@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>逗包用户广场</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#F7F8FC;color:#1a1a2e;min-height:100vh;-webkit-font-smoothing:antialiased}
+    /* Navbar */
+    .navbar{background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);position:sticky;top:0;z-index:40;padding:12px 16px}
+    .navbar-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo-icon{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 3s ease-in-out infinite}
+    .logo-text{font-size:18px;font-weight:700;color:#1a1a2e}
+    .nav-right{display:flex;align-items:center;gap:6px}
+    .nav-btn{background:transparent;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;color:#6b7280;transition:all .2s}
+    .nav-btn:hover{background:#f3f4f6;color:#1a1a2e}
+    .nav-btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .25s}
+    .nav-btn-primary:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35);transform:translateY(-1px)}
+    .nav-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
+    .nav-user{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:10px;cursor:pointer;transition:background .2s}
+    .nav-user:hover{background:#f3f4f6}
+    .nav-user-name{font-size:13px;font-weight:500;color:#374151;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .badge-dot{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    /* Main */
+    .main{max-width:900px;margin:0 auto;padding:20px 16px}
+    /* Card */
+    .card{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);padding:16px;transition:box-shadow .25s,transform .25s}
+    .card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06),0 8px 24px rgba(0,0,0,0.06);transform:translateY(-2px)}
+    /* Input */
+    .input{background:#F7F8FC;border:1.5px solid transparent;border-radius:10px;padding:10px 14px;font-size:14px;width:100%;outline:none;color:#1a1a2e;transition:all .2s}
+    .input::placeholder{color:#9ca3af}
+    .input:focus{border-color:#FF6B35;background:#fff;box-shadow:0 0 0 3px rgba(255,107,53,0.08)}
+    /* Buttons */
+    .btn{border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .2s}
+    .btn:active{transform:scale(0.97)}
+    .btn-orange{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff}
+    .btn-orange:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35)}
+    .btn-blue{background:#EFF6FF;color:#2563EB}
+    .btn-blue:hover{background:#DBEAFE}
+    .btn-green{background:#ECFDF5;color:#059669}
+    .btn-red{background:#FEF2F2;color:#DC2626}
+    .btn-red:hover{background:#FEE2E2}
+    .btn-gray{background:#f3f4f6;color:#6b7280}
+    .btn-gray:hover{background:#e5e7eb}
+    .btn-full{width:100%;padding:12px;border-radius:12px;font-size:15px}
+    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    /* Avatar */
+    .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0;overflow:hidden}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+    .avatar-sm{width:34px;height:34px;font-size:13px}
+    /* Tag */
+    .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+    .tag-green{background:#ECFDF5;color:#059669}
+    .tag-blue{background:#EFF6FF;color:#2563EB}
+    .tag-gray{background:#f3f4f6;color:#6b7280}
+    .tag-red{background:#FEF2F2;color:#DC2626}
+    /* Modal */
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;animation:fadeIn .2s;padding:16px}
+    .modal{background:#fff;border-radius:20px;padding:28px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;animation:scaleIn .25s;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
+    .modal-lg{max-width:520px}
+    .modal-header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+    .modal-title{font-size:18px;font-weight:700;color:#1a1a2e}
+    .modal-close{margin-left:auto;background:none;border:none;padding:6px;border-radius:8px;cursor:pointer;color:#9ca3af;font-size:18px}
+    .modal-close:hover{background:#f3f4f6;color:#374151}
+    .form-group{margin-bottom:14px}
+    .form-label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
+    .form-error{background:#FEF2F2;border:1px solid #FECACA;color:#DC2626;font-size:13px;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-weight:500}
+    /* Tabs */
+    .tabs{display:flex;gap:4px;background:#F7F8FC;border-radius:12px;padding:4px;margin-bottom:16px}
+    .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .2s;background:transparent;color:#9ca3af}
+    .tab.active{background:#fff;color:#FF6B35;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+    .tab:hover:not(.active){color:#374151}
+    .tab-badge{background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center}
+    /* Section */
+    .section-label{font-size:11px;font-weight:600;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+    .list-item{display:flex;align-items:center;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:8px}
+    .list-item-info{flex:1;min-width:0}
+    .list-item-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .list-item-email{font-size:11px;color:#9ca3af;margin-top:2px}
+    .list-item-bio{font-size:11px;color:#9ca3af;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* User card */
+    .user-card{padding:16px}
+    .user-card-top{display:flex;align-items:flex-start;gap:12px}
+    .user-card-info{flex:1;min-width:0}
+    .user-card-name{font-size:15px;font-weight:600;color:#1a1a2e}
+    .user-card-email{font-size:12px;color:#9ca3af;margin-top:3px}
+    .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .user-card-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.05)}
+    .user-card-actions .btn{flex:1}
+    /* Search */
+    .search-wrap{position:relative}
+    .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af}
+    .search-input{padding-left:40px}
+    .search-count{margin-top:10px;font-size:12px;color:#9ca3af;font-weight:500}
+    /* Grid */
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    @media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}.nav-user-name{display:none}}
+    /* Welcome */
+    .welcome{text-align:center;padding:32px 24px}
+    .welcome-icon{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px;box-shadow:0 4px 16px rgba(255,107,53,0.3);animation:float 3s ease-in-out infinite}
+    .welcome h2{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:8px}
+    .welcome p{font-size:14px;color:#9ca3af;max-width:360px;margin:0 auto}
+    .feature-card{text-align:center;padding:16px}
+    .feature-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px}
+    .feature-card h3{font-size:13px;font-weight:600;color:#1a1a2e}
+    .feature-card p{font-size:11px;color:#9ca3af;margin-top:4px}
+    /* Friend list on homepage */
+    .friend-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;cursor:default}
+    .friend-row-info{flex:1;min-width:0}
+    .friend-row-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .friend-row-email{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* Toast */
+    .toast-container{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:8px}
+    .toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);font-size:13px;font-weight:500;animation:slideInDown .3s;min-width:240px;max-width:360px}
+    .toast-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
+    .toast-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
+    .toast-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
+    .toast-close{background:none;border:none;cursor:pointer;color:#9ca3af;padding:2px;border-radius:4px;font-size:14px}
+    .toast-close:hover{background:rgba(0,0,0,0.05)}
+    /* Empty state */
+    .empty{text-align:center;padding:32px 16px}
+    .empty-icon{font-size:40px;margin-bottom:8px}
+    .empty-text{font-size:13px;color:#9ca3af}
+    /* Rule card */
+    .rule{display:flex;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:10px}
+    .rule-num{width:24px;height:24px;border-radius:8px;background:#FF6B35;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+    .rule-text{font-size:13px;color:#4b5563;line-height:1.6}
+    /* Footer */
+    .footer{text-align:center;padding:20px;font-size:12px;color:#d1d5db}
+    /* Status dot */
+    .status-dot{width:8px;height:8px;border-radius:50%;background:#4ECDC4;animation:pulse 2s ease-in-out infinite}
+    /* Animations */
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+    @keyframes slideInDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+    .anim-up{animation:fadeInUp .35s ease-out both}
+    .anim-up-d1{animation:fadeInUp .35s ease-out .1s both}
+    .anim-up-d2{animation:fadeInUp .35s ease-out .2s both}
+    .anim-up-d3{animation:fadeInUp .35s ease-out .3s both}
+    /* Scrollbar */
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:10px}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toasts"></div>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <div class="logo">
+      <div class="logo-icon">✨</div>
+      <span class="logo-text">逗包用户广场</span>
+    </div>
+    <div class="nav-right" id="navRight">
+      <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main" id="mainContent">
+  <!-- Search -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:8px">
+      <div class="search-wrap" style="flex:1">
+        <span class="search-icon">🔍</span>
+        <input class="input search-input" id="searchInput" placeholder="搜索用户姓名、邮箱或豆包号..." oninput="debounceSearch()">
+      </div>
+      <button class="nav-btn" id="clearBtn" style="display:none" onclick="clearSearch()">✕ 清除</button>
+    </div>
+    <div class="search-count" id="searchCount" style="display:none"></div>
+  </div>
+
+  <!-- Dynamic content area -->
+  <div id="contentArea"></div>
+</div>
+
+<!-- Footer -->
+<div class="footer">逗包用户广场 · 连接豆包智能体用户</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Announcement Modal -->
+<div class="modal-overlay" id="announcementModal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div style="width:36px;height:36px;border-radius:12px;background:#FFF3ED;display:flex;align-items:center;justify-content:center">📢</div>
+      <div><div class="modal-title">使用须知</div><div style="font-size:11px;color:#9ca3af">首次使用前请阅读</div></div>
+      <button class="modal-close" onclick="closeModal('announcement')">✕</button>
+    </div>
+    <div class="rule"><div class="rule-num">1</div><div class="rule-text">此规则防君子不防小人；</div></div>
+    <div class="rule"><div class="rule-num">2</div><div class="rule-text">如果目的是挂人、网络暴力、冲某人主页、开盒（人肉搜索）、就近约会等违背道德、法律的情况，无论动机是否正当，请不要使用此网站；</div></div>
+    <div class="rule"><div class="rule-num">3</div><div class="rule-text">第一次使用的，请尽快注册账号并设置密码。请不要泄露你的密码。如果你完全不想被搜索到，可开启"全网隐身"，同时你也将无法搜索别人；如果你想让少数的网友访问，请开启白名单模式并设置邀请码；</div></div>
+    <div class="rule"><div class="rule-num">4</div><div class="rule-text">受技术限制、法律限制和成本限制，本站不得不砍掉聊天功能。请需要交流的用户们在自己的豆包主页进行互动。</div></div>
+    <button class="btn btn-orange btn-full" style="margin-top:20px" onclick="closeModal('announcement')">我已知晓</button>
+  </div>
+</div>
+
+<!-- Register Modal -->
+<div class="modal-overlay" id="registerModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">✨</div>
+      <div class="modal-title">创建账号</div>
+      <button class="modal-close" onclick="closeModal('register')">✕</button>
+    </div>
+    <div id="registerError"></div>
+    <div class="form-group"><label class="form-label">姓名 *</label><input class="input" id="regName" placeholder="你的昵称" maxlength="100"></div>
+    <div class="form-group"><label class="form-label">邮箱 *</label><input class="input" id="regEmail" type="email" placeholder="your@email.com"></div>
+    <div class="form-group"><label class="form-label">密码 *（6位）</label><input class="input" id="regPassword" type="password" placeholder="6位密码" maxlength="6"></div>
+    <div class="form-group"><label class="form-label">豆包号</label><input class="input" id="regDoubaoId" placeholder="自定义豆包号" maxlength="50"></div>
+    <div class="form-group"><label class="form-label">智能体链接</label><input class="input" id="regAgentUrl" placeholder="https://doubao.com/bot/xxx"></div>
+    <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg"></div>
+    <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己" rows="3" style="resize:vertical"></textarea></div>
+    <button class="btn btn-orange btn-full" onclick="doRegister()">注册</button>
+    <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">已有账号？<a href="#" onclick="showModal('login');return false" style="color:#FF6B35;font-weight:600">去登录</a></p>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal-overlay" id="loginModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#4ECDC4,#6EE7DE);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">🔑</div>
+      <div class="modal-title">欢迎回来</div>
+      <button class="modal-close" onclick="closeModal('login')">✕</button>
+    </div>
+    <div id="loginError"></div>
+    <div class="form-group"><label class="form-label">账号</label><input class="input" id="loginId" placeholder="邮箱、豆包号或智能体链接"></div>
+    <div class="form-group"><label class="form-label">密码</label><input class="input" id="loginPwd" type="password" placeholder="6位密码" maxlength="6"></div>
+    <button class="btn btn-orange btn-full" onclick="doLogin()">登录</button>
+    <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">没有账号？<a href="#" onclick="showModal('register');return false" style="color:#FF6B35;font-weight:600">去注册</a></p>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">设置</div>
+      <button class="modal-close" onclick="closeModal('settings')">✕</button>
+    </div>
+    <!-- User info -->
+    <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#F7F8FC;border-radius:16px;margin-bottom:16px">
+      <div class="avatar" id="settingsAvatar">?</div>
+      <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#1a1a2e" id="settingsName">-</div><div style="font-size:12px;color:#9ca3af" id="settingsEmail">-</div></div>
+      <div class="status-dot"></div>
+    </div>
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchSettingsTab('friends',this)">👥 好友 <span class="tab-badge" id="friendsBadge" style="display:none">0</span></button>
+      <button class="tab" onclick="switchSettingsTab('blocks',this)">🚫 黑名单 <span class="tab-badge" id="blocksBadge" style="display:none">0</span></button>
+      <button class="tab" onclick="switchSettingsTab('account',this)">⚙️ 账号</button>
+    </div>
+    <!-- Tab content -->
+    <div id="settingsContent" style="max-height:400px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script>
+// ===== State =====
+let currentUser = JSON.parse(localStorage.getItem('dp_user') || 'null');
+let searchTimer = null;
+let friendIds = new Set();
+let blockedIds = new Set();
+
+// ===== API Helper =====
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  return res.json();
+}
+
+// ===== Toast =====
+function toast(message, type = 'success') {
+  const container = document.getElementById('toasts');
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span>${icons[type]}</span><span style="flex:1">${message}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ===== Modal =====
+function showModal(name) {
+  document.getElementById(name + 'Modal').style.display = 'flex';
+  if (name === 'settings') loadSettings();
+}
+function closeModal(name) {
+  document.getElementById(name + 'Modal').style.display = 'none';
+  if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
+}
+
+// ===== Avatar HTML =====
+function avatarHTML(user, small = false) {
+  const cls = small ? 'avatar avatar-sm' : 'avatar';
+  if (user?.avatar) return `<div class="${cls}"><img src="${esc(user.avatar)}" alt="" onerror="this.style.display='none'"></div>`;
+  return `<div class="${cls}">${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
+}
+
+function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ===== Init =====
+async function init() {
+  updateNavbar();
+  if (!localStorage.getItem('dp_announcement_seen')) showModal('announcement');
+  renderContent();
+}
+
+// ===== Navbar =====
+function updateNavbar() {
+  const el = document.getElementById('navRight');
+  if (currentUser) {
+    el.innerHTML = `
+      <button class="nav-btn" style="position:relative" onclick="showModal('settings')">🔔<span class="badge-dot" id="navBadge" style="display:none">0</span></button>
+      <div class="nav-user" onclick="showModal('settings')">
+        ${avatarHTML(currentUser, true)}
+        <span class="nav-user-name">${esc(currentUser.name)}</span>
+      </div>
+      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪 <span class="nav-user-name" style="display:inline">退出</span></button>
+    `;
+  } else {
+    el.innerHTML = `<button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>`;
+  }
+}
+
+// ===== Register =====
+async function doRegister() {
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const doubao_id = document.getElementById('regDoubaoId').value.trim();
+  const agent_url = document.getElementById('regAgentUrl').value.trim();
+  const avatar = document.getElementById('regAvatar').value.trim();
+  const bio = document.getElementById('regBio').value.trim();
+  const errEl = document.getElementById('registerError');
+
+  if (!name || !email || !password) { errEl.innerHTML = '<div class="form-error">姓名、邮箱和密码是必填项</div>'; return; }
+  if (password.length !== 6) { errEl.innerHTML = '<div class="form-error">密码必须为6位</div>'; return; }
+
+  const res = await api('/api/users', {
+    method: 'POST',
+    body: JSON.stringify({ name, email, password, doubao_id, agent_url, avatar, bio }),
+  });
+
+  if (res.success) {
+    currentUser = res.data;
+    localStorage.setItem('dp_user', JSON.stringify(currentUser));
+    closeModal('register');
+    updateNavbar();
+    renderContent();
+    toast('注册成功！欢迎加入逗包用户广场');
+  } else {
+    errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
+  }
+}
+
+// ===== Login =====
+async function doLogin() {
+  const identifier = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPwd').value;
+  const errEl = document.getElementById('loginError');
+
+  if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
+
+  const res = await api('/api/users/login', {
+    method: 'POST',
+    body: JSON.stringify({ identifier, password }),
+  });
+
+  if (res.success) {
+    currentUser = res.data;
+    localStorage.setItem('dp_user', JSON.stringify(currentUser));
+    closeModal('login');
+    updateNavbar();
+    renderContent();
+    toast(`欢迎回来，${currentUser.name}！`);
+  } else {
+    errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
+  }
+}
+
+// ===== Logout =====
+function doLogout() {
+  currentUser = null;
+  localStorage.removeItem('dp_user');
+  friendIds.clear();
+  blockedIds.clear();
+  updateNavbar();
+  renderContent();
+  toast('已退出登录', 'info');
+}
+
+// ===== Search =====
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 300);
+}
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const clearBtn = document.getElementById('clearBtn');
+  const countEl = document.getElementById('searchCount');
+
+  if (!q) { clearBtn.style.display = 'none'; countEl.style.display = 'none'; renderContent(); return; }
+  clearBtn.style.display = 'flex';
+  countEl.style.display = 'block';
+
+  const res = await api(`/api/users?search=${encodeURIComponent(q)}`);
+  if (!res.success) return;
+
+  const users = res.data.filter(u => currentUser ? u.id !== currentUser.id : true)
+                         .filter(u => !blockedIds.has(u.id));
+
+  countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
+
+  if (users.length === 0) {
+    document.getElementById('contentArea').innerHTML = `
+      <div class="card empty anim-up"><div class="empty-icon">🔍</div><div class="empty-text">未找到匹配用户</div><div style="font-size:12px;color:#d1d5db;margin-top:4px">请尝试其他关键词</div></div>`;
+    return;
+  }
+
+  document.getElementById('contentArea').innerHTML = `<div class="grid-2">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('searchCount').style.display = 'none';
+  renderContent();
+}
+
+// ===== User Card HTML =====
+function userCardHTML(user, index) {
+  const isFriend = friendIds.has(user.id);
+  const delay = index * 0.06;
+  return `
+    <div class="card user-card anim-up" style="animation-delay:${delay}s">
+      <div class="user-card-top">
+        ${avatarHTML(user)}
+        <div class="user-card-info">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="user-card-name">${esc(user.name)}</span>
+            ${isFriend ? '<span class="tag tag-green">好友</span>' : ''}
+          </div>
+          <div class="user-card-email">${esc(user.email)}</div>
+          ${user.bio ? `<div class="user-card-bio">${esc(user.bio)}</div>` : ''}
+          ${user.doubao_id ? `<div class="user-card-bio">@${esc(user.doubao_id)}</div>` : ''}
+        </div>
+      </div>
+      <div class="user-card-actions">
+        ${currentUser ? (isFriend
+          ? `<div class="btn btn-green btn-sm" style="flex:1">✅ 已是好友</div>`
+          : `<button class="btn btn-blue btn-sm" style="flex:1" onclick="addFriend('${user.id}',this)">➕ 加好友</button>`
+        ) : ''}
+        ${currentUser ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)" title="拉黑">🚫</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// ===== Add Friend =====
+async function addFriend(friendId, btn) {
+  if (!currentUser) { showModal('login'); return; }
+  btn.disabled = true;
+  btn.textContent = '...';
+  const res = await api('/api/friends', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id, friend_id: friendId }),
+  });
+  if (res.success) {
+    friendIds.add(friendId);
+    toast('已添加好友！');
+    doSearch();
+  } else {
+    toast(res.error, 'error');
+    btn.disabled = false;
+    btn.textContent = '➕ 加好友';
+  }
+}
+
+// ===== Block User =====
+async function blockUser(userId, btn) {
+  if (!currentUser) return;
+  const res = await api('/api/blocked', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id, blocked_user_id: userId }),
+  });
+  if (res.success) {
+    blockedIds.add(userId);
+    toast('已拉黑该用户');
+    doSearch();
+  } else {
+    toast(res.error, 'error');
+  }
+}
+
+// ===== Render Content =====
+async function renderContent() {
+  if (currentUser) {
+    // Load relationships
+    const [friendsRes, blocksRes] = await Promise.all([
+      api(`/api/friends?user_id=${currentUser.id}&status=accepted`),
+      api(`/api/blocked?user_id=${currentUser.id}`),
+    ]);
+    friendIds = new Set((friendsRes.data || []).map(f => f.friend?.id).filter(Boolean));
+    blockedIds = new Set((blocksRes.data || []).map(b => b.blocked_user?.id).filter(Boolean));
+
+    // Update badge
+    const badge = document.getElementById('navBadge');
+    if (badge) { badge.textContent = friendIds.size; badge.style.display = friendIds.size > 0 ? 'flex' : 'none'; }
+
+    // Friend list
+    const friends = friendsRes.data || [];
+    let html = '';
+
+    if (friends.length > 0) {
+      html += `
+        <div class="anim-up-d1" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span class="section-label" style="margin:0">👥 我的好友 (${friends.length})</span>
+            <a href="#" onclick="showModal('settings');return false" style="font-size:12px;color:#FF6B35;font-weight:500">管理好友 →</a>
+          </div>
+          <div class="grid-3">
+            ${friends.map(f => `
+              <div class="card friend-row anim-up">
+                ${avatarHTML(f.friend, true)}
+                <div class="friend-row-info">
+                  <div class="friend-row-name">${esc(f.friend?.name)}</div>
+                  <div class="friend-row-email">${esc(f.friend?.email)}</div>
+                </div>
+                <span class="tag tag-green">好友</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    // Welcome
+    html += `
+      <div class="card welcome anim-up-d2">
+        <div class="welcome-icon">✨</div>
+        <h2>欢迎来到逗包用户广场</h2>
+        <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
+      </div>
+      <div class="grid-2 anim-up-d3" style="margin-top:12px">
+        <div class="card feature-card"><div class="feature-icon" style="background:#FFF3ED">🔍</div><h3>搜索用户</h3><p>通过姓名或邮箱查找</p></div>
+        <div class="card feature-card"><div class="feature-icon" style="background:#ECFDF5">👥</div><h3>好友互动</h3><p>添加好友，互相关注</p></div>
+      </div>`;
+
+    document.getElementById('contentArea').innerHTML = html;
+  } else {
+    // Not logged in - show all users + welcome
+    const res = await api('/api/users');
+    const users = res.data || [];
+
+    let html = `
+      <div class="card welcome anim-up">
+        <div class="welcome-icon">✨</div>
+        <h2>欢迎来到逗包用户广场</h2>
+        <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
+      </div>
+      <div class="grid-2 anim-up-d1" style="margin-top:12px">
+        <div class="card feature-card"><div class="feature-icon" style="background:#FFF3ED">🔍</div><h3>搜索用户</h3><p>通过姓名或邮箱查找</p></div>
+        <div class="card feature-card"><div class="feature-icon" style="background:#ECFDF5">👥</div><h3>好友互动</h3><p>添加好友，互相关注</p></div>
+      </div>
+      <div class="card anim-up-d2" style="margin-top:12px;text-align:center;padding:24px">
+        <p style="color:#6b7280;font-size:14px;margin-bottom:16px">还没有账号？立即注册，展示你的智能体</p>
+        <button class="btn btn-orange" style="padding:10px 32px;font-size:15px;border-radius:12px" onclick="showModal('register')">立即注册 →</button>
+      </div>`;
+
+    if (users.length > 0) {
+      html += `
+        <div class="anim-up-d3" style="margin-top:20px">
+          <div class="section-label">👥 已注册用户 (${users.length})</div>
+          <div class="grid-3" style="margin-top:8px">
+            ${users.map((u, i) => `
+              <div class="card friend-row anim-up" style="animation-delay:${i * 0.04}s;cursor:pointer" onclick="quickLogin('${esc(u.id)}')">
+                ${avatarHTML(u, true)}
+                <div class="friend-row-info">
+                  <div class="friend-row-name">${esc(u.name)}</div>
+                  <div class="friend-row-email">${esc(u.email)}</div>
+                </div>
+                <span style="color:#d1d5db;font-size:12px">→</span>
+              </div>
+            `).join('')}
+          </div>
+          <p style="text-align:center;font-size:11px;color:#d1d5db;margin-top:8px">点击用户可快速登录（演示用）</p>
+        </div>`;
+    }
+
+    document.getElementById('contentArea').innerHTML = html;
+  }
+}
+
+// ===== Quick Login (for demo) =====
+async function quickLogin(userId) {
+  const res = await api('/api/users');
+  const user = res.data?.find(u => u.id === userId);
+  if (user) {
+    currentUser = user;
+    localStorage.setItem('dp_user', JSON.stringify(currentUser));
+    updateNavbar();
+    renderContent();
+    toast(`已切换为 ${user.name}`, 'info');
+  }
+}
+
+// ===== Settings =====
+let settingsTab = 'friends';
+
+async function loadSettings() {
+  if (!currentUser) return;
+  document.getElementById('settingsAvatar').innerHTML = currentUser.avatar
+    ? `<img src="${esc(currentUser.avatar)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
+    : currentUser.name.charAt(0).toUpperCase();
+  document.getElementById('settingsName').textContent = currentUser.name;
+  document.getElementById('settingsEmail').textContent = currentUser.email;
+  switchSettingsTab('friends', document.querySelector('.tab'));
+}
+
+async function switchSettingsTab(tab, btnEl) {
+  settingsTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  else document.querySelectorAll('.tab')[tab === 'friends' ? 0 : tab === 'blocks' ? 1 : 2].classList.add('active');
+
+  const el = document.getElementById('settingsContent');
+
+  if (tab === 'friends') {
+    const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
+    const friends = res.data || [];
+    document.getElementById('friendsBadge').textContent = friends.length;
+    document.getElementById('friendsBadge').style.display = friends.length > 0 ? 'flex' : 'none';
+
+    if (friends.length === 0) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无好友</div></div>`;
+    } else {
+      el.innerHTML = friends.map(f => `
+        <div class="list-item">
+          ${avatarHTML(f.friend, true)}
+          <div class="list-item-info">
+            <div class="list-item-name">${esc(f.friend?.name)}</div>
+            <div class="list-item-email">${esc(f.friend?.email)}</div>
+            ${f.friend?.bio ? `<div class="list-item-bio">${esc(f.friend.bio)}</div>` : ''}
+          </div>
+          <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}',this)">➖ 移除</button>
+        </div>
+      `).join('');
+    }
+  } else if (tab === 'blocks') {
+    const res = await api(`/api/blocked?user_id=${currentUser.id}`);
+    const blocks = res.data || [];
+    document.getElementById('blocksBadge').textContent = blocks.length;
+    document.getElementById('blocksBadge').style.display = blocks.length > 0 ? 'flex' : 'none';
+
+    if (blocks.length === 0) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>`;
+    } else {
+      el.innerHTML = blocks.map(b => `
+        <div class="list-item">
+          ${avatarHTML(b.blocked_user, true)}
+          <div class="list-item-info">
+            <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
+            <div class="list-item-email">${esc(b.blocked_user?.email || '')}</div>
+            ${b.blocked_user?.bio ? `<div class="list-item-bio">${esc(b.blocked_user.bio)}</div>` : ''}
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="unblockUser('${b.id}',this)">↩️ 移出</button>
+        </div>
+      `).join('');
+    }
+  } else if (tab === 'account') {
+    el.innerHTML = `
+      <div class="form-group"><label class="form-label">修改密码</label>
+        <div style="display:flex;gap:8px">
+          <input class="input" id="newPwd" type="password" placeholder="新密码（6位）" maxlength="6" style="flex:1">
+          <button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">豆包号</label>
+        <div style="font-size:13px;color:#374151;padding:8px 0">${esc(currentUser.doubao_id) || '未设置'}</div>
+      </div>
+      <div class="form-group"><label class="form-label">智能体链接</label>
+        <div style="font-size:13px;color:#374151;padding:8px 0;word-break:break-all">${esc(currentUser.agent_url) || '未设置'}</div>
+      </div>
+      <div class="form-group"><label class="form-label">隐私模式</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-sm ${currentUser.privacy_setting === 'searchable' ? 'btn-green' : 'btn-gray'}" onclick="setPrivacy('searchable')">🌐 可搜索</button>
+          <button class="btn btn-sm ${currentUser.privacy_setting === 'whitelist' ? 'btn-blue' : 'btn-gray'}" onclick="setPrivacy('whitelist')">🔐 白名单</button>
+          <button class="btn btn-sm ${currentUser.privacy_setting === 'stealth' ? 'btn-gray' : 'btn-gray'}" onclick="setPrivacy('stealth')">👻 隐身</button>
+        </div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:6px">当前：${currentUser.privacy_setting === 'searchable' ? '可搜索' : currentUser.privacy_setting === 'whitelist' ? '白名单模式' : '全网隐身'}</div>
+      </div>
+    `;
+  }
+}
+
+async function removeFriend(friendshipId, btn) {
+  const res = await api(`/api/friends?id=${friendshipId}`, { method: 'DELETE' });
+  if (res.success) {
+    toast('已移除好友');
+    loadSettings();
+    renderContent();
+  } else {
+    toast(res.error, 'error');
+  }
+}
+
+async function unblockUser(blockId, btn) {
+  const res = await api(`/api/blocked?id=${blockId}`, { method: 'DELETE' });
+  if (res.success) {
+    toast('已移出黑名单');
+    loadSettings();
+    renderContent();
+  } else {
+    toast(res.error, 'error');
+  }
+}
+
+async function changePassword() {
+  const pwd = document.getElementById('newPwd').value;
+  if (!pwd || pwd.length !== 6) { toast('密码必须为6位', 'error'); return; }
+  const res = await api(`/api/users/${currentUser.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'change_password', password: pwd }),
+  });
+  if (res.success) { toast('密码修改成功'); document.getElementById('newPwd').value = ''; }
+  else toast(res.error, 'error');
+}
+
+async function setPrivacy(setting) {
+  const res = await api(`/api/users/${currentUser.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'set_privacy', privacy_setting: setting }),
+  });
+  if (res.success) {
+    currentUser.privacy_setting = setting;
+    localStorage.setItem('dp_user', JSON.stringify(currentUser));
+    toast('隐私设置已更新');
+    switchSettingsTab('account');
+  } else toast(res.error, 'error');
+}
+
+// ===== Start =====
+init();
+</script>
+</body>
+</html>
