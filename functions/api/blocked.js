@@ -1,4 +1,4 @@
-// Cloudflare Pages Function - Blocked Users API
+// Cloudflare Pages Function - Blocked Users API (完整版，双向屏蔽)
 // GET    /api/blocked?user_id=xxx          - 获取黑名单
 // POST   /api/blocked                      - 拉黑用户
 // DELETE /api/blocked?id=xxx               - 移出黑名单
@@ -14,8 +14,9 @@ export async function onRequestGet(context) {
 
   const results = await env.DB.prepare(
     `SELECT b.id, b.created_at,
-            u.id as blocked_id, u.name as blocked_name, u.email as blocked_email,
-            u.avatar as blocked_avatar, u.bio as blocked_bio
+            u.id as blocked_id, u.name as blocked_name, 
+            u.avatar as blocked_avatar, u.bio as blocked_bio,
+            u.doubao_id as blocked_doubao_id, u.agent_url as blocked_agent_url
      FROM blocked_users b
      JOIN users u ON u.id = b.blocked_user_id
      WHERE b.user_id = ?`
@@ -27,9 +28,10 @@ export async function onRequestGet(context) {
     blocked_user: {
       id: r.blocked_id,
       name: r.blocked_name,
-      email: r.blocked_email,
       avatar: r.blocked_avatar,
       bio: r.blocked_bio,
+      doubao_id: r.blocked_doubao_id,
+      agent_url: r.blocked_agent_url,
     }
   }));
 

@@ -1,7 +1,8 @@
-// Cloudflare Pages Function - Friends API
-// GET    /api/friends?user_id=xxx&status=accepted  - 获取好友列表
-// POST   /api/friends                             - 添加好友
-// DELETE /api/friends?id=xxx                       - 移除好友
+// Cloudflare Pages Function - Friends API (完整版)
+// GET    /api/friends?user_id=xxx&status=pending|accepted  - 获取好友/申请列表
+// POST   /api/friends             - 发送好友申请
+// PUT    /api/friends?id=xxx      - 审核好友申请 (accept/reject)
+// DELETE /api/friends?id=xxx      - 删除好友
 
 export async function onRequestGet(context) {
   const { env } = context;
@@ -13,29 +14,36 @@ export async function onRequestGet(context) {
     return Response.json({ success: false, error: 'user_id 是必填参数' });
   }
 
+  // 获取好友列表（包含对方信息）
   const results = await env.DB.prepare(
-    `SELECT f.id, f.status, f.created_at,
-            u.id as friend_id, u.name as friend_name, u.email as friend_email,
-            u.avatar as friend_avatar, u.bio as friend_bio
+    `SELECT f.id, f.status, f.created_at, f.updated_at,
+            u.id as friend_id, u.name as friend_name, 
+            u.avatar as friend_avatar, u.bio as friend_bio,
+            u.doubao_id as friend_doubao_id, u.agent_url as friend_agent_url
      FROM friendships f
      JOIN users u ON (CASE WHEN f.user_id = ? THEN u.id = f.friend_id ELSE u.id = f.user_id END)
-     WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = ?`
+     WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = ?
+     ORDER BY f.updated_at DESC`
   ).bind(userId, userId, userId, status).all();
 
-  const friends = results.results.map((r) => ({
+  // 标记是"我发出的"还是"对方发出的"
+  const friendships = results.results.map((r) => ({
     id: r.id,
     status: r.status,
     created_at: r.created_at,
+    updated_at: r.updated_at,
+    is_outgoing: r.user_id === userId, // 是否是我发出的申请
     friend: {
       id: r.friend_id,
       name: r.friend_name,
-      email: r.friend_email,
       avatar: r.friend_avatar,
       bio: r.friend_bio,
+      doubao_id: r.friend_doubao_id,
+      agent_url: r.friend_agent_url,
     }
   }));
 
-  return Response.json({ success: true, data: friends });
+  return Response.json({ success: true, data: friendships });
 }
 
 export async function onRequestPost(context) {
@@ -49,20 +57,57 @@ export async function onRequestPost(context) {
     return Response.json({ success: false, error: '不能添加自己为好友' });
   }
 
-  // 检查是否已存在
+  // 检查是否已存在任何关系
   const existing = await env.DB.prepare(
-    `SELECT * FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`
+    `SELECT * FROM friendships WHERE 
+     (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`
   ).bind(user_id, friend_id, friend_id, user_id).first();
 
   if (existing) {
-    return Response.json({ success: false, error: '你们已经是好友或请求已发送' });
+    if (existing.status === 'accepted') {
+      return Response.json({ success: false, error: '你们已经是好友' });
+    } else if (existing.status === 'pending') {
+      return Response.json({ success: false, error: '好友申请已发送，等待对方处理' });
+    } else if (existing.status === 'rejected') {
+      // 之前被拒绝过，可以重新申请
+      await env.DB.prepare(
+        `UPDATE friendships SET status = 'pending', user_id = ?, friend_id = ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(user_id, friend_id, existing.id).run();
+      return Response.json({ success: true, data: { id: existing.id, status: 'pending' } });
+    }
   }
 
   try {
     const result = await env.DB.prepare(
-      `INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'accepted')`
+      `INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')`
     ).bind(user_id, friend_id).run();
-    return Response.json({ success: true, data: { id: result.meta.last_row_id, status: 'accepted' } });
+    return Response.json({ success: true, data: { id: result.meta.last_row_id, status: 'pending' } });
+  } catch (e) {
+    return Response.json({ success: false, error: e.message });
+  }
+}
+
+export async function onRequestPut(context) {
+  const { env } = context;
+  const url = new URL(context.request.url);
+  const id = url.searchParams.get('id');
+  const { action } = await context.request.json();
+
+  if (!id) {
+    return Response.json({ success: false, error: 'id 是必填参数' });
+  }
+
+  if (!['accept', 'reject'].includes(action)) {
+    return Response.json({ success: false, error: 'action 必须是 accept 或 reject' });
+  }
+
+  const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+
+  try {
+    await env.DB.prepare(
+      `UPDATE friendships SET status = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(newStatus, id).run();
+    return Response.json({ success: true, message: action === 'accept' ? '已通过好友申请' : '已拒绝好友申请' });
   } catch (e) {
     return Response.json({ success: false, error: e.message });
   }
