@@ -464,9 +464,10 @@ function userCardHTML(user, index) {
         </div>
       </div>
       <div class="user-card-actions">
+        ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1" title="访问智能体主页">🔗 访问主页</a>` : '<div style="flex:1"></div>'}
         ${currentUser ? (isFriend
-          ? `<div class="btn btn-green btn-sm" style="flex:1">✅ 已是好友</div>`
-          : `<button class="btn btn-blue btn-sm" style="flex:1" onclick="addFriend('${user.id}',this)">➕ 加好友</button>`
+          ? `<div class="btn btn-green btn-sm">✅ 好友</div>`
+          : `<button class="btn btn-blue btn-sm" onclick="addFriend('${user.id}',this)">➕ 加好友</button>`
         ) : ''}
         ${currentUser ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)" title="拉黑">🚫</button>` : ''}
       </div>
@@ -589,34 +590,20 @@ async function renderContent() {
           <div class="section-label">👥 已注册用户 (${users.length})</div>
           <div class="grid-3" style="margin-top:8px">
             ${users.map((u, i) => `
-              <div class="card friend-row anim-up" style="animation-delay:${i * 0.04}s;cursor:pointer" onclick="quickLogin('${esc(u.id)}')">
+              <div class="card friend-row anim-up" style="animation-delay:${i * 0.04}s">
                 ${avatarHTML(u, true)}
                 <div class="friend-row-info">
                   <div class="friend-row-name">${esc(u.name)}</div>
                   <div class="friend-row-email">${esc(u.email)}</div>
                 </div>
-                <span style="color:#d1d5db;font-size:12px">→</span>
+                ${u.agent_url ? `<a href="${esc(u.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-blue btn-sm" title="访问智能体主页">🔗</a>` : '<span style="color:#d1d5db;font-size:12px">-</span>'}
               </div>
             `).join('')}
           </div>
-          <p style="text-align:center;font-size:11px;color:#d1d5db;margin-top:8px">点击用户可快速登录（演示用）</p>
         </div>`;
     }
 
     document.getElementById('contentArea').innerHTML = html;
-  }
-}
-
-// ===== Quick Login (for demo) =====
-async function quickLogin(userId) {
-  const res = await api('/api/users');
-  const user = res.data?.find(u => u.id === userId);
-  if (user) {
-    currentUser = user;
-    localStorage.setItem('dp_user', JSON.stringify(currentUser));
-    updateNavbar();
-    renderContent();
-    toast(`已切换为 ${user.name}`, 'info');
   }
 }
 
