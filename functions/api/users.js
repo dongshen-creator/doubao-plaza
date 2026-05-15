@@ -176,18 +176,17 @@ export async function onRequestPost(context) {
     const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(agent_url).first();
     if (existingAgentUrl) return Response.json({ success: false, error: '该智能体链接已被注册' });
 
-    // 创建用户
-    const result = await env.DB.prepare(
+    // 创建用户（ID由数据库自动生成）
+    await env.DB.prepare(
       `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(name, password, doubao_id, agent_url, device_fingerprint || null, avatar || null, bio || null).run();
 
-    const userId = result.meta.last_row_id;
-
+    // 通过 doubao_id 查询刚创建的用户
     const user = await env.DB.prepare(
       `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at 
-       FROM users WHERE id = ?`
-    ).bind(userId).first();
+       FROM users WHERE doubao_id = ?`
+    ).bind(doubao_id).first();
 
     // 创建会话
     const token = generateToken();
