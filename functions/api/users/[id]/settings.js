@@ -3,47 +3,67 @@
 // GET /api/users/[id]/notifications - 获取通知（惩罚提醒等）
 
 export async function onRequestGet(context) {
-  const { env } = context;
-  const userId = context.params.id;
-  
-  // 获取用户的惩罚通知
-  const user = await env.DB.prepare(
-    `SELECT privacy_setting, punished_until, punish_reason FROM users WHERE id = ?`
-  ).bind(userId).first();
-  
-  if (!user) {
-    return Response.json({ success: false, error: '用户不存在' });
-  }
-  
-  const notifications = [];
-  
-  // 检查是否有惩罚
-  if (user.privacy_setting === 'punished_whitelist' && user.punished_until) {
-    notifications.push({
-      type: 'punishment',
-      title: '账号处罚通知',
-      message: `您的账号因${user.punish_reason || '被多次举报'}，已被强制开启白名单模式至 ${new Date(user.punished_until).toLocaleDateString('zh-CN')}。在此期间您只能被通过豆包号和邀请码搜索到。`,
-      severity: 'warning'
-    });
-  } else if (user.privacy_setting === 'punished_stealth') {
-    notifications.push({
-      type: 'punishment',
-      title: '账号处罚通知',
-      message: `您的账号因${user.punish_reason || '被多次举报'}，已被强制开启隐身模式。您将完全不可被搜索到。`,
-      severity: 'error'
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
     });
   }
-  
-  return Response.json({ success: true, data: notifications });
+
+  try {
+    const { env } = context;
+    const userId = context.params.id;
+    
+    // 获取用户的惩罚通知
+    const user = await env.DB.prepare(
+      `SELECT privacy_setting, punished_until, punish_reason FROM users WHERE id = ?`
+    ).bind(userId).first();
+    
+    if (!user) {
+      return Response.json({ success: false, error: '用户不存在' });
+    }
+    
+    const notifications = [];
+    
+    // 检查是否有惩罚
+    if (user.privacy_setting === 'punished_whitelist' && user.punished_until) {
+      notifications.push({
+        type: 'punishment',
+        title: '账号处罚通知',
+        message: `您的账号因${user.punish_reason || '被多次举报'}，已被强制开启白名单模式至 ${new Date(user.punished_until).toLocaleDateString('zh-CN')}。在此期间您只能被通过豆包号和邀请码搜索到。`,
+        severity: 'warning'
+      });
+    } else if (user.privacy_setting === 'punished_stealth') {
+      notifications.push({
+        type: 'punishment',
+        title: '账号处罚通知',
+        message: `您的账号因${user.punish_reason || '被多次举报'}，已被强制开启隐身模式。您将完全不可被搜索到。`,
+        severity: 'error'
+      });
+    }
+    
+    return Response.json({ success: true, data: notifications });
+  } catch (e) {
+    return Response.json({ success: false, error: '服务器错误：' + e.message });
+  }
 }
 
 export async function onRequestPut(context) {
-  const { env } = context;
-  const userId = context.params.id;
-  const body = await context.request.json();
-  const { action, password, invite_code, privacy_setting } = body;
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 
   try {
+    const { env } = context;
+    const userId = context.params.id;
+    const body = await context.request.json().catch(() => ({}));
+    const { action, password, invite_code, privacy_setting } = body;
+
     if (action === 'change_password') {
       if (!password || password.length !== 6) {
         return Response.json({ success: false, error: '新密码必须为6位' });

@@ -2,26 +2,35 @@
 // POST /api/reports - 举报用户
 
 export async function onRequestPost(context) {
-  const { env } = context;
-  const { reporter_id, reported_id, reason } = await context.request.json();
-
-  if (!reporter_id || !reported_id) {
-    return Response.json({ success: false, error: 'reporter_id 和 reported_id 是必填项' });
-  }
-  if (reporter_id === reported_id) {
-    return Response.json({ success: false, error: '不能举报自己' });
-  }
-
-  // 检查是否已举报过（同一举报人30天内不能重复举报同一用户）
-  const existing = await env.DB.prepare(
-    `SELECT * FROM reports WHERE reporter_id = ? AND reported_id = ? AND created_at > datetime('now', '-30 days')`
-  ).bind(reporter_id, reported_id).first();
-
-  if (existing) {
-    return Response.json({ success: false, error: '您已举报过该用户，30天内不能重复举报' });
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
+    const { env } = context;
+    const body = await context.request.json().catch(() => ({}));
+    const { reporter_id, reported_id, reason } = body;
+
+    if (!reporter_id || !reported_id) {
+      return Response.json({ success: false, error: 'reporter_id 和 reported_id 是必填项' });
+    }
+    if (reporter_id === reported_id) {
+      return Response.json({ success: false, error: '不能举报自己' });
+    }
+
+    // 检查是否已举报过（同一举报人30天内不能重复举报同一用户）
+    const existing = await env.DB.prepare(
+      `SELECT * FROM reports WHERE reporter_id = ? AND reported_id = ? AND created_at > datetime('now', '-30 days')`
+    ).bind(reporter_id, reported_id).first();
+
+    if (existing) {
+      return Response.json({ success: false, error: '您已举报过该用户，30天内不能重复举报' });
+    }
+
     // 创建举报记录
     await env.DB.prepare(
       `INSERT INTO reports (reporter_id, reported_id, reason) VALUES (?, ?, ?)`

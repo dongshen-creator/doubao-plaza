@@ -2,14 +2,22 @@
 // DELETE /api/users/[id]
 
 export async function onRequestDelete(context) {
-  const { env } = context;
-  const userId = context.params.id;
-
-  if (!userId) {
-    return Response.json({ success: false, error: '用户ID不能为空' });
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
+    const { env } = context;
+    const userId = context.params.id;
+
+    if (!userId) {
+      return Response.json({ success: false, error: '用户ID不能为空' });
+    }
+
     await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
     await env.DB.prepare(`DELETE FROM friendships WHERE user_id = ? OR friend_id = ?`).bind(userId, userId).run();
     await env.DB.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).bind(userId, userId).run();
