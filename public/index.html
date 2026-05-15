@@ -187,11 +187,9 @@
       <button class="modal-close" onclick="closeModal('login')">✕</button>
     </div>
     <div id="loginError"></div>
-    <form onsubmit="event.preventDefault();doLogin()">
     <div class="form-group"><label class="form-label">豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入豆包号或智能体链接"></div>
-    <div class="form-group"><label class="form-label">密码（6位）</label><input class="input" id="loginPwd" type="password" placeholder="输入6位密码" maxlength="6" autocomplete="current-password"></div>
-    <button type="submit" class="btn btn-orange btn-full">登录</button>
-    </form>
+    <div class="form-group"><label class="form-label">密码（6位）</label><input class="input" id="loginPwd" type="password" placeholder="输入6位密码" maxlength="6"></div>
+    <button class="btn btn-orange btn-full" onclick="doLogin()">登录</button>
     <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:#FF6B35;font-weight:600">立即注册</a></p>
   </div>
 </div>
@@ -205,15 +203,13 @@
       <button class="modal-close" onclick="closeModal('register')">✕</button>
     </div>
     <div id="registerError"></div>
-    <form onsubmit="event.preventDefault();doRegister()">
     <div class="form-group"><label class="form-label">姓名 *</label><input class="input" id="regName" placeholder="你的昵称" maxlength="100"></div>
-    <div class="form-group"><label class="form-label">密码 *（6位）</label><input class="input" id="regPassword" type="password" placeholder="设置6位密码" maxlength="6" autocomplete="new-password"></div>
+    <div class="form-group"><label class="form-label">密码 *（6位）</label><input class="input" id="regPassword" type="password" placeholder="设置6位密码" maxlength="6"></div>
     <div class="form-group"><label class="form-label">豆包号</label><input class="input" id="regDoubaoId" placeholder="自定义豆包号（选填）" maxlength="50"><div class="form-hint">豆包号和智能体链接至少填一个</div></div>
     <div class="form-group"><label class="form-label">智能体链接</label><input class="input" id="regAgentUrl" placeholder="https://doubao.com/bot/xxx（选填）"><div class="form-hint">系统会自动检测链接有效性</div></div>
     <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
     <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填）" rows="3" style="resize:vertical"></textarea></div>
-    <button type="submit" class="btn btn-orange btn-full">注册</button>
-    </form>
+    <button class="btn btn-orange btn-full" onclick="doRegister()">注册</button>
     <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:#FF6B35;font-weight:600">去登录</a></p>
   </div>
 </div>
@@ -268,10 +264,6 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`请求失败 (${res.status}): ${text || res.statusText}`);
-  }
   return res.json();
 }
 
@@ -309,20 +301,15 @@ function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g
 async function init() {
   // Try auto login
   if (sessionToken) {
-    try {
-      const res = await api('/api/users/auto-login', {
-        method: 'POST',
-        body: JSON.stringify({ token: sessionToken }),
-      });
-      if (res.success) {
-        currentUser = res.data;
-        sessionToken = res.token;
-        localStorage.setItem('dp_token', sessionToken);
-      } else {
-        localStorage.removeItem('dp_token');
-        sessionToken = null;
-      }
-    } catch (e) {
+    const res = await api('/api/users/auto-login', {
+      method: 'POST',
+      body: JSON.stringify({ token: sessionToken }),
+    });
+    if (res.success) {
+      currentUser = res.data;
+      sessionToken = res.token;
+      localStorage.setItem('dp_token', sessionToken);
+    } else {
       localStorage.removeItem('dp_token');
       sessionToken = null;
     }
@@ -361,25 +348,21 @@ async function doLogin() {
 
   if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
 
-  try {
-    const res = await api('/api/users/login', {
-      method: 'POST',
-      body: JSON.stringify({ identifier, password }),
-    });
+  const res = await api('/api/users/login', {
+    method: 'POST',
+    body: JSON.stringify({ identifier, password }),
+  });
 
-    if (res.success) {
-      currentUser = res.data;
-      sessionToken = res.token;
-      localStorage.setItem('dp_token', sessionToken);
-      closeModal('login');
-      updateNavbar();
-      renderContent();
-      toast(`欢迎回来，${currentUser.name}！`);
-    } else {
-      errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+  if (res.success) {
+    currentUser = res.data;
+    sessionToken = res.token;
+    localStorage.setItem('dp_token', sessionToken);
+    closeModal('login');
+    updateNavbar();
+    renderContent();
+    toast(`欢迎回来，${currentUser.name}！`);
+  } else {
+    errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
   }
 }
 
@@ -397,25 +380,21 @@ async function doRegister() {
   if (password.length !== 6) { errEl.innerHTML = '<div class="form-error">密码必须为6位</div>'; return; }
   if (!doubao_id && !agent_url) { errEl.innerHTML = '<div class="form-error">豆包号和智能体链接至少填一个</div>'; return; }
 
-  try {
-    const res = await api('/api/users', {
-      method: 'POST',
-      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio }),
-    });
+  const res = await api('/api/users', {
+    method: 'POST',
+    body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio }),
+  });
 
-    if (res.success) {
-      currentUser = res.data;
-      sessionToken = res.token;
-      localStorage.setItem('dp_token', sessionToken);
-      closeModal('register');
-      updateNavbar();
-      renderContent();
-      toast('注册成功！欢迎加入逗包用户广场');
-    } else {
-      errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+  if (res.success) {
+    currentUser = res.data;
+    sessionToken = res.token;
+    localStorage.setItem('dp_token', sessionToken);
+    closeModal('register');
+    updateNavbar();
+    renderContent();
+    toast('注册成功！欢迎加入逗包用户广场');
+  } else {
+    errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
   }
 }
 
@@ -507,27 +486,22 @@ async function doSearch() {
   clearBtn.style.display = 'flex';
   countEl.style.display = 'block';
 
-  try {
-    let url = `/api/users?search=${encodeURIComponent(q)}&current_user=${currentUser.id}`;
-    if (doubaoId) url += `&doubao_id=${encodeURIComponent(doubaoId)}`;
-    if (inviteCode) url += `&invite_code=${encodeURIComponent(inviteCode)}`;
-    
-    const res = await api(url);
-    if (!res.success) { countEl.textContent = '搜索失败'; return; }
+  let url = `/api/users?search=${encodeURIComponent(q)}&current_user=${currentUser.id}`;
+  if (doubaoId) url += `&doubao_id=${encodeURIComponent(doubaoId)}`;
+  if (inviteCode) url += `&invite_code=${encodeURIComponent(inviteCode)}`;
+  
+  const res = await api(url);
+  if (!res.success) { countEl.textContent = '搜索失败'; return; }
 
-    const users = res.data;
-    countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
+  const users = res.data;
+  countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
 
-    if (users.length === 0) {
-      resultsEl.innerHTML = `<div class="card empty anim-up"><div class="empty-icon">🔍</div><div class="empty-text">未找到匹配用户</div></div>`;
-      return;
-    }
-
-    resultsEl.innerHTML = `<div class="grid-2">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
-  } catch (e) {
-    countEl.textContent = '搜索出错';
-    resultsEl.innerHTML = '';
+  if (users.length === 0) {
+    resultsEl.innerHTML = `<div class="card empty anim-up"><div class="empty-icon">🔍</div><div class="empty-text">未找到匹配用户</div></div>`;
+    return;
   }
+
+  resultsEl.innerHTML = `<div class="grid-2">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
 }
 
 function clearSearch() {
@@ -571,21 +545,15 @@ function userCardHTML(user, index) {
 async function addFriend(friendId, btn) {
   btn.disabled = true;
   btn.textContent = '...';
-  try {
-    const res = await api('/api/friends', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: currentUser.id, friend_id: friendId }),
-    });
-    if (res.success) {
-      toast('好友申请已发送，等待对方通过');
-      loadFriendRequests();
-    } else {
-      toast(res.error, 'error');
-      btn.disabled = false;
-      btn.textContent = '➕ 加好友';
-    }
-  } catch (e) {
-    toast(e.message, 'error');
+  const res = await api('/api/friends', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id, friend_id: friendId }),
+  });
+  if (res.success) {
+    toast('好友申请已发送，等待对方通过');
+    loadFriendRequests();
+  } else {
+    toast(res.error, 'error');
     btn.disabled = false;
     btn.textContent = '➕ 加好友';
   }
@@ -593,20 +561,16 @@ async function addFriend(friendId, btn) {
 
 // ===== Block User =====
 async function blockUser(userId, btn) {
-  try {
-    const res = await api('/api/blocked', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: currentUser.id, blocked_user_id: userId }),
-    });
-    if (res.success) {
-      toast('已拉黑该用户');
-      doSearch();
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
+  const res = await api('/api/blocked', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id, blocked_user_id: userId }),
+  });
+  if (res.success) {
+    toast('已拉黑该用户');
+    doSearch();
+    loadMyFriends();
+  } else {
+    toast(res.error, 'error');
   }
 }
 
@@ -621,118 +585,98 @@ function showReportModal(userId) {
 async function submitReport() {
   if (!pendingReportUserId) return;
   const reason = document.getElementById('reportReason').value.trim();
-  try {
-    const res = await api('/api/reports', {
-      method: 'POST',
-      body: JSON.stringify({ reporter_id: currentUser.id, reported_id: pendingReportUserId, reason }),
-    });
-    if (res.success) {
-      closeModal('report');
-      toast('举报成功' + (res.punishment ? '，该用户已被处罚' : ''));
-      if (res.punishment) doSearch();
-    } else {
-      document.getElementById('reportError').innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    document.getElementById('reportError').innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+  const res = await api('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify({ reporter_id: currentUser.id, reported_id: pendingReportUserId, reason }),
+  });
+  if (res.success) {
+    closeModal('report');
+    toast('举报成功' + (res.punishment ? '，该用户已被处罚' : ''));
+    if (res.punishment) doSearch();
+  } else {
+    document.getElementById('reportError').innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
   }
 }
 
 // ===== Load Friend Requests =====
 async function loadFriendRequests() {
-  try {
-    const res = await api(`/api/friends?user_id=${currentUser.id}&status=pending`);
-    if (!res.success) return;
-    
-    const requests = res.data.filter(r => !r.is_outgoing); // Only show incoming requests
-    const el = document.getElementById('friendRequests');
-    
-    if (requests.length === 0) { el.innerHTML = ''; return; }
-    
-    el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">📩 待处理的好友申请 (${requests.length})</div>
-        ${requests.map(r => `
-          <div class="card list-item">
-            ${avatarHTML(r.friend, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(r.friend?.name)}</div>
-              <div class="list-item-email">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
-            </div>
-            <button class="btn btn-green btn-sm" onclick="handleFriendRequest('${r.id}', 'accept')">✅ 通过</button>
-            <button class="btn btn-gray btn-sm" onclick="handleFriendRequest('${r.id}', 'reject')">❌ 拒绝</button>
+  const res = await api(`/api/friends?user_id=${currentUser.id}&status=pending`);
+  if (!res.success) return;
+  
+  const requests = res.data.filter(r => !r.is_outgoing); // Only show incoming requests
+  const el = document.getElementById('friendRequests');
+  
+  if (requests.length === 0) { el.innerHTML = ''; return; }
+  
+  el.innerHTML = `
+    <div class="anim-up" style="margin-bottom:16px">
+      <div class="section-label">📩 待处理的好友申请 (${requests.length})</div>
+      ${requests.map(r => `
+        <div class="card list-item">
+          ${avatarHTML(r.friend, true)}
+          <div class="list-item-info">
+            <div class="list-item-name">${esc(r.friend?.name)}</div>
+            <div class="list-item-email">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
           </div>
-        `).join('')}
-      </div>
-    `;
-  } catch (e) {
-    // silently fail
-  }
+          <button class="btn btn-green btn-sm" onclick="handleFriendRequest('${r.id}', 'accept')">✅ 通过</button>
+          <button class="btn btn-gray btn-sm" onclick="handleFriendRequest('${r.id}', 'reject')">❌ 拒绝</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 async function handleFriendRequest(id, action) {
-  try {
-    const res = await api(`/api/friends?id=${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ action }),
-    });
-    if (res.success) {
-      toast(action === 'accept' ? '已通过好友申请' : '已拒绝好友申请');
-      loadFriendRequests();
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
+  const res = await api(`/api/friends?id=${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ action }),
+  });
+  if (res.success) {
+    toast(action === 'accept' ? '已通过好友申请' : '已拒绝好友申请');
+    loadFriendRequests();
+    loadMyFriends();
+  } else {
+    toast(res.error, 'error');
   }
 }
 
 // ===== Load My Friends =====
 async function loadMyFriends() {
-  try {
-    const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
-    if (!res.success) return;
-    
-    const friends = res.data;
-    const el = document.getElementById('myFriends');
-    
-    if (friends.length === 0) { el.innerHTML = ''; return; }
-    
-    el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">👥 我的好友 (${friends.length})</div>
-        <div class="grid-3">
-          ${friends.map(f => `
-            <div class="card friend-row">
-              ${avatarHTML(f.friend, true)}
-              <div class="friend-row-info">
-                <div class="friend-row-name">${esc(f.friend?.name)}</div>
-                <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
-              </div>
-              <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+  const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
+  if (!res.success) return;
+  
+  const friends = res.data;
+  const el = document.getElementById('myFriends');
+  
+  if (friends.length === 0) { el.innerHTML = ''; return; }
+  
+  el.innerHTML = `
+    <div class="anim-up" style="margin-bottom:16px">
+      <div class="section-label">👥 我的好友 (${friends.length})</div>
+      <div class="grid-3">
+        ${friends.map(f => `
+          <div class="card friend-row">
+            ${avatarHTML(f.friend, true)}
+            <div class="friend-row-info">
+              <div class="friend-row-name">${esc(f.friend?.name)}</div>
+              <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
             </div>
-          `).join('')}
-        </div>
+            <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+          </div>
+        `).join('')}
       </div>
-    `;
-  } catch (e) {
-    // silently fail
-  }
+    </div>
+  `;
 }
 
 async function removeFriend(id) {
   if (!confirm('确定要移除这位好友吗？')) return;
-  try {
-    const res = await api(`/api/friends?id=${id}`, { method: 'DELETE' });
-    if (res.success) {
-      toast('已移除好友');
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
+  const res = await api(`/api/friends?id=${id}`, { method: 'DELETE' });
+  if (res.success) {
+    toast('已移除好友');
+    loadMyFriends();
+  } else {
+    toast(res.error, 'error');
   }
 }
 
@@ -743,20 +687,16 @@ async function loadSettings() {
   if (!currentUser) return;
   
   // Load notifications
-  try {
-    const notifRes = await api(`/api/users/${currentUser.id}/settings`);
-    const notifEl = document.getElementById('settingsNotifications');
-    if (notifRes.success && notifRes.data.length > 0) {
-      notifEl.innerHTML = notifRes.data.map(n => `
-        <div class="notification-item notification-${n.severity}">
-          <strong>${n.title}</strong><br>${n.message}
-        </div>
-      `).join('');
-    } else {
-      notifEl.innerHTML = '';
-    }
-  } catch (e) {
-    document.getElementById('settingsNotifications').innerHTML = '';
+  const notifRes = await api(`/api/users/${currentUser.id}/settings`);
+  const notifEl = document.getElementById('settingsNotifications');
+  if (notifRes.success && notifRes.data.length > 0) {
+    notifEl.innerHTML = notifRes.data.map(n => `
+      <div class="notification-item notification-${n.severity}">
+        <strong>${n.title}</strong><br>${n.message}
+      </div>
+    `).join('');
+  } else {
+    notifEl.innerHTML = '';
   }
   
   document.getElementById('settingsAvatar').innerHTML = currentUser.avatar
@@ -804,54 +744,46 @@ async function switchSettingsTab(tab, btnEl) {
       </div>
     `;
   } else if (tab === 'friends') {
-    try {
-      const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
-      const friends = res.data || [];
-      document.getElementById('friendsBadge').textContent = friends.length;
-      document.getElementById('friendsBadge').style.display = friends.length > 0 ? 'flex' : 'none';
+    const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
+    const friends = res.data || [];
+    document.getElementById('friendsBadge').textContent = friends.length;
+    document.getElementById('friendsBadge').style.display = friends.length > 0 ? 'flex' : 'none';
 
-      if (friends.length === 0) {
-        el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无好友</div></div>`;
-      } else {
-        el.innerHTML = friends.map(f => `
-          <div class="list-item">
-            ${avatarHTML(f.friend, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(f.friend?.name)}</div>
-              <div class="list-item-email">${esc(f.friend?.doubao_id || '')}</div>
-              ${f.friend?.bio ? `<div class="list-item-bio">${esc(f.friend.bio)}</div>` : ''}
-            </div>
-            <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+    if (friends.length === 0) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无好友</div></div>`;
+    } else {
+      el.innerHTML = friends.map(f => `
+        <div class="list-item">
+          ${avatarHTML(f.friend, true)}
+          <div class="list-item-info">
+            <div class="list-item-name">${esc(f.friend?.name)}</div>
+            <div class="list-item-email">${esc(f.friend?.doubao_id || '')}</div>
+            ${f.friend?.bio ? `<div class="list-item-bio">${esc(f.friend.bio)}</div>` : ''}
           </div>
-        `).join('');
-      }
-    } catch (e) {
-      el.innerHTML = `<div class="empty"><div class="empty-text">加载失败</div></div>`;
+          <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+        </div>
+      `).join('');
     }
   } else if (tab === 'blocks') {
-    try {
-      const res = await api(`/api/blocked?user_id=${currentUser.id}`);
-      const blocks = res.data || [];
-      document.getElementById('blocksBadge').textContent = blocks.length;
-      document.getElementById('blocksBadge').style.display = blocks.length > 0 ? 'flex' : 'none';
+    const res = await api(`/api/blocked?user_id=${currentUser.id}`);
+    const blocks = res.data || [];
+    document.getElementById('blocksBadge').textContent = blocks.length;
+    document.getElementById('blocksBadge').style.display = blocks.length > 0 ? 'flex' : 'none';
 
-      if (blocks.length === 0) {
-        el.innerHTML = `<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>`;
-      } else {
-        el.innerHTML = blocks.map(b => `
-          <div class="list-item">
-            ${avatarHTML(b.blocked_user, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
-              <div class="list-item-email">${esc(b.blocked_user?.doubao_id || '')}</div>
-              ${b.blocked_user?.bio ? `<div class="list-item-bio">${esc(b.blocked_user.bio)}</div>` : ''}
-            </div>
-            <button class="btn btn-blue btn-sm" onclick="unblockUser('${b.id}')">移出</button>
+    if (blocks.length === 0) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>`;
+    } else {
+      el.innerHTML = blocks.map(b => `
+        <div class="list-item">
+          ${avatarHTML(b.blocked_user, true)}
+          <div class="list-item-info">
+            <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
+            <div class="list-item-email">${esc(b.blocked_user?.doubao_id || '')}</div>
+            ${b.blocked_user?.bio ? `<div class="list-item-bio">${esc(b.blocked_user.bio)}</div>` : ''}
           </div>
-        `).join('');
-      }
-    } catch (e) {
-      el.innerHTML = `<div class="empty"><div class="empty-text">加载失败</div></div>`;
+          <button class="btn btn-blue btn-sm" onclick="unblockUser('${b.id}')">移出</button>
+        </div>
+      `).join('');
     }
   }
 }
@@ -870,80 +802,60 @@ function getPrivacyLabel(setting) {
 async function changePassword() {
   const pwd = document.getElementById('newPwd').value;
   if (!pwd || pwd.length !== 6) { toast('密码必须为6位', 'error'); return; }
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'change_password', password: pwd }),
-    });
-    if (res.success) { toast('密码修改成功'); document.getElementById('newPwd').value = ''; }
-    else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+  const res = await api(`/api/users/${currentUser.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'change_password', password: pwd }),
+  });
+  if (res.success) { toast('密码修改成功'); document.getElementById('newPwd').value = ''; }
+  else toast(res.error, 'error');
 }
 
 async function setInviteCode() {
   const code = document.getElementById('inviteCode').value.trim();
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'set_invite_code', invite_code: code }),
-    });
-    if (res.success) { toast('邀请码设置成功'); currentUser.invite_code = code; }
-    else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+  const res = await api(`/api/users/${currentUser.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'set_invite_code', invite_code: code }),
+  });
+  if (res.success) { toast('邀请码设置成功'); currentUser.invite_code = code; }
+  else toast(res.error, 'error');
 }
 
 async function setPrivacy(setting) {
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'set_privacy', privacy_setting: setting }),
-    });
-    if (res.success) {
-      toast(res.message || '隐私设置已更新');
-      currentUser.privacy_setting = setting;
-      if (res.message?.includes('123456')) currentUser.invite_code = '123456';
-      switchSettingsTab('account');
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+  const res = await api(`/api/users/${currentUser.id}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'set_privacy', privacy_setting: setting }),
+  });
+  if (res.success) {
+    toast(res.message || '隐私设置已更新');
+    currentUser.privacy_setting = setting;
+    if (res.message?.includes('123456')) currentUser.invite_code = '123456';
+    switchSettingsTab('account');
+  } else toast(res.error, 'error');
 }
 
 async function unblockUser(blockId) {
-  try {
-    const res = await api(`/api/blocked?id=${blockId}`, { method: 'DELETE' });
-    if (res.success) {
-      toast('已移出黑名单');
-      switchSettingsTab('blocks');
-      doSearch();
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+  const res = await api(`/api/blocked?id=${blockId}`, { method: 'DELETE' });
+  if (res.success) {
+    toast('已移出黑名单');
+    switchSettingsTab('blocks');
+    doSearch();
+  } else toast(res.error, 'error');
 }
 
 async function deleteAccount() {
   if (!confirm('⚠️ 警告：此操作将永久删除您的账号和所有数据！\n\n包括：\n- 个人资料\n- 好友关系\n- 黑名单记录\n\n此操作不可恢复！\n\n确定要注销账号吗？')) return;
   if (!confirm('最后确认：您真的要永久删除账号吗？')) return;
   
-  try {
-    const res = await api(`/api/users/${currentUser.id}`, { method: 'DELETE' });
-    if (res.success) {
-      closeModal('settings');
-      currentUser = null;
-      sessionToken = null;
-      localStorage.removeItem('dp_token');
-      updateNavbar();
-      renderContent();
-      toast('账号已永久删除', 'info');
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+  const res = await api(`/api/users/${currentUser.id}`, { method: 'DELETE' });
+  if (res.success) {
+    closeModal('settings');
+    currentUser = null;
+    sessionToken = null;
+    localStorage.removeItem('dp_token');
+    updateNavbar();
+    renderContent();
+    toast('账号已永久删除', 'info');
+  } else toast(res.error, 'error');
 }
 
 // ===== Start =====

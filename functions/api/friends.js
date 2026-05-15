@@ -16,8 +16,8 @@ export async function onRequestGet(context) {
 
   // 获取好友列表（包含对方信息）
   const results = await env.DB.prepare(
-    `SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, f.updated_at,
-            u.id as friend_user_id, u.name as friend_name, 
+    `SELECT f.id, f.status, f.created_at, f.updated_at,
+            u.id as friend_id, u.name as friend_name, 
             u.avatar as friend_avatar, u.bio as friend_bio,
             u.doubao_id as friend_doubao_id, u.agent_url as friend_agent_url
      FROM friendships f
@@ -34,7 +34,7 @@ export async function onRequestGet(context) {
     updated_at: r.updated_at,
     is_outgoing: r.user_id === userId, // 是否是我发出的申请
     friend: {
-      id: r.friend_user_id,
+      id: r.friend_id,
       name: r.friend_name,
       avatar: r.friend_avatar,
       bio: r.friend_bio,
