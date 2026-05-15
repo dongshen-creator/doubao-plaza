@@ -3,951 +3,112 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>逗包用户广场</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+  <title>逗包用户广场 - 维护中</title>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#F7F8FC;color:#1a1a2e;min-height:100vh;-webkit-font-smoothing:antialiased}
-    .navbar{background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);position:sticky;top:0;z-index:40;padding:12px 16px}
-    .navbar-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
-    .logo{display:flex;align-items:center;gap:10px}
-    .logo-icon{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 3s ease-in-out infinite}
-    .logo-text{font-size:18px;font-weight:700;color:#1a1a2e}
-    .nav-right{display:flex;align-items:center;gap:8px}
-    .nav-btn{background:transparent;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;color:#6b7280;transition:all .2s}
-    .nav-btn:hover{background:#f3f4f6;color:#1a1a2e}
-    .nav-btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .25s}
-    .nav-btn-primary:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35);transform:translateY(-1px)}
-    .nav-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
-    .nav-user{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:10px;cursor:pointer;transition:background .2s}
-    .nav-user:hover{background:#f3f4f6}
-    .nav-user-name{font-size:13px;font-weight:500;color:#374151;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .badge-dot{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
-    .main{max-width:900px;margin:0 auto;padding:20px 16px}
-    .card{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);padding:16px;transition:box-shadow .25s,transform .25s}
-    .card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06),0 8px 24px rgba(0,0,0,0.06);transform:translateY(-2px)}
-    .input{background:#F7F8FC;border:1.5px solid transparent;border-radius:10px;padding:10px 14px;font-size:14px;width:100%;outline:none;color:#1a1a2e;transition:all .2s}
-    .input::placeholder{color:#9ca3af}
-    .input:focus{border-color:#FF6B35;background:#fff;box-shadow:0 0 0 3px rgba(255,107,53,0.08)}
-    .btn{border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .2s}
-    .btn:active{transform:scale(0.97)}
-    .btn-orange{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff}
-    .btn-orange:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35)}
-    .btn-blue{background:#EFF6FF;color:#2563EB}
-    .btn-blue:hover{background:#DBEAFE}
-    .btn-green{background:#ECFDF5;color:#059669}
-    .btn-red{background:#FEF2F2;color:#DC2626}
-    .btn-red:hover{background:#FEE2E2}
-    .btn-gray{background:#f3f4f6;color:#6b7280}
-    .btn-gray:hover{background:#e5e7eb}
-    .btn-full{width:100%;padding:12px;border-radius:12px;font-size:15px}
-    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
-    .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0;overflow:hidden}
-    .avatar img{width:100%;height:100%;object-fit:cover}
-    .avatar-sm{width:34px;height:34px;font-size:13px}
-    .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-    .tag-green{background:#ECFDF5;color:#059669}
-    .tag-blue{background:#EFF6FF;color:#2563EB}
-    .tag-gray{background:#f3f4f6;color:#6b7280}
-    .tag-red{background:#FEF2F2;color:#DC2626}
-    .tag-orange{background:#FFF3ED;color:#FF6B35}
-    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;animation:fadeIn .2s;padding:16px}
-    .modal{background:#fff;border-radius:20px;padding:28px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;animation:scaleIn .25s;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
-    .modal-lg{max-width:520px}
-    .modal-header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
-    .modal-title{font-size:18px;font-weight:700;color:#1a1a2e}
-    .modal-close{margin-left:auto;background:none;border:none;padding:6px;border-radius:8px;cursor:pointer;color:#9ca3af;font-size:18px}
-    .modal-close:hover{background:#f3f4f6;color:#374151}
-    .form-group{margin-bottom:14px}
-    .form-label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
-    .form-error{background:#FEF2F2;border:1px solid #FECACA;color:#DC2626;font-size:13px;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-weight:500}
-    .form-hint{font-size:11px;color:#9ca3af;margin-top:4px}
-    .tabs{display:flex;gap:4px;background:#F7F8FC;border-radius:12px;padding:4px;margin-bottom:16px}
-    .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .2s;background:transparent;color:#9ca3af}
-    .tab.active{background:#fff;color:#FF6B35;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-    .tab:hover:not(.active){color:#374151}
-    .tab-badge{background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center}
-    .section-label{font-size:11px;font-weight:600;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
-    .list-item{display:flex;align-items:center;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:8px}
-    .list-item-info{flex:1;min-width:0}
-    .list-item-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .list-item-email{font-size:11px;color:#9ca3af;margin-top:2px}
-    .list-item-bio{font-size:11px;color:#9ca3af;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .user-card{padding:16px}
-    .user-card-top{display:flex;align-items:flex-start;gap:12px}
-    .user-card-info{flex:1;min-width:0}
-    .user-card-name{font-size:15px;font-weight:600;color:#1a1a2e}
-    .user-card-id{font-size:12px;color:#9ca3af;margin-top:3px}
-    .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .user-card-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.05)}
-    .search-wrap{position:relative}
-    .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af}
-    .search-input{padding-left:40px}
-    .search-count{margin-top:10px;font-size:12px;color:#9ca3af;font-weight:500}
-    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    @media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}.nav-user-name{display:none}}
-    .welcome{text-align:center;padding:32px 24px}
-    .welcome-icon{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px;box-shadow:0 4px 16px rgba(255,107,53,0.3);animation:float 3s ease-in-out infinite}
-    .welcome h2{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:8px}
-    .welcome p{font-size:14px;color:#9ca3af;max-width:360px;margin:0 auto}
-    .feature-card{text-align:center;padding:16px}
-    .feature-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px}
-    .feature-card h3{font-size:13px;font-weight:600;color:#1a1a2e}
-    .feature-card p{font-size:11px;color:#9ca3af;margin-top:4px}
-    .friend-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;cursor:default}
-    .friend-row-info{flex:1;min-width:0}
-    .friend-row-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .friend-row-id{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .toast-container{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:8px}
-    .toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);font-size:13px;font-weight:500;animation:slideInDown .3s;min-width:240px;max-width:360px}
-    .toast-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
-    .toast-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
-    .toast-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
-    .toast-warning{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
-    .toast-close{background:none;border:none;cursor:pointer;color:#9ca3af;padding:2px;border-radius:4px;font-size:14px}
-    .toast-close:hover{background:rgba(0,0,0,0.05)}
-    .empty{text-align:center;padding:32px 16px}
-    .empty-icon{font-size:40px;margin-bottom:8px}
-    .empty-text{font-size:13px;color:#9ca3af}
-    .rule{display:flex;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:10px}
-    .rule-num{width:24px;height:24px;border-radius:8px;background:#FF6B35;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
-    .rule-text{font-size:13px;color:#4b5563;line-height:1.6}
-    .footer{text-align:center;padding:20px;font-size:12px;color:#d1d5db}
-    .status-dot{width:8px;height:8px;border-radius:50%;background:#4ECDC4;animation:pulse 2s ease-in-out infinite}
-    .notification-item{padding:12px;border-radius:12px;margin-bottom:8px;font-size:13px}
-    .notification-warning{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
-    .notification-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-    @keyframes slideInDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-    .anim-up{animation:fadeInUp .35s ease-out both}
-    .anim-up-d1{animation:fadeInUp .35s ease-out .1s both}
-    .anim-up-d2{animation:fadeInUp .35s ease-out .2s both}
-    .anim-up-d3{animation:fadeInUp .35s ease-out .3s both}
-    ::-webkit-scrollbar{width:5px}
-    ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:10px}
-    .hidden{display:none!important}
-    .login-required{text-align:center;padding:60px 20px}
-    .login-required h3{font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:12px}
-    .login-required p{font-size:14px;color:#9ca3af;margin-bottom:24px}
-    .warning-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:16px;margin-bottom:16px;color:#92400E;font-size:13px}
-    .danger-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;margin-bottom:16px;color:#991B1B;font-size:13px}
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+    .container {
+      text-align: center;
+      padding: 40px 20px;
+      max-width: 500px;
+    }
+    .logo {
+      width: 120px;
+      height: 120px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      font-size: 60px;
+    }
+    h1 {
+      color: white;
+      font-size: 32px;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff3cd;
+      color: #856404;
+      padding: 10px 20px;
+      border-radius: 50px;
+      font-size: 14px;
+      margin-bottom: 25px;
+    }
+    .status::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: #ffc107;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    p {
+      color: #666;
+      line-height: 1.8;
+      margin-bottom: 15px;
+    }
+    .contact {
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid #eee;
+    }
+    .contact-title {
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 15px;
+    }
+    .footer {
+      margin-top: 30px;
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-
-<div class="toast-container" id="toasts"></div>
-
-<nav class="navbar">
-  <div class="navbar-inner">
-    <div class="logo">
-      <div class="logo-icon">✨</div>
-      <span class="logo-text">逗包用户广场</span>
+  <div class="container">
+    <div class="logo">🎭</div>
+    <h1>逗包用户广场</h1>
+    <div class="card">
+      <div class="status">🔧 系统维护中</div>
+      <p>亲爱的用户，您好！</p>
+      <p>逗包用户广场正在进行系统维护，暂时无法访问。</p>
+      <p>维护期间，您可以正常使用豆包 APP，不受影响。</p>
+      <p>感谢您的理解与支持！</p>
+      <div class="contact">
+        <div class="contact-title">如有问题，请联系管理员</div>
+        <p style="font-size: 14px; color: #999;">预计恢复时间：待定</p>
+      </div>
     </div>
-    <div class="nav-right" id="navRight">
-      <button class="nav-btn-primary" onclick="showModal('login')">🔑 登录</button>
-      <button class="nav-btn" onclick="showModal('register')">✨ 注册</button>
-    </div>
+    <div class="footer">© 2024 逗包用户广场</div>
   </div>
-</nav>
-
-<div class="main" id="mainContent">
-  <!-- Content will be rendered by JS -->
-</div>
-
-<div class="footer">逗包用户广场 · 连接豆包智能体用户</div>
-
-<!-- Announcement Modal -->
-<div class="modal-overlay" id="announcementModal" style="display:none">
-  <div class="modal modal-lg">
-    <div class="modal-header">
-      <div style="width:36px;height:36px;border-radius:12px;background:#FFF3ED;display:flex;align-items:center;justify-content:center">📢</div>
-      <div><div class="modal-title">使用须知</div><div style="font-size:11px;color:#9ca3af">首次使用前请阅读</div></div>
-      <button class="modal-close" onclick="closeModal('announcement')">✕</button>
-    </div>
-    <div class="rule"><div class="rule-num">1</div><div class="rule-text">此规则防君子不防小人；</div></div>
-    <div class="rule"><div class="rule-num">2</div><div class="rule-text">如果目的是挂人、网络暴力、冲某人主页、开盒（人肉搜索）、就近约会等违背道德、法律的情况，无论动机是否正当，请不要使用此网站；</div></div>
-    <div class="rule"><div class="rule-num">3</div><div class="rule-text">第一次使用的，请尽快注册账号并设置密码。请不要泄露你的密码。如果你完全不想被搜索到，可开启"全网隐身"，同时你也将无法搜索别人；如果你想让少数的网友访问，请开启白名单模式并设置邀请码；</div></div>
-    <div class="rule"><div class="rule-num">4</div><div class="rule-text">受技术限制、法律限制和成本限制，本站不得不砍掉聊天功能。请需要交流的用户们在自己的豆包主页进行互动。</div></div>
-    <button class="btn btn-orange btn-full" style="margin-top:20px" onclick="closeModal('announcement')">我已知晓</button>
-  </div>
-</div>
-
-<!-- Login Modal -->
-<div class="modal-overlay" id="loginModal" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#4ECDC4,#6EE7DE);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">🔑</div>
-      <div class="modal-title">欢迎回来</div>
-      <button class="modal-close" onclick="closeModal('login')">✕</button>
-    </div>
-    <div id="loginError"></div>
-    <form onsubmit="event.preventDefault();doLogin()">
-    <div class="form-group"><label class="form-label">豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入豆包号或智能体链接"></div>
-    <div class="form-group"><label class="form-label">密码（6位）</label><input class="input" id="loginPwd" type="password" placeholder="输入6位密码" maxlength="6" autocomplete="current-password"></div>
-    <button type="submit" class="btn btn-orange btn-full">登录</button>
-    </form>
-    <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:#FF6B35;font-weight:600">立即注册</a></p>
-  </div>
-</div>
-
-<!-- Register Modal -->
-<div class="modal-overlay" id="registerModal" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">✨</div>
-      <div class="modal-title">创建账号</div>
-      <button class="modal-close" onclick="closeModal('register')">✕</button>
-    </div>
-    <div id="registerError"></div>
-    <form onsubmit="event.preventDefault();doRegister()">
-    <div class="form-group"><label class="form-label">姓名 *</label><input class="input" id="regName" placeholder="你的昵称" maxlength="100"></div>
-    <div class="form-group"><label class="form-label">密码 *（6位）</label><input class="input" id="regPassword" type="password" placeholder="设置6位密码" maxlength="6" autocomplete="new-password"></div>
-    <div class="form-group"><label class="form-label">豆包号</label><input class="input" id="regDoubaoId" placeholder="自定义豆包号（选填）" maxlength="50"><div class="form-hint">豆包号和智能体链接至少填一个</div></div>
-    <div class="form-group"><label class="form-label">智能体链接</label><input class="input" id="regAgentUrl" placeholder="https://doubao.com/bot/xxx（选填）"><div class="form-hint">系统会自动检测链接有效性</div></div>
-    <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
-    <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填）" rows="3" style="resize:vertical"></textarea></div>
-    <button type="submit" class="btn btn-orange btn-full">注册</button>
-    </form>
-    <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:#FF6B35;font-weight:600">去登录</a></p>
-  </div>
-</div>
-
-<!-- Settings Modal -->
-<div class="modal-overlay" id="settingsModal" style="display:none">
-  <div class="modal modal-lg">
-    <div class="modal-header">
-      <div class="modal-title">设置</div>
-      <button class="modal-close" onclick="closeModal('settings')">✕</button>
-    </div>
-    <div id="settingsNotifications"></div>
-    <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#F7F8FC;border-radius:16px;margin-bottom:16px">
-      <div class="avatar" id="settingsAvatar">?</div>
-      <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#1a1a2e" id="settingsName">-</div><div style="font-size:12px;color:#9ca3af" id="settingsId">-</div></div>
-      <div class="status-dot"></div>
-    </div>
-    <div class="tabs">
-      <button class="tab active" onclick="switchSettingsTab('account',this)">⚙️ 账号</button>
-      <button class="tab" onclick="switchSettingsTab('friends',this)">👥 好友 <span class="tab-badge" id="friendsBadge" style="display:none">0</span></button>
-      <button class="tab" onclick="switchSettingsTab('blocks',this)">🚫 黑名单 <span class="tab-badge" id="blocksBadge" style="display:none">0</span></button>
-    </div>
-    <div id="settingsContent" style="max-height:400px;overflow-y:auto"></div>
-  </div>
-</div>
-
-<!-- Report Modal -->
-<div class="modal-overlay" id="reportModal" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div style="width:32px;height:32px;border-radius:10px;background:#FEF2F2;display:flex;align-items:center;justify-content:center;color:#DC2626;font-size:16px">🚨</div>
-      <div class="modal-title">举报用户</div>
-      <button class="modal-close" onclick="closeModal('report')">✕</button>
-    </div>
-    <div id="reportError"></div>
-    <div class="form-group"><label class="form-label">举报原因（选填）</label><textarea class="input" id="reportReason" placeholder="请简要说明举报原因..." rows="3"></textarea></div>
-    <div class="warning-box">⚠️ 恶意举报将会受到处罚。同一用户30天内只能举报一次。</div>
-    <button class="btn btn-red btn-full" onclick="submitReport()">确认举报</button>
-  </div>
-</div>
-
-<script>
-// ===== State =====
-let currentUser = null;
-let sessionToken = localStorage.getItem('dp_token');
-let searchTimer = null;
-let pendingReportUserId = null;
-
-// ===== API Helper =====
-async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`请求失败 (${res.status}): ${text || res.statusText}`);
-  }
-  return res.json();
-}
-
-// ===== Toast =====
-function toast(message, type = 'success') {
-  const container = document.getElementById('toasts');
-  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.innerHTML = `<span>${icons[type]}</span><span style="flex:1">${message}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
-  container.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
-}
-
-// ===== Modal =====
-function showModal(name) {
-  document.getElementById(name + 'Modal').style.display = 'flex';
-  if (name === 'settings') loadSettings();
-}
-function closeModal(name) {
-  document.getElementById(name + 'Modal').style.display = 'none';
-  if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
-}
-
-// ===== Avatar HTML =====
-function avatarHTML(user, small = false) {
-  const cls = small ? 'avatar avatar-sm' : 'avatar';
-  if (user?.avatar) return `<div class="${cls}"><img src="${esc(user.avatar)}" alt="" onerror="this.style.display='none'"></div>`;
-  return `<div class="${cls}">${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
-}
-
-function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-// ===== Init =====
-async function init() {
-  // Try auto login
-  if (sessionToken) {
-    try {
-      const res = await api('/api/users/auto-login', {
-        method: 'POST',
-        body: JSON.stringify({ token: sessionToken }),
-      });
-      if (res.success) {
-        currentUser = res.data;
-        sessionToken = res.token;
-        localStorage.setItem('dp_token', sessionToken);
-      } else {
-        localStorage.removeItem('dp_token');
-        sessionToken = null;
-      }
-    } catch (e) {
-      localStorage.removeItem('dp_token');
-      sessionToken = null;
-    }
-  }
-  
-  updateNavbar();
-  if (!localStorage.getItem('dp_announcement_seen')) showModal('announcement');
-  renderContent();
-}
-
-// ===== Navbar =====
-function updateNavbar() {
-  const el = document.getElementById('navRight');
-  if (currentUser) {
-    el.innerHTML = `
-      <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
-      <div class="nav-user" onclick="showModal('settings')">
-        ${avatarHTML(currentUser, true)}
-        <span class="nav-user-name">${esc(currentUser.name)}</span>
-      </div>
-      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪 退出</button>
-    `;
-  } else {
-    el.innerHTML = `
-      <button class="nav-btn" onclick="showModal('login')">🔑 登录</button>
-      <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
-    `;
-  }
-}
-
-// ===== Login =====
-async function doLogin() {
-  const identifier = document.getElementById('loginId').value.trim();
-  const password = document.getElementById('loginPwd').value;
-  const errEl = document.getElementById('loginError');
-
-  if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
-
-  try {
-    const res = await api('/api/users/login', {
-      method: 'POST',
-      body: JSON.stringify({ identifier, password }),
-    });
-
-    if (res.success) {
-      currentUser = res.data;
-      sessionToken = res.token;
-      localStorage.setItem('dp_token', sessionToken);
-      closeModal('login');
-      updateNavbar();
-      renderContent();
-      toast(`欢迎回来，${currentUser.name}！`);
-    } else {
-      errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
-  }
-}
-
-// ===== Register =====
-async function doRegister() {
-  const name = document.getElementById('regName').value.trim();
-  const password = document.getElementById('regPassword').value;
-  const doubao_id = document.getElementById('regDoubaoId').value.trim();
-  const agent_url = document.getElementById('regAgentUrl').value.trim();
-  const avatar = document.getElementById('regAvatar').value.trim();
-  const bio = document.getElementById('regBio').value.trim();
-  const errEl = document.getElementById('registerError');
-
-  if (!name || !password) { errEl.innerHTML = '<div class="form-error">姓名和密码是必填项</div>'; return; }
-  if (password.length !== 6) { errEl.innerHTML = '<div class="form-error">密码必须为6位</div>'; return; }
-  if (!doubao_id && !agent_url) { errEl.innerHTML = '<div class="form-error">豆包号和智能体链接至少填一个</div>'; return; }
-
-  try {
-    const res = await api('/api/users', {
-      method: 'POST',
-      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio }),
-    });
-
-    if (res.success) {
-      currentUser = res.data;
-      sessionToken = res.token;
-      localStorage.setItem('dp_token', sessionToken);
-      closeModal('register');
-      updateNavbar();
-      renderContent();
-      toast('注册成功！欢迎加入逗包用户广场');
-    } else {
-      errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
-  }
-}
-
-// ===== Logout =====
-function doLogout() {
-  currentUser = null;
-  sessionToken = null;
-  localStorage.removeItem('dp_token');
-  updateNavbar();
-  renderContent();
-  toast('已退出登录', 'info');
-}
-
-// ===== Render Content =====
-async function renderContent() {
-  const el = document.getElementById('mainContent');
-  
-  if (!currentUser) {
-    // Not logged in - show login required
-    el.innerHTML = `
-      <div class="login-required">
-        <div class="welcome-icon" style="margin-bottom:24px">🔒</div>
-        <h3>请先登录</h3>
-        <p>登录后即可搜索用户、添加好友、管理个人资料</p>
-        <button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px" onclick="showModal('login')">立即登录</button>
-        <p style="margin-top:16px;font-size:13px;color:#9ca3af">还没有账号？<a href="#" onclick="showModal('register');return false" style="color:#FF6B35">立即注册</a></p>
-      </div>
-    `;
-    return;
-  }
-  
-  // Logged in - show full interface
-  let html = `
-    <!-- Search -->
-    <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <div class="search-wrap" style="flex:1">
-          <span class="search-icon">🔍</span>
-          <input class="input search-input" id="searchInput" placeholder="搜索用户姓名或简介..." oninput="debounceSearch()">
-        </div>
-        <button class="nav-btn" id="clearBtn" style="display:none" onclick="clearSearch()">✕ 清除</button>
-      </div>
-      <div style="display:flex;gap:8px">
-        <input class="input" id="searchDoubaoId" placeholder="豆包号（白名单搜索用）" style="flex:1">
-        <input class="input" id="searchInviteCode" placeholder="邀请码" style="flex:1">
-      </div>
-      <div class="search-count" id="searchCount" style="display:none"></div>
-    </div>
-    
-    <!-- Search Results -->
-    <div id="searchResults"></div>
-    
-    <!-- Friend Requests (Pending) -->
-    <div id="friendRequests"></div>
-    
-    <!-- My Friends -->
-    <div id="myFriends"></div>
-    
-    <!-- Welcome -->
-    <div class="card welcome anim-up">
-      <div class="welcome-icon">✨</div>
-      <h2>欢迎来到逗包用户广场</h2>
-      <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
-    </div>
-  `;
-  
-  el.innerHTML = html;
-  
-  // Load initial data
-  loadFriendRequests();
-  loadMyFriends();
-}
-
-// ===== Search =====
-function debounceSearch() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(doSearch, 300);
-}
-
-async function doSearch() {
-  const q = document.getElementById('searchInput').value.trim();
-  const doubaoId = document.getElementById('searchDoubaoId').value.trim();
-  const inviteCode = document.getElementById('searchInviteCode').value.trim();
-  const clearBtn = document.getElementById('clearBtn');
-  const countEl = document.getElementById('searchCount');
-  const resultsEl = document.getElementById('searchResults');
-
-  if (!q && !doubaoId) { clearBtn.style.display = 'none'; countEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
-  clearBtn.style.display = 'flex';
-  countEl.style.display = 'block';
-
-  try {
-    let url = `/api/users?search=${encodeURIComponent(q)}&current_user=${currentUser.id}`;
-    if (doubaoId) url += `&doubao_id=${encodeURIComponent(doubaoId)}`;
-    if (inviteCode) url += `&invite_code=${encodeURIComponent(inviteCode)}`;
-    
-    const res = await api(url);
-    if (!res.success) { countEl.textContent = '搜索失败'; return; }
-
-    const users = res.data;
-    countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
-
-    if (users.length === 0) {
-      resultsEl.innerHTML = `<div class="card empty anim-up"><div class="empty-icon">🔍</div><div class="empty-text">未找到匹配用户</div></div>`;
-      return;
-    }
-
-    resultsEl.innerHTML = `<div class="grid-2">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
-  } catch (e) {
-    countEl.textContent = '搜索出错';
-    resultsEl.innerHTML = '';
-  }
-}
-
-function clearSearch() {
-  document.getElementById('searchInput').value = '';
-  document.getElementById('searchDoubaoId').value = '';
-  document.getElementById('searchInviteCode').value = '';
-  document.getElementById('clearBtn').style.display = 'none';
-  document.getElementById('searchCount').style.display = 'none';
-  document.getElementById('searchResults').innerHTML = '';
-}
-
-// ===== User Card =====
-function userCardHTML(user, index) {
-  const delay = index * 0.06;
-  const isSelf = currentUser && user.id === currentUser.id;
-  
-  return `
-    <div class="card user-card anim-up" style="animation-delay:${delay}s">
-      <div class="user-card-top">
-        ${avatarHTML(user)}
-        <div class="user-card-info">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="user-card-name">${esc(user.name)}</span>
-            ${user.privacy_setting === 'whitelist' || user.privacy_setting === 'punished_whitelist' ? '<span class="tag tag-blue">白名单</span>' : ''}
-            ${user.privacy_setting === 'stealth' || user.privacy_setting === 'punished_stealth' ? '<span class="tag tag-gray">隐身</span>' : ''}
-          </div>
-          ${user.doubao_id ? `<div class="user-card-id">@${esc(user.doubao_id)}</div>` : ''}
-          ${user.bio ? `<div class="user-card-bio">${esc(user.bio)}</div>` : ''}
-        </div>
-      </div>
-      <div class="user-card-actions">
-        ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1">🔗 访问主页</a>` : '<div style="flex:1"></div>'}
-        ${!isSelf ? `<button class="btn btn-blue btn-sm" onclick="addFriend('${user.id}',this)">➕ 加好友</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)">🚫</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-red btn-sm" onclick="showReportModal('${user.id}')">🚨</button>` : ''}
-      </div>
-    </div>`;
-}
-
-// ===== Add Friend =====
-async function addFriend(friendId, btn) {
-  btn.disabled = true;
-  btn.textContent = '...';
-  try {
-    const res = await api('/api/friends', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: currentUser.id, friend_id: friendId }),
-    });
-    if (res.success) {
-      toast('好友申请已发送，等待对方通过');
-      loadFriendRequests();
-    } else {
-      toast(res.error, 'error');
-      btn.disabled = false;
-      btn.textContent = '➕ 加好友';
-    }
-  } catch (e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
-    btn.textContent = '➕ 加好友';
-  }
-}
-
-// ===== Block User =====
-async function blockUser(userId, btn) {
-  try {
-    const res = await api('/api/blocked', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: currentUser.id, blocked_user_id: userId }),
-    });
-    if (res.success) {
-      toast('已拉黑该用户');
-      doSearch();
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-// ===== Report =====
-function showReportModal(userId) {
-  pendingReportUserId = userId;
-  document.getElementById('reportReason').value = '';
-  document.getElementById('reportError').innerHTML = '';
-  showModal('report');
-}
-
-async function submitReport() {
-  if (!pendingReportUserId) return;
-  const reason = document.getElementById('reportReason').value.trim();
-  try {
-    const res = await api('/api/reports', {
-      method: 'POST',
-      body: JSON.stringify({ reporter_id: currentUser.id, reported_id: pendingReportUserId, reason }),
-    });
-    if (res.success) {
-      closeModal('report');
-      toast('举报成功' + (res.punishment ? '，该用户已被处罚' : ''));
-      if (res.punishment) doSearch();
-    } else {
-      document.getElementById('reportError').innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
-    }
-  } catch (e) {
-    document.getElementById('reportError').innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
-  }
-}
-
-// ===== Load Friend Requests =====
-async function loadFriendRequests() {
-  try {
-    const res = await api(`/api/friends?user_id=${currentUser.id}&status=pending`);
-    if (!res.success) return;
-    
-    const requests = res.data.filter(r => !r.is_outgoing); // Only show incoming requests
-    const el = document.getElementById('friendRequests');
-    
-    if (requests.length === 0) { el.innerHTML = ''; return; }
-    
-    el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">📩 待处理的好友申请 (${requests.length})</div>
-        ${requests.map(r => `
-          <div class="card list-item">
-            ${avatarHTML(r.friend, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(r.friend?.name)}</div>
-              <div class="list-item-email">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
-            </div>
-            <button class="btn btn-green btn-sm" onclick="handleFriendRequest('${r.id}', 'accept')">✅ 通过</button>
-            <button class="btn btn-gray btn-sm" onclick="handleFriendRequest('${r.id}', 'reject')">❌ 拒绝</button>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  } catch (e) {
-    // silently fail
-  }
-}
-
-async function handleFriendRequest(id, action) {
-  try {
-    const res = await api(`/api/friends?id=${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ action }),
-    });
-    if (res.success) {
-      toast(action === 'accept' ? '已通过好友申请' : '已拒绝好友申请');
-      loadFriendRequests();
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-// ===== Load My Friends =====
-async function loadMyFriends() {
-  try {
-    const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
-    if (!res.success) return;
-    
-    const friends = res.data;
-    const el = document.getElementById('myFriends');
-    
-    if (friends.length === 0) { el.innerHTML = ''; return; }
-    
-    el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">👥 我的好友 (${friends.length})</div>
-        <div class="grid-3">
-          ${friends.map(f => `
-            <div class="card friend-row">
-              ${avatarHTML(f.friend, true)}
-              <div class="friend-row-info">
-                <div class="friend-row-name">${esc(f.friend?.name)}</div>
-                <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
-              </div>
-              <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    // silently fail
-  }
-}
-
-async function removeFriend(id) {
-  if (!confirm('确定要移除这位好友吗？')) return;
-  try {
-    const res = await api(`/api/friends?id=${id}`, { method: 'DELETE' });
-    if (res.success) {
-      toast('已移除好友');
-      loadMyFriends();
-    } else {
-      toast(res.error, 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-// ===== Settings =====
-let settingsTab = 'account';
-
-async function loadSettings() {
-  if (!currentUser) return;
-  
-  // Load notifications
-  try {
-    const notifRes = await api(`/api/users/${currentUser.id}/settings`);
-    const notifEl = document.getElementById('settingsNotifications');
-    if (notifRes.success && notifRes.data.length > 0) {
-      notifEl.innerHTML = notifRes.data.map(n => `
-        <div class="notification-item notification-${n.severity}">
-          <strong>${n.title}</strong><br>${n.message}
-        </div>
-      `).join('');
-    } else {
-      notifEl.innerHTML = '';
-    }
-  } catch (e) {
-    document.getElementById('settingsNotifications').innerHTML = '';
-  }
-  
-  document.getElementById('settingsAvatar').innerHTML = currentUser.avatar
-    ? `<img src="${esc(currentUser.avatar)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
-    : currentUser.name.charAt(0).toUpperCase();
-  document.getElementById('settingsName').textContent = currentUser.name;
-  document.getElementById('settingsId').textContent = currentUser.doubao_id ? `@${currentUser.doubao_id}` : (currentUser.agent_url || '未设置豆包号');
-  switchSettingsTab('account');
-}
-
-async function switchSettingsTab(tab, btnEl) {
-  settingsTab = tab;
-  document.querySelectorAll('#settingsModal .tab').forEach(t => t.classList.remove('active'));
-  if (btnEl) btnEl.classList.add('active');
-  else document.querySelectorAll('#settingsModal .tab')[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2].classList.add('active');
-
-  const el = document.getElementById('settingsContent');
-
-  if (tab === 'account') {
-    el.innerHTML = `
-      <div class="form-group"><label class="form-label">修改密码</label>
-        <div style="display:flex;gap:8px">
-          <input class="input" id="newPwd" type="password" placeholder="新密码（6位）" maxlength="6" style="flex:1">
-          <button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label">邀请码</label>
-        <div style="display:flex;gap:8px">
-          <input class="input" id="inviteCode" placeholder="设置邀请码" value="${esc(currentUser.invite_code || '')}" style="flex:1">
-          <button class="btn btn-blue btn-sm" onclick="setInviteCode()">保存</button>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label">隐私模式</label>
-        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
-          <button class="btn btn-sm ${currentUser.privacy_setting === 'searchable' ? 'btn-green' : 'btn-gray'}" onclick="setPrivacy('searchable')">🌐 可搜索</button>
-          <button class="btn btn-sm ${currentUser.privacy_setting === 'whitelist' || currentUser.privacy_setting === 'punished_whitelist' ? 'btn-blue' : 'btn-gray'}" onclick="setPrivacy('whitelist')">🔐 白名单</button>
-          <button class="btn btn-sm ${currentUser.privacy_setting === 'stealth' || currentUser.privacy_setting === 'punished_stealth' ? 'btn-gray' : 'btn-gray'}" onclick="setPrivacy('stealth')">👻 隐身</button>
-        </div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:6px">当前：${getPrivacyLabel(currentUser.privacy_setting)}</div>
-      </div>
-      <div class="danger-box">
-        <strong>⚠️ 危险区域</strong><br>
-        注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>
-        <button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button>
-      </div>
-    `;
-  } else if (tab === 'friends') {
-    try {
-      const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
-      const friends = res.data || [];
-      document.getElementById('friendsBadge').textContent = friends.length;
-      document.getElementById('friendsBadge').style.display = friends.length > 0 ? 'flex' : 'none';
-
-      if (friends.length === 0) {
-        el.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无好友</div></div>`;
-      } else {
-        el.innerHTML = friends.map(f => `
-          <div class="list-item">
-            ${avatarHTML(f.friend, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(f.friend?.name)}</div>
-              <div class="list-item-email">${esc(f.friend?.doubao_id || '')}</div>
-              ${f.friend?.bio ? `<div class="list-item-bio">${esc(f.friend.bio)}</div>` : ''}
-            </div>
-            <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
-          </div>
-        `).join('');
-      }
-    } catch (e) {
-      el.innerHTML = `<div class="empty"><div class="empty-text">加载失败</div></div>`;
-    }
-  } else if (tab === 'blocks') {
-    try {
-      const res = await api(`/api/blocked?user_id=${currentUser.id}`);
-      const blocks = res.data || [];
-      document.getElementById('blocksBadge').textContent = blocks.length;
-      document.getElementById('blocksBadge').style.display = blocks.length > 0 ? 'flex' : 'none';
-
-      if (blocks.length === 0) {
-        el.innerHTML = `<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>`;
-      } else {
-        el.innerHTML = blocks.map(b => `
-          <div class="list-item">
-            ${avatarHTML(b.blocked_user, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
-              <div class="list-item-email">${esc(b.blocked_user?.doubao_id || '')}</div>
-              ${b.blocked_user?.bio ? `<div class="list-item-bio">${esc(b.blocked_user.bio)}</div>` : ''}
-            </div>
-            <button class="btn btn-blue btn-sm" onclick="unblockUser('${b.id}')">移出</button>
-          </div>
-        `).join('');
-      }
-    } catch (e) {
-      el.innerHTML = `<div class="empty"><div class="empty-text">加载失败</div></div>`;
-    }
-  }
-}
-
-function getPrivacyLabel(setting) {
-  const labels = {
-    'searchable': '可搜索 - 任何人都能搜索到你',
-    'whitelist': '白名单 - 需要豆包号和邀请码才能搜索',
-    'stealth': '隐身 - 完全不可被搜索',
-    'punished_whitelist': '白名单（处罚中）- 被多次举报，暂时限制',
-    'punished_stealth': '隐身（处罚中）- 被多次举报，暂时限制'
-  };
-  return labels[setting] || setting;
-}
-
-async function changePassword() {
-  const pwd = document.getElementById('newPwd').value;
-  if (!pwd || pwd.length !== 6) { toast('密码必须为6位', 'error'); return; }
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'change_password', password: pwd }),
-    });
-    if (res.success) { toast('密码修改成功'); document.getElementById('newPwd').value = ''; }
-    else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-async function setInviteCode() {
-  const code = document.getElementById('inviteCode').value.trim();
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'set_invite_code', invite_code: code }),
-    });
-    if (res.success) { toast('邀请码设置成功'); currentUser.invite_code = code; }
-    else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-async function setPrivacy(setting) {
-  try {
-    const res = await api(`/api/users/${currentUser.id}/settings`, {
-      method: 'PUT',
-      body: JSON.stringify({ action: 'set_privacy', privacy_setting: setting }),
-    });
-    if (res.success) {
-      toast(res.message || '隐私设置已更新');
-      currentUser.privacy_setting = setting;
-      if (res.message?.includes('123456')) currentUser.invite_code = '123456';
-      switchSettingsTab('account');
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-async function unblockUser(blockId) {
-  try {
-    const res = await api(`/api/blocked?id=${blockId}`, { method: 'DELETE' });
-    if (res.success) {
-      toast('已移出黑名单');
-      switchSettingsTab('blocks');
-      doSearch();
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-async function deleteAccount() {
-  if (!confirm('⚠️ 警告：此操作将永久删除您的账号和所有数据！\n\n包括：\n- 个人资料\n- 好友关系\n- 黑名单记录\n\n此操作不可恢复！\n\n确定要注销账号吗？')) return;
-  if (!confirm('最后确认：您真的要永久删除账号吗？')) return;
-  
-  try {
-    const res = await api(`/api/users/${currentUser.id}`, { method: 'DELETE' });
-    if (res.success) {
-      closeModal('settings');
-      currentUser = null;
-      sessionToken = null;
-      localStorage.removeItem('dp_token');
-      updateNavbar();
-      renderContent();
-      toast('账号已永久删除', 'info');
-    } else toast(res.error, 'error');
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-// ===== Start =====
-init();
-</script>
 </body>
 </html>
