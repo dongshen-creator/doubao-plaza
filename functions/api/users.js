@@ -24,6 +24,21 @@ function generateToken() {
   return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function checkAgentUrlAccessible(url) {
+  // 尝试验证链接是否可访问
+  // 由于 CORS 限制，这里只能做简单的域名验证
+  // 实际项目中可以配置 Cloudflare Workers 做代理验证
+  try {
+    const u = new URL(url);
+    // 只允许豆包和 Coze 的域名
+    const allowedDomains = ['doubao.com', 'www.doubao.com', 'coze.cn', 'www.coze.cn', 'coze.com'];
+    const isAllowed = allowedDomains.some(domain => u.hostname === domain || u.hostname.endsWith('.' + domain));
+    return isAllowed;
+  } catch {
+    return false;
+  }
+}
+
 export async function onRequestGet(context) {
   // 首先检查环境变量
   if (!context.env.DB) {
@@ -96,7 +111,7 @@ export async function onRequestGet(context) {
     }
 
     const results = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, invite_code, created_at 
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at 
        FROM users ${whereClause} ORDER BY created_at DESC`
     ).bind(...params).all();
 
@@ -118,39 +133,61 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { name, password, doubao_id, agent_url, avatar, bio, invite_code } = body;
+    const { name, password, doubao_id, agent_url, avatar, bio, device_fingerprint } = body;
 
+    // 基本验证
     if (!name || !password) {
       return Response.json({ success: false, error: '姓名和密码是必填项' });
     }
     if (password.length !== 6) {
       return Response.json({ success: false, error: '密码必须为6位' });
     }
-    if (!doubao_id && !agent_url) {
-      return Response.json({ success: false, error: '豆包号和智能体链接至少填一个' });
+    if (!doubao_id || !agent_url) {
+      return Response.json({ success: false, error: '豆包号和智能体链接都必须填写' });
     }
-    if (agent_url && !isValidAgentUrl(agent_url)) {
+    
+    // 验证智能体链接格式
+    if (!isValidAgentUrl(agent_url)) {
       return Response.json({ success: false, error: '智能体链接格式不正确，请使用豆包或Coze平台的链接' });
     }
-
-    if (doubao_id) {
-      const existing = await env.DB.prepare(`SELECT id FROM users WHERE doubao_id = ?`).bind(doubao_id).first();
-      if (existing) return Response.json({ success: false, error: '该豆包号已被注册' });
-    }
-    if (agent_url) {
-      const existing = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(agent_url).first();
-      if (existing) return Response.json({ success: false, error: '该智能体链接已被注册' });
+    
+    // 验证智能体链接域名是否合法
+    const isAccessible = await checkAgentUrlAccessible(agent_url);
+    if (!isAccessible) {
+      return Response.json({ success: false, error: '智能体链接无效，请使用有效的豆包或Coze链接' });
     }
 
+    // 检查设备指纹（同一设备是否已注册过）
+    if (device_fingerprint) {
+      const existingDevice = await env.DB.prepare(
+        `SELECT id FROM users WHERE device_fingerprint = ?`
+      ).bind(device_fingerprint).first();
+      
+      if (existingDevice) {
+        return Response.json({ success: false, error: '该设备/浏览器已注册过账号，每个设备只能注册一个账号' });
+      }
+    }
+
+    // 检查豆包号是否已注册
+    const existingDoubaoId = await env.DB.prepare(`SELECT id FROM users WHERE doubao_id = ?`).bind(doubao_id).first();
+    if (existingDoubaoId) return Response.json({ success: false, error: '该豆包号已被注册' });
+    
+    // 检查智能体链接是否已注册
+    const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(agent_url).first();
+    if (existingAgentUrl) return Response.json({ success: false, error: '该智能体链接已被注册' });
+
+    // 创建用户
     const result = await env.DB.prepare(
-      `INSERT INTO users (name, password, doubao_id, agent_url, avatar, bio, invite_code) 
+      `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(name, password, doubao_id || null, agent_url || null, avatar || null, bio || null, invite_code || null).run();
+    ).bind(name, password, doubao_id, agent_url, device_fingerprint || null, avatar || null, bio || null).run();
+
+    const userId = result.meta.last_row_id;
 
     const user = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, invite_code, created_at 
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at 
        FROM users WHERE id = ?`
-    ).bind(result.meta.last_row_id).first();
+    ).bind(userId).first();
 
     // 创建会话
     const token = generateToken();
