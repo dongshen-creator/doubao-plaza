@@ -1,5 +1,5 @@
 -- 逗包用户广场 D1 数据库初始化脚本
--- 更新版：添加设备指纹，去掉注册邀请码
+-- 更新版：添加公告、功能、开发者管理
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
@@ -8,10 +8,11 @@ CREATE TABLE IF NOT EXISTS users (
   avatar TEXT,
   bio TEXT,
   password TEXT NOT NULL,
-  doubao_id TEXT UNIQUE,           -- 豆包号，唯一
-  agent_url TEXT UNIQUE,           -- 智能体链接，唯一
-  device_fingerprint TEXT,         -- 设备指纹，防多注册
-  invite_code TEXT,                -- 白名单邀请码（仅白名单模式使用）
+  doubao_id TEXT UNIQUE,
+  agent_url TEXT UNIQUE,
+  device_fingerprint TEXT,
+  invite_code TEXT,
+  is_developer INTEGER DEFAULT 0,
   privacy_setting TEXT DEFAULT 'searchable',
   punished_until TEXT,
   punish_reason TEXT,
@@ -59,6 +60,28 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- 网站公告表
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+
+-- 功能图标表
+CREATE TABLE IF NOT EXISTS features (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  title TEXT NOT NULL,
+  icon_url TEXT,
+  link_url TEXT NOT NULL,
+  sort_order INTEGER DEFAULT 0,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_users_doubao_id ON users(doubao_id);
 CREATE INDEX IF NOT EXISTS idx_users_agent_url ON users(agent_url);
@@ -71,3 +94,4 @@ CREATE INDEX IF NOT EXISTS idx_blocked_target ON blocked_users(blocked_user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_reported ON reports(reported_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_features_order ON features(sort_order);

@@ -80,7 +80,7 @@
     .user-card-info{flex:1;min-width:0}
     .user-card-name{font-size:15px;font-weight:600;color:#1a1a2e}
     .user-card-id{font-size:12px;color:#9ca3af;margin-top:3px}
-    .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;word-break:break-all;white-space:pre-wrap}
     .user-card-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.05)}
     .search-wrap{position:relative}
     .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af}
@@ -175,7 +175,11 @@
     <div class="rule"><div class="rule-num">1</div><div class="rule-text">此规则防君子不防小人；</div></div>
     <div class="rule"><div class="rule-num">2</div><div class="rule-text">如果目的是挂人、网络暴力、冲某人主页、开盒（人肉搜索）、就近约会等违背道德、法律的情况，无论动机是否正当，请不要使用此网站；</div></div>
     <div class="rule"><div class="rule-num">3</div><div class="rule-text">第一次使用的，请尽快注册账号并设置密码。请不要泄露你的密码。如果你完全不想被搜索到，可开启"全网隐身"，同时你也将无法搜索别人；如果你想让少数的网友访问，请开启白名单模式并设置邀请码；</div></div>
-    <div class="rule"><div class="rule-num">4</div><div class="rule-text">受技术限制、法律限制和成本限制，本站不得不砍掉聊天功能。请需要交流的用户们在自己的豆包主页进行互动。</div></div>
+    <div class="rule"><div class="rule-num">4</div><div class="rule-text">受技术限制、法律限制和成本限制本站不得不砍掉聊天功能。请需要交流的用户们在自己的豆包主页进行互动。</div></div>
+    <div class="warning-box" style="margin-top:16px">
+      <strong>⚠️ 免责声明</strong><br>
+      本网站依托豆包智能体链接、豆包号和浏览器IP进行用户绑定。上传的智能体内容、网页链接属于其他平台的内容本站概不负责。
+    </div>
     <button class="btn btn-orange btn-full" style="margin-top:20px" onclick="closeModal('announcement')">我已知晓</button>
   </div>
 </div>
@@ -213,7 +217,7 @@
     <div class="form-group"><label class="form-label">豆包号 *</label><input class="input" id="regDoubaoId" placeholder="你的豆包号（必填）" maxlength="50"></div>
     <div class="form-group"><label class="form-label">智能体链接 *</label><input class="input" id="regAgentUrl" placeholder="https://doubao.com/bot/xxx（必填）"><div class="form-hint">系统会验证链接是否可访问</div></div>
     <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
-    <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填）" rows="3" style="resize:vertical"></textarea></div>
+    <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填，最多500字）" rows="3" maxlength="500" style="resize:vertical"></textarea><div class="form-hint">最多500字</div></div>
     <button type="submit" class="btn btn-orange btn-full">注册</button>
     </form>
     <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:#FF6B35;font-weight:600">去登录</a></p>
@@ -254,6 +258,22 @@
     <div class="form-group"><label class="form-label">举报原因（选填）</label><textarea class="input" id="reportReason" placeholder="请简要说明举报原因..." rows="3"></textarea></div>
     <div class="warning-box">⚠️ 恶意举报将会受到处罚。同一用户30天内只能举报一次。</div>
     <button class="btn btn-red btn-full" onclick="submitReport()">确认举报</button>
+  </div>
+</div>
+
+<!-- Developer Modal -->
+<div class="modal-overlay" id="developerModal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div style="width:32px;height:32px;border-radius:10px;background:#FFF3ED;display:flex;align-items:center;justify-content:center;color:#FF6B35;font-size:16px">🔧</div>
+      <div class="modal-title">开发者模式</div>
+      <button class="modal-close" onclick="closeModal('developer')">✕</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchDevTab('announcements',this)">📢 公告管理</button>
+      <button class="tab" onclick="switchDevTab('features',this)">🔧 功能管理</button>
+    </div>
+    <div id="developerContent" style="max-height:500px;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -355,6 +375,7 @@ function updateNavbar() {
   const el = document.getElementById('navRight');
   if (currentUser) {
     el.innerHTML = `
+      ${isDeveloper() ? '<button class="nav-btn" style="background:#FFF3ED;color:#FF6B35" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
       <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
       <div class="nav-user" onclick="showModal('settings')">
         ${avatarHTML(currentUser, true)}
@@ -368,6 +389,10 @@ function updateNavbar() {
       <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
     `;
   }
+}
+
+function isDeveloper() {
+  return currentUser && currentUser.doubao_id === '470208447';
 }
 
 // ===== Login =====
@@ -498,6 +523,12 @@ async function renderContent() {
     <!-- My Friends -->
     <div id="myFriends"></div>
     
+    <!-- Features Section -->
+    <div id="featuresSection"></div>
+    
+    <!-- Announcements Section -->
+    <div id="announcementsSection"></div>
+    
     <!-- Welcome -->
     <div class="card welcome anim-up">
       <div class="welcome-icon">✨</div>
@@ -511,6 +542,61 @@ async function renderContent() {
   // Load initial data
   loadFriendRequests();
   loadMyFriends();
+  loadFeatures();
+  loadAnnouncements();
+}
+
+// ===== Load Features =====
+async function loadFeatures() {
+  try {
+    const res = await api('/api/features');
+    if (!res.success || !res.data || res.data.length === 0) return;
+    
+    const el = document.getElementById('featuresSection');
+    el.innerHTML = `
+      <div class="anim-up" style="margin-bottom:16px">
+        <div class="section-label">🔧 功能</div>
+        <div class="card" style="padding:20px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:16px;text-align:center">
+            ${res.data.map(f => `
+              <a href="${esc(f.link_url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit">
+                <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">
+                  ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🔗'">` : '🔗'}
+                </div>
+                <div style="font-size:12px;font-weight:500;color:#374151;word-break:break-all">${esc(f.title)}</div>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    // silently fail
+  }
+}
+
+// ===== Load Announcements =====
+async function loadAnnouncements() {
+  try {
+    const res = await api('/api/announcements');
+    if (!res.success || !res.data || res.data.length === 0) return;
+    
+    const el = document.getElementById('announcementsSection');
+    el.innerHTML = `
+      <div class="anim-up" style="margin-bottom:16px">
+        <div class="section-label">📢 网站公告</div>
+        ${res.data.map(a => `
+          <div class="card" style="margin-bottom:12px">
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
+            <div style="font-size:13px;color:#4b5563;word-break:break-all;white-space:pre-wrap">${a.content}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:8px">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    // silently fail
+  }
 }
 
 // ===== Search =====
@@ -728,13 +814,19 @@ async function loadMyFriends() {
         <div class="section-label">👥 我的好友 (${friends.length})</div>
         <div class="grid-3">
           ${friends.map(f => `
-            <div class="card friend-row">
-              ${avatarHTML(f.friend, true)}
-              <div class="friend-row-info">
-                <div class="friend-row-name">${esc(f.friend?.name)}</div>
-                <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
+            <div class="card friend-row" style="flex-direction:column;align-items:stretch;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                ${avatarHTML(f.friend, true)}
+                <div class="friend-row-info">
+                  <div class="friend-row-name">${esc(f.friend?.name)}</div>
+                  <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
+                </div>
               </div>
-              <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+              ${f.friend?.bio ? `<div style="font-size:11px;color:#9ca3af;word-break:break-all;white-space:pre-wrap">${esc(f.friend.bio)}</div>` : ''}
+              <div style="display:flex;gap:6px">
+                ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : ''}
+                <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -966,6 +1058,196 @@ async function deleteAccount() {
       renderContent();
       toast('账号已永久删除', 'info');
     } else toast(res.error, 'error');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ===== Developer Mode =====
+let devTab = 'announcements';
+
+function showModal(name) {
+  if (name === 'developer') {
+    if (!isDeveloper()) {
+      toast('只有开发者才能访问此功能', 'error');
+      return;
+    }
+    document.getElementById('developerModal').style.display = 'flex';
+    loadDeveloperContent();
+    return;
+  }
+  document.getElementById(name + 'Modal').style.display = 'flex';
+}
+
+async function loadDeveloperContent() {
+  const el = document.getElementById('developerContent');
+  if (devTab === 'announcements') {
+    await loadAnnouncementsManager();
+  } else {
+    await loadFeaturesManager();
+  }
+}
+
+async function switchDevTab(tab, btnEl) {
+  devTab = tab;
+  document.querySelectorAll('#developerModal .tab').forEach(t => t.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  else document.querySelectorAll('#developerModal .tab')[tab === 'announcements' ? 0 : 1].classList.add('active');
+  await loadDeveloperContent();
+}
+
+// ===== Announcements Manager =====
+async function loadAnnouncementsManager() {
+  const el = document.getElementById('developerContent');
+  try {
+    const res = await api('/api/announcements');
+    const announcements = res.data || [];
+    
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="section-label">📢 发布新公告</div>
+        <div class="form-group"><label class="form-label">标题</label><input class="input" id="devAnnTitle" placeholder="公告标题" maxlength="100"></div>
+        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持图片外链）" rows="5" style="resize:vertical"></textarea></div>
+        <button class="btn btn-orange btn-full" onclick="devPublishAnnouncement()">发布公告</button>
+      </div>
+      <div class="section-label">📋 现有公告</div>
+      ${announcements.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : announcements.map(a => `
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
+          <div style="font-size:13px;color:#4b5563;word-break:break-all;white-space:pre-wrap;margin-bottom:8px">${a.content}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;color:#9ca3af">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
+            <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="form-error">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function devPublishAnnouncement() {
+  const title = document.getElementById('devAnnTitle').value.trim();
+  const content = document.getElementById('devAnnContent').value.trim();
+  
+  if (!title || !content) { toast('标题和内容不能为空', 'error'); return; }
+  
+  try {
+    const res = await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, content, created_by: currentUser.id }),
+    });
+    if (res.success) {
+      toast('公告发布成功');
+      document.getElementById('devAnnTitle').value = '';
+      document.getElementById('devAnnContent').value = '';
+      loadAnnouncementsManager();
+      loadAnnouncements(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devDeleteAnnouncement(id) {
+  if (!confirm('确定删除这条公告？')) return;
+  try {
+    const res = await api(`/api/announcements?id=${id}`, { method: 'DELETE' });
+    if (res.success) {
+      toast('公告已删除');
+      loadAnnouncementsManager();
+      loadAnnouncements(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ===== Features Manager =====
+async function loadFeaturesManager() {
+  const el = document.getElementById('developerContent');
+  try {
+    const res = await api('/api/features');
+    const features = res.data || [];
+    
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="section-label">🔧 添加新功能</div>
+        <div class="form-group"><label class="form-label">图标URL</label><input class="input" id="devFeatIcon" placeholder="图片链接（留空使用默认图标）"></div>
+        <div class="form-group"><label class="form-label">标题 *</label><input class="input" id="devFeatTitle" placeholder="功能名称" maxlength="50"></div>
+        <div class="form-group"><label class="form-label">链接 *</label><input class="input" id="devFeatLink" placeholder="https://..."></div>
+        <button class="btn btn-orange btn-full" onclick="devAddFeature()">添加功能</button>
+      </div>
+      <div class="section-label">📋 现有功能</div>
+      ${features.length === 0 ? '<div class="empty"><div class="empty-text">暂无功能</div></div>' : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${features.map(f => `
+            <div class="card" style="padding:12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <div style="width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+                  ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🔗'">` : '🔗'}
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600;color:#1a1a2e;word-break:break-all">${esc(f.title)}</div>
+                </div>
+              </div>
+              <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;word-break:break-all">${esc(f.link_url)}</div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeleteFeature('${f.id}')">删除</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="form-error">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function devAddFeature() {
+  const icon_url = document.getElementById('devFeatIcon').value.trim();
+  const title = document.getElementById('devFeatTitle').value.trim();
+  const link_url = document.getElementById('devFeatLink').value.trim();
+  
+  if (!title || !link_url) { toast('标题和链接不能为空', 'error'); return; }
+  
+  try {
+    const res = await api('/api/features', {
+      method: 'POST',
+      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, created_by: currentUser.id }),
+    });
+    if (res.success) {
+      toast('功能添加成功');
+      document.getElementById('devFeatIcon').value = '';
+      document.getElementById('devFeatTitle').value = '';
+      document.getElementById('devFeatLink').value = '';
+      loadFeaturesManager();
+      loadFeatures(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devDeleteFeature(id) {
+  if (!confirm('确定删除这个功能？')) return;
+  try {
+    const res = await api(`/api/features?id=${id}`, { method: 'DELETE' });
+    if (res.success) {
+      toast('功能已删除');
+      loadFeaturesManager();
+      loadFeatures(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
   } catch (e) {
     toast(e.message, 'error');
   }
