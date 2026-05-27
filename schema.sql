@@ -82,6 +82,16 @@ CREATE TABLE IF NOT EXISTS features (
   updated_at TEXT
 );
 
+-- 自定义页面表（开发者本地功能）
+CREATE TABLE IF NOT EXISTS custom_pages (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  title TEXT NOT NULL,
+  html_content TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_users_doubao_id ON users(doubao_id);
 CREATE INDEX IF NOT EXISTS idx_users_agent_url ON users(agent_url);
