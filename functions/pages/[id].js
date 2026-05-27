@@ -1,5 +1,5 @@
 // Cloudflare Pages Function - Render Custom Page
-// GET /pages/[id] - 渲染自定义页面
+// GET /pages/[id] - 渲染自定义页面（纯HTML输出，无容器）
 
 export async function onRequestGet(context) {
   if (!context.env.DB) {
@@ -30,81 +30,11 @@ export async function onRequestGet(context) {
       `, { status: 404, headers: { 'Content-Type': 'text/html' } });
     }
 
-    const html = `
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(page.title)} - 逗包用户广场</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-      background: #f5f5f5;
-      min-height: 100vh;
-    }
-    .page-container {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .page-header {
-      background: linear-gradient(135deg, #FF6B35, #FF8F5E);
-      color: white;
-      padding: 20px;
-      border-radius: 16px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .page-header h1 {
-      font-size: 18px;
-      font-weight: 600;
-    }
-    .page-header a {
-      color: white;
-      text-decoration: none;
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    .page-content {
-      background: white;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    }
-  </style>
-</head>
-<body>
-  <div class="page-container">
-    <div class="page-header">
-      <h1>${escapeHtml(page.title)}</h1>
-      <a href="/">← 返回广场</a>
-    </div>
-    <div class="page-content">
-      ${page.html_content}
-    </div>
-  </div>
-</body>
-</html>
-    `;
-
-    return new Response(html, {
+    // 直接输出开发者提交的HTML内容，不添加任何容器框架
+    return new Response(page.html_content, {
       headers: { 'Content-Type': 'text/html' }
     });
   } catch (e) {
     return new Response('服务器错误：' + e.message, { status: 500 });
   }
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
