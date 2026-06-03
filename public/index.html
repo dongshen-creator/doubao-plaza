@@ -346,20 +346,23 @@ function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g
 // 渲染富文本内容（支持HTML标签）
 function renderRichContent(content) {
   if (!content) return '';
-  // 允许安全的HTML标签
-  const allowedTags = ['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody'];
-  // 先转义所有HTML
+  // 允许安全的HTML标签，直接替换转义后的标签
   let html = esc(content);
-  // 再还原允许的HTML标签
-  allowedTags.forEach(tag => {
-    const openRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)&gt;`, 'gi');
-    const closeRegex = new RegExp(`&lt;/${tag}&gt;`, 'gi');
-    const selfCloseRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)?/&gt;`, 'gi');
-    html = html.replace(openRegex, '<$1$2>');
-    html = html.replace(closeRegex, '</$1>');
-    html = html.replace(selfCloseRegex, '<$1$2/>');
+  // 还原允许的HTML标签（支持属性）
+  const tagPatterns = [
+    // 自闭合标签 <img ... /> 或 <img ...>
+    { regex: /&lt;(img|video|iframe|br|hr)(\s+[^&]*?)(\s*\/?)&gt;/gi, replace: '<$1$2$3>' },
+    // 自闭合标签无属性 <br> <hr>
+    { regex: /&lt;(br|hr)\s*\/?&gt;/gi, replace: '<$1 />' },
+    // 开标签 <div ...> <p ...>
+    { regex: /&lt;([a-zA-Z][a-zA-Z0-9]*)(\s+[^&]*?)&gt;/gi, replace: '<$1$2>' },
+    // 闭标签 </div> </p>
+    { regex: /&lt;\/([a-zA-Z][a-zA-Z0-9]*)&gt;/gi, replace: '</$1>' }
+  ];
+  tagPatterns.forEach(p => {
+    html = html.replace(p.regex, p.replace);
   });
-  // 还原HTML实体
+  // 还原HTML实体（属性中的引号等）
   html = html.replace(/&amp;quot;/g, '"').replace(/&amp;apos;/g, "'").replace(/&amp;lt;/g, '<').replace(/&amp;gt;/g, '>').replace(/&amp;amp;/g, '&');
   return html;
 }
@@ -974,7 +977,7 @@ async function switchSettingsTab(tab, btnEl) {
         <button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button>
       </div>
     `;
-    loadFeatureToggles();
+    setTimeout(() => loadFeatureToggles(), 0);
   } else if (tab === 'friends') {
     try {
       const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
@@ -1194,6 +1197,7 @@ function showModal(name) {
     return;
   }
   document.getElementById(name + 'Modal').style.display = 'flex';
+  if (name === 'settings') loadSettings();
 }
 
 async function loadDeveloperContent() {
