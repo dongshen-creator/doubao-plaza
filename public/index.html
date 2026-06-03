@@ -346,24 +346,26 @@ function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g
 // 渲染富文本内容（支持HTML标签）
 function renderRichContent(content) {
   if (!content) return '';
-  // 允许安全的HTML标签，直接替换转义后的标签
+  // 先转义所有HTML
   let html = esc(content);
+  // 先还原属性中的引号实体（避免正则匹配中断）
+  html = html.replace(/&amp;quot;/g, '##QUOT##').replace(/&amp;apos;/g, "##APOS##").replace(/&amp;lt;/g, '##LT##').replace(/&amp;gt;/g, '##GT##').replace(/&amp;amp;/g, '##AMP##');
   // 还原允许的HTML标签（支持属性）
   const tagPatterns = [
     // 自闭合标签 <img ... /> 或 <img ...>
-    { regex: /&lt;(img|video|iframe|br|hr)(\s+[^&]*?)(\s*\/?)&gt;/gi, replace: '<$1$2$3>' },
+    { regex: /&lt;(img|video|iframe|br|hr)(\s[\s\S]*?)(\s*\/?)&gt;/gi, replace: '<$1$2$3>' },
     // 自闭合标签无属性 <br> <hr>
     { regex: /&lt;(br|hr)\s*\/?&gt;/gi, replace: '<$1 />' },
     // 开标签 <div ...> <p ...>
-    { regex: /&lt;([a-zA-Z][a-zA-Z0-9]*)(\s+[^&]*?)&gt;/gi, replace: '<$1$2>' },
+    { regex: /&lt;([a-zA-Z][a-zA-Z0-9]*)(\s[\s\S]*?)&gt;/gi, replace: '<$1$2>' },
     // 闭标签 </div> </p>
     { regex: /&lt;\/([a-zA-Z][a-zA-Z0-9]*)&gt;/gi, replace: '</$1>' }
   ];
   tagPatterns.forEach(p => {
     html = html.replace(p.regex, p.replace);
   });
-  // 还原HTML实体（属性中的引号等）
-  html = html.replace(/&amp;quot;/g, '"').replace(/&amp;apos;/g, "'").replace(/&amp;lt;/g, '<').replace(/&amp;gt;/g, '>').replace(/&amp;amp;/g, '&');
+  // 还原占位符为真实引号
+  html = html.replace(/##QUOT##/g, '"').replace(/##APOS##/g, "'").replace(/##LT##/g, '<').replace(/##GT##/g, '>').replace(/##AMP##/g, '&');
   return html;
 }
 
@@ -1233,8 +1235,17 @@ async function loadAnnouncementsManager() {
       <div style="margin-bottom:16px">
         <div class="section-label">📢 发布新公告</div>
         <div class="form-group"><label class="form-label">标题</label><input class="input" id="devAnnTitle" placeholder="公告标题" maxlength="100"></div>
-        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持HTML：图片、GIF、视频等）" rows="5" style="resize:vertical"></textarea></div>
-        <div style="font-size:11px;color:#9ca3af;margin-bottom:12px">支持HTML标签：&lt;img&gt;图片、&lt;video&gt;视频、&lt;iframe&gt;嵌入等</div>
+        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容" rows="5" style="resize:vertical"></textarea></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <button class="btn btn-blue btn-sm" onclick="insertEmbed()">📎 嵌入媒体</button>
+          <span style="font-size:11px;color:#9ca3af">点击按钮，粘贴链接，自动识别图片/视频并插入</span>
+        </div>
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:12px;background:#f8f9fa;padding:8px;border-radius:8px">
+          <strong>使用说明：</strong><br>
+          1. 直接输入文字即可<br>
+          2. 点击「📎 嵌入媒体」→ 粘贴图片/视频链接 → 自动插入<br>
+          3. 也可以直接手写 HTML：<code>&lt;img src="链接"&gt;</code> <code>&lt;video src="链接" controls&gt;&lt;/video&gt;</code>
+        </div>
         <button class="btn btn-orange btn-full" onclick="devPublishAnnouncement()">发布公告</button>
       </div>
       <div class="section-label">📋 现有公告</div>
@@ -1252,6 +1263,36 @@ async function loadAnnouncementsManager() {
   } catch (e) {
     el.innerHTML = `<div class="form-error">加载失败：${esc(e.message)}</div>`;
   }
+}
+
+function insertEmbed() {
+  const url = prompt('粘贴图片或视频链接：\n\n支持格式：jpg, png, gif, webp, mp4, webm');
+  if (!url || !url.trim()) return;
+  const trimmed = url.trim();
+  const textarea = document.getElementById('devAnnContent');
+  const cursorPos = textarea.selectionStart;
+  const before = textarea.value.substring(0, cursorPos);
+  const after = textarea.value.substring(cursorPos);
+
+  // 自动识别文件类型
+  const imgExts = ['.jpg','.jpeg','.png','.gif','.webp','.svg','.bmp','.ico'];
+  const videoExts = ['.mp4','.webm','.ogg','.mov'];
+  const lower = trimmed.toLowerCase();
+
+  let embedCode = '';
+  if (imgExts.some(ext => lower.includes(ext))) {
+    embedCode = `<img src="${trimmed}" style="max-width:100%">`;
+  } else if (videoExts.some(ext => lower.includes(ext))) {
+    embedCode = `<video src="${trimmed}" controls style="max-width:100%"></video>`;
+  } else {
+    // 默认当作图片尝试
+    embedCode = `<img src="${trimmed}" style="max-width:100%">`;
+  }
+
+  textarea.value = before + embedCode + after;
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = cursorPos + embedCode.length;
+  toast('已插入媒体');
 }
 
 async function devPublishAnnouncement() {
