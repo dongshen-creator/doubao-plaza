@@ -343,6 +343,27 @@ function avatarHTML(user, small = false) {
 
 function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// 渲染富文本内容（支持HTML标签）
+function renderRichContent(content) {
+  if (!content) return '';
+  // 允许安全的HTML标签
+  const allowedTags = ['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody'];
+  // 先转义所有HTML
+  let html = esc(content);
+  // 再还原允许的HTML标签
+  allowedTags.forEach(tag => {
+    const openRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)&gt;`, 'gi');
+    const closeRegex = new RegExp(`&lt;/${tag}&gt;`, 'gi');
+    const selfCloseRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)?/&gt;`, 'gi');
+    html = html.replace(openRegex, '<$1$2>');
+    html = html.replace(closeRegex, '</$1>');
+    html = html.replace(selfCloseRegex, '<$1$2/>');
+  });
+  // 还原HTML实体
+  html = html.replace(/&amp;quot;/g, '"').replace(/&amp;apos;/g, "'").replace(/&amp;lt;/g, '<').replace(/&amp;gt;/g, '>').replace(/&amp;amp;/g, '&');
+  return html;
+}
+
 // ===== Init =====
 async function init() {
   // Try auto login
@@ -393,7 +414,8 @@ function updateNavbar() {
 }
 
 function isDeveloper() {
-  return currentUser && currentUser.doubao_id === '470208447';
+  const devIds = ['470208447', 'East_pairs'];
+  return currentUser && devIds.includes(currentUser.doubao_id);
 }
 
 // ===== Login =====
@@ -553,13 +575,19 @@ async function loadFeatures() {
     const res = await api('/api/features');
     if (!res.success || !res.data || res.data.length === 0) return;
     
+    // 过滤用户隐藏的功能
+    const hiddenFeatures = JSON.parse(localStorage.getItem('dp_hidden_features') || '[]');
+    const visibleFeatures = res.data.filter(f => !hiddenFeatures.includes(f.id));
+    
+    if (visibleFeatures.length === 0) return;
+    
     const el = document.getElementById('featuresSection');
     el.innerHTML = `
       <div class="anim-up" style="margin-bottom:16px">
         <div class="section-label">🔧 功能</div>
         <div class="card" style="padding:20px">
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:16px;text-align:center">
-            ${res.data.map(f => `
+            ${visibleFeatures.map(f => `
               <a href="${esc(f.link_url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit">
                 <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">
                   ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🔗'">` : '🔗'}
@@ -589,7 +617,7 @@ async function loadAnnouncements() {
         ${res.data.map(a => `
           <div class="card" style="margin-bottom:12px">
             <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
-            <div style="font-size:13px;color:#4b5563;word-break:break-all;white-space:pre-wrap">${a.content}</div>
+            <div style="font-size:13px;color:#4b5563;word-break:break-all">${renderRichContent(a.content)}</div>
             <div style="font-size:11px;color:#9ca3af;margin-top:8px">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
           </div>
         `).join('')}
@@ -896,6 +924,25 @@ async function switchSettingsTab(tab, btnEl) {
 
   if (tab === 'account') {
     el.innerHTML = `
+      <div class="card" style="margin-bottom:16px;padding:16px">
+        <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:12px">👤 个人信息</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:600;overflow:hidden;flex-shrink:0">
+            ${currentUser.avatar ? `<img src="${esc(currentUser.avatar)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='${currentUser.name.charAt(0).toUpperCase()}'">` : currentUser.name.charAt(0).toUpperCase()}
+          </div>
+          <div style="flex:1">
+            <div style="font-size:16px;font-weight:600;color:#1a1a2e">${esc(currentUser.name)}</div>
+            <div style="font-size:13px;color:#9ca3af">${currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px">${currentUser.bio ? esc(currentUser.bio) : '暂无简介'}</div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">更换头像</label>
+          <div style="display:flex;gap:8px">
+            <input class="input" id="newAvatarUrl" placeholder="输入图片链接" value="${esc(currentUser.avatar || '')}" style="flex:1">
+            <button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button>
+          </div>
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">修改密码</label>
         <div style="display:flex;gap:8px">
           <input class="input" id="newPwd" type="password" placeholder="新密码（6位）" maxlength="6" style="flex:1">
@@ -917,12 +964,17 @@ async function switchSettingsTab(tab, btnEl) {
         </div>
         <div style="font-size:11px;color:#9ca3af;margin-top:6px">当前：${getPrivacyLabel(currentUser.privacy_setting)}</div>
       </div>
+      <div class="form-group"><label class="form-label">功能显示设置</label>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div>
+        <div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div>
+      </div>
       <div class="danger-box">
         <strong>⚠️ 危险区域</strong><br>
         注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>
         <button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button>
       </div>
     `;
+    loadFeatureToggles();
   } else if (tab === 'friends') {
     try {
       const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
@@ -1002,6 +1054,26 @@ async function changePassword() {
   }
 }
 
+async function updateAvatar() {
+  const avatar = document.getElementById('newAvatarUrl').value.trim();
+  try {
+    const res = await api(`/api/users/${currentUser.id}/settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'update_avatar', avatar }),
+    });
+    if (res.success) {
+      toast('头像更新成功');
+      currentUser.avatar = avatar;
+      updateNavbar();
+      switchSettingsTab('account');
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 async function setWhitelistCode() {
   const code = document.getElementById('whitelistCode').value.trim();
   try {
@@ -1046,10 +1118,52 @@ async function unblockUser(blockId) {
   }
 }
 
+async function loadFeatureToggles() {
+  try {
+    const res = await api('/api/features');
+    const features = res.data || [];
+    const hiddenFeatures = JSON.parse(localStorage.getItem('dp_hidden_features') || '[]');
+
+    const el = document.getElementById('featureToggleList');
+    if (features.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:#9ca3af">暂无功能按钮</div>';
+      return;
+    }
+
+    el.innerHTML = features.map(f => `
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;background:#f9fafb;border-radius:8px">
+        <input type="checkbox" class="feature-toggle" data-id="${f.id}" ${hiddenFeatures.includes(f.id) ? '' : 'checked'}>
+        <span style="font-size:13px;color:#374151">${esc(f.title)}</span>
+      </label>
+    `).join('');
+
+    // 添加保存按钮
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-blue btn-full';
+    saveBtn.style.marginTop = '8px';
+    saveBtn.textContent = '保存设置';
+    saveBtn.onclick = saveFeatureToggles;
+    el.appendChild(saveBtn);
+  } catch (e) {
+    document.getElementById('featureToggleList').innerHTML = '<div style="font-size:12px;color:#9ca3af">加载失败</div>';
+  }
+}
+
+function saveFeatureToggles() {
+  const checkboxes = document.querySelectorAll('.feature-toggle');
+  const hiddenFeatures = [];
+  checkboxes.forEach(cb => {
+    if (!cb.checked) hiddenFeatures.push(cb.dataset.id);
+  });
+  localStorage.setItem('dp_hidden_features', JSON.stringify(hiddenFeatures));
+  toast('设置已保存');
+  loadFeatures(); // 刷新主页功能显示
+}
+
 async function deleteAccount() {
   if (!confirm('⚠️ 警告：此操作将永久删除您的账号和所有数据！\n\n包括：\n- 个人资料\n- 好友关系\n- 黑名单记录\n\n此操作不可恢复！\n\n确定要注销账号吗？')) return;
   if (!confirm('最后确认：您真的要永久删除账号吗？')) return;
-  
+
   try {
     const res = await api(`/api/users/${currentUser.id}`, { method: 'DELETE' });
     if (res.success) {
@@ -1115,14 +1229,15 @@ async function loadAnnouncementsManager() {
       <div style="margin-bottom:16px">
         <div class="section-label">📢 发布新公告</div>
         <div class="form-group"><label class="form-label">标题</label><input class="input" id="devAnnTitle" placeholder="公告标题" maxlength="100"></div>
-        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持图片外链）" rows="5" style="resize:vertical"></textarea></div>
+        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持HTML：图片、GIF、视频等）" rows="5" style="resize:vertical"></textarea></div>
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:12px">支持HTML标签：&lt;img&gt;图片、&lt;video&gt;视频、&lt;iframe&gt;嵌入等</div>
         <button class="btn btn-orange btn-full" onclick="devPublishAnnouncement()">发布公告</button>
       </div>
       <div class="section-label">📋 现有公告</div>
       ${announcements.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : announcements.map(a => `
         <div class="card" style="margin-bottom:12px">
           <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
-          <div style="font-size:13px;color:#4b5563;word-break:break-all;white-space:pre-wrap;margin-bottom:8px">${a.content}</div>
+          <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:#9ca3af">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
             <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
@@ -1309,6 +1424,24 @@ async function loadPagesManager() {
         <div style="font-size:11px;color:#9ca3af;margin-bottom:12px">支持标签：div, span, p, h1-h6, img, a, style, script 等</div>
         <button class="btn btn-orange btn-full" onclick="devCreatePage()">创建页面</button>
       </div>
+      <div class="card" style="margin-bottom:16px;padding:16px;background:#f8f9fa">
+        <div style="font-size:13px;font-weight:600;color:#1a1a2e;margin-bottom:8px">📖 API 调用文档</div>
+        <div style="font-size:12px;color:#4b5563;line-height:1.6">
+          <p style="margin-bottom:8px"><strong>获取当前登录用户信息：</strong></p>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/users/auto-login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ token: localStorage.getItem('dp_token') })
+}).then(r => r.json()).then(data => console.log(data));</pre>
+          <p style="margin:8px 0"><strong>获取所有用户：</strong></p>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/users').then(r => r.json()).then(data => console.log(data));</pre>
+          <p style="margin:8px 0"><strong>获取网站公告：</strong></p>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/announcements').then(r => r.json()).then(data => console.log(data));</pre>
+          <p style="margin:8px 0"><strong>获取功能列表：</strong></p>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/features').then(r => r.json()).then(data => console.log(data));</pre>
+          <p style="margin-top:8px;color:#9ca3af">提示：所有 API 返回格式为 { success: true/false, data: ..., error: ... }</p>
+        </div>
+      </div>
       <div class="section-label">📋 现有页面</div>
       ${pages.length === 0 ? '<div class="empty"><div class="empty-text">暂无自定义页面</div></div>' : `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">
@@ -1318,7 +1451,7 @@ async function loadPagesManager() {
               <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;word-break:break-all">/pages/${p.id}</div>
               <div style="display:flex;gap:6px">
                 <a href="/pages/${p.id}" target="_blank" class="btn btn-green btn-sm" style="flex:1">预览</a>
-                <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditPage('${p.id}', '${esc(p.title)}', \`${esc(p.html_content)}\`)">编辑</button>
+                <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditPage('${p.id}')">编辑</button>
                 <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeletePage('${p.id}')">删除</button>
               </div>
             </div>
@@ -1355,19 +1488,31 @@ async function devCreatePage() {
   }
 }
 
-function devEditPage(id, title, html) {
-  const el = document.getElementById('developerContent');
-  el.innerHTML = `
-    <div style="margin-bottom:16px">
-      <div class="section-label">✏️ 编辑页面</div>
-      <div class="form-group"><label class="form-label">页面标题 *</label><input class="input" id="editPageTitle" value="${esc(title)}" maxlength="50"></div>
-      <div class="form-group"><label class="form-label">HTML 代码 *</label><textarea class="input" id="editPageHtml" rows="15" style="resize:vertical;font-family:monospace;font-size:12px">${esc(html)}</textarea></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdatePage('${id}')">保存修改</button>
-        <button class="btn btn-gray btn-full" style="flex:1" onclick="loadPagesManager()">取消</button>
+async function devEditPage(id) {
+  try {
+    const res = await api(`/api/custom-pages?id=${id}`);
+    if (!res.success || !res.data) {
+      toast('获取页面信息失败', 'error');
+      return;
+    }
+    const page = res.data;
+    const el = document.getElementById('developerContent');
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="section-label">✏️ 编辑页面</div>
+        <div class="form-group"><label class="form-label">页面标题 *</label><input class="input" id="editPageTitle" value="${esc(page.title)}" maxlength="50"></div>
+        <div class="form-group"><label class="form-label">HTML 代码 *</label><textarea class="input" id="editPageHtml" rows="15" style="resize:vertical;font-family:monospace;font-size:12px"></textarea></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdatePage('${id}')">保存修改</button>
+          <button class="btn btn-gray btn-full" style="flex:1" onclick="loadPagesManager()">取消</button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+    // 使用 textContent 避免 HTML 解析问题
+    document.getElementById('editPageHtml').textContent = page.html_content;
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 async function devUpdatePage(id) {

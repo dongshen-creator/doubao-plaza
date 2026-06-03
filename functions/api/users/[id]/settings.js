@@ -62,7 +62,13 @@ export async function onRequestPut(context) {
     const { env } = context;
     const userId = context.params.id;
     const body = await context.request.json().catch(() => ({}));
-    const { action, password, invite_code, privacy_setting } = body;
+    const { action, password, invite_code, privacy_setting, avatar } = body;
+
+    if (action === 'update_avatar') {
+      await env.DB.prepare(`UPDATE users SET avatar = ?, updated_at = datetime('now') WHERE id = ?`)
+        .bind(avatar || null, userId).run();
+      return Response.json({ success: true, message: '头像更新成功' });
+    }
 
     if (action === 'change_password') {
       if (!password || password.length !== 6) {

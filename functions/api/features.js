@@ -42,8 +42,9 @@ export async function onRequestPost(context) {
     }
 
     // 验证创建者是开发者
+    const DEV_IDS = ['470208447', 'East_pairs'];
     const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(created_by).first();
-    if (!user || user.doubao_id !== '470208447') {
+    if (!user || !DEV_IDS.includes(user.doubao_id)) {
       return Response.json({ success: false, error: '只有开发者才能管理功能' });
     }
 

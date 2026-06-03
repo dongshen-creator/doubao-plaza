@@ -6,9 +6,10 @@
 // DELETE /api/custom-pages?id=xxx   - 删除页面（仅开发者）
 
 // 检查是否为开发者
+const DEV_IDS = ['470208447', 'East_pairs'];
 async function isDeveloper(env, userId) {
   const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(userId).first();
-  return user && user.doubao_id === '470208447';
+  return user && DEV_IDS.includes(user.doubao_id);
 }
 
 // GET - 获取页面列表或单个页面
