@@ -346,22 +346,16 @@ function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g
 // 渲染富文本内容（支持HTML标签）
 function renderRichContent(content) {
   if (!content) return '';
-  // 允许安全的HTML标签
-  const allowedTags = ['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody'];
-  // 先转义所有HTML
-  let html = esc(content);
-  // 再还原允许的HTML标签
-  allowedTags.forEach(tag => {
-    const openRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)&gt;`, 'gi');
-    const closeRegex = new RegExp(`&lt;/${tag}&gt;`, 'gi');
-    const selfCloseRegex = new RegExp(`&lt;(${tag})(\\s[^&]*)?/&gt;`, 'gi');
-    html = html.replace(openRegex, '<$1$2>');
-    html = html.replace(closeRegex, '</$1>');
-    html = html.replace(selfCloseRegex, '<$1$2/>');
-  });
-  // 还原HTML实体
-  html = html.replace(/&amp;quot;/g, '"').replace(/&amp;apos;/g, "'").replace(/&amp;lt;/g, '<').replace(/&amp;gt;/g, '>').replace(/&amp;amp;/g, '&');
-  return html;
+  const allowed = new Set(['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody']);
+  const div = document.createElement('div');
+  div.innerHTML = content;
+  const all = div.querySelectorAll('*');
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (!allowed.has(all[i].tagName.toLowerCase())) {
+      all[i].replaceWith(document.createTextNode(all[i].textContent));
+    }
+  }
+  return div.innerHTML;
 }
 
 // ===== Init =====
