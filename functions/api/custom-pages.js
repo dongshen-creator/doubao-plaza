@@ -113,7 +113,7 @@ export async function onRequestPut(context) {
 
     // 验证更新者是开发者
     const updaterId = updated_by || body.created_by;
-    if (!await isDeveloper(env, updaterId)) {
+    if (!updaterId || !await isDeveloper(env, updaterId)) {
       return Response.json({ success: false, error: '只有开发者才能更新页面' });
     }
 

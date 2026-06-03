@@ -66,6 +66,54 @@ export async function onRequestPost(context) {
   }
 }
 
+export async function onRequestPut(context) {
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    const { env } = context;
+    const url = new URL(context.request.url);
+    const id = url.searchParams.get('id');
+    const body = await context.request.json().catch(() => ({}));
+    const { title, icon_url, link_url, updated_by } = body;
+
+    if (!id) {
+      return Response.json({ success: false, error: '缺少功能ID' });
+    }
+
+    if (!title || !link_url) {
+      return Response.json({ success: false, error: '标题和链接不能为空' });
+    }
+
+    const updaterId = updated_by || body.created_by;
+    if (!updaterId) {
+      return Response.json({ success: false, error: '缺少用户标识' });
+    }
+
+    const DEV_IDS = ['470208447', 'East_pairs'];
+    const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(updaterId).first();
+    if (!user || !DEV_IDS.includes(user.doubao_id)) {
+      return Response.json({ success: false, error: '只有开发者才能管理功能' });
+    }
+
+    await env.DB.prepare(
+      `UPDATE features SET title = ?, icon_url = ?, link_url = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(title, icon_url || null, link_url, id).run();
+
+    const feature = await env.DB.prepare(
+      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at FROM features WHERE id = ?`
+    ).bind(id).first();
+
+    return Response.json({ success: true, data: feature });
+  } catch (e) {
+    return Response.json({ success: false, error: '更新失败：' + e.message });
+  }
+}
+
 export async function onRequestDelete(context) {
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {

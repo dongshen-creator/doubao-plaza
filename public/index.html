@@ -1188,6 +1188,7 @@ function showModal(name) {
     return;
   }
   document.getElementById(name + 'Modal').style.display = 'flex';
+  if (name === 'settings') loadSettings();
 }
 
 async function loadDeveloperContent() {
@@ -1212,6 +1213,71 @@ async function switchDevTab(tab, btnEl) {
   await loadDeveloperContent();
 }
 
+// ===== Insert Media Helpers =====
+function detectMediaType(url) {
+  const ext = url.split('?')[0].split('/').pop()?.toLowerCase() || '';
+  const imgExts = ['jpg','jpeg','png','gif','webp','svg','bmp','ico','avif'];
+  const vidExts = ['mp4','webm','mov','avi','mkv','flv','wmv','m4v'];
+  const audExts = ['mp3','wav','ogg','aac','m4a','flac','wma'];
+  if (imgExts.some(e => ext.endsWith(e) || ext.endsWith('.'+e))) return 'image';
+  if (vidExts.some(e => ext.endsWith(e) || ext.endsWith('.'+e))) return 'video';
+  if (audExts.some(e => ext.endsWith(e) || ext.endsWith('.'+e))) return 'audio';
+  if (/youtube\.com|youtu\.be|bilibili\.com/.test(url)) return 'iframe';
+  if (/cdn|media|upload|image|img/.test(url)) return 'image';
+  return 'link';
+}
+
+function generateMediaHTML(type, url, w, h) {
+  const width = w ? `width="${w}"` : '';
+  const height = h ? `height="${h}"` : '';
+  const su = esc(url);
+  switch (type) {
+    case 'image': return `<img src="${su}" ${width} ${height} style="max-width:100%;height:auto;border-radius:8px" alt="">`;
+    case 'video': return `<video src="${su}" controls ${width} ${height} style="max-width:100%;border-radius:8px"></video>`;
+    case 'audio': return `<audio src="${su}" controls style="width:100%"></audio>`;
+    case 'iframe': return `<iframe src="${su}" ${width || 'width="100%"'} ${height || 'height="400"'} style="border:none;border-radius:8px" allowfullscreen></iframe>`;
+    default: return `<a href="${su}" target="_blank" rel="noopener noreferrer">${su}</a>`;
+  }
+}
+
+function insertAtCursor(id, text) {
+  const ta = document.getElementById(id);
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.substring(0, start) + text + ta.value.substring(end);
+  const pos = start + text.length;
+  ta.selectionStart = ta.selectionEnd = pos;
+  ta.focus();
+}
+
+function toggleInsertPanel() {
+  const p = document.getElementById('insertPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+function onInsertUrlChange() {
+  const url = document.getElementById('insertUrl').value.trim();
+  if (!url) return;
+  const type = detectMediaType(url);
+  document.getElementById('insertType').value = type;
+  const labels = { image:'🖼️ 图片', video:'🎬 视频', audio:'🎵 音频', iframe:'📺 嵌入', link:'🔗 链接' };
+  document.getElementById('insertTypeLabel').textContent = labels[type] || '🔗 链接';
+}
+
+function devInsertMedia() {
+  const url = document.getElementById('insertUrl').value.trim();
+  const width = document.getElementById('insertWidth').value.trim();
+  const height = document.getElementById('insertHeight').value.trim();
+  const type = document.getElementById('insertType').value;
+  if (!url) { toast('请输入链接', 'error'); return; }
+  const html = generateMediaHTML(type, url, width, height);
+  insertAtCursor('devAnnContent', html);
+  document.getElementById('insertUrl').value = '';
+  document.getElementById('insertWidth').value = '';
+  document.getElementById('insertHeight').value = '';
+  document.getElementById('insertPanel').style.display = 'none';
+  toast('已插入内容');
+}
+
 // ===== Announcements Manager =====
 async function loadAnnouncementsManager() {
   const el = document.getElementById('developerContent');
@@ -1224,7 +1290,25 @@ async function loadAnnouncementsManager() {
         <div class="section-label">📢 发布新公告</div>
         <div class="form-group"><label class="form-label">标题</label><input class="input" id="devAnnTitle" placeholder="公告标题" maxlength="100"></div>
         <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持HTML：图片、GIF、视频等）" rows="5" style="resize:vertical"></textarea></div>
-        <div style="font-size:11px;color:#9ca3af;margin-bottom:12px">支持HTML标签：&lt;img&gt;图片、&lt;video&gt;视频、&lt;iframe&gt;嵌入等</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <button class="btn btn-blue btn-sm" onclick="toggleInsertPanel()">📎 插入</button>
+          <span style="font-size:11px;color:#9ca3af">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
+        </div>
+        <div id="insertPanel" style="display:none;background:#f8f9fa;border-radius:12px;padding:12px;margin-bottom:12px">
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label">文件链接</label>
+            <input class="input" id="insertUrl" placeholder="https://example.com/image.jpg" oninput="onInsertUrlChange()">
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:600;color:#6b7280">检测类型：</span>
+            <span id="insertTypeLabel" style="font-size:12px;color:#374151">-</span>
+            <input type="hidden" id="insertType" value="image">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <div style="flex:1"><label class="form-label">宽度（选填）</label><input class="input" id="insertWidth" placeholder="auto"></div>
+            <div style="flex:1"><label class="form-label">高度（选填）</label><input class="input" id="insertHeight" placeholder="auto"></div>
+          </div>
+          <button class="btn btn-orange btn-full" onclick="devInsertMedia()">插入</button>
+        </div>
         <button class="btn btn-orange btn-full" onclick="devPublishAnnouncement()">发布公告</button>
       </div>
       <div class="section-label">📋 现有公告</div>
@@ -1334,6 +1418,7 @@ async function loadFeaturesManager() {
               </div>
               <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;word-break:break-all">${esc(f.link_url)}</div>
               <div style="display:flex;gap:6px">
+                <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditFeature('${f.id}')">编辑</button>
                 <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeleteFeature('${f.id}')">删除</button>
               </div>
             </div>
@@ -1395,6 +1480,78 @@ async function devDeleteFeature(id) {
       toast('功能已删除');
       loadFeaturesManager();
       loadFeatures(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devEditFeature(id) {
+  try {
+    const res = await api('/api/features');
+    const feat = (res.data || []).find(f => f.id === id);
+    if (!feat) { toast('功能不存在', 'error'); return; }
+
+    const pagesRes = await api('/api/custom-pages');
+    const pages = pagesRes.data || [];
+    const pageOptions = pages.map(p => `<option value="/pages/${p.id}" ${feat.link_url === '/pages/'+p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('');
+    const isLocal = feat.link_url.startsWith('/pages/');
+
+    const el = document.getElementById('developerContent');
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="section-label">✏️ 编辑功能</div>
+        <div class="form-group"><label class="form-label">图标URL</label><input class="input" id="editFeatIcon" value="${esc(feat.icon_url || '')}" placeholder="图片链接（留空使用默认图标）"></div>
+        <div class="form-group"><label class="form-label">标题 *</label><input class="input" id="editFeatTitle" value="${esc(feat.title)}" maxlength="50"></div>
+        <div class="form-group"><label class="form-label">链接类型</label>
+          <select class="input" id="editFeatLinkType" onchange="toggleEditLinkInput()" style="margin-bottom:8px">
+            <option value="external" ${isLocal ? '' : 'selected'}>外部链接</option>
+            <option value="local" ${isLocal ? 'selected' : ''}>本地页面</option>
+          </select>
+        </div>
+        <div class="form-group" id="editExternalLinkGroup" style="${isLocal ? 'display:none' : ''}"><label class="form-label">外部链接 *</label><input class="input" id="editFeatExternalLink" value="${isLocal ? '' : esc(feat.link_url)}" placeholder="https://..."></div>
+        <div class="form-group" id="editLocalLinkGroup" style="${isLocal ? '' : 'display:none'}"><label class="form-label">选择本地页面 *</label>
+          <select class="input" id="editFeatLocalLink"><option value="">-- 选择页面 --</option>${pageOptions}</select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdateFeature('${id}')">保存修改</button>
+          <button class="btn btn-gray btn-full" style="flex:1" onclick="loadFeaturesManager()">取消</button>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function toggleEditLinkInput() {
+  const type = document.getElementById('editFeatLinkType').value;
+  document.getElementById('editExternalLinkGroup').style.display = type === 'external' ? 'block' : 'none';
+  document.getElementById('editLocalLinkGroup').style.display = type === 'local' ? 'block' : 'none';
+}
+
+async function devUpdateFeature(id) {
+  const icon_url = document.getElementById('editFeatIcon').value.trim();
+  const title = document.getElementById('editFeatTitle').value.trim();
+  const linkType = document.getElementById('editFeatLinkType').value;
+  let link_url;
+  if (linkType === 'external') {
+    link_url = document.getElementById('editFeatExternalLink').value.trim();
+  } else {
+    link_url = document.getElementById('editFeatLocalLink').value;
+  }
+  if (!title || !link_url) { toast('标题和链接不能为空', 'error'); return; }
+  try {
+    const res = await api(`/api/features?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, updated_by: currentUser.id }),
+    });
+    if (res.success) {
+      toast('功能已更新');
+      loadFeaturesManager();
+      loadFeatures();
     } else {
       toast(res.error, 'error');
     }
@@ -1518,7 +1675,7 @@ async function devUpdatePage(id) {
   try {
     const res = await api(`/api/custom-pages?id=${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, html_content }),
+      body: JSON.stringify({ title, html_content, created_by: currentUser.id }),
     });
     if (res.success) {
       toast('页面更新成功');
