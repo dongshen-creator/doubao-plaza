@@ -44,9 +44,14 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '会话已过期' });
     }
 
+    const clientIP = context.request.headers.get('CF-Connecting-IP')
+      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+      || 'unknown';
+    const userAgent = context.request.headers.get('User-Agent') || '';
+
     await env.DB.prepare(
-      `UPDATE users SET last_login_at = datetime('now') WHERE id = ?`
-    ).bind(session.user_id).run();
+      `UPDATE users SET last_login_at = datetime('now'), last_login_ip = ?, last_login_ua = ? WHERE id = ?`
+    ).bind(clientIP, userAgent, session.user_id).run();
 
     const user = await checkAndUpdatePunishment(env, session.user_id);
 
@@ -67,7 +72,9 @@ export async function onRequestPost(context) {
       invite_code: user.invite_code,
       created_at: user.created_at,
       updated_at: user.updated_at,
-      last_login_at: user.last_login_at
+      last_login_at: user.last_login_at,
+      last_login_ip: clientIP,
+      last_login_ua: userAgent
     };
 
     return Response.json({ success: true, data: safeUser, token });

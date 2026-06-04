@@ -18,7 +18,11 @@ export async function onRequestGet(context) {
        FROM announcements ORDER BY created_at DESC`
     ).all();
 
-    return Response.json({ success: true, data: results.results });
+    const data = (results.results || []).map(r => ({
+      ...r,
+      created_at: r.created_at ? r.created_at.replace(' ', 'T') + 'Z' : null,
+    }));
+    return Response.json({ success: true, data });
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误：' + e.message });
   }
@@ -56,6 +60,9 @@ export async function onRequestPost(context) {
       `SELECT id, title, content, created_by, created_at, updated_at FROM announcements WHERE id = ?`
     ).bind(result.meta.last_row_id).first();
 
+    if (announcement && announcement.created_at) {
+      announcement.created_at = announcement.created_at.replace(' ', 'T') + 'Z';
+    }
     return Response.json({ success: true, data: announcement });
   } catch (e) {
     return Response.json({ success: false, error: '发布失败：' + e.message });

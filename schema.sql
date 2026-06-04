@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
   last_report_reset TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT,
-  last_login_at TEXT
+  last_login_at TEXT,
+  last_login_ip TEXT,
+  last_login_ua TEXT,
+  registered_ip TEXT
 );
 
 -- 好友关系表

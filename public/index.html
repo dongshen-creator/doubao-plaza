@@ -358,6 +358,14 @@ function renderRichContent(content) {
   return div.innerHTML;
 }
 
+function formatDate(str) {
+  if (!str) return '';
+  try {
+    const s = str.includes('T') ? str : str.replace(' ', 'T') + 'Z';
+    return new Date(s).toLocaleString('zh-CN');
+  } catch { return str; }
+}
+
 // ===== Init =====
 async function init() {
   // Try auto login
@@ -612,7 +620,7 @@ async function loadAnnouncements() {
           <div class="card" style="margin-bottom:12px">
             <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
             <div style="font-size:13px;color:#4b5563;word-break:break-all">${renderRichContent(a.content)}</div>
-            <div style="font-size:11px;color:#9ca3af;margin-top:8px">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:8px">${formatDate(a.created_at)}</div>
           </div>
         `).join('')}
       </div>
@@ -961,6 +969,14 @@ async function switchSettingsTab(tab, btnEl) {
       <div class="form-group"><label class="form-label">功能显示设置</label>
         <div style="font-size:12px;color:#6b7280;margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div>
         <div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px;background:#f8f9fa">
+        <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px">🔐 最近登录</div>
+        <div style="font-size:12px;color:#4b5563;line-height:1.8">
+          <div>IP：${esc(currentUser.last_login_ip || '未知')}</div>
+          <div>时间：${formatDate(currentUser.last_login_at)}</div>
+          <div>设备：${esc(currentUser.last_login_ua || '未知')}</div>
+        </div>
       </div>
       <div class="danger-box">
         <strong>⚠️ 危险区域</strong><br>
@@ -1317,7 +1333,7 @@ async function loadAnnouncementsManager() {
           <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
           <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;color:#9ca3af">${a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}</div>
+            <div style="font-size:11px;color:#9ca3af">${formatDate(a.created_at)}</div>
             <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
           </div>
         </div>
@@ -1601,9 +1617,10 @@ async function loadPagesManager() {
               <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px;word-break:break-all">${esc(p.title)}</div>
               <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;word-break:break-all">/pages/${p.id}</div>
               <div style="display:flex;gap:6px">
-                <a href="/pages/${p.id}" target="_blank" class="btn btn-green btn-sm" style="flex:1">预览</a>
-                <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditPage('${p.id}')">编辑</button>
-                <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeletePage('${p.id}')">删除</button>
+                <a href="/pages/${p.id}" target="_blank" class="btn btn-green btn-sm">预览</a>
+                <button class="btn btn-blue btn-sm" onclick="devEditPage('${p.id}')">编辑</button>
+                <button class="btn btn-orange btn-sm" onclick="devManageFiles('${p.id}')">📁 文件</button>
+                <button class="btn btn-red btn-sm" onclick="devDeletePage('${p.id}')">删除</button>
               </div>
             </div>
           `).join('')}
@@ -1695,6 +1712,110 @@ async function devDeletePage(id) {
     if (res.success) {
       toast('页面已删除');
       loadPagesManager();
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ===== File Manager =====
+async function devManageFiles(pageId) {
+  const el = document.getElementById('developerContent');
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div class="section-label">📁 文件管理</div>
+      <button class="btn btn-gray btn-sm" onclick="loadPagesManager()" style="margin-bottom:12px">← 返回页面列表</button>
+      <div style="background:#f8f9fa;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div class="form-group" style="margin-bottom:8px"><label class="form-label">上传文件</label>
+          <input type="file" id="fileInput" style="font-size:13px;color:#374151;margin-bottom:8px">
+        </div>
+        <div class="form-group" style="margin-bottom:8px"><label class="form-label">存储路径（选填，默认文件名）</label>
+          <input class="input" id="filePath" placeholder="images/logo.png 或 style.css" style="font-size:12px">
+        </div>
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">上传 index.html 会覆盖 D1 中已有的 HTML 内容</div>
+        <button class="btn btn-orange btn-full" onclick="devUploadFile('${pageId}')">📤 上传</button>
+      </div>
+      <div class="section-label">📋 已上传文件</div>
+      <div id="fileList" style="font-size:13px;color:#9ca3af">加载中...</div>
+    </div>
+  `;
+  await devLoadFileList(pageId);
+}
+
+async function devLoadFileList(pageId) {
+  const el = document.getElementById('fileList');
+  try {
+    const res = await api(`/api/pages/upload?id=${pageId}`);
+    const files = res.data || [];
+
+    if (!res.r2) {
+      el.innerHTML = '<div style="font-size:12px;color:#9ca3af">⚠️ R2 存储桶未绑定，文件上传不可用</div>';
+      return;
+    }
+
+    if (files.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:#9ca3af">暂无文件，请上传 index.html</div>';
+      return;
+    }
+
+    el.innerHTML = files.map(f => `
+      <div class="card" style="padding:10px;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0;font-size:12px">
+          <div style="font-weight:500;color:#1a1a2e;word-break:break-all">${esc(f.path)}</div>
+          <div style="color:#9ca3af;margin-top:2px">${(f.size / 1024).toFixed(1)} KB · ${f.uploaded ? new Date(f.uploaded).toLocaleString('zh-CN') : ''}</div>
+        </div>
+        <a href="/pages/${pageId}/${f.path}" target="_blank" class="btn btn-green btn-sm">查看</a>
+        <button class="btn btn-red btn-sm" onclick="devDeleteFile('${pageId}','${esc(f.path)}')">删除</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="form-error">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function devUploadFile(pageId) {
+  const fileInput = document.getElementById('fileInput');
+  const file = fileInput.files?.[0];
+  if (!file) { toast('请选择文件', 'error'); return; }
+
+  let filePath = document.getElementById('filePath').value.trim();
+  if (!filePath) filePath = file.name;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', filePath);
+    formData.append('user_id', currentUser.id);
+
+    const res = await fetch(`/api/pages/upload?id=${pageId}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('文件上传成功');
+      fileInput.value = '';
+      document.getElementById('filePath').value = '';
+      devLoadFileList(pageId);
+    } else {
+      toast(data.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devDeleteFile(pageId, filePath) {
+  if (!confirm(`确定删除 ${filePath}？`)) return;
+  try {
+    const res = await api(`/api/pages/upload?id=${pageId}&path=${encodeURIComponent(filePath)}&user_id=${currentUser.id}`, {
+      method: 'DELETE',
+    });
+    if (res.success) {
+      toast('文件已删除');
+      devLoadFileList(pageId);
     } else {
       toast(res.error, 'error');
     }

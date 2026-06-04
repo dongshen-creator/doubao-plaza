@@ -176,15 +176,20 @@ export async function onRequestPost(context) {
     const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(agent_url).first();
     if (existingAgentUrl) return Response.json({ success: false, error: '该智能体链接已被注册' });
 
+    const regIP = context.request.headers.get('CF-Connecting-IP')
+      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+      || 'unknown';
+    const regUA = context.request.headers.get('User-Agent') || '';
+
     // 创建用户（ID由数据库自动生成）
     await env.DB.prepare(
-      `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(name, password, doubao_id, agent_url, device_fingerprint || null, avatar || null, bio || null).run();
+      `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio, registered_ip, last_login_ip, last_login_ua) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(name, password, doubao_id, agent_url, device_fingerprint || null, avatar || null, bio || null, regIP, regIP, regUA).run();
 
     // 通过 doubao_id 查询刚创建的用户
     const user = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at 
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at, last_login_ip 
        FROM users WHERE doubao_id = ?`
     ).bind(doubao_id).first();
 

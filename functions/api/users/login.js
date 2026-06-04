@@ -58,9 +58,14 @@ export async function onRequestPost(context) {
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
     ).bind(user.id, token, expiresAt).run();
 
+    const clientIP = context.request.headers.get('CF-Connecting-IP')
+      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+      || 'unknown';
+    const userAgent = context.request.headers.get('User-Agent') || '';
+
     await env.DB.prepare(
-      `UPDATE users SET last_login_at = datetime('now') WHERE id = ?`
-    ).bind(user.id).run();
+      `UPDATE users SET last_login_at = datetime('now'), last_login_ip = ?, last_login_ua = ? WHERE id = ?`
+    ).bind(clientIP, userAgent, user.id).run();
 
     // 安全地移除 password 字段
     const safeUser = {
@@ -75,7 +80,9 @@ export async function onRequestPost(context) {
       invite_code: user.invite_code,
       created_at: user.created_at,
       updated_at: user.updated_at,
-      last_login_at: user.last_login_at
+      last_login_at: user.last_login_at,
+      last_login_ip: clientIP,
+      last_login_ua: userAgent
     };
 
     return Response.json({ success: true, data: safeUser, token });
