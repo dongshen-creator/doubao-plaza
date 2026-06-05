@@ -1334,7 +1334,10 @@ async function loadAnnouncementsManager() {
           <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:#9ca3af">${formatDate(a.created_at)}</div>
-            <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${a.id}')">编辑</button>
+              <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
+            </div>
           </div>
         </div>
       `).join('')}
@@ -1377,6 +1380,52 @@ async function devDeleteAnnouncement(id) {
       toast('公告已删除');
       loadAnnouncementsManager();
       loadAnnouncements(); // Refresh main page
+    } else {
+      toast(res.error, 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devEditAnnouncement(id) {
+  try {
+    const res = await api('/api/announcements');
+    const ann = (res.data || []).find(a => a.id === id);
+    if (!ann) { toast('公告不存在', 'error'); return; }
+
+    const el = document.getElementById('developerContent');
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="section-label">✏️ 编辑公告</div>
+        <div class="form-group"><label class="form-label">标题</label><input class="input" id="editAnnTitle" value="${esc(ann.title)}" maxlength="100"></div>
+        <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="editAnnContent" rows="5" style="resize:vertical">${esc(ann.content)}</textarea></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdateAnnouncement('${id}')">保存修改</button>
+          <button class="btn btn-gray btn-full" style="flex:1" onclick="loadAnnouncementsManager()">取消</button>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function devUpdateAnnouncement(id) {
+  const title = document.getElementById('editAnnTitle').value.trim();
+  const content = document.getElementById('editAnnContent').value.trim();
+
+  if (!title || !content) { toast('标题和内容不能为空', 'error'); return; }
+
+  try {
+    const res = await api('/api/announcements', {
+      method: 'PUT',
+      body: JSON.stringify({ id, title, content, created_by: currentUser.id }),
+    });
+    if (res.success) {
+      toast('公告已更新');
+      loadAnnouncementsManager();
+      loadAnnouncements();
     } else {
       toast(res.error, 'error');
     }
