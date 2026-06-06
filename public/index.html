@@ -421,34 +421,60 @@ function isDeveloper() {
 }
 
 // ===== Login =====
-async function doLogin() {
-  const identifier = document.getElementById('loginId').value.trim();
-  const password = document.getElementById('loginPwd').value;
-  const errEl = document.getElementById('loginError');
+  async function doLogin() {
+    const identifier = document.getElementById('loginId').value.trim();
+    const password = document.getElementById('loginPwd').value;
+    const errEl = document.getElementById('loginError');
 
-  if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
+    if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
+    try {
+      // First: if we already have a token, try auto-login to detect existing homepage session
+      const existingToken = localStorage.getItem('dp_token');
+      if (existingToken) {
+        try {
+          const auto = await api('/api/users/auto-login', {
+            method: 'POST',
+            body: JSON.stringify({ token: existingToken }),
+          });
+          if (auto.success) {
+            // reuse existing session instead of logging in again
+            currentUser = auto.data;
+            sessionToken = auto.token || existingToken;
+            localStorage.setItem('dp_token', sessionToken);
+            closeModal('login');
+            updateNavbar();
+            renderContent();
+            toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
+            return;
+          }
+        } catch (e) {
+          // ignore and continue to normal login flow
+        }
+      }
 
-  try {
-    const res = await api('/api/users/login', {
-      method: 'POST',
-      body: JSON.stringify({ identifier, password }),
-    });
+      // Include device fingerprint in login request to help server correlate homepage sessions
+      const fingerprint = await getDeviceFingerprint();
 
-    if (res.success) {
-      currentUser = res.data;
-      sessionToken = res.token;
-      localStorage.setItem('dp_token', sessionToken);
-      closeModal('login');
-      updateNavbar();
-      renderContent();
-      toast(`欢迎回来，${currentUser.name}！`);
-    } else {
-      errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
+      const res = await api('/api/users/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier, password, device_fingerprint: fingerprint }),
+      });
+
+      if (res.success) {
+        currentUser = res.data;
+        sessionToken = res.token;
+        localStorage.setItem('dp_token', sessionToken);
+        closeModal('login');
+        updateNavbar();
+        renderContent();
+        toast(`欢迎回来，${currentUser.name}！`);
+      } else {
+        errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
+      }
+    } catch (e) {
+      errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
     }
-  } catch (e) {
-    errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
   }
-}
 
 // ===== Register =====
 async function doRegister() {
@@ -1193,7 +1219,7 @@ async function deleteAccount() {
 // ===== Developer Mode =====
 let devTab = 'announcements';
 
-function showModal(name) {
+async function showModal(name) {
   if (name === 'developer') {
     if (!isDeveloper()) {
       toast('只有开发者才能访问此功能', 'error');
@@ -1203,6 +1229,31 @@ function showModal(name) {
     loadDeveloperContent();
     return;
   }
+
+  // When opening the login modal, try auto-login first to detect an existing homepage session
+  if (name === 'login') {
+    const existingToken = localStorage.getItem('dp_token');
+    if (existingToken) {
+      try {
+        const auto = await api('/api/users/auto-login', {
+          method: 'POST',
+          body: JSON.stringify({ token: existingToken }),
+        });
+        if (auto.success) {
+          currentUser = auto.data;
+          sessionToken = auto.token || existingToken;
+          localStorage.setItem('dp_token', sessionToken);
+          updateNavbar();
+          renderContent();
+          toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
+          return; // don't show login modal
+        }
+      } catch (e) {
+        // ignore and show login modal
+      }
+    }
+  }
+
   document.getElementById(name + 'Modal').style.display = 'flex';
   if (name === 'settings') loadSettings();
 }
