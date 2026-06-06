@@ -31,6 +31,14 @@ export async function onRequest(context) {
   if (!env.DB) return json({ error: '数据库未绑定' }, 500);
   if (!env.MATRIX_HOMESERVER || !env.MATRIX_BOT_TOKEN) return json({ error: 'Matrix 未配置' }, 500);
 
+  // Auto-create tables
+  try {
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS chat_rooms (id TEXT PRIMARY KEY, matrix_room_id TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'private', name TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now')))");
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS chat_room_members (room_id TEXT NOT NULL, user_id TEXT NOT NULL, joined_at TEXT DEFAULT (datetime('now')), PRIMARY KEY(room_id, user_id))");
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, count INTEGER DEFAULT 0, last_event_id TEXT, PRIMARY KEY(room_id, user_id))");
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, sent_count INTEGER DEFAULT 1, PRIMARY KEY(room_id, user_id))");
+  } catch(e) { /* tables may already exist */ }
+
   const url = new URL(request.url);
   const method = request.method;
   const action = url.searchParams.get('action') || '';

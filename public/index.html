@@ -534,6 +534,7 @@ function updateNavbar() {
     `;
   } else {
     el.innerHTML = `
+      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <button class="nav-btn" onclick="showModal('login')">🔑 登录</button>
       <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
     `;
