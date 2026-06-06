@@ -200,7 +200,8 @@
     .chat-msg a{color:#FF6B35;text-decoration:underline;word-break:break-all}
     .chat-msg .file-link{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,107,53,0.1);border-radius:8px;text-decoration:none;color:#FF6B35;font-size:12px}
     .chat-msg-right .file-link{background:rgba(255,255,255,0.15)}
-    @media(max-width:767px){.chat-room-list{position:fixed;top:54px;left:0;right:0;bottom:0;z-index:10;transform:translateX(-100%);transition:transform .25s}.chat-room-list.show{transform:translateX(0)}.chat-msg{max-width:88%}}
+    .nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 2px 4px rgba(239,68,68,.3)}
+    @media(max-width:767px){.chat-room-list{position:fixed;top:54px;left:0;right:0;bottom:0;z-index:10;transform:translateX(-100%);transition:transform .25s;width:260px}.chat-room-list.show{transform:translateX(0)}.chat-msg{max-width:88%}.chat-header .chat-show-list{display:block!important}.chat-main,.chat-msgs{width:100%}}
   </style>
 </head>
 <body>
@@ -353,6 +354,7 @@
 <!-- Chat Panel -->
 <div class="chat-panel" id="chatPanel">
   <div class="chat-header">
+    <button class="nav-btn chat-show-list" onclick="toggleRoomList()" style="padding:6px 10px;display:none">☰</button>
     <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">← 返回</button>
     <div style="flex:1;font-size:16px;font-weight:700">💬 消息</div>
     <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">✕</button>
@@ -404,6 +406,8 @@ let sessionToken = localStorage.getItem('dp_token');
 let searchTimer = null;
 let pendingReportUserId = null;
 let deviceFingerprint = null;
+let notifEnabled = localStorage.getItem('dp_notif') !== 'off';
+let unreadPollTimer = null;
 
 // ===== Get Device Fingerprint =====
 async function getDeviceFingerprint() {
@@ -511,6 +515,7 @@ async function init() {
   updateNavbar();
   if (!localStorage.getItem('dp_announcement_seen')) showModal('announcement');
   renderContent();
+  startUnreadPolling();
 }
 
 // ===== Navbar =====
@@ -519,7 +524,7 @@ function updateNavbar() {
   if (currentUser) {
     el.innerHTML = `
       ${isDeveloper() ? '<button class="nav-btn" style="background:#FFF3ED;color:#FF6B35" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
-      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden" style="position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#EF4444"></span></button>
+      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
       <div class="nav-user" onclick="showModal('settings')">
         ${avatarHTML(currentUser, true)}
@@ -1092,6 +1097,13 @@ async function switchSettingsTab(tab, btnEl) {
         <div style="font-size:12px;color:#6b7280;margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div>
         <div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div>
       </div>
+      <div class="form-group" style="margin-top:16px">
+        <label class="form-label">消息通知</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">
+          <input type="checkbox" id="notifToggle" ${notifEnabled ? 'checked' : ''} onchange="toggleNotif()">
+          接收新消息通知（聊天按钮红点提醒）
+        </label>
+      </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:#f8f9fa">
         <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px">🔐 最近登录</div>
         <div style="font-size:12px;color:#4b5563;line-height:1.8">
@@ -1234,6 +1246,14 @@ async function setPrivacy(setting) {
     } else toast(res.error, 'error');
   } catch (e) {
     toast(e.message, 'error');
+  }
+}
+
+function toggleNotif() {
+  notifEnabled = document.getElementById('notifToggle').checked;
+  localStorage.setItem('dp_notif', notifEnabled ? 'on' : 'off');
+  if (!notifEnabled) {
+    document.getElementById('chatUnreadBadge').classList.add('hidden');
   }
 }
 
@@ -2035,6 +2055,7 @@ async function openChatWith(friendId, friendName) {
   const panel = document.getElementById('chatPanel');
   panel.classList.add('show');
   chatState.chatOpen = true;
+  document.getElementById('chatRoomList').classList.remove('show');
 
   if (friendId) {
     let res;
@@ -2088,6 +2109,7 @@ function renderRoomList() {
 
 async function switchRoom(roomId) {
   chatState.currentRoomId = roomId;
+  document.getElementById('chatRoomList').classList.remove('show');
   renderRoomList();
   loadMessages(roomId);
 }
@@ -2273,7 +2295,7 @@ async function uploadChatImage(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/chat/upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat-upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
   if (!res?.success) { toast('图片上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
@@ -2295,7 +2317,7 @@ async function uploadChatFile(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/chat/upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat-upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
   if (!res?.success) { toast('文件上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
@@ -2320,6 +2342,30 @@ async function recallMessage(eventId) {
   const msg = msgs.find(m => m.event_id === eventId);
   if (msg) msg.recalled = true;
   renderMessages(chatState.currentRoomId);
+}
+
+function toggleRoomList() {
+  document.getElementById('chatRoomList').classList.toggle('show');
+}
+
+function startUnreadPolling() {
+  if (unreadPollTimer) clearTimeout(unreadPollTimer);
+  if (!currentUser) return;
+  api('/api/chat?action=unread-count&user_id=' + currentUser.id).then(res => {
+    if (!currentUser) return;
+    if (res && typeof res.total === 'number') {
+      const badge = document.getElementById('chatUnreadBadge');
+      if (res.total > 0 && notifEnabled) {
+        badge.textContent = res.total > 99 ? '99+' : res.total;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+    unreadPollTimer = setTimeout(startUnreadPolling, 10000);
+  }).catch(() => {
+    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000);
+  });
 }
 
 // ===== Start =====

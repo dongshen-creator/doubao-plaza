@@ -47,10 +47,20 @@ export async function onRequest(context) {
     if (method === 'GET' && action === 'channel-members') return await handleChannelMembers(env, url);
     if (method === 'GET' && action === 'channels') return await handleListChannels(env, url);
     if (method === 'POST' && action === 'recall') return await handleRecall(env, body);
+    if (method === 'GET' && action === 'unread-count') return await handleUnreadCount(env, url);
     return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
   }
+}
+
+async function handleUnreadCount(env, url) {
+  const user_id = url.searchParams.get('user_id');
+  if (!user_id) return json({ error: 'user_id 必填' });
+  const result = await env.DB.prepare(
+    "SELECT COALESCE(SUM(count), 0) as total FROM chat_unread WHERE user_id=?"
+  ).bind(user_id).first();
+  return json({ total: result?.total || 0 });
 }
 
 async function handleHandshake(env, body) {
@@ -121,6 +131,12 @@ async function handleHandshake(env, body) {
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?), (?, ?)"
   ).bind(roomId, user_id, roomId, friend_id).run();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)"
+  ).bind(roomId, user_id).run();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)"
+  ).bind(roomId, friend_id).run();
 
   return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id, users: [sanitize(u1), sanitize(u2)] });
 }
@@ -187,6 +203,16 @@ async function handleSend(env, body) {
     method: 'PUT',
     body: JSON.stringify(msgContent)
   });
+
+  const otherMembers = await env.DB.prepare(
+    "SELECT user_id FROM chat_room_members WHERE room_id=? AND user_id!=?"
+  ).bind(room_id, user_id).all();
+  for (const m of otherMembers.results) {
+    await env.DB.prepare(
+      "INSERT INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 1) " +
+      "ON CONFLICT(room_id, user_id) DO UPDATE SET count=count+1"
+    ).bind(room_id, m.user_id).run();
+  }
 
   return json({ success: true, event_id: result.event_id || '' });
 }
