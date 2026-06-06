@@ -2239,8 +2239,8 @@ async function sendChatMsg() {
   btn.disabled = true;
   const body = { action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content };
   if (chatState.replyTo) { body.reply_to = chatState.replyTo; }
-  const res = await api('/api/chat', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
-  if (!res) { toast('发送失败', 'error'); btn.disabled = false; return; }
+  const res = await api('/api/chat', { method: 'POST', body: JSON.stringify(body) }).catch(e => { toast(e.message, 'error'); return null; });
+  if (!res) { btn.disabled = false; return; }
   if (res.error) {
     if (res.stranger_limit) {
       document.getElementById('chatStrangerWarn').classList.remove('hidden');

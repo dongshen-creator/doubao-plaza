@@ -184,21 +184,23 @@ async function handleSend(env, body) {
         "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
       ).bind(user_id, otherId, otherId, user_id).first();
       if (!isFriend) {
-        const limit = await env.DB.prepare(
-          "SELECT messages_sent FROM chat_stranger_limits WHERE room_id=? AND user_id=?"
-        ).bind(room_id, user_id).first();
-        if (limit && limit.messages_sent >= 1) {
-          const otherReplied = await env.DB.prepare(
+        try {
+          const limit = await env.DB.prepare(
             "SELECT messages_sent FROM chat_stranger_limits WHERE room_id=? AND user_id=?"
-          ).bind(room_id, otherId).first();
-          if (!otherReplied || otherReplied.messages_sent === 0) {
-            return json({ error: '请等待对方回复', stranger_limit: true });
+          ).bind(room_id, user_id).first();
+          if (limit && limit.messages_sent >= 1) {
+            const otherReplied = await env.DB.prepare(
+              "SELECT messages_sent FROM chat_stranger_limits WHERE room_id=? AND user_id=?"
+            ).bind(room_id, otherId).first();
+            if (!otherReplied || otherReplied.messages_sent === 0) {
+              return json({ error: '请等待对方回复', stranger_limit: true });
+            }
           }
-        }
-        await env.DB.prepare(
-          "INSERT INTO chat_stranger_limits (room_id, user_id, messages_sent) VALUES (?, ?, 1) " +
-          "ON CONFLICT(room_id, user_id) DO UPDATE SET messages_sent=messages_sent+1"
-        ).bind(room_id, user_id).run();
+          await env.DB.prepare(
+            "INSERT INTO chat_stranger_limits (room_id, user_id, messages_sent) VALUES (?, ?, 1) " +
+            "ON CONFLICT(room_id, user_id) DO UPDATE SET messages_sent=messages_sent+1"
+          ).bind(room_id, user_id).run();
+        } catch(e) {}
       }
     }
   }
