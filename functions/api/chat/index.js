@@ -46,6 +46,7 @@ export async function onRequest(context) {
     if (method === 'POST' && action === 'join-channel') return await handleJoinChannel(env, body);
     if (method === 'GET' && action === 'channel-members') return await handleChannelMembers(env, url);
     if (method === 'GET' && action === 'channels') return await handleListChannels(env, url);
+    if (method === 'POST' && action === 'recall') return await handleRecall(env, body);
     return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -318,6 +319,21 @@ async function handleListChannels(env, url) {
     joined = j.results.map(r => r.room_id);
   }
   return json({ channels: channels.results.map(c => ({ ...c, joined: joined.includes(c.id) })) });
+}
+
+async function handleRecall(env, body) {
+  const { user_id, room_id, event_id } = body;
+  if (!user_id || !room_id || !event_id) return json({ error: '参数不完整' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '房间不存在' });
+  const member = await env.DB.prepare("SELECT id FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();
+  if (!member) return json({ error: '您不是房间成员' });
+  const txnId = genId();
+  await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/redact/' + encodeURIComponent(event_id) + '/' + txnId, {
+    method: 'PUT',
+    body: JSON.stringify({ reason: '消息已撤回' })
+  });
+  return json({ success: true });
 }
 
 function sanitize(u) {

@@ -189,6 +189,16 @@
     .dark .chat-stranger-warn{background:#7F1D1D;border-color:#991B1B;color:#FECACA}
     .chat-new-channel{margin:12px 14px;padding:10px;border:2px dashed #d1d5db;border-radius:12px;text-align:center;cursor:pointer;font-size:12px;color:#9ca3af;transition:all .2s}
     .chat-new-channel:hover{border-color:#FF6B35;color:#FF6B35;background:rgba(255,107,53,.04)}
+    .chat-action-btn{width:34px;height:34px;border-radius:10px;border:none;background:#f3f4f6;color:#6b7280;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+    .chat-action-btn:hover{background:#e5e7eb}
+    .dark .chat-action-btn{background:#3a3a4e;color:#9ca3af}
+    .dark .chat-action-btn:hover{background:#4b5563}
+    .chat-recall-btn{background:transparent;border:none;color:rgba(255,107,53,0.7);font-size:10px;cursor:pointer;padding:2px 4px;border-radius:4px;transition:all .2s}
+    .chat-recall-btn:hover{background:rgba(255,107,53,0.1);color:#FF6B35}
+    .chat-msg img{border-radius:8px;max-width:200px;max-height:200px;display:block}
+    .chat-msg a{color:#FF6B35;text-decoration:underline;word-break:break-all}
+    .chat-msg .file-link{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,107,53,0.1);border-radius:8px;text-decoration:none;color:#FF6B35;font-size:12px}
+    .chat-msg-right .file-link{background:rgba(255,255,255,0.15)}
     @media(max-width:767px){.chat-room-list{position:fixed;top:54px;left:0;right:0;bottom:0;z-index:10;transform:translateX(-100%);transition:transform .25s}.chat-room-list.show{transform:translateX(0)}.chat-msg{max-width:88%}}
   </style>
 </head>
@@ -365,6 +375,10 @@
         <button class="close-reply" onclick="cancelReply()">✕</button>
       </div>
       <div class="chat-input-area">
+        <input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="uploadChatImage(this)">
+        <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
+        <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片">🖼</button>
+        <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
         <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this)"></textarea>
         <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
       </div>
@@ -2022,8 +2036,9 @@ async function openChatWith(friendId, friendName) {
   chatState.chatOpen = true;
 
   if (friendId) {
+    let res;
     try {
-      const res = await api('/api/chat', {
+      res = await api('/api/chat', {
         method: 'POST',
         body: JSON.stringify({ action: 'handshake', user_id: currentUser.id, friend_id: friendId })
       });
@@ -2106,12 +2121,28 @@ function renderMsgHTML(m, roomId) {
   const side = isMine ? 'chat-msg-right' : 'chat-msg-left';
   const time = m.ts ? new Date(m.ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '';
   const replyHtml = m.reply_to ? renderReplyPreview(m.reply_to, roomId) : '';
+  let contentHtml = '';
+  const text = m.content || '';
+  if (m.recalled) {
+    contentHtml = '<em style="opacity:0.5;font-style:italic">已撤回</em>';
+  } else if (text.startsWith('img:')) {
+    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy">';
+  } else if (text.startsWith('file:')) {
+    const parts = text.slice(5).split(':', 2);
+    contentHtml = '<a href="' + esc(parts[1] || '') + '" target="_blank" class="file-link">📎 ' + esc(parts[0] || '文件') + '</a>';
+  } else {
+    contentHtml = linkify(esc(text));
+  }
+  const recallBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="recallMessage(\'' + esc(m.event_id || '') + '\')">撤回</button>' : '';
   return `<div class="chat-msg ${side}" data-eid="${esc(m.event_id || '')}">
     <div class="chat-msg-bubble">
       ${!isMine ? `<div class="chat-msg-sender">${esc(m.sender)}</div>` : ''}
       ${replyHtml}
-      <div style="cursor:pointer" onclick="setReply('${esc(m.event_id || '')}','${esc(m.content?.slice(0,50))}')">${esc(m.content)}</div>
-      <div class="chat-msg-time">${time}</div>
+      <div style="cursor:pointer" onclick="setReply('${esc(m.event_id || '')}','${esc(text.slice(0,50))}')">${contentHtml}</div>
+      <div class="chat-msg-time" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${time}</span>
+        ${recallBtn}
+      </div>
     </div>
   </div>`;
 }
@@ -2212,6 +2243,61 @@ async function createChannel() {
 function autoChatResize(ta) {
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+
+function linkify(text) {
+  return text.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
+}
+
+async function uploadChatImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!chatState.currentRoomId) { toast('请先选择聊天', 'error'); return; }
+  const path = chatState.currentRoomId + '/' + Date.now() + '_' + file.name;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('user_id', currentUser.id);
+  form.append('path', path);
+  const res = await fetch('/api/pages/upload?id=chat', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  input.value = '';
+  if (!res?.success) { toast('图片上传失败', 'error'); return; }
+  const url = '/pages/chat/' + path;
+  await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'img:' + url }) });
+  toast('图片已发送', 'success');
+  setTimeout(() => startPolling(chatState.currentRoomId), 500);
+}
+
+async function uploadChatFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!chatState.currentRoomId) { toast('请先选择聊天', 'error'); return; }
+  const path = chatState.currentRoomId + '/' + Date.now() + '_' + file.name;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('user_id', currentUser.id);
+  form.append('path', path);
+  const res = await fetch('/api/pages/upload?id=chat', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  input.value = '';
+  if (!res?.success) { toast('文件上传失败', 'error'); return; }
+  const url = '/pages/chat/' + path;
+  await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'file:' + file.name + ':' + url }) });
+  toast('文件已发送', 'success');
+  setTimeout(() => startPolling(chatState.currentRoomId), 500);
+}
+
+async function recallMessage(eventId) {
+  if (!chatState.currentRoomId) return;
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'recall', user_id: currentUser.id, room_id: chatState.currentRoomId, event_id: eventId })
+  }).catch(() => null);
+  if (!res || res.error) { toast(res?.error || '撤回失败', 'error'); return; }
+  toast('已撤回', 'success');
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  const msg = msgs.find(m => m.event_id === eventId);
+  if (msg) msg.recalled = true;
+  renderMessages(chatState.currentRoomId);
 }
 
 // ===== Start =====
