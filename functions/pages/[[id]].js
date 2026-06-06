@@ -9,6 +9,7 @@ function homepageSessionScript() {
 'window._hpSession=null;' +
 'window._hpReady=new Promise(function(r){window._hpResolve=r;});' +
 'window.getHomepageSession=function(){return window._hpReady;};' +
+'window.checkHomepageSession=function(){' +
 'var token=typeof localStorage!==\'undefined\'?localStorage.getItem(\'dp_token\'):null;' +
 'if(!token){window._hpResolve(null);return;}' +
 'fetch(\'/api/users/auto-login\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify({token:token})})' +
@@ -17,8 +18,17 @@ function homepageSessionScript() {
 'try{window.dispatchEvent(new CustomEvent(\'hp-session\',{detail:window._hpSession}));}catch(e){}' +
 'window._hpResolve(window._hpSession);' +
 '}).catch(function(){window._hpResolve(null);});' +
+'};' +
+'window.checkHomepageSession();' +
 '})();' +
 '</script>';  
+}
+
+function injectIntoHTML(html, script) {
+  var idx = html.lastIndexOf('</body>');
+  if (idx === -1) idx = html.lastIndexOf('</BODY>');
+  if (idx === -1) return html + script;
+  return html.slice(0, idx) + script + html.slice(idx);
 }
 
 function getContentType(filename) {
@@ -50,9 +60,8 @@ export async function onRequestGet(context) {
       if (obj) {
         const ct = obj.httpMetadata?.contentType || getContentType(filePath);
         if (ct === 'text/html') {
-          const html = await obj.text();
-          const injected = html.replace('</body>', homepageSessionScript() + '</body>');
-          return new Response(injected, {
+          const html = await new Response(obj.body).text();
+          return new Response(injectIntoHTML(html, homepageSessionScript()), {
             headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
           });
         }
@@ -74,8 +83,7 @@ export async function onRequestGet(context) {
       ).bind(pageId).first();
 
       if (page) {
-        const injected = page.html_content.replace('</body>', homepageSessionScript() + '</body>');
-        return new Response(injected, {
+        return new Response(injectIntoHTML(page.html_content, homepageSessionScript()), {
           headers: { 'Content-Type': 'text/html' },
         });
       }

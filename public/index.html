@@ -342,10 +342,6 @@ function showModal(name) {
 function closeModal(name) {
   document.getElementById(name + 'Modal').style.display = 'none';
   if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
-  if (name === 'login') {
-    document.getElementById('loginForm').style.display = 'block';
-    document.getElementById('loginNoSession').style.display = 'none';
-  }
 }
 
 // ===== Avatar HTML =====
@@ -1237,12 +1233,7 @@ async function showModal(name) {
         }
       } catch (e) {}
     }
-    // No valid homepage session — show the "go to homepage" message instead of login form
-    document.getElementById('loginForm').style.display = 'none';
-    document.getElementById('loginNoSession').style.display = 'block';
-    document.getElementById('loginError').innerHTML = '';
-    document.getElementById('loginModal').style.display = 'flex';
-    return;
+    // 主页上无有效会话 → 显示正常登录表单
   }
 
   document.getElementById(name + 'Modal').style.display = 'flex';
