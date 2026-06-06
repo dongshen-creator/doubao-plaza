@@ -36,7 +36,7 @@ export async function onRequest(context) {
   const action = url.searchParams.get('action') || '';
 
   try {
-    if (method === 'POST' && action === 'upload') return await handleChatUpload(env, request);
+
     const body = (method === 'POST' || method === 'PUT') ? await request.json().catch(() => ({})) : {};
     const resolvedAction = action || body.action || '';
     if (method === 'POST' && resolvedAction === 'handshake') return await handleHandshake(env, body);
@@ -53,27 +53,6 @@ export async function onRequest(context) {
     return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
-  }
-}
-
-async function handleChatUpload(env, request) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file');
-    const userId = formData.get('user_id');
-    if (!file) return json({ error: '请选择文件' });
-    if (!userId) return json({ error: '缺少用户ID' });
-    const user = await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(userId).first();
-    if (!user) return json({ error: '用户不存在' });
-    if (!env.PAGES_BUCKET) return json({ error: 'R2 存储桶未绑定' });
-    const path = formData.get('path') || Date.now().toString(36) + '_' + (file.name || 'file');
-    const buffer = await file.arrayBuffer();
-    await env.PAGES_BUCKET.put('pages/chat/' + path, buffer, {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' },
-    });
-    return json({ success: true, data: { path: 'chat/' + path, size: buffer.byteLength } });
-  } catch (e) {
-    return json({ error: '上传失败：' + e.message });
   }
 }
 
