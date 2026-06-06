@@ -33,7 +33,7 @@ export async function onRequest(context) {
 
   const url = new URL(request.url);
   const method = request.method;
-  const action = url.searchParams.get('action');
+  const action = url.searchParams.get('action') || body.action || '';
   const body = (method === 'POST' || method === 'PUT') ? await request.json().catch(() => ({})) : {};
 
   try {
