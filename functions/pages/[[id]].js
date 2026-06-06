@@ -2,80 +2,44 @@
 // [[id]].js 捕获 /pages/{id} 以及 /pages/{id}/子路径
 // 优先从 R2 读取文件，无 R2 或无文件时回退到 D1 的 html_content
 
-// 注入到自定义页面的主页会话检测 + 登录遮罩（内联 HTML + script）
-function overlayBlock() {
-  return '<style id="hp-style">' +
-  '#hp-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;background:#F7F8FC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;transition:opacity .35s}' +
-  '#hp-overlay.hp-hidden{opacity:0;pointer-events:none}' +
-  '.hp-spinner{width:34px;height:34px;border:3px solid #e5e7eb;border-top-color:#FF6B35;border-radius:50%;animation:hp-spin .75s linear infinite;margin:0 auto 18px}' +
-  '@keyframes hp-spin{to{transform:rotate(360deg)}}' +
-  '.hp-card{text-align:center;padding:48px 32px;max-width:380px}' +
-  '.hp-card h2{font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:8px}' +
-  '.hp-card p{font-size:14px;color:#9ca3af;margin-bottom:28px;line-height:1.6}' +
-  '.hp-btn{display:inline-flex;align-items:center;gap:6px;padding:12px 32px;border-radius:12px;border:none;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .25s}' +
-  '.hp-btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;box-shadow:0 4px 14px rgba(255,107,53,.35)}' +
-  '.hp-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,107,53,.4)}' +
-  '.hp-btn:active{transform:scale(.97)}' +
-  '</style>' +
-  '<div id="hp-overlay"><div class="hp-card"><div class="hp-spinner"></div><h2>正在验证登录状态...</h2></div></div>' +
-  '<script>' +
+// 注入到 <head> 最前端的同步登录墙脚本
+// 无 token 时用 document.write 完全替换页面，阻止任何外部资源加载
+// 有 token 时页面正常渲染（0 网络开销）
+function loginWallHead() {
+  return '<script id="hp-login">' +
   '(function(){' +
-  'var ov=document.getElementById("hp-overlay");' +
-  'if(!ov)return;' +
-  'window._hpSession=null;' +
-  'window._hpReady=new Promise(function(r){window._hpResolve=r;});' +
-  'window.getHomepageSession=function(){return window._hpReady;};' +
-  'function showLogin(msg){' +
-  'ov.innerHTML="<div class=\\"hp-card\\"><div class=\\"hp-icon\\">&#x1F512;</div><h2>"+msg+"</h2><p>\\u8BBF\\u95EE\\u6B64\\u9875\\u9762\\u9700\\u8981\\u767B\\u5F55\\u9017\\u5305\\u7528\\u6237\\u5E7F\\u573A\\u8D26\\u53F7</p><a href=\\"/\\" class=\\"hp-btn hp-btn-primary\\">&#x1F3E0; \\u524D\\u5F80\\u4E3B\\u9875\\u767B\\u5F55</a></div>";' +
-  '}' +
-  'function hideOverlay(){ov.classList.add("hp-hidden");var s=document.getElementById("hp-style");if(s)s.remove();setTimeout(function(){ov.remove()},350);}' +
-  'var token=typeof localStorage!="undefined"?localStorage.getItem("dp_token"):null;' +
-  'if(!token){showLogin("\\u8BF7\\u5148\\u767B\\u5F55");window._hpResolve(null);return;}' +
-  'var cached=typeof sessionStorage!="undefined"?sessionStorage.getItem("hp_session"):null;' +
-  'if(cached){try{var cs=JSON.parse(cached);if(cs&&cs.valid){window._hpSession=cs;window._hpResolve(cs);hideOverlay();return;}}catch(e){}}' +
-  'fetch("/api/users/auto-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:token})})' +
-  '.then(function(r){return r.json()})' +
-  '.then(function(d){' +
-  'if(d.success){' +
-  'window._hpSession={user:d.data,token:d.token||token,valid:true};' +
-  'window._hpResolve(window._hpSession);' +
-  'try{sessionStorage.setItem("hp_session",JSON.stringify(window._hpSession));}catch(e){}' +
-  'hideOverlay();' +
+  'var t=typeof localStorage!="undefined"?localStorage.getItem("dp_token"):null;' +
+  'if(t){' +
+  // token 存在，页面正常渲染
+  'window._hpToken=t;' +
   '}else{' +
-  'try{sessionStorage.removeItem("hp_session");}catch(e){}' +
-  'localStorage.removeItem("dp_token");' +
-  'showLogin("\\u4F1A\\u8BDD\\u5DF2\\u8FC7\\u671F");' +
-  'window._hpResolve(null);' +
+  // 无 token → 立即终止原始页面，document.write 登录提示
+  'document.open();' +
+  'document.write("<!DOCTYPE html><html lang=\\"zh-CN\\"><head><meta charset=\\"UTF-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>\\u8BF7\\u5148\\u767B\\u5F55</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#F7F8FC;font-family:-apple-system,BlinkMacSystemFont,\\"PingFang SC\\",\\"Microsoft YaHei\\",sans-serif;text-align:center}.hp-c{padding:32px}.hp-i{font-size:64px;margin-bottom:24px}.hp-h{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:12px}.hp-p{color:#9ca3af;margin-bottom:28px;font-size:14px;line-height:1.6}.hp-a{display:inline-flex;align-items:center;gap:6px;padding:12px 32px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;text-decoration:none;font-size:15px;font-weight:600;transition:all .25s}.hp-a:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(255,107,53,.35)}</style></head><body><div class=\\"hp-c\\"><div class=\\"hp-i\\">\\uD83D\\uDD12</div><div class=\\"hp-h\\">\\u8BF7\\u5148\\u767B\\u5F55</div><div class=\\"hp-p\\">\\u8BBF\\u95EE\\u6B64\\u9875\\u9762\\u9700\\u8981\\u767B\\u5F55\\u9017\\u5305\\u7528\\u6237\\u5E7F\\u573A\\u8D26\\u53F7</div><a href=\\"\\" class=\\"hp-a\\">\\uD83C\\uDFE0 \\u524D\\u5F80\\u4E3B\\u9875\\u767B\\u5F55</a></div></body></html>");' +
+  'document.close();' +
   '}' +
-  '})' +
-  '.catch(function(){' +
-  'showLogin("\\u7F51\\u7EDC\\u9519\\u8BEF");' +
-  'window._hpResolve(null);' +
-  '});' +
-  'window.addEventListener("storage",function(e){if(e.key==="dp_token"){if(!e.newValue){showLogin("\\u5DF2\\u767B\\u51FA");window._hpResolve(null);}else{location.reload();}}});' +
   '})();' +
   '</script>';
 }
 
 function injectIntoHTML(html, block) {
-  // 优先注入到 <body> 标签后，遮罩作为 body 第一个子元素
-  var bodyMatch = html.match(/<body[\s>]/i);
-  if (bodyMatch) {
-    var idx = bodyMatch.index;
+  // 注入到 <head> 开头（所有外部资源之前）
+  var hMatch = html.match(/<head[\s>]/i);
+  if (hMatch) {
+    var idx = hMatch.index;
     var tagEnd = html.indexOf('>', idx);
     if (tagEnd !== -1) {
       return html.slice(0, tagEnd + 1) + block + html.slice(tagEnd + 1);
     }
   }
   // fallback: 注入到 </head> 前
-  var hIdx = html.lastIndexOf('</head>');
-  if (hIdx === -1) hIdx = html.lastIndexOf('</HEAD>');
-  if (hIdx === -1) {
-    hIdx = html.lastIndexOf('</body>');
-    if (hIdx === -1) hIdx = html.lastIndexOf('</BODY>');
-    if (hIdx === -1) return html + block;
+  var hIdx = html.indexOf('</head>');
+  if (hIdx === -1) hIdx = html.indexOf('</HEAD>');
+  if (hIdx !== -1) {
+    return html.slice(0, hIdx) + block + html.slice(hIdx);
   }
-  return html.slice(0, hIdx) + block + html.slice(hIdx);
+  // fallback: 追加到最前面
+  return block + html;
 }
 
 function getContentType(filename) {
@@ -108,7 +72,7 @@ export async function onRequestGet(context) {
         const ct = obj.httpMetadata?.contentType || getContentType(filePath);
         if (ct === 'text/html') {
           const html = await new Response(obj.body).text();
-          return new Response(injectIntoHTML(html, overlayBlock()), {
+          return new Response(injectIntoHTML(html, loginWallHead()), {
             headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
           });
         }
@@ -130,7 +94,7 @@ export async function onRequestGet(context) {
       ).bind(pageId).first();
 
       if (page) {
-        return new Response(injectIntoHTML(page.html_content, overlayBlock()), {
+        return new Response(injectIntoHTML(page.html_content, loginWallHead()), {
           headers: { 'Content-Type': 'text/html' },
         });
       }
