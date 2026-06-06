@@ -2049,7 +2049,16 @@ let chatState = {
   chatOpen: false
 };
 
-function openChat() { openChatWith(null, null); }
+function openChat() {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
+  const panel = document.getElementById('chatPanel');
+  panel.classList.add('show');
+  chatState.chatOpen = true;
+  document.getElementById('chatRoomList').classList.add('show');
+  document.getElementById('chatEmpty').classList.remove('hidden');
+  document.getElementById('chatMsgs').classList.add('hidden');
+  loadRoomList();
+}
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
   const panel = document.getElementById('chatPanel');
@@ -2067,7 +2076,7 @@ async function openChatWith(friendId, friendName) {
       if (res.error) { toast(res.error, 'error'); return; }
     } catch (e) { toast(e.message, 'error'); return; }
     chatState.currentRoomId = res.room_id;
-    renderRoomList();
+    await loadRoomList();
     loadMessages(res.room_id);
   } else {
     loadRoomList();
@@ -2143,7 +2152,7 @@ function renderMsgHTML(m, roomId) {
   const isMine = m.sender_id === currentUser.id;
   const side = isMine ? 'chat-msg-right' : 'chat-msg-left';
   const time = m.ts ? new Date(m.ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '';
-  const replyHtml = m.reply_to ? renderReplyPreview(m.reply_to, roomId) : '';
+  const replyHtml = m.reply_to ? renderReplyBlock(m.reply_to, roomId) : '';
   let contentHtml = '';
   const text = m.content || '';
   if (m.recalled) {
@@ -2161,20 +2170,34 @@ function renderMsgHTML(m, roomId) {
     <div class="chat-msg-bubble">
       ${!isMine ? `<div class="chat-msg-sender">${esc(m.sender)}${m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : ''}</div>` : ''}
       ${replyHtml}
-      <div style="cursor:pointer" onclick="setReply('${esc(m.event_id || '')}','${esc(text.slice(0,50))}')">${contentHtml}</div>
+      <div>${contentHtml}</div>
       <div class="chat-msg-time" style="display:flex;justify-content:space-between;align-items:center">
         <span>${time}</span>
-        ${recallBtn}
+        <div style="display:flex;gap:4px;align-items:center">
+          ${!m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReply(\'' + esc(m.event_id || '') + '\',\'' + esc(text.slice(0,50).replace(/'/g,"\\'")) + '\')" style="color:#6b7280;font-size:10px">引用</button>' : ''}
+          ${recallBtn}
+        </div>
       </div>
     </div>
   </div>`;
 }
 
-function renderReplyPreview(eventId, roomId) {
+function renderReplyBlock(eventId, roomId) {
+  if (!eventId) return '';
   const msgs = chatState.messages[roomId] || [];
   const ref = msgs.find(m => m.event_id === eventId);
-  if (!ref) return '';
-  return `<div class="chat-msg-reply">${esc(ref.sender)}: ${esc(ref.content?.slice(0,60))}</div>`;
+  if (!ref) return '<div class="chat-msg-reply" style="opacity:0.4"><em>消息已删除或不可用</em></div>';
+  if (ref.recalled) return '<div class="chat-msg-reply" style="opacity:0.4"><em>原消息已撤回</em></div>';
+  let preview = '';
+  const t = ref.content || '';
+  if (t.startsWith('img:')) {
+    preview = '<img src="' + esc(t.slice(4)) + '" loading="lazy" style="max-width:80px;max-height:60px;border-radius:4px;display:block;margin-top:2px">';
+  } else if (t.startsWith('file:')) {
+    preview = '📎 ' + esc(t.slice(5).split(':',2)[0] || '文件');
+  } else {
+    preview = linkify(esc(t.length > 80 ? t.slice(0,80) + '…' : t));
+  }
+  return `<div class="chat-msg-reply" onclick="document.querySelector('[data-eid=\\'${esc(eventId)}\\']')?.scrollIntoView({behavior:'smooth'})">${esc(ref.sender)}: ${preview}</div>`;
 }
 
 function startPolling(roomId) {
@@ -2282,8 +2305,17 @@ function autoChatResize(ta) {
 }
 
 function linkify(text) {
-  return text.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
+  return text.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
+    var url = match;
+    var ext = url.split('?')[0].split('/').pop().toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext) || /cdn|media|upload|image|img/.test(url))
+      return '<img src="' + url + '" loading="lazy" style="max-width:200px;max-height:200px;border-radius:8px;display:block;margin:4px 0">';
+    if (/\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)(\?|$)/i.test(ext))
+      return '<video src="' + url + '" controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
+    if (/\.(mp3|wav|ogg|aac|m4a|flac|wma)(\?|$)/i.test(ext))
+      return '<audio src="' + url + '" controls style="width:100%;margin:4px 0"></audio>';
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+  }).replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
 }
 
 async function uploadChatImage(input) {
@@ -2366,6 +2398,363 @@ function startUnreadPolling() {
   }).catch(() => {
     if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   });
+}
+
+// ===== Groups & Pinning (localStorage) =====
+function getFriendGroups() {
+  try { return JSON.parse(localStorage.getItem('chat_friend_groups') || '{}'); } catch { return {}; }
+}
+function saveFriendGroups(g) { localStorage.setItem('chat_friend_groups', JSON.stringify(g)); }
+function getChannelGroups() {
+  try { return JSON.parse(localStorage.getItem('chat_channel_groups') || '{}'); } catch { return {}; }
+}
+function saveChannelGroups(g) { localStorage.setItem('chat_channel_groups', JSON.stringify(g)); }
+function getPinnedChannels() {
+  try { return JSON.parse(localStorage.getItem('chat_pinned') || '[]'); } catch { return []; }
+}
+function savePinnedChannels(p) { localStorage.setItem('chat_pinned', JSON.stringify(p)); }
+function togglePinChannel(roomId) {
+  var p = getPinnedChannels();
+  var idx = p.indexOf(roomId);
+  if (idx >= 0) p.splice(idx, 1); else p.push(roomId);
+  savePinnedChannels(p);
+  return idx < 0;
+}
+function getChannelGroupList() {
+  return Object.keys(getChannelGroups());
+}
+function setChannelGroup(roomId, groupName) {
+  var g = getChannelGroups();
+  // Remove from any existing group
+  for (var k in g) { var idx = g[k].indexOf(roomId); if (idx >= 0) g[k].splice(idx, 1); if (!g[k].length) delete g[k]; }
+  if (groupName) { if (!g[groupName]) g[groupName] = []; g[groupName].push(roomId); }
+  saveChannelGroups(g);
+}
+
+// Modify renderRoomList to show pinned + groups
+renderRoomList = function() {
+  var el = document.getElementById('chatRoomItems');
+  var rooms = chatState.rooms;
+  if (!rooms || !rooms.length) {
+    el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
+    return;
+  }
+  var pinned = getPinnedChannels();
+  var groups = getChannelGroups();
+  var unpinned = rooms.filter(function(r) { return pinned.indexOf(r.id) < 0; });
+  var pinnedRooms = rooms.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
+  var html = '';
+  // Pinned section
+  if (pinnedRooms.length) {
+    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:#9ca3af">📌 置顶</div>';
+    html += pinnedRooms.map(function(r) { return roomItemHTML(r); }).join('');
+  }
+  // Grouped sections
+  var assigned = {};
+  for (var gName in groups) {
+    (groups[gName] || []).forEach(function(rid) { assigned[rid] = gName; });
+  }
+  var usedGroups = {};
+  unpinned.forEach(function(r) {
+    var g = assigned[r.id] || '';
+    if (g) usedGroups[g] = true;
+  });
+  // Ungrouped
+  var ungrouped = unpinned.filter(function(r) { return !assigned[r.id]; });
+  if (ungrouped.length) {
+    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:#9ca3af">聊天</div>';
+    html += ungrouped.map(function(r) { return roomItemHTML(r); }).join('');
+  }
+  // Groups
+  for (var gName in usedGroups) {
+    var gr = unpinned.filter(function(r) { return assigned[r.id] === gName; });
+    if (!gr.length) continue;
+    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:#9ca3af">' + esc(gName) + '</div>';
+    html += gr.map(function(r) { return roomItemHTML(r); }).join('');
+  }
+  // Group management
+  html += '<div style="padding:8px 14px;display:flex;gap:4px">' +
+    '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:10px;flex:1">📁 管理分组</button>' +
+    '<button class="btn btn-sm btn-gray" onclick="showChannelPinHelp()" style="font-size:10px">📌</button>' +
+    '</div>';
+  el.innerHTML = html;
+};
+
+function roomItemHTML(r) {
+  var active = r.id === chatState.currentRoomId;
+  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
+  var name = r.other ? esc(r.other.name) : esc(r.name);
+  var isPinned = getPinnedChannels().indexOf(r.id) >= 0;
+  return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
+    '<div class="chat-room-avatar">' + avatar + '</div>' +
+    '<div class="chat-room-info">' +
+    '<div class="chat-room-name">' + (isPinned ? '📌 ' : '') + name + '</div>' +
+    '<div class="chat-room-preview">' + (r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' : '') + '</div>' +
+    '</div>' +
+    (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+    '<button class="chat-recall-btn" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" style="color:#9ca3af;font-size:10px;padding:4px">📌</button>' +
+    '<button class="chat-recall-btn" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" style="color:#9ca3af;font-size:10px;padding:4px">📁</button>' +
+    '</div>';
+}
+
+function showChannelGroupManager() {
+  var groups = getChannelGroups();
+  var names = Object.keys(groups);
+  var html = '<div class="modal-overlay" id="groupManagerModal" style="display:flex"><div class="modal modal-lg">' +
+    '<div class="modal-header"><div class="modal-title">📁 频道分组</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'groupManagerModal\').remove()">✕</button></div>';
+  html += '<div style="margin-bottom:12px;display:flex;gap:8px">' +
+    '<input class="input" id="newGroupName" placeholder="新分组名称" style="flex:1">' +
+    '<button class="btn btn-orange btn-sm" onclick="addChannelGroup()">创建</button></div>';
+  if (!names.length) {
+    html += '<div class="empty"><div class="empty-text">暂无分组</div></div>';
+  } else {
+    html += names.map(function(n) {
+      var count = (groups[n] || []).length;
+      return '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(n) + '</div><div class="list-item-email">' + count + ' 个频道</div></div>' +
+        '<button class="btn btn-red btn-sm" onclick="deleteChannelGroup(\'' + esc(n) + '\')">删除</button></div>';
+    }).join('');
+  }
+  html += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function addChannelGroup() {
+  var name = document.getElementById('newGroupName').value.trim();
+  if (!name) { toast('请输入分组名称', 'error'); return; }
+  var g = getChannelGroups();
+  if (g[name]) { toast('分组已存在', 'error'); return; }
+  g[name] = [];
+  saveChannelGroups(g);
+  document.getElementById('groupManagerModal').remove();
+  showChannelGroupManager();
+  loadRoomList();
+}
+
+function deleteChannelGroup(name) {
+  var g = getChannelGroups();
+  delete g[name];
+  saveChannelGroups(g);
+  document.getElementById('groupManagerModal').remove();
+  showChannelGroupManager();
+  loadRoomList();
+}
+
+function promptChannelGroup(roomId, roomName) {
+  var groups = getChannelGroups();
+  var names = Object.keys(groups);
+  var current = '';
+  for (var k in groups) { if (groups[k].indexOf(roomId) >= 0) { current = k; break; } }
+  var opts = '<option value="">(无分组)</option>' + names.map(function(n) { return '<option value="' + esc(n) + '" ' + (n === current ? 'selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+  var html = '<div class="modal-overlay" id="groupPromptModal" style="display:flex"><div class="modal" style="max-width:300px">' +
+    '<div class="modal-header"><div class="modal-title">' + esc(roomName) + '</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'groupPromptModal\').remove()">✕</button></div>' +
+    '<div class="form-group"><label class="form-label">分组</label>' +
+    '<select class="input" id="groupSelect">' + opts + '</select></div>' +
+    '<button class="btn btn-orange btn-full" onclick="var s=document.getElementById(\'groupSelect\').value;setChannelGroup(\'' + roomId + '\',s);document.getElementById(\'groupPromptModal\').remove();loadRoomList();toast(s?\'已分组\':\'已取消分组\')">确定</button>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function showChannelPinHelp() {
+  toast('点击频道旁的 📌 按钮置顶', 'info');
+}
+
+// Friend groups in settings
+function addFriendGroupsUI(friends) {
+  var groups = getFriendGroups();
+  var groupNames = Object.keys(groups);
+  // Group management
+  var html = '<div style="margin-bottom:12px"><div class="section-label">👥 好友分组</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+    '<input class="input" id="friendGroupInput" placeholder="新分组名称" style="flex:1">' +
+    '<button class="btn btn-orange btn-sm" onclick="createFriendGroup()">创建</button></div>';
+  if (groupNames.length) {
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+      groupNames.map(function(n) {
+        return '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f3f4f6;border-radius:8px;font-size:12px">' + esc(n) +
+          '<button onclick="deleteFriendGroup(\'' + esc(n) + '\')" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px">✕</button></span>';
+      }).join('') + '</div>';
+  }
+  html += '</div><div class="section-label">👥 好友列表</div>';
+  return html;
+}
+
+function createFriendGroup() {
+  var name = document.getElementById('friendGroupInput').value.trim();
+  if (!name) { toast('请输入分组名称', 'error'); return; }
+  var g = getFriendGroups();
+  if (g[name]) { toast('分组已存在', 'error'); return; }
+  g[name] = [];
+  saveFriendGroups(g);
+  switchSettingsTab('friends');
+}
+
+function deleteFriendGroup(name) {
+  if (!confirm('删除分组 "' + name + '"？好友不会被删除。')) return;
+  var g = getFriendGroups();
+  delete g[name];
+  saveFriendGroups(g);
+  switchSettingsTab('friends');
+}
+
+function setFriendGroup(friendId, groupName) {
+  var g = getFriendGroups();
+  for (var k in g) { var idx = g[k].indexOf(friendId); if (idx >= 0) g[k].splice(idx, 1); if (!g[k].length) delete g[k]; }
+  if (groupName) { if (!g[groupName]) g[groupName] = []; g[groupName].push(friendId); }
+  saveFriendGroups(g);
+}
+
+// Patch settings friends tab
+switchSettingsTab = function(tab, btnEl) {
+  settingsTab = tab;
+  document.querySelectorAll('#settingsModal .tab').forEach(function(t) { t.classList.remove('active'); });
+  if (btnEl) btnEl.classList.add('active');
+  else {
+    var els = document.querySelectorAll('#settingsModal .tab');
+    if (els[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2]) els[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2].classList.add('active');
+  }
+  var el = document.getElementById('settingsContent');
+  if (tab === 'account') {
+    // ... keep existing account tab code
+    el.innerHTML = settingsAccountHTML();
+    loadFeatureToggles();
+  } else if (tab === 'friends') {
+    loadFriendsWithGroups(el);
+  } else if (tab === 'blocks') {
+    loadBlocksTab(el);
+  }
+};
+
+function settingsAccountHTML() {
+  return '<div class="card" style="margin-bottom:16px;padding:16px">' +
+    '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:12px">👤 个人信息</div>' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">' +
+    '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:600;overflow:hidden;flex-shrink:0">' +
+    (currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + currentUser.name.charAt(0).toUpperCase() + '\'">' : currentUser.name.charAt(0).toUpperCase()) +
+    '</div><div style="flex:1"><div style="font-size:16px;font-weight:600;color:#1a1a2e">' + esc(currentUser.name) + '</div>' +
+    '<div style="font-size:13px;color:#9ca3af">' + (currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')) + '</div>' +
+    '<div style="font-size:12px;color:#6b7280;margin-top:2px">' + (currentUser.bio ? esc(currentUser.bio) : '暂无简介') + '</div></div></div>' +
+    '<div class="form-group"><label class="form-label">更换头像</label><div style="display:flex;gap:8px"><input class="input" id="newAvatarUrl" placeholder="输入图片链接" value="' + esc(currentUser.avatar || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button></div></div></div>' +
+    '<div class="form-group"><label class="form-label">修改密码</label><div style="display:flex;gap:8px"><input class="input" id="newPwd" type="password" placeholder="新密码（6位）" maxlength="6" style="flex:1"><button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button></div></div>' +
+    '<div class="form-group"><label class="form-label">白名单邀请码</label><div style="display:flex;gap:8px"><input class="input" id="whitelistCode" placeholder="设置白名单模式的邀请码" value="' + esc(currentUser.invite_code || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="setWhitelistCode()">保存</button></div>' +
+    '<div style="font-size:11px;color:#9ca3af;margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div></div>' +
+    '<div class="form-group"><label class="form-label">隐私模式</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">' +
+    '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'searchable' ? 'btn-green' : 'btn-gray') + '" onclick="setPrivacy(\'searchable\')">🌐 可搜索</button>' +
+    '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'whitelist' || currentUser.privacy_setting === 'punished_whitelist' ? 'btn-blue' : 'btn-gray') + '" onclick="setPrivacy(\'whitelist\')">🔐 白名单</button>' +
+    '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'stealth' || currentUser.privacy_setting === 'punished_stealth' ? 'btn-gray' : 'btn-gray') + '" onclick="setPrivacy(\'stealth\')">👻 隐身</button></div>' +
+    '<div style="font-size:11px;color:#9ca3af;margin-top:6px">当前：' + getPrivacyLabel(currentUser.privacy_setting) + '</div></div>' +
+    '<div class="form-group"><label class="form-label">功能显示设置</label><div style="font-size:12px;color:#6b7280;margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div><div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div></div>' +
+    '<div class="form-group" style="margin-top:16px"><label class="form-label">消息通知</label>' +
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer">' +
+    '<input type="checkbox" id="notifToggle" ' + (notifEnabled ? 'checked' : '') + ' onchange="toggleNotif()">接收新消息通知（聊天按钮红点提醒）</label></div>' +
+    '<div class="card" style="margin-bottom:16px;padding:14px;background:#f8f9fa"><div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:6px">🔐 最近登录</div>' +
+    '<div style="font-size:12px;color:#4b5563;line-height:1.8"><div>IP：' + esc(currentUser.last_login_ip || '未知') + '</div><div>时间：' + formatDate(currentUser.last_login_at) + '</div>' +
+    '<div>设备：' + esc(currentUser.last_login_ua || '未知') + '</div></div></div>' +
+    '<div class="danger-box"><strong>⚠️ 危险区域</strong><br>注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>' +
+    '<button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button></div>';
+}
+
+async function loadFriendsWithGroups(el) {
+  try {
+    var res = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
+    var friends = res.data || [];
+    document.getElementById('friendsBadge').textContent = friends.length;
+    document.getElementById('friendsBadge').style.display = friends.length > 0 ? 'flex' : 'none';
+    if (!friends.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无好友</div></div>'; return; }
+    var groups = getFriendGroups();
+    var groupNames = Object.keys(groups);
+    var html = '<div style="margin-bottom:12px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<div class="section-label" style="margin-bottom:0">👥 好友分组</div>' +
+      '<button class="btn btn-sm btn-gray" onclick="showFriendGroupManager()" style="font-size:11px">管理</button></div></div>';
+    if (groupNames.length) {
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
+        '<span class="tag ' + (_filterGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
+        groupNames.map(function(n) {
+          return '<span class="tag ' + (_filterGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'' + esc(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+        }).join('') + '</div>';
+    }
+    var filteredFriends = _filterGroup ? friends.filter(function(f) {
+      for (var k in groups) { if (groups[k].indexOf(f.friend.id) >= 0) return k === _filterGroup; }
+      return false;
+    }) : friends;
+    html += '<div id="friendGroupFiltered"><div class="section-label">👥 ' + (_filterGroup ? '分组: ' + _filterGroup : '全部好友') + ' (' + filteredFriends.length + ')</div>';
+    html += filteredFriends.map(function(f) {
+      var g = '';
+      for (var k in groups) { if (groups[k].indexOf(f.friend.id) >= 0) { g = k; break; } }
+      return '<div class="list-item">' +
+        avatarHTML(f.friend, true) +
+        '<div class="list-item-info"><div class="list-item-name">' + esc(f.friend.name) + '</div>' +
+        '<div class="list-item-email">' + esc(f.friend.doubao_id || '') + '</div></div>' +
+        '<select class="input" style="width:auto;font-size:11px;padding:4px 8px" onchange="setFriendGroup(\'' + f.friend.id + '\',this.value)">' +
+        '<option value="">(无分组)</option>' +
+        groupNames.map(function(n) { return '<option value="' + esc(n) + '" ' + (g === n ? 'selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+        '</select>' +
+        '<button class="btn btn-red btn-sm" onclick="removeFriend(\'' + f.id + '\')">移除</button></div>';
+    }).join('');
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">加载失败</div></div>';
+  }
+}
+
+function showFriendGroupManager() {
+  var groups = getFriendGroups();
+  var names = Object.keys(groups);
+  var html = '<div class="modal-overlay" id="fgManagerModal" style="display:flex"><div class="modal modal-lg">' +
+    '<div class="modal-header"><div class="modal-title">👥 好友分组管理</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'fgManagerModal\').remove()">✕</button></div>';
+  html += '<div style="margin-bottom:12px;display:flex;gap:8px">' +
+    '<input class="input" id="fgNewName" placeholder="新分组名称" style="flex:1">' +
+    '<button class="btn btn-orange btn-sm" onclick="doCreateFriendGroup()">创建</button></div>';
+  if (!names.length) {
+    html += '<div class="empty"><div class="empty-text">暂无分组</div></div>';
+  } else {
+    html += names.map(function(n) {
+      return '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(n) + '</div></div>' +
+        '<button class="btn btn-red btn-sm" onclick="if(confirm(\'删除分组？\')){deleteFriendGroup(\'' + esc(n) + '\')}">删除</button></div>';
+    }).join('');
+  }
+  html += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function doCreateFriendGroup() {
+  var name = document.getElementById('fgNewName').value.trim();
+  if (!name) { toast('请输入分组名称', 'error'); return; }
+  var g = getFriendGroups();
+  if (g[name]) { toast('分组已存在', 'error'); return; }
+  g[name] = [];
+  saveFriendGroups(g);
+  document.getElementById('fgManagerModal').remove();
+  switchSettingsTab('friends');
+}
+
+var _filterGroup = '';
+function filterFriendGroup(name) {
+  _filterGroup = name;
+  switchSettingsTab('friends');
+}
+
+async function loadBlocksTab(el) {
+  try {
+    var res = await api('/api/blocked?user_id=' + currentUser.id);
+    var blocks = res.data || [];
+    document.getElementById('blocksBadge').textContent = blocks.length;
+    document.getElementById('blocksBadge').style.display = blocks.length > 0 ? 'flex' : 'none';
+    if (!blocks.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>'; return; }
+    el.innerHTML = blocks.map(function(b) {
+      return '<div class="list-item">' +
+        avatarHTML(b.blocked_user, true) +
+        '<div class="list-item-info"><div class="list-item-name">' + esc(b.blocked_user.name || '未知用户') + '</div>' +
+        '<div class="list-item-email">' + esc(b.blocked_user.doubao_id || '') + '</div></div>' +
+        '<button class="btn btn-blue btn-sm" onclick="unblockUser(\'' + b.id + '\')">移出</button></div>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">加载失败</div></div>';
+  }
 }
 
 // ===== Start =====
