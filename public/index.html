@@ -2295,9 +2295,9 @@ async function uploadChatImage(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/chat-upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat?action=upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
-  if (!res?.success) { toast('图片上传失败', 'error'); return; }
+  if (!res?.success) { toast(res?.error || '图片上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
   const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'img:' + url }) });
   const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '2', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'img:' + url, reply_to: null, ts: Date.now() };
@@ -2317,9 +2317,9 @@ async function uploadChatFile(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/chat-upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat?action=upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
-  if (!res?.success) { toast('文件上传失败', 'error'); return; }
+  if (!res?.success) { toast(res?.error || '文件上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
   const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'file:' + file.name + ':' + url }) });
   const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '3', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };

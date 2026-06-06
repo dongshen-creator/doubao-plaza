@@ -33,24 +33,47 @@ export async function onRequest(context) {
 
   const url = new URL(request.url);
   const method = request.method;
-  const body = (method === 'POST' || method === 'PUT') ? await request.json().catch(() => ({})) : {};
-  const action = url.searchParams.get('action') || body.action || '';
+  const action = url.searchParams.get('action') || '';
 
   try {
-    if (method === 'POST' && action === 'handshake') return await handleHandshake(env, body);
-    if (method === 'POST' && action === 'send') return await handleSend(env, body);
-    if (method === 'GET' && action === 'poll') return await handlePoll(env, url);
-    if (method === 'GET' && action === 'rooms') return await handleRooms(env, url);
-    if (method === 'POST' && action === 'read') return await handleRead(env, body);
-    if (method === 'POST' && action === 'create-channel') return await handleCreateChannel(env, body);
-    if (method === 'POST' && action === 'join-channel') return await handleJoinChannel(env, body);
-    if (method === 'GET' && action === 'channel-members') return await handleChannelMembers(env, url);
-    if (method === 'GET' && action === 'channels') return await handleListChannels(env, url);
-    if (method === 'POST' && action === 'recall') return await handleRecall(env, body);
-    if (method === 'GET' && action === 'unread-count') return await handleUnreadCount(env, url);
+    if (method === 'POST' && action === 'upload') return await handleChatUpload(env, request);
+    const body = (method === 'POST' || method === 'PUT') ? await request.json().catch(() => ({})) : {};
+    const resolvedAction = action || body.action || '';
+    if (method === 'POST' && resolvedAction === 'handshake') return await handleHandshake(env, body);
+    if (method === 'POST' && resolvedAction === 'send') return await handleSend(env, body);
+    if (method === 'GET' && resolvedAction === 'poll') return await handlePoll(env, url);
+    if (method === 'GET' && resolvedAction === 'rooms') return await handleRooms(env, url);
+    if (method === 'POST' && resolvedAction === 'read') return await handleRead(env, body);
+    if (method === 'POST' && resolvedAction === 'create-channel') return await handleCreateChannel(env, body);
+    if (method === 'POST' && resolvedAction === 'join-channel') return await handleJoinChannel(env, body);
+    if (method === 'GET' && resolvedAction === 'channel-members') return await handleChannelMembers(env, url);
+    if (method === 'GET' && resolvedAction === 'channels') return await handleListChannels(env, url);
+    if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
+    if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
     return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
+  }
+}
+
+async function handleChatUpload(env, request) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    const userId = formData.get('user_id');
+    if (!file) return json({ error: '请选择文件' });
+    if (!userId) return json({ error: '缺少用户ID' });
+    const user = await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(userId).first();
+    if (!user) return json({ error: '用户不存在' });
+    if (!env.PAGES_BUCKET) return json({ error: 'R2 存储桶未绑定' });
+    const path = formData.get('path') || Date.now().toString(36) + '_' + (file.name || 'file');
+    const buffer = await file.arrayBuffer();
+    await env.PAGES_BUCKET.put('pages/chat/' + path, buffer, {
+      httpMetadata: { contentType: file.type || 'application/octet-stream' },
+    });
+    return json({ success: true, data: { path: 'chat/' + path, size: buffer.byteLength } });
+  } catch (e) {
+    return json({ error: '上传失败：' + e.message });
   }
 }
 
@@ -230,22 +253,20 @@ async function handlePoll(env, url) {
   let nextBatch = '';
 
   try {
+    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}}));
+    let sync;
     if (since) {
-      const sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}})) + '&since=' + encodeURIComponent(since) + '&timeout=3000');
-      nextBatch = sync.next_batch || '';
-      const roomData = sync.rooms?.join?.[room.matrix_room_id];
-      if (roomData) {
-        const events = roomData.timeline?.events || [];
-        for (const ev of events) {
-          if (ev.type === 'm.room.message') messages.push(parseMatrixEvent(ev));
-        }
-      }
+      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=3000');
     } else {
-      const msgs = await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/messages?dir=b&limit=50');
-      nextBatch = msgs.end || '';
-      const events = msgs.chunk?.filter(e => e.type === 'm.room.message') || [];
-      for (const ev of events) messages.push(parseMatrixEvent(ev));
-      messages.reverse();
+      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0');
+    }
+    nextBatch = sync.next_batch || '';
+    const roomData = sync.rooms?.join?.[room.matrix_room_id];
+    if (roomData) {
+      const events = roomData.timeline?.events || [];
+      for (const ev of events) {
+        if (ev.type === 'm.room.message') messages.push(parseMatrixEvent(ev));
+      }
     }
   } catch (e) {
     return json({ error: '同步失败: ' + e.message });
