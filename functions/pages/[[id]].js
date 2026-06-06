@@ -2,32 +2,73 @@
 // [[id]].js 捕获 /pages/{id} 以及 /pages/{id}/子路径
 // 优先从 R2 读取文件，无 R2 或无文件时回退到 D1 的 html_content
 
-// 注入到自定义页面的主页会话检测脚本
-function homepageSessionScript() {
-  return '<script>' +
+// 注入到自定义页面的主页会话检测 + 登录遮罩
+function overlayScript() {
+  return '<style id="hp-style">' +
+'#hp-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;background:#F7F8FC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\',\'Microsoft YaHei\',sans-serif;transition:opacity .35s}' +
+'#hp-overlay.hp-hidden{opacity:0;pointer-events:none}' +
+'.hp-spinner{width:34px;height:34px;border:3px solid #e5e7eb;border-top-color:#FF6B35;border-radius:50%;animation:hp-spin .75s linear infinite;margin:0 auto 18px}' +
+'@keyframes hp-spin{to{transform:rotate(360deg)}}' +
+'.hp-card{text-align:center;padding:48px 32px;max-width:380px}' +
+'.hp-card .hp-icon{font-size:52px;margin-bottom:14px}' +
+'.hp-card h2{font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:8px}' +
+'.hp-card p{font-size:14px;color:#9ca3af;margin-bottom:28px;line-height:1.6}' +
+'.hp-btn{display:inline-flex;align-items:center;gap:6px;padding:12px 32px;border-radius:12px;border:none;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .25s}' +
+'.hp-btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;box-shadow:0 4px 14px rgba(255,107,53,.35)}' +
+'.hp-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,107,53,.4)}' +
+'.hp-btn:active{transform:scale(.97)}' +
+'</style>' +
+'<script>' +
 '(function(){' +
+'var ov=document.createElement("div");' +
+'ov.id="hp-overlay";' +
+'ov.innerHTML=\'<div class="hp-card"><div class="hp-spinner"></div><h2>正在验证登录状态...</h2></div>\';' +
+'document.documentElement.appendChild(ov);' +
+'' +
 'window._hpSession=null;' +
 'window._hpReady=new Promise(function(r){window._hpResolve=r;});' +
 'window.getHomepageSession=function(){return window._hpReady;};' +
-'window.checkHomepageSession=function(){' +
-'var token=typeof localStorage!==\'undefined\'?localStorage.getItem(\'dp_token\'):null;' +
-'if(!token){window._hpResolve(null);return;}' +
+'' +
+'function showLogin(msg){' +
+'ov.innerHTML=\'<div class="hp-card"><div class="hp-icon">🔒</div><h2>\'+msg+\'</h2><p>访问此页面需要登录逗包用户广场账号</p><a href="/" class="hp-btn hp-btn-primary">🏠 前往主页登录</a></div>\';' +
+'}' +
+'' +
+'var token=typeof localStorage!==\'undefined\'?localStorage.getItem("dp_token"):null;' +
+'if(!token){showLogin("请先登录");window._hpResolve(null);return;}' +
+'' +
 'fetch(\'/api/users/auto-login\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify({token:token})})' +
-'.then(function(r){return r.json()}).then(function(d){' +
-'window._hpSession=d.success?{user:d.data,token:d.token||token}:null;' +
-'try{window.dispatchEvent(new CustomEvent(\'hp-session\',{detail:window._hpSession}));}catch(e){}' +
+'.then(function(r){return r.json()})' +
+'.then(function(d){' +
+'if(d.success){' +
+'window._hpSession={user:d.data,token:d.token||token};' +
 'window._hpResolve(window._hpSession);' +
-'}).catch(function(){window._hpResolve(null);});' +
-'};' +
-'window.checkHomepageSession();' +
+'ov.classList.add("hp-hidden");' +
+'var s=document.getElementById("hp-style");if(s)s.remove();' +
+'setTimeout(function(){ov.remove()},350);' +
+'}else{' +
+'localStorage.removeItem("dp_token");' +
+'showLogin("会话已过期");' +
+'window._hpResolve(null);' +
+'}' +
+'})' +
+'.catch(function(){' +
+'showLogin("网络错误");' +
+'window._hpResolve(null);' +
+'});' +
 '})();' +
-'</script>';  
+'</script>';
 }
 
 function injectIntoHTML(html, script) {
-  var idx = html.lastIndexOf('</body>');
-  if (idx === -1) idx = html.lastIndexOf('</BODY>');
-  if (idx === -1) return html + script;
+  // 优先注入到 </head> 前，让遮罩在 body 渲染前就位
+  var idx = html.lastIndexOf('</head>');
+  if (idx === -1) idx = html.lastIndexOf('</HEAD>');
+  if (idx === -1) {
+    // fallback: 注入到 </body> 前
+    idx = html.lastIndexOf('</body>');
+    if (idx === -1) idx = html.lastIndexOf('</BODY>');
+    if (idx === -1) return html + script;
+  }
   return html.slice(0, idx) + script + html.slice(idx);
 }
 
@@ -61,7 +102,7 @@ export async function onRequestGet(context) {
         const ct = obj.httpMetadata?.contentType || getContentType(filePath);
         if (ct === 'text/html') {
           const html = await new Response(obj.body).text();
-          return new Response(injectIntoHTML(html, homepageSessionScript()), {
+          return new Response(injectIntoHTML(html, overlayScript()), {
             headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
           });
         }
@@ -83,7 +124,7 @@ export async function onRequestGet(context) {
       ).bind(pageId).first();
 
       if (page) {
-        return new Response(injectIntoHTML(page.html_content, homepageSessionScript()), {
+        return new Response(injectIntoHTML(page.html_content, overlayScript()), {
           headers: { 'Content-Type': 'text/html' },
         });
       }
