@@ -193,8 +193,9 @@
     .chat-action-btn:hover{background:#e5e7eb}
     .dark .chat-action-btn{background:#3a3a4e;color:#9ca3af}
     .dark .chat-action-btn:hover{background:#4b5563}
-    .chat-recall-btn{background:transparent;border:none;color:rgba(255,107,53,0.7);font-size:10px;cursor:pointer;padding:2px 4px;border-radius:4px;transition:all .2s}
+    .chat-recall-btn{background:transparent;border:none;color:#fff;font-size:10px;cursor:pointer;padding:2px 4px;border-radius:4px;transition:all .2s}
     .chat-recall-btn:hover{background:rgba(255,107,53,0.1);color:#FF6B35}
+    .chat-msg-left .chat-recall-btn{color:rgba(255,107,53,0.7)}
     .chat-msg img{border-radius:8px;max-width:200px;max-height:200px;display:block}
     .chat-msg a{color:#FF6B35;text-decoration:underline;word-break:break-all}
     .chat-msg .file-link{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,107,53,0.1);border-radius:8px;text-decoration:none;color:#FF6B35;font-size:12px}
@@ -375,7 +376,7 @@
         <button class="close-reply" onclick="cancelReply()">✕</button>
       </div>
       <div class="chat-input-area">
-        <input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="uploadChatImage(this)">
+        <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
         <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
         <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片">🖼</button>
         <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
@@ -2136,7 +2137,7 @@ function renderMsgHTML(m, roomId) {
   const recallBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="recallMessage(\'' + esc(m.event_id || '') + '\')">撤回</button>' : '';
   return `<div class="chat-msg ${side}" data-eid="${esc(m.event_id || '')}">
     <div class="chat-msg-bubble">
-      ${!isMine ? `<div class="chat-msg-sender">${esc(m.sender)}</div>` : ''}
+      ${!isMine ? `<div class="chat-msg-sender">${esc(m.sender)}${m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : ''}</div>` : ''}
       ${replyHtml}
       <div style="cursor:pointer" onclick="setReply('${esc(m.event_id || '')}','${esc(text.slice(0,50))}')">${contentHtml}</div>
       <div class="chat-msg-time" style="display:flex;justify-content:space-between;align-items:center">
@@ -2202,6 +2203,19 @@ async function sendChatMsg() {
     btn.disabled = false; return;
   }
   document.getElementById('chatStrangerWarn').classList.add('hidden');
+  const localMsg = {
+    event_id: res.event_id || Date.now().toString(36),
+    sender: currentUser.name,
+    sender_id: currentUser.id,
+    sender_avatar: currentUser.avatar || '',
+    sender_doubao_id: currentUser.doubao_id || '',
+    content,
+    reply_to: chatState.replyTo || null,
+    ts: Date.now()
+  };
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
+  renderMessages(chatState.currentRoomId);
   input.value = ''; autoChatResize(input);
   if (chatState.replyTo) cancelReply();
   btn.disabled = false;
@@ -2259,11 +2273,15 @@ async function uploadChatImage(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/pages/upload?id=chat', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat/upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
   if (!res?.success) { toast('图片上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
-  await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'img:' + url }) });
+  const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'img:' + url }) });
+  const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '2', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'img:' + url, reply_to: null, ts: Date.now() };
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
+  renderMessages(chatState.currentRoomId);
   toast('图片已发送', 'success');
   setTimeout(() => startPolling(chatState.currentRoomId), 500);
 }
@@ -2277,11 +2295,15 @@ async function uploadChatFile(input) {
   form.append('file', file);
   form.append('user_id', currentUser.id);
   form.append('path', path);
-  const res = await fetch('/api/pages/upload?id=chat', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  const res = await fetch('/api/chat/upload', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
   input.value = '';
   if (!res?.success) { toast('文件上传失败', 'error'); return; }
   const url = '/pages/chat/' + path;
-  await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'file:' + file.name + ':' + url }) });
+  const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'file:' + file.name + ':' + url }) });
+  const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '3', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
+  renderMessages(chatState.currentRoomId);
   toast('文件已发送', 'success');
   setTimeout(() => startPolling(chatState.currentRoomId), 500);
 }

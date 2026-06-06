@@ -62,6 +62,25 @@ async function handleHandshake(env, body) {
   ).bind(user_id, friend_id, friend_id, user_id).first();
   if (blocked) return json({ error: '无法与已拉黑的用户聊天' });
 
+  const recipient = await env.DB.prepare("SELECT id, privacy_setting, punished_until FROM users WHERE id=?").bind(friend_id).first();
+  if (recipient) {
+    if (recipient.privacy_setting === 'punished_stealth') {
+      return json({ error: '对方因违规已被限制使用聊天功能' });
+    }
+    if (recipient.privacy_setting === 'stealth') {
+      const isFriend = await env.DB.prepare(
+        "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
+      ).bind(user_id, friend_id, friend_id, user_id).first();
+      if (!isFriend) return json({ error: '对方开启了隐身模式，无法发起会话' });
+    }
+    if (recipient.privacy_setting === 'whitelist' || recipient.privacy_setting === 'punished_whitelist') {
+      const isFriend = await env.DB.prepare(
+        "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
+      ).bind(user_id, friend_id, friend_id, user_id).first();
+      if (!isFriend) return json({ error: '对方开启了白名单模式，仅好友可发起会话' });
+    }
+  }
+
   const existing = await env.DB.prepare(
     "SELECT cr.id, cr.matrix_room_id FROM chat_rooms cr " +
     "JOIN chat_room_members m1 ON cr.id=m1.room_id AND m1.user_id=? " +
@@ -157,18 +176,19 @@ async function handleSend(env, body) {
     body: content,
     'com.doubao.sender_id': user_id,
     'com.doubao.sender_name': user.name,
-    'com.doubao.sender_avatar': user.avatar || ''
+    'com.doubao.sender_avatar': user.avatar || '',
+    'com.doubao.sender_doubao_id': user.doubao_id || ''
   };
   if (reply_to) {
     msgContent['m.relates_to'] = { 'm.in_reply_to': { event_id: reply_to } };
   }
 
-  await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/send/m.room.message/' + txnId, {
+  const result = await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/send/m.room.message/' + txnId, {
     method: 'PUT',
     body: JSON.stringify(msgContent)
   });
 
-  return json({ success: true });
+  return json({ success: true, event_id: result.event_id || '' });
 }
 
 async function handlePoll(env, url) {
@@ -185,7 +205,7 @@ async function handlePoll(env, url) {
 
   try {
     if (since) {
-      const sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}})) + '&since=' + encodeURIComponent(since) + '&timeout=30000');
+      const sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}})) + '&since=' + encodeURIComponent(since) + '&timeout=3000');
       nextBatch = sync.next_batch || '';
       const roomData = sync.rooms?.join?.[room.matrix_room_id];
       if (roomData) {
@@ -215,6 +235,7 @@ function parseMatrixEvent(ev) {
     sender: content['com.doubao.sender_name'] || '未知用户',
     sender_id: content['com.doubao.sender_id'] || '',
     sender_avatar: content['com.doubao.sender_avatar'] || '',
+    sender_doubao_id: content['com.doubao.sender_doubao_id'] || '',
     content: content.body || '',
     reply_to: content['m.relates_to']?.['m.in_reply_to']?.event_id || null,
     ts: ev.origin_server_ts,
