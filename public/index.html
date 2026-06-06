@@ -139,6 +139,57 @@
     .login-required p{font-size:14px;color:#9ca3af;margin-bottom:24px}
     .warning-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:16px;margin-bottom:16px;color:#92400E;font-size:13px}
     .danger-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;margin-bottom:16px;color:#991B1B;font-size:13px}
+    .chat-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:55;background:#F7F8FC;display:none;flex-direction:column;animation:fadeIn .2s}
+    .dark .chat-panel{background:#1a1a2e}
+    .chat-panel.show{display:flex}
+    .chat-header{background:#fff;border-bottom:1px solid rgba(0,0,0,.06);padding:10px 16px;display:flex;align-items:center;gap:10px;height:54px;z-index:2}
+    .dark .chat-header{background:#2a2a3e;border-color:rgba(255,255,255,.06)}
+    .chat-body{flex:1;display:flex;overflow:hidden;min-height:0}
+    .chat-room-list{width:280px;background:#fff;border-right:1px solid #e5e7eb;flex-shrink:0;display:flex;flex-direction:column}
+    .dark .chat-room-list{background:#2a2a3e;border-color:#374151}
+    .chat-room-item{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s;border-bottom:1px solid #f3f4f6}
+    .dark .chat-room-item{border-color:#374151}
+    .chat-room-item:hover{background:#f3f4f6}
+    .dark .chat-room-item:hover{background:#3a3a4e}
+    .chat-room-item.active{background:rgba(255,107,53,.08);border-left:3px solid #FF6B35}
+    .chat-room-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;overflow:hidden}
+    .chat-room-avatar img{width:100%;height:100%;object-fit:cover}
+    .chat-room-info{flex:1;min-width:0}
+    .chat-room-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dark .chat-room-name{color:#e5e7eb}
+    .chat-room-preview{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+    .chat-room-unread{background:#EF4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
+    .chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+    .chat-msg{max-width:75%;word-break:break-word;line-height:1.45;position:relative}
+    .chat-msg-left{align-self:flex-start}
+    .chat-msg-right{align-self:flex-end}
+    .chat-msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;position:relative}
+    .chat-msg-left .chat-msg-bubble{background:#fff;border:1px solid #e5e7eb;border-bottom-left-radius:4px}
+    .chat-msg-right .chat-msg-bubble{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;border-bottom-right-radius:4px}
+    .dark .chat-msg-left .chat-msg-bubble{background:#2a2a3e;border-color:#374151;color:#e5e7eb}
+    .chat-msg-sender{font-size:11px;font-weight:600;color:#FF6B35;margin-bottom:3px}
+    .chat-msg-time{font-size:10px;color:#9ca3af;margin-top:4px;text-align:right}
+    .chat-msg-right .chat-msg-time{color:rgba(255,255,255,.6)}
+    .chat-msg-reply{font-size:11px;padding:6px 8px;border-radius:8px;margin-bottom:4px;opacity:.7;background:rgba(0,0,0,.05);border-left:3px solid #FF6B35;cursor:pointer}
+    .chat-msg-right .chat-msg-reply{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.4)}
+    .chat-input-area{padding:10px 16px;background:#fff;border-top:1px solid #e5e7eb;display:flex;gap:8px;align-items:flex-end}
+    .dark .chat-input-area{background:#2a2a3e;border-color:#374151}
+    .chat-input{flex:1;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px 14px;font-size:13px;resize:none;outline:none;max-height:120px;min-height:42px;background:transparent;color:#1a1a2e;transition:border-color .2s}
+    .dark .chat-input{color:#e5e7eb;border-color:#374151}
+    .chat-input:focus{border-color:#FF6B35}
+    .chat-send-btn{width:42px;height:42px;border-radius:12px;border:none;background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+    .chat-send-btn:hover{box-shadow:0 4px 14px rgba(255,107,53,.35);transform:translateY(-1px)}
+    .chat-send-btn:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
+    .chat-empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:32px;color:#9ca3af;font-size:14px}
+    .chat-reply-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#f3f4f6;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280}
+    .dark .chat-reply-bar{background:#3a3a4e;border-color:#4b5563;color:#9ca3af}
+    .chat-reply-bar .close-reply{background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px}
+    .chat-stranger-warn{font-size:11px;color:#EF4444;padding:6px 16px;text-align:center;background:#FEF2F2;border-top:1px solid #FECACA}
+    .dark .chat-stranger-warn{background:#7F1D1D;border-color:#991B1B;color:#FECACA}
+    .chat-new-channel{margin:12px 14px;padding:10px;border:2px dashed #d1d5db;border-radius:12px;text-align:center;cursor:pointer;font-size:12px;color:#9ca3af;transition:all .2s}
+    .chat-new-channel:hover{border-color:#FF6B35;color:#FF6B35;background:rgba(255,107,53,.04)}
+    @media(max-width:767px){.chat-room-list{position:fixed;top:54px;left:0;right:0;bottom:0;z-index:10;transform:translateX(-100%);transition:transform .25s}.chat-room-list.show{transform:translateX(0)}.chat-msg{max-width:88%}}
   </style>
 </head>
 <body>
@@ -288,6 +339,49 @@
   </div>
 </div>
 
+<!-- Chat Panel -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">← 返回</button>
+    <div style="flex:1;font-size:16px;font-weight:700">💬 消息</div>
+    <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">✕</button>
+  </div>
+  <div class="chat-body">
+    <div class="chat-room-list" id="chatRoomList">
+      <div style="padding:12px 14px;font-size:12px;font-weight:600;color:#9ca3af;display:flex;justify-content:space-between;align-items:center">
+        <span>聊天</span>
+        <button class="btn btn-sm btn-gray" onclick="showCreateChannel()" style="font-size:11px">＋ 频道</button>
+      </div>
+      <div id="chatRoomItems" style="flex:1;overflow-y:auto"></div>
+    </div>
+    <div class="chat-main" id="chatMain">
+      <div class="chat-empty" id="chatEmpty">
+        <div><div style="font-size:48px;margin-bottom:12px">💬</div><div>选择一个聊天或创建频道</div></div>
+      </div>
+      <div class="chat-msgs hidden" id="chatMsgs"></div>
+      <div id="chatStrangerWarn" class="chat-stranger-warn hidden"></div>
+      <div id="chatReplyBar" class="chat-reply-bar hidden">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
+        <button class="close-reply" onclick="cancelReply()">✕</button>
+      </div>
+      <div class="chat-input-area">
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this)"></textarea>
+        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="createChannelModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">创建新频道</div>
+      <button class="modal-close" onclick="closeModal('createChannel')">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">频道名称</label><input class="input" id="channelName" placeholder="输入频道名称" maxlength="50"></div>
+    <button class="btn btn-orange btn-full" onclick="createChannel()">创建</button>
+  </div>
+</div>
+
 <script>
 // ===== State =====
 let currentUser = null;
@@ -410,6 +504,7 @@ function updateNavbar() {
   if (currentUser) {
     el.innerHTML = `
       ${isDeveloper() ? '<button class="nav-btn" style="background:#FFF3ED;color:#FF6B35" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
+      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden" style="position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#EF4444"></span></button>
       <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
       <div class="nav-user" onclick="showModal('settings')">
         ${avatarHTML(currentUser, true)}
@@ -712,6 +807,7 @@ function userCardHTML(user, index) {
       <div class="user-card-actions">
         ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1">🔗 访问主页</a>` : '<div style="flex:1"></div>'}
         ${!isSelf ? `<button class="btn btn-blue btn-sm" onclick="addFriend('${user.id}',this)">➕ 加好友</button>` : ''}
+        ${!isSelf ? `<button class="btn btn-green btn-sm" onclick="openChatWith('${user.id}','${esc(user.name)}')">💬 聊天</button>` : ''}
         ${!isSelf ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)">🚫</button>` : ''}
         ${!isSelf ? `<button class="btn btn-red btn-sm" onclick="showReportModal('${user.id}')">🚨</button>` : ''}
       </div>
@@ -864,7 +960,8 @@ async function loadMyFriends() {
                 </div>
               </div>
               ${f.friend?.bio ? `<div style="font-size:11px;color:#9ca3af;word-break:break-all;white-space:pre-wrap">${esc(f.friend.bio)}</div>` : ''}
-              <div style="display:flex;gap:6px">
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-green btn-sm" style="flex:1" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">💬 聊天</button>
                 ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : ''}
                 <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
               </div>
@@ -1904,6 +2001,215 @@ async function devDeleteFile(pageId, filePath) {
   } catch (e) {
     toast(e.message, 'error');
   }
+}
+
+// ===== Chat System =====
+let chatState = {
+  rooms: [],
+  currentRoomId: null,
+  messages: {},
+  nextBatch: {},
+  pollTimer: null,
+  replyTo: null,
+  chatOpen: false
+};
+
+function openChat() { openChatWith(null, null); }
+async function openChatWith(friendId, friendName) {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
+  const panel = document.getElementById('chatPanel');
+  panel.classList.add('show');
+  chatState.chatOpen = true;
+
+  if (friendId) {
+    const res = await api('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'handshake', user_id: currentUser.id, friend_id: friendId })
+    }).catch(() => null);
+    if (!res || res.error) { toast(res?.error || '创建聊天失败', 'error'); return; }
+    chatState.currentRoomId = res.room_id;
+    renderRoomList();
+    loadMessages(res.room_id);
+  } else {
+    loadRoomList();
+  }
+}
+
+function closeChat() {
+  document.getElementById('chatPanel').classList.remove('show');
+  chatState.chatOpen = false;
+  if (chatState.pollTimer) { clearTimeout(chatState.pollTimer); chatState.pollTimer = null; }
+}
+
+async function loadRoomList() {
+  const res = await api(`/api/chat?action=rooms&user_id=${currentUser.id}`).catch(() => null);
+  if (res?.rooms) { chatState.rooms = res.rooms; renderRoomList(); }
+}
+
+function renderRoomList() {
+  const el = document.getElementById('chatRoomItems');
+  const rooms = chatState.rooms;
+  if (!rooms?.length) {
+    el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
+    return;
+  }
+  el.innerHTML = rooms.map(r => {
+    const active = r.id === chatState.currentRoomId;
+    const avatar = r.other ? (r.other.avatar ? `<img src="${esc(r.other.avatar)}">` : esc(r.other.name.charAt(0))) : '📢';
+    const name = r.other ? esc(r.other.name) : esc(r.name);
+    return `<div class="chat-room-item ${active ? 'active' : ''}" onclick="switchRoom('${r.id}')">
+      <div class="chat-room-avatar">${avatar}</div>
+      <div class="chat-room-info">
+        <div class="chat-room-name">${name}</div>
+        <div class="chat-room-preview">${r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' : ''}</div>
+      </div>
+      ${r.unread ? `<div class="chat-room-unread">${r.unread > 99 ? '99+' : r.unread}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function switchRoom(roomId) {
+  chatState.currentRoomId = roomId;
+  renderRoomList();
+  loadMessages(roomId);
+}
+
+async function loadMessages(roomId) {
+  const msgsEl = document.getElementById('chatMsgs');
+  const empty = document.getElementById('chatEmpty');
+  msgsEl.classList.remove('hidden');
+  empty.classList.add('hidden');
+  msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px">加载中...</div>';
+  const res = await api(`/api/chat?action=poll&room_id=${roomId}&user_id=${currentUser.id}`).catch(() => null);
+  if (!res) { msgsEl.innerHTML = '<div class="chat-empty">加载失败</div>'; return; }
+  chatState.nextBatch[roomId] = res.next_batch || '';
+  const msgs = res.messages || [];
+  chatState.messages[roomId] = msgs;
+  renderMessages(roomId);
+  markRead(roomId);
+  startPolling(roomId);
+  document.getElementById('chatInput').focus();
+}
+
+function renderMessages(roomId) {
+  const msgsEl = document.getElementById('chatMsgs');
+  const msgs = chatState.messages[roomId] || [];
+  if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
+  msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+function renderMsgHTML(m, roomId) {
+  const isMine = m.sender_id === currentUser.id;
+  const side = isMine ? 'chat-msg-right' : 'chat-msg-left';
+  const time = m.ts ? new Date(m.ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '';
+  const replyHtml = m.reply_to ? renderReplyPreview(m.reply_to, roomId) : '';
+  return `<div class="chat-msg ${side}" data-eid="${esc(m.event_id || '')}">
+    <div class="chat-msg-bubble">
+      ${!isMine ? `<div class="chat-msg-sender">${esc(m.sender)}</div>` : ''}
+      ${replyHtml}
+      <div style="cursor:pointer" onclick="setReply('${esc(m.event_id || '')}','${esc(m.content?.slice(0,50))}')">${esc(m.content)}</div>
+      <div class="chat-msg-time">${time}</div>
+    </div>
+  </div>`;
+}
+
+function renderReplyPreview(eventId, roomId) {
+  const msgs = chatState.messages[roomId] || [];
+  const ref = msgs.find(m => m.event_id === eventId);
+  if (!ref) return '';
+  return `<div class="chat-msg-reply">${esc(ref.sender)}: ${esc(ref.content?.slice(0,60))}</div>`;
+}
+
+function startPolling(roomId) {
+  if (chatState.pollTimer) { clearTimeout(chatState.pollTimer); }
+  if (!chatState.chatOpen) return;
+  const since = chatState.nextBatch[roomId] || '';
+  api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
+    .then(res => {
+      if (!chatState.chatOpen || chatState.currentRoomId !== roomId) return;
+      if (res.messages?.length) {
+        const existing = chatState.messages[roomId] || [];
+        const newIds = new Set(res.messages.map(m => m.event_id));
+        chatState.messages[roomId] = [...existing.filter(m => !newIds.has(m.event_id)), ...res.messages];
+        renderMessages(roomId);
+        markRead(roomId);
+      }
+      if (res.next_batch) chatState.nextBatch[roomId] = res.next_batch;
+      if (chatState.chatOpen) chatState.pollTimer = setTimeout(() => startPolling(roomId), 3000);
+    }).catch(() => {
+      if (chatState.chatOpen) chatState.pollTimer = setTimeout(() => startPolling(roomId), 5000);
+    });
+}
+
+function markRead(roomId) {
+  const msgs = chatState.messages[roomId] || [];
+  const last = msgs[msgs.length - 1];
+  api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'read', user_id: currentUser.id, room_id: roomId, event_id: last?.event_id || '' })
+  }).catch(() => {});
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content || !chatState.currentRoomId) return;
+  const btn = document.getElementById('chatSendBtn');
+  btn.disabled = true;
+  const body = { action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content };
+  if (chatState.replyTo) { body.reply_to = chatState.replyTo; }
+  const res = await api('/api/chat', { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
+  if (!res) { toast('发送失败', 'error'); btn.disabled = false; return; }
+  if (res.error) {
+    if (res.stranger_limit) {
+      document.getElementById('chatStrangerWarn').classList.remove('hidden');
+      document.getElementById('chatStrangerWarn').textContent = '⏳ 已发送第一条消息，请等待对方回复';
+    } else { toast(res.error, 'error'); }
+    btn.disabled = false; return;
+  }
+  document.getElementById('chatStrangerWarn').classList.add('hidden');
+  input.value = ''; autoChatResize(input);
+  if (chatState.replyTo) cancelReply();
+  btn.disabled = false;
+  setTimeout(() => startPolling(chatState.currentRoomId), 500);
+}
+
+function setReply(eventId, preview) {
+  chatState.replyTo = eventId;
+  document.getElementById('chatReplyText').textContent = preview || '';
+  document.getElementById('chatReplyBar').classList.remove('hidden');
+  document.getElementById('chatInput').focus();
+}
+
+function cancelReply() {
+  chatState.replyTo = null;
+  document.getElementById('chatReplyBar').classList.add('hidden');
+}
+
+function showCreateChannel() {
+  document.getElementById('channelName').value = '';
+  document.getElementById('createChannelModal').style.display = 'flex';
+}
+
+async function createChannel() {
+  const name = document.getElementById('channelName').value.trim();
+  if (!name) { toast('请输入频道名称', 'error'); return; }
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'create-channel', user_id: currentUser.id, name })
+  }).catch(() => null);
+  if (!res || res.error) { toast(res?.error || '创建失败', 'error'); return; }
+  document.getElementById('createChannelModal').style.display = 'none';
+  chatState.currentRoomId = res.room_id;
+  await loadRoomList();
+  loadMessages(res.room_id);
+  toast('频道已创建');
+}
+
+function autoChatResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
 }
 
 // ===== Start =====

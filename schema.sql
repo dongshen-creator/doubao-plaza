@@ -95,6 +95,48 @@ CREATE TABLE IF NOT EXISTS custom_pages (
   updated_at TEXT
 );
 
+-- 聊天室表
+CREATE TABLE IF NOT EXISTS chat_rooms (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  matrix_room_id TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'private',
+  name TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 聊天室成员
+CREATE TABLE IF NOT EXISTS chat_room_members (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  matrix_user_id TEXT,
+  joined_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(room_id, user_id)
+);
+
+-- 陌生人发言限制
+CREATE TABLE IF NOT EXISTS chat_stranger_limits (
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  messages_sent INTEGER DEFAULT 1,
+  UNIQUE(room_id, user_id)
+);
+
+-- 未读消息计数
+CREATE TABLE IF NOT EXISTS chat_unread (
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  last_event_id TEXT,
+  count INTEGER DEFAULT 0,
+  UNIQUE(room_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_rooms_matrix ON chat_rooms(matrix_room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_members_room ON chat_room_members(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_room_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_unread_user ON chat_unread(user_id);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_users_doubao_id ON users(doubao_id);
 CREATE INDEX IF NOT EXISTS idx_users_agent_url ON users(agent_url);
