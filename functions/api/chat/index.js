@@ -26,21 +26,26 @@ async function matrixFetch(env, path, options = {}) {
   try { return JSON.parse(text); } catch { return text; }
 }
 
+async function ensureTables(env) {
+  // Mirror schema.sql exactly for column compatibility
+  const stmts = [
+    "CREATE TABLE IF NOT EXISTS chat_rooms (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), matrix_room_id TEXT NOT NULL UNIQUE, type TEXT NOT NULL DEFAULT 'private', name TEXT, created_by TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
+    "CREATE TABLE IF NOT EXISTS chat_room_members (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), room_id TEXT NOT NULL, user_id TEXT NOT NULL, matrix_user_id TEXT, joined_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, messages_sent INTEGER DEFAULT 1, UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))"
+  ];
+  for (const sql of stmts) {
+    try { await env.DB.prepare(sql).raw(); } catch(e) { try { await env.DB.prepare(sql).run(); } catch(e2) {} }
+  }
+}
+
 export async function onRequest(context) {
   const { env, request } = context;
   if (!env.DB) return json({ error: '数据库未绑定' }, 500);
   if (!env.MATRIX_HOMESERVER || !env.MATRIX_BOT_TOKEN) return json({ error: 'Matrix 未配置' }, 500);
 
-  // Auto-create tables
-  const tables = [
-    "CREATE TABLE IF NOT EXISTS chat_rooms (id TEXT PRIMARY KEY, matrix_room_id TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'private', name TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now')))",
-    "CREATE TABLE IF NOT EXISTS chat_room_members (room_id TEXT NOT NULL, user_id TEXT NOT NULL, joined_at TEXT DEFAULT (datetime('now')), PRIMARY KEY(room_id, user_id))",
-    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, count INTEGER DEFAULT 0, last_event_id TEXT, PRIMARY KEY(room_id, user_id))",
-    "CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, sent_count INTEGER DEFAULT 1, PRIMARY KEY(room_id, user_id))"
-  ];
-  for (const sql of tables) {
-    try { await env.DB.prepare(sql).run(); } catch(e) {}
-  }
+  // Auto-create tables (schema.sql compatible column names)
+  await ensureTables(env);
 
   const url = new URL(request.url);
   const method = request.method;
@@ -148,12 +153,10 @@ async function handleHandshake(env, body) {
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?), (?, ?)"
   ).bind(roomId, user_id, roomId, friend_id).run();
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)"
-  ).bind(roomId, user_id).run();
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)"
-  ).bind(roomId, friend_id).run();
+  try {
+    await env.DB.prepare("INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)").bind(roomId, user_id).run();
+    await env.DB.prepare("INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)").bind(roomId, friend_id).run();
+  } catch(e) {}
 
   return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id, users: [sanitize(u1), sanitize(u2)] });
 }
@@ -221,15 +224,17 @@ async function handleSend(env, body) {
     body: JSON.stringify(msgContent)
   });
 
-  const otherMembers = await env.DB.prepare(
-    "SELECT user_id FROM chat_room_members WHERE room_id=? AND user_id!=?"
-  ).bind(room_id, user_id).all();
-  for (const m of otherMembers.results) {
-    await env.DB.prepare(
-      "INSERT INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 1) " +
-      "ON CONFLICT(room_id, user_id) DO UPDATE SET count=count+1"
-    ).bind(room_id, m.user_id).run();
-  }
+  try {
+    const otherMembers = await env.DB.prepare(
+      "SELECT user_id FROM chat_room_members WHERE room_id=? AND user_id!=?"
+    ).bind(room_id, user_id).all();
+    for (const m of otherMembers.results) {
+      await env.DB.prepare(
+        "INSERT INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 1) " +
+        "ON CONFLICT(room_id, user_id) DO UPDATE SET count=count+1"
+      ).bind(room_id, m.user_id).run();
+    }
+  } catch(e) {}
 
   return json({ success: true, event_id: result.event_id || '' });
 }
@@ -287,43 +292,46 @@ function parseMatrixEvent(ev) {
 async function handleRooms(env, url) {
   const user_id = url.searchParams.get('user_id');
   if (!user_id) return json({ error: 'user_id 必填' });
-  try {
-    const rooms = await env.DB.prepare(
-      "SELECT cr.id, cr.matrix_room_id, cr.type, cr.name, cr.created_by, cr.created_at, " +
-      "COALESCE(cu.count, 0) as unread FROM chat_rooms cr " +
-      "JOIN chat_room_members m ON cr.id=m.room_id AND m.user_id=? " +
-      "LEFT JOIN chat_unread cu ON cu.room_id=cr.id AND cu.user_id=? " +
-      "ORDER BY cr.created_at DESC"
-    ).bind(user_id, user_id).all();
 
-    const result = [];
-    for (const r of rooms.results) {
-      if (r.type === 'private') {
-        const other = await env.DB.prepare(
-          "SELECT u.id, u.name, u.avatar, u.doubao_id FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
-          "WHERE m.room_id=? AND m.user_id!=?"
-        ).bind(r.id, user_id).first();
-        result.push({ ...r, other: sanitize(other), name: r.name || other?.name || '聊天' });
-      } else {
-        const members = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
-        ).bind(r.id).first();
-        result.push({ ...r, member_count: members?.count || 0 });
-      }
+  const rooms = await env.DB.prepare(
+    "SELECT cr.id, cr.matrix_room_id, cr.type, cr.name, cr.created_by, cr.created_at " +
+    "FROM chat_rooms cr " +
+    "JOIN chat_room_members m ON cr.id=m.room_id AND m.user_id=? " +
+    "ORDER BY cr.created_at DESC"
+  ).bind(user_id).all().catch(() => ({ results: [] }));
+
+  const result = [];
+  for (const r of (rooms.results || [])) {
+    let unread = 0;
+    try {
+      const u = await env.DB.prepare("SELECT count FROM chat_unread WHERE room_id=? AND user_id=?").bind(r.id, user_id).first();
+      unread = u?.count || 0;
+    } catch(e) {}
+    if (r.type === 'private') {
+      const other = await env.DB.prepare(
+        "SELECT u.id, u.name, u.avatar, u.doubao_id FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
+        "WHERE m.room_id=? AND m.user_id!=?"
+      ).bind(r.id, user_id).first();
+      result.push({ ...r, unread, other: sanitize(other), name: r.name || other?.name || '聊天' });
+    } else {
+      const members = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
+      ).bind(r.id).first();
+      result.push({ ...r, unread, member_count: members?.count || 0 });
     }
-    return json({ rooms: result });
-  } catch (e) {
-    return json({ rooms: [] });
   }
+  return json({ rooms: result });
 }
 
 async function handleRead(env, body) {
   const { user_id, room_id, event_id } = body;
   if (!user_id || !room_id) return json({ error: '参数不完整' });
-  await env.DB.prepare(
-    "INSERT INTO chat_unread (room_id, user_id, count, last_event_id) VALUES (?, ?, 0, ?) " +
-    "ON CONFLICT(room_id, user_id) DO UPDATE SET count=0, last_event_id=excluded.last_event_id"
-  ).bind(room_id, user_id, event_id || '').run();
+  try {
+    await env.DB.prepare(
+      "INSERT INTO chat_unread (room_id, user_id, count, last_event_id) VALUES (?, ?, 0, ?) " +
+      "ON CONFLICT(room_id, user_id) DO UPDATE SET count=0, last_event_id=excluded.last_event_id"
+    ).bind(room_id, user_id, event_id || '').run();
+  } catch(e) {}
   return json({ success: true });
 }
 
