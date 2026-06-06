@@ -1,5 +1,7 @@
 // Chat API - Matrix proxy mode
-// 环境变量: MATRIX_HOMESERVER, MATRIX_BOT_TOKEN, MATRIX_BOT_USER_ID
+// 环境变量: MATRIX_HOMESERVER, MATRIX_BOT_TOKEN, MATRIX_BOT_USER_ID, MATRIX_BOT_PASSWORD
+
+var __botToken = '';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -14,13 +16,34 @@ function matrixUrl(env, path) {
   return hs + path;
 }
 
+async function matrixLogin(env) {
+  if (!env.MATRIX_BOT_USER_ID || !env.MATRIX_BOT_PASSWORD) throw new Error('Matrix 账号未配置');
+  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
+  const loginRes = await fetch(hs + '/_matrix/client/v3/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'm.login.password', user: env.MATRIX_BOT_USER_ID, password: env.MATRIX_BOT_PASSWORD })
+  });
+  const data = await loginRes.json();
+  if (!data.access_token) throw new Error('Matrix 登录失败: ' + JSON.stringify(data));
+  __botToken = data.access_token;
+  return data.access_token;
+}
+
 async function matrixFetch(env, path, options = {}) {
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  const token = env.MATRIX_BOT_TOKEN || '';
-  const res = await fetch(hs + path, {
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
-  });
+  if (!__botToken) __botToken = env.MATRIX_BOT_TOKEN || '';
+  const doFetch = function(tok) {
+    return fetch(hs + path, {
+      headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options
+    });
+  };
+  var res = await doFetch(__botToken);
+  if (res.status === 401 && env.MATRIX_BOT_PASSWORD) {
+    __botToken = await matrixLogin(env);
+    res = await doFetch(__botToken);
+  }
   const text = await res.text();
   if (!res.ok) throw new Error('Matrix ' + res.status + ': ' + text.slice(0, 200));
   try { return JSON.parse(text); } catch { return text; }
@@ -42,7 +65,7 @@ async function ensureTables(env) {
 export async function onRequest(context) {
   const { env, request } = context;
   if (!env.DB) return json({ error: '数据库未绑定' }, 500);
-  if (!env.MATRIX_HOMESERVER || !env.MATRIX_BOT_TOKEN) return json({ error: 'Matrix 未配置' }, 500);
+  if (!env.MATRIX_HOMESERVER || (!env.MATRIX_BOT_TOKEN && !env.MATRIX_BOT_PASSWORD)) return json({ error: 'Matrix 未配置' }, 500);
 
   // Auto-create tables (schema.sql compatible column names)
   await ensureTables(env);
