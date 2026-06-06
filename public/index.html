@@ -193,12 +193,22 @@
       <button class="modal-close" onclick="closeModal('login')">✕</button>
     </div>
     <div id="loginError"></div>
-    <form onsubmit="event.preventDefault();doLogin()">
-    <div class="form-group"><label class="form-label">豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入豆包号或智能体链接"></div>
-    <div class="form-group"><label class="form-label">密码（6位）</label><input class="input" id="loginPwd" type="password" placeholder="输入6位密码" maxlength="6" autocomplete="current-password"></div>
-    <button type="submit" class="btn btn-orange btn-full">登录</button>
-    </form>
-    <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:#FF6B35;font-weight:600">立即注册</a></p>
+    <div id="loginNoSession" style="display:none">
+      <div class="warning-box" style="margin-bottom:16px">
+        <strong>⚠️ 尚未在主页登录</strong><br><br>
+        请先返回逗包用户广场主页登录，登录后再打开此页面。
+      </div>
+      <a href="/" class="btn btn-orange btn-full" style="text-decoration:none;display:flex;align-items:center;justify-content:center">🏠 前往主页登录</a>
+      <button class="btn btn-gray btn-full" style="margin-top:8px" onclick="closeModal('login')">我知道了</button>
+    </div>
+    <div id="loginForm">
+      <form onsubmit="event.preventDefault();doLogin()">
+      <div class="form-group"><label class="form-label">豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入豆包号或智能体链接"></div>
+      <div class="form-group"><label class="form-label">密码（6位）</label><input class="input" id="loginPwd" type="password" placeholder="输入6位密码" maxlength="6" autocomplete="current-password"></div>
+      <button type="submit" class="btn btn-orange btn-full">登录</button>
+      </form>
+      <p style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:#FF6B35;font-weight:600">立即注册</a></p>
+    </div>
   </div>
 </div>
 
@@ -332,6 +342,10 @@ function showModal(name) {
 function closeModal(name) {
   document.getElementById(name + 'Modal').style.display = 'none';
   if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
+  if (name === 'login') {
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loginNoSession').style.display = 'none';
+  }
 }
 
 // ===== Avatar HTML =====
@@ -427,37 +441,11 @@ function isDeveloper() {
     const errEl = document.getElementById('loginError');
 
     if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
+
     try {
-      // First: if we already have a token, try auto-login to detect existing homepage session
-      const existingToken = localStorage.getItem('dp_token');
-      if (existingToken) {
-        try {
-          const auto = await api('/api/users/auto-login', {
-            method: 'POST',
-            body: JSON.stringify({ token: existingToken }),
-          });
-          if (auto.success) {
-            // reuse existing session instead of logging in again
-            currentUser = auto.data;
-            sessionToken = auto.token || existingToken;
-            localStorage.setItem('dp_token', sessionToken);
-            closeModal('login');
-            updateNavbar();
-            renderContent();
-            toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
-            return;
-          }
-        } catch (e) {
-          // ignore and continue to normal login flow
-        }
-      }
-
-      // Include device fingerprint in login request to help server correlate homepage sessions
-      const fingerprint = await getDeviceFingerprint();
-
       const res = await api('/api/users/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier, password, device_fingerprint: fingerprint }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       if (res.success) {
@@ -1230,7 +1218,6 @@ async function showModal(name) {
     return;
   }
 
-  // When opening the login modal, try auto-login first to detect an existing homepage session
   if (name === 'login') {
     const existingToken = localStorage.getItem('dp_token');
     if (existingToken) {
@@ -1246,12 +1233,16 @@ async function showModal(name) {
           updateNavbar();
           renderContent();
           toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
-          return; // don't show login modal
+          return;
         }
-      } catch (e) {
-        // ignore and show login modal
-      }
+      } catch (e) {}
     }
+    // No valid homepage session — show the "go to homepage" message instead of login form
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('loginNoSession').style.display = 'block';
+    document.getElementById('loginError').innerHTML = '';
+    document.getElementById('loginModal').style.display = 'flex';
+    return;
   }
 
   document.getElementById(name + 'Modal').style.display = 'flex';
