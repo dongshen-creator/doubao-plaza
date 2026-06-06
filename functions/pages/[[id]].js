@@ -2,6 +2,25 @@
 // [[id]].js 捕获 /pages/{id} 以及 /pages/{id}/子路径
 // 优先从 R2 读取文件，无 R2 或无文件时回退到 D1 的 html_content
 
+// 注入到自定义页面的主页会话检测脚本
+function homepageSessionScript() {
+  return '<script>' +
+'(function(){' +
+'window._hpSession=null;' +
+'window._hpReady=new Promise(function(r){window._hpResolve=r;});' +
+'window.getHomepageSession=function(){return window._hpReady;};' +
+'var token=typeof localStorage!==\'undefined\'?localStorage.getItem(\'dp_token\'):null;' +
+'if(!token){window._hpResolve(null);return;}' +
+'fetch(\'/api/users/auto-login\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify({token:token})})' +
+'.then(function(r){return r.json()}).then(function(d){' +
+'window._hpSession=d.success?{user:d.data,token:d.token||token}:null;' +
+'try{window.dispatchEvent(new CustomEvent(\'hp-session\',{detail:window._hpSession}));}catch(e){}' +
+'window._hpResolve(window._hpSession);' +
+'}).catch(function(){window._hpResolve(null);});' +
+'})();' +
+'</script>';  
+}
+
 function getContentType(filename) {
   const ext = filename.split('.').pop()?.toLowerCase();
   const map = {
@@ -29,9 +48,17 @@ export async function onRequestGet(context) {
       const r2Key = `pages/${pageId}/${filePath}`;
       const obj = await env.PAGES_BUCKET.get(r2Key);
       if (obj) {
+        const ct = obj.httpMetadata?.contentType || getContentType(filePath);
+        if (ct === 'text/html') {
+          const html = await obj.text();
+          const injected = html.replace('</body>', homepageSessionScript() + '</body>');
+          return new Response(injected, {
+            headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
+          });
+        }
         return new Response(obj.body, {
           headers: {
-            'Content-Type': obj.httpMetadata?.contentType || getContentType(filePath),
+            'Content-Type': ct,
             'Cache-Control': 'public, max-age=86400',
           },
         });
@@ -47,7 +74,8 @@ export async function onRequestGet(context) {
       ).bind(pageId).first();
 
       if (page) {
-        return new Response(page.html_content, {
+        const injected = page.html_content.replace('</body>', homepageSessionScript() + '</body>');
+        return new Response(injected, {
           headers: { 'Content-Type': 'text/html' },
         });
       }
