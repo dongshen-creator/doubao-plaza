@@ -21,7 +21,7 @@ async function ensureTables(env) {
 
 export async function onRequest(context) {
   const { env, request } = context;
-  if (!env.DB) return json({ error: '鏁版嵁搴撴湭缁戝畾' }, 500);
+  if (!env.DB) return json({ error: '数据库未绑定' }, 500);
 
   await ensureTables(env);
 
@@ -44,7 +44,7 @@ export async function onRequest(context) {
     if (method === 'GET' && resolvedAction === 'channels') return await handleListChannels(env, url);
     if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
-    return json({ error: '鏈煡鎿嶄綔' }, 400);
+    return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
   }
@@ -52,7 +52,7 @@ export async function onRequest(context) {
 
 async function handleUnreadCount(env, url) {
   const user_id = url.searchParams.get('user_id');
-  if (!user_id) return json({ error: 'user_id 蹇呭～' });
+  if (!user_id) return json({ error: 'user_id 必填' });
   try {
     const result = await env.DB.prepare(
       "SELECT COALESCE(SUM(count), 0) as total FROM chat_unread WHERE user_id=?"
@@ -65,29 +65,29 @@ async function handleUnreadCount(env, url) {
 
 async function handleHandshake(env, body) {
   const { user_id, friend_id } = body;
-  if (!user_id || !friend_id) return json({ error: 'user_id 鍜?friend_id 蹇呭～' });
+  if (!user_id || !friend_id) return json({ error: 'user_id 和 friend_id 必填' });
 
   const blocked = await env.DB.prepare(
     "SELECT id FROM blocked_users WHERE (user_id=? AND blocked_user_id=?) OR (user_id=? AND blocked_user_id=?)"
   ).bind(user_id, friend_id, friend_id, user_id).first();
-  if (blocked) return json({ error: '鏃犳硶涓庡凡鎷夐粦鐨勭敤鎴疯亰澶? });
+  if (blocked) return json({ error: '无法与已拉黑的用户聊天' });
 
   const recipient = await env.DB.prepare("SELECT id, privacy_setting, punished_until FROM users WHERE id=?").bind(friend_id).first();
   if (recipient) {
     if (recipient.privacy_setting === 'punished_stealth') {
-      return json({ error: '瀵规柟鍥犺繚瑙勫凡琚檺鍒朵娇鐢ㄨ亰澶╁姛鑳? });
+      return json({ error: '对方因违规已被限制使用聊天功能' });
     }
     if (recipient.privacy_setting === 'stealth') {
       const isFriend = await env.DB.prepare(
         "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
       ).bind(user_id, friend_id, friend_id, user_id).first();
-      if (!isFriend) return json({ error: '瀵规柟寮€鍚簡闅愯韩妯″紡锛屾棤娉曞彂璧蜂細璇? });
+      if (!isFriend) return json({ error: '对方开启了隐身模式，无法发起会话' });
     }
     if (recipient.privacy_setting === 'whitelist' || recipient.privacy_setting === 'punished_whitelist') {
       const isFriend = await env.DB.prepare(
         "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
       ).bind(user_id, friend_id, friend_id, user_id).first();
-      if (!isFriend) return json({ error: '瀵规柟寮€鍚簡鐧藉悕鍗曟ā寮忥紝浠呭ソ鍙嬪彲鍙戣捣浼氳瘽' });
+      if (!isFriend) return json({ error: '对方开启了白名单模式，仅好友可发起会话' });
     }
   }
 
@@ -110,7 +110,7 @@ async function handleHandshake(env, body) {
     env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(user_id).first(),
     env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(friend_id).first()
   ]);
-  if (!u1 || !u2) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
+  if (!u1 || !u2) return json({ error: '用户不存在' });
 
   const roomName = u1.name + ' & ' + u2.name;
   const roomId = genId();
@@ -131,10 +131,10 @@ async function handleHandshake(env, body) {
 
 async function handleSend(env, body) {
   const { user_id, room_id, content, reply_to } = body;
-  if (!user_id || !room_id || !content?.trim()) return json({ error: '鍙傛暟涓嶅畬鏁? });
+  if (!user_id || !room_id || !content?.trim()) return json({ error: '参数不完整' });
 
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
+  if (!room) return json({ error: '房间不存在' });
 
   const members = await env.DB.prepare(
     "SELECT user_id FROM chat_room_members WHERE room_id=?"
@@ -145,7 +145,7 @@ async function handleSend(env, body) {
     const blocked = await env.DB.prepare(
       "SELECT id FROM blocked_users WHERE (user_id=? AND blocked_user_id=?) OR (user_id=? AND blocked_user_id=?)"
     ).bind(user_id, otherId, otherId, user_id).first();
-    if (blocked) return json({ error: '鏃犳硶鍚戝凡鎷夐粦鐨勭敤鎴峰彂閫佹秷鎭? });
+    if (blocked) return json({ error: '无法向已拉黑的用户发送消息' });
 
     if (room.type === 'private') {
       const isFriend = await env.DB.prepare(
@@ -161,7 +161,7 @@ async function handleSend(env, body) {
               "SELECT messages_sent FROM chat_stranger_limits WHERE room_id=? AND user_id=?"
             ).bind(room_id, otherId).first();
             if (!otherReplied || otherReplied.messages_sent === 0) {
-              return json({ error: '璇风瓑寰呭鏂瑰洖澶?, stranger_limit: true });
+              return json({ error: '请等待对方回复', stranger_limit: true });
             }
           }
           await env.DB.prepare(
@@ -174,7 +174,7 @@ async function handleSend(env, body) {
   }
 
   const user = await env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(user_id).first();
-  if (!user) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
+  if (!user) return json({ error: '用户不存在' });
 
   const payload = JSON.stringify({
     text: content,
@@ -193,12 +193,12 @@ async function handleSend(env, body) {
       body: payload
     });
   } catch (e) {
-    return json({ error: '娑堟伅鍙戦€佸け璐? ' + e.message });
+    return json({ error: '消息发送失败: ' + e.message });
   }
 
   if (!ntfyRes.ok) {
     const txt = await ntfyRes.text().catch(() => '');
-    return json({ error: '娑堟伅鍙戦€佸け璐?(' + ntfyRes.status + '): ' + txt.slice(0, 200) });
+    return json({ error: '消息发送失败 (' + ntfyRes.status + '): ' + txt.slice(0, 200) });
   }
 
   const ntfyData = await ntfyRes.json();
@@ -223,10 +223,10 @@ async function handlePoll(env, url) {
   const room_id = url.searchParams.get('room_id');
   const since = url.searchParams.get('since') || '';
   const userId = url.searchParams.get('user_id');
-  if (!room_id) return json({ error: 'room_id 蹇呭～' });
+  if (!room_id) return json({ error: 'room_id 必填' });
 
   const room = await env.DB.prepare("SELECT id FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
+  if (!room) return json({ error: '房间不存在' });
 
   let messages = [];
   let nextBatch = '';
@@ -242,7 +242,7 @@ async function handlePoll(env, url) {
   try {
     const ntfyUrl = 'https://ntfy.sh/' + encodeURIComponent(room_id) + '/json?poll=1' + (since ? '&since=' + encodeURIComponent(since) : '');
     const res = await fetch(ntfyUrl);
-    if (!res.ok) return json({ error: '杞澶辫触 (' + res.status + ')' });
+    if (!res.ok) return json({ error: '轮询失败 (' + res.status + ')' });
 
     const text = await res.text();
     const lines = text.split('\n').filter(Boolean);
@@ -257,12 +257,12 @@ async function handlePoll(env, url) {
         try {
           parsed = JSON.parse(ev.message);
         } catch {
-          parsed = { text: ev.message, sender_name: ev.title || '鏈煡鐢ㄦ埛' };
+          parsed = { text: ev.message, sender_name: ev.title || '未知用户' };
         }
 
         messages.push({
           event_id: ev.id,
-          sender: parsed.sender_name || ev.title || '鏈煡鐢ㄦ埛',
+          sender: parsed.sender_name || ev.title || '未知用户',
           sender_id: parsed.sender_id || '',
           sender_avatar: parsed.sender_avatar || '',
           sender_doubao_id: parsed.sender_doubao_id || '',
@@ -278,7 +278,7 @@ async function handlePoll(env, url) {
       nextBatch = messages[messages.length - 1].event_id;
     }
   } catch (e) {
-    return json({ error: '鍚屾澶辫触: ' + e.message });
+    return json({ error: '同步失败: ' + e.message });
   }
 
   return json({ messages, next_batch: nextBatch });
@@ -286,7 +286,7 @@ async function handlePoll(env, url) {
 
 async function handleRooms(env, url) {
   const user_id = url.searchParams.get('user_id');
-  if (!user_id) return json({ error: 'user_id 蹇呭～' });
+  if (!user_id) return json({ error: 'user_id 必填' });
 
   const rooms = await env.DB.prepare(
     "SELECT cr.id, cr.matrix_room_id, cr.type, cr.name, cr.created_by, cr.created_at " +
@@ -307,7 +307,7 @@ async function handleRooms(env, url) {
         "SELECT u.id, u.name, u.avatar, u.doubao_id FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
         "WHERE m.room_id=? AND m.user_id!=?"
       ).bind(r.id, user_id).first();
-      result.push({ ...r, unread, other: sanitize(other), name: r.name || other?.name || '鑱婂ぉ' });
+      result.push({ ...r, unread, other: sanitize(other), name: r.name || other?.name || '聊天' });
     } else {
       const members = await env.DB.prepare(
         "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
@@ -320,7 +320,7 @@ async function handleRooms(env, url) {
 
 async function handleRead(env, body) {
   const { user_id, room_id, event_id } = body;
-  if (!user_id || !room_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
+  if (!user_id || !room_id) return json({ error: '参数不完整' });
   try {
     await env.DB.prepare(
       "INSERT INTO chat_unread (room_id, user_id, count, last_event_id) VALUES (?, ?, 0, ?) " +
@@ -332,9 +332,9 @@ async function handleRead(env, body) {
 
 async function handleCreateChannel(env, body) {
   const { user_id, name } = body;
-  if (!user_id || !name?.trim()) return json({ error: '鍙傛暟涓嶅畬鏁? });
+  if (!user_id || !name?.trim()) return json({ error: '参数不完整' });
   const user = await env.DB.prepare("SELECT id, name FROM users WHERE id=?").bind(user_id).first();
-  if (!user) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
+  if (!user) return json({ error: '用户不存在' });
 
   const roomId = genId();
   await env.DB.prepare(
@@ -349,16 +349,16 @@ async function handleCreateChannel(env, body) {
 
 async function handleJoinChannel(env, body) {
   const { user_id, room_id } = body;
-  if (!user_id || !room_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
+  if (!user_id || !room_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=? AND type='channel'").bind(room_id).first();
-  if (!room) return json({ error: '棰戦亾涓嶅瓨鍦? });
+  if (!room) return json({ error: '频道不存在' });
   await env.DB.prepare("INSERT OR IGNORE INTO chat_room_members (room_id, user_id) VALUES (?, ?)").bind(room_id, user_id).run();
   return json({ success: true });
 }
 
 async function handleChannelMembers(env, url) {
   const room_id = url.searchParams.get('room_id');
-  if (!room_id) return json({ error: 'room_id 蹇呭～' });
+  if (!room_id) return json({ error: 'room_id 必填' });
   const members = await env.DB.prepare(
     "SELECT u.id, u.name, u.avatar, u.doubao_id, m.joined_at FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
     "WHERE m.room_id=? ORDER BY m.joined_at ASC"
@@ -385,11 +385,11 @@ async function handleListChannels(env, url) {
 
 async function handleRecall(env, body) {
   const { user_id, room_id, event_id } = body;
-  if (!user_id || !room_id || !event_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
+  if (!user_id || !room_id || !event_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
+  if (!room) return json({ error: '房间不存在' });
   const member = await env.DB.prepare("SELECT id FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();
-  if (!member) return json({ error: '鎮ㄤ笉鏄埧闂存垚鍛? });
+  if (!member) return json({ error: '您不是房间成员' });
   try {
     await env.DB.prepare(
       "INSERT OR IGNORE INTO chat_recalled_messages (room_id, event_id, recalled_by) VALUES (?, ?, ?)"
