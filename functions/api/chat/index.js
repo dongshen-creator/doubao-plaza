@@ -1,8 +1,3 @@
-// Chat API - Matrix proxy mode
-// 环境变量: MATRIX_HOMESERVER, MATRIX_BOT_TOKEN, MATRIX_BOT_USER_ID, MATRIX_BOT_PASSWORD
-
-var __botToken = '';
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { 'Content-Type': 'application/json' }
@@ -11,74 +6,13 @@ function json(data, status = 200) {
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
-function matrixUrl(env, path) {
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  return hs + path;
-}
-
-async function matrixLogin(env) {
-  if (!env.MATRIX_BOT_USER_ID || !env.MATRIX_BOT_PASSWORD) throw new Error('Matrix 账号未配置（缺少 MATRIX_BOT_USER_ID 或 MATRIX_BOT_PASSWORD）');
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  // Try user_id login, fallback to email login if provided
-  const identifiers = [];
-  if (env.MATRIX_BOT_EMAIL) {
-    identifiers.push({ type: 'm.id.thirdparty', medium: 'email', address: env.MATRIX_BOT_EMAIL });
-  }
-  identifiers.push({ type: 'm.id.user', user: env.MATRIX_BOT_USER_ID });
-  let lastError = null;
-  for (const identifier of identifiers) {
-    const loginRes = await fetch(hs + '/_matrix/client/v3/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'm.login.password', identifier, password: env.MATRIX_BOT_PASSWORD })
-    });
-    const data = await loginRes.json();
-    if (data.access_token) {
-      __botToken = data.access_token;
-      return data.access_token;
-    }
-    lastError = 'Matrix 密码登录失败 (' + loginRes.status + '): ' + JSON.stringify(data);
-  }
-  throw new Error(lastError);
-}
-
-async function matrixFetch(env, path, options = {}) {
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  if (!__botToken) __botToken = env.MATRIX_BOT_TOKEN || '';
-  const doFetch = function(tok) {
-    return fetch(hs + path, {
-      headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json', ...(options.headers || {}) },
-      ...options
-    });
-  };
-  var res = await doFetch(__botToken);
-  if (res.status === 401) {
-    if (env.MATRIX_BOT_PASSWORD) {
-      try {
-        __botToken = await matrixLogin(env);
-        res = await doFetch(__botToken);
-      } catch(loginErr) {
-        // login failed, fall through to throw original error
-        const txt = await res.text();
-        throw new Error('Matrix 401: ' + txt.slice(0, 200) + ' (自动续期失败: ' + loginErr.message + ')');
-      }
-    } else {
-      const txt = await res.text();
-      throw new Error('Matrix 401: ' + txt.slice(0, 200) + '（如需自动续期，请设置 MATRIX_BOT_PASSWORD 环境变量）');
-    }
-  }
-  const text = await res.text();
-  if (!res.ok) throw new Error('Matrix ' + res.status + ': ' + text.slice(0, 200));
-  try { return JSON.parse(text); } catch { return text; }
-}
-
 async function ensureTables(env) {
-  // Mirror schema.sql exactly for column compatibility
   const stmts = [
     "CREATE TABLE IF NOT EXISTS chat_rooms (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), matrix_room_id TEXT NOT NULL UNIQUE, type TEXT NOT NULL DEFAULT 'private', name TEXT, created_by TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS chat_room_members (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), room_id TEXT NOT NULL, user_id TEXT NOT NULL, matrix_user_id TEXT, joined_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, messages_sent INTEGER DEFAULT 1, UNIQUE(room_id, user_id))",
-    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))"
+    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_recalled_messages (room_id TEXT NOT NULL, event_id TEXT NOT NULL, recalled_by TEXT NOT NULL, recalled_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, event_id))"
   ];
   for (const sql of stmts) {
     try { await env.DB.prepare(sql).raw(); } catch(e) { try { await env.DB.prepare(sql).run(); } catch(e2) {} }
@@ -87,10 +21,8 @@ async function ensureTables(env) {
 
 export async function onRequest(context) {
   const { env, request } = context;
-  if (!env.DB) return json({ error: '数据库未绑定' }, 500);
-  if (!env.MATRIX_HOMESERVER || (!env.MATRIX_BOT_TOKEN && !env.MATRIX_BOT_PASSWORD)) return json({ error: 'Matrix 未配置' }, 500);
+  if (!env.DB) return json({ error: '鏁版嵁搴撴湭缁戝畾' }, 500);
 
-  // Auto-create tables (schema.sql compatible column names)
   await ensureTables(env);
 
   const url = new URL(request.url);
@@ -112,70 +44,15 @@ export async function onRequest(context) {
     if (method === 'GET' && resolvedAction === 'channels') return await handleListChannels(env, url);
     if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
-    if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
-    if (method === 'POST' && resolvedAction === 'reset-password') return await handleResetPassword(env, body);
-  if (method === 'POST' && resolvedAction === 'set-password') return await handleSetPassword(env, body);
-  if (method === 'GET' && resolvedAction === 'proxy') return await handleProxy(env, url);
-  return json({ error: '未知操作' }, 400);
+    return json({ error: '鏈煡鎿嶄綔' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
   }
 }
 
-async function handleMatrixLoginTest(env, body) {
-  const { email, password } = body;
-  if (!email && !password) {
-    // Try with env vars
-    const results = [];
-    // Test 1: user_id login
-    if (env.MATRIX_BOT_USER_ID && env.MATRIX_BOT_PASSWORD) {
-      try {
-        const r1 = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.user', user: env.MATRIX_BOT_USER_ID }, password: env.MATRIX_BOT_PASSWORD })
-        });
-        const d1 = await r1.json();
-        results.push({ method: 'user_id', status: r1.status, data: d1.access_token ? 'SUCCESS' : d1 });
-      } catch(e) { results.push({ method: 'user_id', error: e.message }); }
-    }
-    // Test 2: email login
-    if (env.MATRIX_BOT_EMAIL && env.MATRIX_BOT_PASSWORD) {
-      try {
-        const r2 = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.thirdparty', medium: 'email', address: env.MATRIX_BOT_EMAIL }, password: env.MATRIX_BOT_PASSWORD })
-        });
-        const d2 = await r2.json();
-        results.push({ method: 'email', status: r2.status, data: d2.access_token ? 'SUCCESS' : d2 });
-      } catch(e) { results.push({ method: 'email', error: e.message }); }
-    }
-    return json({ results });
-  } else {
-    // Try custom login
-    const results = [];
-    for (const identifier of [
-      body.email ? { type: 'm.id.thirdparty', medium: 'email', address: body.email } : null,
-      body.user_id ? { type: 'm.id.user', user: body.user_id } : null
-    ].filter(Boolean)) {
-      try {
-        const r = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'm.login.password', identifier, password: body.password })
-        });
-        const d = await r.json();
-        results.push({ method: identifier.type, status: r.status, data: d.access_token ? 'SUCCESS token=' + d.access_token.substring(0,10)+'... user_id='+d.user_id : d });
-      } catch(e) { results.push({ method: identifier.type, error: e.message }); }
-    }
-    return json({ results });
-  }
-}
-
 async function handleUnreadCount(env, url) {
   const user_id = url.searchParams.get('user_id');
-  if (!user_id) return json({ error: 'user_id 必填' });
+  if (!user_id) return json({ error: 'user_id 蹇呭～' });
   try {
     const result = await env.DB.prepare(
       "SELECT COALESCE(SUM(count), 0) as total FROM chat_unread WHERE user_id=?"
@@ -188,29 +65,29 @@ async function handleUnreadCount(env, url) {
 
 async function handleHandshake(env, body) {
   const { user_id, friend_id } = body;
-  if (!user_id || !friend_id) return json({ error: 'user_id 和 friend_id 必填' });
+  if (!user_id || !friend_id) return json({ error: 'user_id 鍜?friend_id 蹇呭～' });
 
   const blocked = await env.DB.prepare(
     "SELECT id FROM blocked_users WHERE (user_id=? AND blocked_user_id=?) OR (user_id=? AND blocked_user_id=?)"
   ).bind(user_id, friend_id, friend_id, user_id).first();
-  if (blocked) return json({ error: '无法与已拉黑的用户聊天' });
+  if (blocked) return json({ error: '鏃犳硶涓庡凡鎷夐粦鐨勭敤鎴疯亰澶? });
 
   const recipient = await env.DB.prepare("SELECT id, privacy_setting, punished_until FROM users WHERE id=?").bind(friend_id).first();
   if (recipient) {
     if (recipient.privacy_setting === 'punished_stealth') {
-      return json({ error: '对方因违规已被限制使用聊天功能' });
+      return json({ error: '瀵规柟鍥犺繚瑙勫凡琚檺鍒朵娇鐢ㄨ亰澶╁姛鑳? });
     }
     if (recipient.privacy_setting === 'stealth') {
       const isFriend = await env.DB.prepare(
         "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
       ).bind(user_id, friend_id, friend_id, user_id).first();
-      if (!isFriend) return json({ error: '对方开启了隐身模式，无法发起会话' });
+      if (!isFriend) return json({ error: '瀵规柟寮€鍚簡闅愯韩妯″紡锛屾棤娉曞彂璧蜂細璇? });
     }
     if (recipient.privacy_setting === 'whitelist' || recipient.privacy_setting === 'punished_whitelist') {
       const isFriend = await env.DB.prepare(
         "SELECT id FROM friendships WHERE status='accepted' AND ((user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))"
       ).bind(user_id, friend_id, friend_id, user_id).first();
-      if (!isFriend) return json({ error: '对方开启了白名单模式，仅好友可发起会话' });
+      if (!isFriend) return json({ error: '瀵规柟寮€鍚簡鐧藉悕鍗曟ā寮忥紝浠呭ソ鍙嬪彲鍙戣捣浼氳瘽' });
     }
   }
 
@@ -233,24 +110,14 @@ async function handleHandshake(env, body) {
     env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(user_id).first(),
     env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(friend_id).first()
   ]);
-  if (!u1 || !u2) return json({ error: '用户不存在' });
+  if (!u1 || !u2) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
 
   const roomName = u1.name + ' & ' + u2.name;
-  const matrixRoom = await matrixFetch(env, '/_matrix/client/v3/createRoom', {
-    method: 'POST',
-    body: JSON.stringify({
-      name: roomName,
-      preset: 'private_chat',
-      visibility: 'private',
-      initial_state: [{ type: 'm.room.guest_access', state_key: '', content: { guest_access: 'can_join' } }],
-      invite: env.MATRIX_BOT_USER_ID ? [env.MATRIX_BOT_USER_ID] : []
-    })
-  });
-
   const roomId = genId();
+
   await env.DB.prepare(
     "INSERT INTO chat_rooms (id, matrix_room_id, type, name, created_by) VALUES (?, ?, 'private', ?, ?)"
-  ).bind(roomId, matrixRoom.room_id, roomName, user_id).run();
+  ).bind(roomId, roomId, roomName, user_id).run();
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?), (?, ?)"
   ).bind(roomId, user_id, roomId, friend_id).run();
@@ -259,15 +126,15 @@ async function handleHandshake(env, body) {
     await env.DB.prepare("INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)").bind(roomId, friend_id).run();
   } catch(e) {}
 
-  return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id, users: [sanitize(u1), sanitize(u2)] });
+  return json({ room_id: roomId, matrix_room_id: roomId, users: [sanitize(u1), sanitize(u2)] });
 }
 
 async function handleSend(env, body) {
   const { user_id, room_id, content, reply_to } = body;
-  if (!user_id || !room_id || !content?.trim()) return json({ error: '参数不完整' });
+  if (!user_id || !room_id || !content?.trim()) return json({ error: '鍙傛暟涓嶅畬鏁? });
 
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
+  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
 
   const members = await env.DB.prepare(
     "SELECT user_id FROM chat_room_members WHERE room_id=?"
@@ -278,7 +145,7 @@ async function handleSend(env, body) {
     const blocked = await env.DB.prepare(
       "SELECT id FROM blocked_users WHERE (user_id=? AND blocked_user_id=?) OR (user_id=? AND blocked_user_id=?)"
     ).bind(user_id, otherId, otherId, user_id).first();
-    if (blocked) return json({ error: '无法向已拉黑的用户发送消息' });
+    if (blocked) return json({ error: '鏃犳硶鍚戝凡鎷夐粦鐨勭敤鎴峰彂閫佹秷鎭? });
 
     if (room.type === 'private') {
       const isFriend = await env.DB.prepare(
@@ -294,7 +161,7 @@ async function handleSend(env, body) {
               "SELECT messages_sent FROM chat_stranger_limits WHERE room_id=? AND user_id=?"
             ).bind(room_id, otherId).first();
             if (!otherReplied || otherReplied.messages_sent === 0) {
-              return json({ error: '请等待对方回复', stranger_limit: true });
+              return json({ error: '璇风瓑寰呭鏂瑰洖澶?, stranger_limit: true });
             }
           }
           await env.DB.prepare(
@@ -307,25 +174,35 @@ async function handleSend(env, body) {
   }
 
   const user = await env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(user_id).first();
-  if (!user) return json({ error: '用户不存在' });
+  if (!user) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
 
-  const txnId = genId();
-  const msgContent = {
-    msgtype: 'm.text',
-    body: content,
-    'com.doubao.sender_id': user_id,
-    'com.doubao.sender_name': user.name,
-    'com.doubao.sender_avatar': user.avatar || '',
-    'com.doubao.sender_doubao_id': user.doubao_id || ''
-  };
-  if (reply_to) {
-    msgContent['m.relates_to'] = { 'm.in_reply_to': { event_id: reply_to } };
+  const payload = JSON.stringify({
+    text: content,
+    sender_id: user_id,
+    sender_name: user.name,
+    sender_avatar: user.avatar || '',
+    sender_doubao_id: user.doubao_id || '',
+    reply_to: reply_to || ''
+  });
+
+  let ntfyRes;
+  try {
+    ntfyRes = await fetch('https://ntfy.sh/' + encodeURIComponent(room_id), {
+      method: 'POST',
+      headers: { 'Title': user.name, 'Content-Type': 'text/plain' },
+      body: payload
+    });
+  } catch (e) {
+    return json({ error: '娑堟伅鍙戦€佸け璐? ' + e.message });
   }
 
-  const result = await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/send/m.room.message/' + txnId, {
-    method: 'PUT',
-    body: JSON.stringify(msgContent)
-  });
+  if (!ntfyRes.ok) {
+    const txt = await ntfyRes.text().catch(() => '');
+    return json({ error: '娑堟伅鍙戦€佸け璐?(' + ntfyRes.status + '): ' + txt.slice(0, 200) });
+  }
+
+  const ntfyData = await ntfyRes.json();
+  const eventId = ntfyData.id || '';
 
   try {
     const otherMembers = await env.DB.prepare(
@@ -339,62 +216,77 @@ async function handleSend(env, body) {
     }
   } catch(e) {}
 
-  return json({ success: true, event_id: result.event_id || '' });
+  return json({ success: true, event_id: eventId });
 }
 
 async function handlePoll(env, url) {
   const room_id = url.searchParams.get('room_id');
   const since = url.searchParams.get('since') || '';
   const userId = url.searchParams.get('user_id');
-  if (!room_id) return json({ error: 'room_id 必填' });
+  if (!room_id) return json({ error: 'room_id 蹇呭～' });
 
-  const room = await env.DB.prepare("SELECT matrix_room_id FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
+  const room = await env.DB.prepare("SELECT id FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
 
   let messages = [];
   let nextBatch = '';
+  let recalledIds = [];
 
   try {
-    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}}));
-    let sync;
-    if (since) {
-      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=3000');
-    } else {
-      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0');
+    const recalled = await env.DB.prepare(
+      "SELECT event_id FROM chat_recalled_messages WHERE room_id=?"
+    ).bind(room_id).all();
+    recalledIds = recalled.results.map(r => r.event_id);
+  } catch(e) {}
+
+  try {
+    const ntfyUrl = 'https://ntfy.sh/' + encodeURIComponent(room_id) + '/json?poll=1' + (since ? '&since=' + encodeURIComponent(since) : '');
+    const res = await fetch(ntfyUrl);
+    if (!res.ok) return json({ error: '杞澶辫触 (' + res.status + ')' });
+
+    const text = await res.text();
+    const lines = text.split('\n').filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const ev = JSON.parse(line);
+        if (ev.event !== 'message') continue;
+        if (recalledIds.includes(ev.id)) continue;
+
+        let parsed;
+        try {
+          parsed = JSON.parse(ev.message);
+        } catch {
+          parsed = { text: ev.message, sender_name: ev.title || '鏈煡鐢ㄦ埛' };
+        }
+
+        messages.push({
+          event_id: ev.id,
+          sender: parsed.sender_name || ev.title || '鏈煡鐢ㄦ埛',
+          sender_id: parsed.sender_id || '',
+          sender_avatar: parsed.sender_avatar || '',
+          sender_doubao_id: parsed.sender_doubao_id || '',
+          content: parsed.text || '',
+          reply_to: parsed.reply_to || null,
+          ts: ev.time * 1000,
+          type: 'm.room.message'
+        });
+      } catch(e) {}
     }
-    nextBatch = sync.next_batch || '';
-    const roomData = sync.rooms?.join?.[room.matrix_room_id];
-    if (roomData) {
-      const events = roomData.timeline?.events || [];
-      for (const ev of events) {
-        if (ev.type === 'm.room.message') messages.push(parseMatrixEvent(ev));
-      }
+
+    if (messages.length > 0) {
+      nextBatch = messages[messages.length - 1].event_id;
     }
   } catch (e) {
-    return json({ error: '同步失败: ' + e.message });
+    return json({ error: '鍚屾澶辫触: ' + e.message });
   }
 
   return json({ messages, next_batch: nextBatch });
 }
 
-function parseMatrixEvent(ev) {
-  const content = ev.content || {};
-  return {
-    event_id: ev.event_id,
-    sender: content['com.doubao.sender_name'] || '未知用户',
-    sender_id: content['com.doubao.sender_id'] || '',
-    sender_avatar: content['com.doubao.sender_avatar'] || '',
-    sender_doubao_id: content['com.doubao.sender_doubao_id'] || '',
-    content: content.body || '',
-    reply_to: content['m.relates_to']?.['m.in_reply_to']?.event_id || null,
-    ts: ev.origin_server_ts,
-    type: ev.type
-  };
-}
-
 async function handleRooms(env, url) {
   const user_id = url.searchParams.get('user_id');
-  if (!user_id) return json({ error: 'user_id 必填' });
+  if (!user_id) return json({ error: 'user_id 蹇呭～' });
 
   const rooms = await env.DB.prepare(
     "SELECT cr.id, cr.matrix_room_id, cr.type, cr.name, cr.created_by, cr.created_at " +
@@ -415,7 +307,7 @@ async function handleRooms(env, url) {
         "SELECT u.id, u.name, u.avatar, u.doubao_id FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
         "WHERE m.room_id=? AND m.user_id!=?"
       ).bind(r.id, user_id).first();
-      result.push({ ...r, unread, other: sanitize(other), name: r.name || other?.name || '聊天' });
+      result.push({ ...r, unread, other: sanitize(other), name: r.name || other?.name || '鑱婂ぉ' });
     } else {
       const members = await env.DB.prepare(
         "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
@@ -428,7 +320,7 @@ async function handleRooms(env, url) {
 
 async function handleRead(env, body) {
   const { user_id, room_id, event_id } = body;
-  if (!user_id || !room_id) return json({ error: '参数不完整' });
+  if (!user_id || !room_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
   try {
     await env.DB.prepare(
       "INSERT INTO chat_unread (room_id, user_id, count, last_event_id) VALUES (?, ?, 0, ?) " +
@@ -440,38 +332,33 @@ async function handleRead(env, body) {
 
 async function handleCreateChannel(env, body) {
   const { user_id, name } = body;
-  if (!user_id || !name?.trim()) return json({ error: '参数不完整' });
+  if (!user_id || !name?.trim()) return json({ error: '鍙傛暟涓嶅畬鏁? });
   const user = await env.DB.prepare("SELECT id, name FROM users WHERE id=?").bind(user_id).first();
-  if (!user) return json({ error: '用户不存在' });
-
-  const matrixRoom = await matrixFetch(env, '/_matrix/client/v3/createRoom', {
-    method: 'POST',
-    body: JSON.stringify({ name: name.trim(), preset: 'public_chat', visibility: 'private' })
-  });
+  if (!user) return json({ error: '鐢ㄦ埛涓嶅瓨鍦? });
 
   const roomId = genId();
   await env.DB.prepare(
     "INSERT INTO chat_rooms (id, matrix_room_id, type, name, created_by) VALUES (?, ?, 'channel', ?, ?)"
-  ).bind(roomId, matrixRoom.room_id, name.trim(), user_id).run();
+  ).bind(roomId, roomId, name.trim(), user_id).run();
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?)"
   ).bind(roomId, user_id).run();
 
-  return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id });
+  return json({ room_id: roomId, matrix_room_id: roomId });
 }
 
 async function handleJoinChannel(env, body) {
   const { user_id, room_id } = body;
-  if (!user_id || !room_id) return json({ error: '参数不完整' });
+  if (!user_id || !room_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=? AND type='channel'").bind(room_id).first();
-  if (!room) return json({ error: '频道不存在' });
+  if (!room) return json({ error: '棰戦亾涓嶅瓨鍦? });
   await env.DB.prepare("INSERT OR IGNORE INTO chat_room_members (room_id, user_id) VALUES (?, ?)").bind(room_id, user_id).run();
   return json({ success: true });
 }
 
 async function handleChannelMembers(env, url) {
   const room_id = url.searchParams.get('room_id');
-  if (!room_id) return json({ error: 'room_id 必填' });
+  if (!room_id) return json({ error: 'room_id 蹇呭～' });
   const members = await env.DB.prepare(
     "SELECT u.id, u.name, u.avatar, u.doubao_id, m.joined_at FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
     "WHERE m.room_id=? ORDER BY m.joined_at ASC"
@@ -498,78 +385,17 @@ async function handleListChannels(env, url) {
 
 async function handleRecall(env, body) {
   const { user_id, room_id, event_id } = body;
-  if (!user_id || !room_id || !event_id) return json({ error: '参数不完整' });
+  if (!user_id || !room_id || !event_id) return json({ error: '鍙傛暟涓嶅畬鏁? });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
+  if (!room) return json({ error: '鎴块棿涓嶅瓨鍦? });
   const member = await env.DB.prepare("SELECT id FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();
-  if (!member) return json({ error: '您不是房间成员' });
-  const txnId = genId();
-  await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/redact/' + encodeURIComponent(event_id) + '/' + txnId, {
-    method: 'PUT',
-    body: JSON.stringify({ reason: '消息已撤回' })
-  });
+  if (!member) return json({ error: '鎮ㄤ笉鏄埧闂存垚鍛? });
+  try {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO chat_recalled_messages (room_id, event_id, recalled_by) VALUES (?, ?, ?)"
+    ).bind(room_id, event_id, user_id).run();
+  } catch(e) {}
   return json({ success: true });
-}
-
-
-async function handleResetPassword(env, body) {
-  const { email } = body;
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
-  const client_secret = 'reset-' + Date.now().toString(36);
-  const paths = [
-    '/_matrix/client/v3/account/password/email/requestToken',
-    '/_matrix/client/v1/account/password/email/requestToken',
-    '/_matrix/client/unstable/account/password/email/requestToken'
-  ];
-  const results = [];
-  for (const path of paths) {
-    try {
-      const result = await fetch(hs + path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_secret, email: email || env.MATRIX_BOT_EMAIL || '', send_attempt: 1 })
-      });
-      const data = await result.json();
-      results.push({ path, status: result.status, data });
-      if (result.ok && !data.errcode) break;
-    } catch(e) {
-      results.push({ path, error: e.message });
-    }
-  }
-  return json({ results });
-}
-
-async function handleProxy(env, url) {
-  const target = url.searchParams.get('url') || '/';
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
-  const resp = await fetch(hs + target);
-  const body = await resp.text();
-  return new Response(body, {
-    headers: { 'Content-Type': resp.headers.get('Content-Type') || 'text/html', 'Access-Control-Allow-Origin': '*' }
-  });
-}
-
-
-async function handleSetPassword(env, body) {
-  const { new_password } = body;
-  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
-  let token = env.MATRIX_BOT_TOKEN || '';
-  if (!token) return json({ error: 'MATRIX_BOT_TOKEN 未配置' });
-  const whoami = await fetch(hs + '/_matrix/client/v3/account/whoami', { headers: { 'Authorization': 'Bearer ' + token } });
-  if (!whoami.ok) {
-    const errText = await whoami.text();
-    return json({ error: 'Token 无效', status: whoami.status, detail: errText.substring(0, 200) });
-  }
-  const whoData = await whoami.json();
-  if (!new_password) return json({ token_valid: true, user_id: whoData.user_id, message: 'Token 有效，请提供 new_password 来修改密码' });
-  const result = await fetch(hs + '/_matrix/client/v3/account/password', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ new_password, logout_devices: false })
-  });
-  const data = await result.json();
-  if (result.ok) return json({ success: true, message: '密码修改成功！' });
-  return json({ error: '密码修改失败', status: result.status, data });
 }
 
 function sanitize(u) {
