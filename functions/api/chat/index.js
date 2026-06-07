@@ -19,15 +19,27 @@ function matrixUrl(env, path) {
 async function matrixLogin(env) {
   if (!env.MATRIX_BOT_USER_ID || !env.MATRIX_BOT_PASSWORD) throw new Error('Matrix 账号未配置（缺少 MATRIX_BOT_USER_ID 或 MATRIX_BOT_PASSWORD）');
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  const loginRes = await fetch(hs + '/_matrix/client/v3/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.user', user: env.MATRIX_BOT_USER_ID }, password: env.MATRIX_BOT_PASSWORD })
-  });
-  const data = await loginRes.json();
-  if (!data.access_token) throw new Error('Matrix 密码登录失败 (' + loginRes.status + '): ' + JSON.stringify(data));
-  __botToken = data.access_token;
-  return data.access_token;
+  // Try user_id login, fallback to email login if provided
+  const identifiers = [];
+  if (env.MATRIX_BOT_EMAIL) {
+    identifiers.push({ type: 'm.id.thirdparty', medium: 'email', address: env.MATRIX_BOT_EMAIL });
+  }
+  identifiers.push({ type: 'm.id.user', user: env.MATRIX_BOT_USER_ID });
+  let lastError = null;
+  for (const identifier of identifiers) {
+    const loginRes = await fetch(hs + '/_matrix/client/v3/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'm.login.password', identifier, password: env.MATRIX_BOT_PASSWORD })
+    });
+    const data = await loginRes.json();
+    if (data.access_token) {
+      __botToken = data.access_token;
+      return data.access_token;
+    }
+    lastError = 'Matrix 密码登录失败 (' + loginRes.status + '): ' + JSON.stringify(data);
+  }
+  throw new Error(lastError);
 }
 
 async function matrixFetch(env, path, options = {}) {
@@ -100,9 +112,61 @@ export async function onRequest(context) {
     if (method === 'GET' && resolvedAction === 'channels') return await handleListChannels(env, url);
     if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
-    return json({ error: '未知操作' }, 400);
+    if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
+  return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
+  }
+}
+
+async function handleMatrixLoginTest(env, body) {
+  const { email, password } = body;
+  if (!email && !password) {
+    // Try with env vars
+    const results = [];
+    // Test 1: user_id login
+    if (env.MATRIX_BOT_USER_ID && env.MATRIX_BOT_PASSWORD) {
+      try {
+        const r1 = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.user', user: env.MATRIX_BOT_USER_ID }, password: env.MATRIX_BOT_PASSWORD })
+        });
+        const d1 = await r1.json();
+        results.push({ method: 'user_id', status: r1.status, data: d1.access_token ? 'SUCCESS' : d1 });
+      } catch(e) { results.push({ method: 'user_id', error: e.message }); }
+    }
+    // Test 2: email login
+    if (env.MATRIX_BOT_EMAIL && env.MATRIX_BOT_PASSWORD) {
+      try {
+        const r2 = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.thirdparty', medium: 'email', address: env.MATRIX_BOT_EMAIL }, password: env.MATRIX_BOT_PASSWORD })
+        });
+        const d2 = await r2.json();
+        results.push({ method: 'email', status: r2.status, data: d2.access_token ? 'SUCCESS' : d2 });
+      } catch(e) { results.push({ method: 'email', error: e.message }); }
+    }
+    return json({ results });
+  } else {
+    // Try custom login
+    const results = [];
+    for (const identifier of [
+      body.email ? { type: 'm.id.thirdparty', medium: 'email', address: body.email } : null,
+      body.user_id ? { type: 'm.id.user', user: body.user_id } : null
+    ].filter(Boolean)) {
+      try {
+        const r = await fetch((env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '') + '/_matrix/client/v3/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'm.login.password', identifier, password: body.password })
+        });
+        const d = await r.json();
+        results.push({ method: identifier.type, status: r.status, data: d.access_token ? 'SUCCESS token=' + d.access_token.substring(0,10)+'... user_id='+d.user_id : d });
+      } catch(e) { results.push({ method: identifier.type, error: e.message }); }
+    }
+    return json({ results });
   }
 }
 
