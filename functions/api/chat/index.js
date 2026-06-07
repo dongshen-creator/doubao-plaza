@@ -14,13 +14,42 @@ function matrixUrl(env, path) {
   return hs + path;
 }
 
+async function matrixLogin(env) {
+  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
+  const res = await fetch(hs + '/_matrix/client/v3/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.user', user: env.MATRIX_BOT_USER_ID }, password: env.MATRIX_BOT_PASSWORD })
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('Matrix 密码登录失败 (' + res.status + '): ' + JSON.stringify(data));
+  return data.access_token;
+}
+
+let __botToken = '';
+
 async function matrixFetch(env, path, options = {}) {
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
-  const token = env.MATRIX_BOT_TOKEN || '';
-  const res = await fetch(hs + path, {
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
-  });
+  if (!__botToken) __botToken = env.MATRIX_BOT_TOKEN || '';
+  const doFetch = function(tok) {
+    return fetch(hs + path, {
+      headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options
+    });
+  };
+  var res = await doFetch(__botToken);
+  if (res.status === 401 && env.MATRIX_BOT_PASSWORD) {
+    try {
+      __botToken = await matrixLogin(env);
+      res = await doFetch(__botToken);
+    } catch(loginErr) {
+      const txt = await res.text();
+      throw new Error('Matrix 401: ' + txt.slice(0, 200) + ' (自动续期失败: ' + loginErr.message + ')');
+    }
+  } else if (res.status === 401) {
+    const txt = await res.text();
+    throw new Error('Matrix 401: ' + txt.slice(0, 200));
+  }
   const text = await res.text();
   if (!res.ok) throw new Error('Matrix ' + res.status + ': ' + text.slice(0, 200));
   try { return JSON.parse(text); } catch { return text; }
@@ -408,24 +437,6 @@ async function handleRecall(env, body) {
     body: JSON.stringify({ reason: '消息已撤回' })
   });
   return json({ success: true });
-}
-async function handleTestLogin(env, body) {
-  const { user_id, password } = body;
-  if (!user_id || !password) return json({ error: 'user_id 和 password 必填' });
-  try {
-    const r = await fetch('https://solitary-firefly-7c0f.luohy2024.workers.dev/__test-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id, password })
-    });
-    const data = await r.json();
-    if (data.data?.access_token) {
-      return json({ success: true, token: data.data.access_token, user_id: data.data.user_id });
-    }
-    return json(data);
-  } catch(e) {
-    return json({ error: e.message });
-  }
 }
 
 function sanitize(u) {
