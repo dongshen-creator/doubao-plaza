@@ -113,6 +113,7 @@ export async function onRequest(context) {
     if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
     if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
+    if (method === 'POST' && resolvedAction === 'reset-password') return await handleResetPassword(env, body);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -506,6 +507,24 @@ async function handleRecall(env, body) {
     body: JSON.stringify({ reason: '消息已撤回' })
   });
   return json({ success: true });
+}
+
+
+async function handleResetPassword(env, body) {
+  const { email } = body;
+  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
+  const client_secret = 'reset-' + Date.now().toString(36);
+  const result = await fetch(hs + '/_matrix/client/v3/account/password/reset/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_secret,
+      email: email || env.MATRIX_BOT_EMAIL || '',
+      send_attempt: 1
+    })
+  });
+  const data = await result.json();
+  return json({ status: result.status, data });
 }
 
 function sanitize(u) {
