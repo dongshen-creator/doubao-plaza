@@ -409,6 +409,21 @@ async function handleRecall(env, body) {
   });
   return json({ success: true });
 }
+async function handleTestLogin(env, body) {
+  const { user_id, password } = body;
+  if (!user_id || !password) return json({ error: 'user_id 和 password 必填' });
+  try {
+    const r = await fetch('https://solitary-firefly-7c0f.luohy2024.workers.dev/__test-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id, password })
+    });
+    const data = await r.json();
+    return json(data);
+  } catch(e) {
+    return json({ error: e.message });
+  }
+}
 
 function sanitize(u) {
   if (!u) return null;
