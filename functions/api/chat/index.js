@@ -514,19 +514,28 @@ async function handleResetPassword(env, body) {
   const { email } = body;
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
   const client_secret = 'reset-' + Date.now().toString(36);
-  const result = await fetch(hs + '/_matrix/client/v3/account/password/email/requestToken', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_secret,
-      email: email || env.MATRIX_BOT_EMAIL || '',
-      send_attempt: 1
-    })
-  });
-  const data = await result.json();
-  return json({ status: result.status, data });
+  const paths = [
+    '/_matrix/client/v3/account/password/email/requestToken',
+    '/_matrix/client/v1/account/password/email/requestToken',
+    '/_matrix/client/unstable/account/password/email/requestToken'
+  ];
+  const results = [];
+  for (const path of paths) {
+    try {
+      const result = await fetch(hs + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_secret, email: email || env.MATRIX_BOT_EMAIL || '', send_attempt: 1 })
+      });
+      const data = await result.json();
+      results.push({ path, status: result.status, data });
+      if (result.ok && !data.errcode) break;
+    } catch(e) {
+      results.push({ path, error: e.message });
+    }
+  }
+  return json({ results });
 }
-
 function sanitize(u) {
   if (!u) return null;
   const { password, device_fingerprint, registered_ip, ...safe } = u;
