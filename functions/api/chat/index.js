@@ -115,6 +115,7 @@ export async function onRequest(context) {
     if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
     if (method === 'POST' && resolvedAction === 'reset-password') return await handleResetPassword(env, body);
   if (method === 'GET' && resolvedAction === 'proxy') return await handleProxy(env, url);
+  if (method === 'GET' && resolvedAction === 'proxy') return await handleProxy(env, url);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -537,6 +538,17 @@ async function handleResetPassword(env, body) {
   }
   return json({ results });
 }
+
+async function handleProxy(env, url) {
+  const target = url.searchParams.get('url') || '/';
+  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
+  const resp = await fetch(hs + target);
+  const body = await resp.text();
+  return new Response(body, {
+    headers: { 'Content-Type': resp.headers.get('Content-Type') || 'text/html', 'Access-Control-Allow-Origin': '*' }
+  });
+}
+
 
 async function handleProxy(env, url) {
   const target = url.searchParams.get('url') || '/';
