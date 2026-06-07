@@ -114,7 +114,7 @@ export async function onRequest(context) {
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
     if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
     if (method === 'POST' && resolvedAction === 'reset-password') return await handleResetPassword(env, body);
-  if (method === 'GET' && resolvedAction === 'proxy') return await handleProxy(env, url);
+  if (method === 'POST' && resolvedAction === 'set-password') return await handleSetPassword(env, body);
   if (method === 'GET' && resolvedAction === 'proxy') return await handleProxy(env, url);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
@@ -550,14 +550,26 @@ async function handleProxy(env, url) {
 }
 
 
-async function handleProxy(env, url) {
-  const target = url.searchParams.get('url') || '/';
+async function handleSetPassword(env, body) {
+  const { new_password } = body;
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
-  const resp = await fetch(hs + target);
-  const body = await resp.text();
-  return new Response(body, {
-    headers: { 'Content-Type': resp.headers.get('Content-Type') || 'text/html', 'Access-Control-Allow-Origin': '*' }
+  let token = env.MATRIX_BOT_TOKEN || '';
+  if (!token) return json({ error: 'MATRIX_BOT_TOKEN 未配置' });
+  const whoami = await fetch(hs + '/_matrix/client/v3/account/whoami', { headers: { 'Authorization': 'Bearer ' + token } });
+  if (!whoami.ok) {
+    const errText = await whoami.text();
+    return json({ error: 'Token 无效', status: whoami.status, detail: errText.substring(0, 200) });
+  }
+  const whoData = await whoami.json();
+  if (!new_password) return json({ token_valid: true, user_id: whoData.user_id, message: 'Token 有效，请提供 new_password 来修改密码' });
+  const result = await fetch(hs + '/_matrix/client/v3/account/password', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_password, logout_devices: false })
   });
+  const data = await result.json();
+  if (result.ok) return json({ success: true, message: '密码修改成功！' });
+  return json({ error: '密码修改失败', status: result.status, data });
 }
 
 function sanitize(u) {
