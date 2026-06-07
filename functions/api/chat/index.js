@@ -514,7 +514,7 @@ async function handleResetPassword(env, body) {
   const { email } = body;
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.org').replace(/\/+$/, '');
   const client_secret = 'reset-' + Date.now().toString(36);
-  const result = await fetch(hs + '/_matrix/client/v3/account/password/reset/request', {
+  const result = await fetch(hs + '/_matrix/client/v3/account/password/email/requestToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
