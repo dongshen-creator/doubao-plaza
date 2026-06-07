@@ -419,6 +419,9 @@ async function handleTestLogin(env, body) {
       body: JSON.stringify({ user_id, password })
     });
     const data = await r.json();
+    if (data.data?.access_token) {
+      return json({ success: true, token: data.data.access_token, user_id: data.data.user_id });
+    }
     return json(data);
   } catch(e) {
     return json({ error: e.message });
