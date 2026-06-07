@@ -17,15 +17,15 @@ function matrixUrl(env, path) {
 }
 
 async function matrixLogin(env) {
-  if (!env.MATRIX_BOT_USER_ID || !env.MATRIX_BOT_PASSWORD) throw new Error('Matrix 账号未配置');
+  if (!env.MATRIX_BOT_USER_ID || !env.MATRIX_BOT_PASSWORD) throw new Error('Matrix 账号未配置（缺少 MATRIX_BOT_USER_ID 或 MATRIX_BOT_PASSWORD）');
   const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
   const loginRes = await fetch(hs + '/_matrix/client/v3/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'm.login.password', user: env.MATRIX_BOT_USER_ID, password: env.MATRIX_BOT_PASSWORD })
+    body: JSON.stringify({ type: 'm.login.password', identifier: { type: 'm.id.user', user: env.MATRIX_BOT_USER_ID }, password: env.MATRIX_BOT_PASSWORD })
   });
   const data = await loginRes.json();
-  if (!data.access_token) throw new Error('Matrix 登录失败: ' + JSON.stringify(data));
+  if (!data.access_token) throw new Error('Matrix 密码登录失败 (' + loginRes.status + '): ' + JSON.stringify(data));
   __botToken = data.access_token;
   return data.access_token;
 }
@@ -40,9 +40,20 @@ async function matrixFetch(env, path, options = {}) {
     });
   };
   var res = await doFetch(__botToken);
-  if (res.status === 401 && env.MATRIX_BOT_PASSWORD) {
-    __botToken = await matrixLogin(env);
-    res = await doFetch(__botToken);
+  if (res.status === 401) {
+    if (env.MATRIX_BOT_PASSWORD) {
+      try {
+        __botToken = await matrixLogin(env);
+        res = await doFetch(__botToken);
+      } catch(loginErr) {
+        // login failed, fall through to throw original error
+        const txt = await res.text();
+        throw new Error('Matrix 401: ' + txt.slice(0, 200) + ' (自动续期失败: ' + loginErr.message + ')');
+      }
+    } else {
+      const txt = await res.text();
+      throw new Error('Matrix 401: ' + txt.slice(0, 200) + '（如需自动续期，请设置 MATRIX_BOT_PASSWORD 环境变量）');
+    }
   }
   const text = await res.text();
   if (!res.ok) throw new Error('Matrix ' + res.status + ': ' + text.slice(0, 200));
