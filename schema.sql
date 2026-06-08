@@ -102,7 +102,8 @@ CREATE TABLE IF NOT EXISTS chat_rooms (
   type TEXT NOT NULL DEFAULT 'private',
   name TEXT,
   created_by TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  last_activity_at TEXT DEFAULT (datetime('now'))
 );
 
 -- 聊天室成员
