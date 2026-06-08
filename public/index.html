@@ -357,6 +357,7 @@
     <button class="nav-btn chat-show-list" onclick="toggleRoomList()" style="padding:6px 10px;display:none">☰</button>
     <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">← 返回</button>
     <div style="flex:1;font-size:16px;font-weight:700">💬 消息</div>
+    <button class="nav-btn" onclick="showRoomSettings()" id="chatSettingsBtn" style="padding:6px 10px;display:none">⚙️</button>
     <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">✕</button>
   </div>
   <div class="chat-body">
@@ -382,7 +383,7 @@
         <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
         <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片">🖼</button>
         <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this)"></textarea>
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this);sendTyping()"></textarea>
         <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
       </div>
     </div>
@@ -2045,7 +2046,7 @@ let chatState = {
   currentRoomId: null,
   messages: {},
   nextBatch: {},
-  pollTimer: null,
+  pollTimers: {},
   replyTo: null,
   chatOpen: false
 };
@@ -2087,12 +2088,19 @@ async function openChatWith(friendId, friendName) {
 function closeChat() {
   document.getElementById('chatPanel').classList.remove('show');
   chatState.chatOpen = false;
-  if (chatState.pollTimer) { clearTimeout(chatState.pollTimer); chatState.pollTimer = null; }
+  Object.values(chatState.pollTimers).forEach(t => clearTimeout(t));
+  chatState.pollTimers = {};
 }
 
 async function loadRoomList() {
   const res = await api(`/api/chat?action=rooms&user_id=${currentUser.id}`).catch(() => null);
-  if (res?.rooms) { chatState.rooms = res.rooms; renderRoomList(); }
+  if (res?.rooms) {
+    chatState.rooms = res.rooms;
+    renderRoomList();
+    res.rooms.forEach(r => {
+      if (!chatState.pollTimers[r.id]) startPolling(r.id);
+    });
+  }
 }
 
 function renderRoomList() {
@@ -2120,6 +2128,8 @@ function renderRoomList() {
 async function switchRoom(roomId) {
   chatState.currentRoomId = roomId;
   document.getElementById('chatRoomList').classList.remove('show');
+  const room = chatState.rooms.find(r => r.id === roomId);
+  document.getElementById('chatSettingsBtn').style.display = (room && room.type === 'channel') ? 'flex' : 'none';
   renderRoomList();
   loadMessages(roomId);
 }
@@ -2166,6 +2176,8 @@ function renderMsgHTML(m, roomId) {
   } else {
     contentHtml = linkify(esc(text));
   }
+  const editBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();editMessage(\'' + esc(m.event_id || '') + '\',\'' + esc(text.replace(/'/g,"\\'").replace(/\\/g,"\\\\").slice(0,100)) + '\')" style="color:#6b7280;font-size:10px">编辑</button>' : '';
+  const reactionBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();showReactionPicker(\'' + esc(m.event_id || '') + '\')" style="color:#6b7280;font-size:10px">😀</button>' : '';
   const recallBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="recallMessage(\'' + esc(m.event_id || '') + '\')">撤回</button>' : '';
   return `<div class="chat-msg ${side}" data-eid="${esc(m.event_id || '')}">
     <div class="chat-msg-bubble">
@@ -2176,7 +2188,7 @@ function renderMsgHTML(m, roomId) {
         <span>${time}</span>
         <div style="display:flex;gap:4px;align-items:center">
           ${!m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReply(\'' + esc(m.event_id || '') + '\',\'' + esc(text.slice(0,50).replace(/'/g,"\\'")) + '\')" style="color:#6b7280;font-size:10px">引用</button>' : ''}
-          ${recallBtn}
+          ${editBtn}${reactionBtn}${recallBtn}
         </div>
       </div>
     </div>
@@ -2202,23 +2214,29 @@ function renderReplyBlock(eventId, roomId) {
 }
 
 function startPolling(roomId) {
-  if (chatState.pollTimer) { clearTimeout(chatState.pollTimer); }
+  if (chatState.pollTimers[roomId]) { clearTimeout(chatState.pollTimers[roomId]); }
   if (!chatState.chatOpen) return;
   const since = chatState.nextBatch[roomId] || '';
   api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
     .then(res => {
-      if (!chatState.chatOpen || chatState.currentRoomId !== roomId) return;
+      if (!chatState.chatOpen) return;
       if (res.messages?.length) {
         const existing = chatState.messages[roomId] || [];
         const newIds = new Set(res.messages.map(m => m.event_id));
         chatState.messages[roomId] = [...existing.filter(m => !newIds.has(m.event_id)), ...res.messages];
-        renderMessages(roomId);
+        if (roomId === chatState.currentRoomId) {
+          renderMessages(roomId);
+        }
         markRead(roomId);
       }
       if (res.next_batch) chatState.nextBatch[roomId] = res.next_batch;
-      if (chatState.chatOpen) chatState.pollTimer = setTimeout(() => startPolling(roomId), 3000);
+      if (chatState.chatOpen) {
+        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 3000);
+      }
     }).catch(() => {
-      if (chatState.chatOpen) chatState.pollTimer = setTimeout(() => startPolling(roomId), 5000);
+      if (chatState.chatOpen) {
+        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 5000);
+      }
     });
 }
 
@@ -2375,6 +2393,8 @@ async function recallMessage(eventId) {
   const msg = msgs.find(m => m.event_id === eventId);
   if (msg) msg.recalled = true;
   renderMessages(chatState.currentRoomId);
+  chatState.nextBatch[chatState.currentRoomId] = '';
+  setTimeout(() => startPolling(chatState.currentRoomId), 500);
 }
 
 function toggleRoomList() {
@@ -2475,7 +2495,8 @@ renderRoomList = function() {
   }
   // Group management
   html += '<div style="padding:8px 14px;display:flex;gap:4px">' +
-    '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:10px;flex:1">📁 管理分组</button>' +
+    '<button class="btn btn-sm btn-gray" onclick="showBrowseChannels()" style="font-size:10px;flex:1">🔍 浏览频道</button>' +
+    '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:10px">📁</button>' +
     '<button class="btn btn-sm btn-gray" onclick="showChannelPinHelp()" style="font-size:10px">📌</button>' +
     '</div>';
   el.innerHTML = html;
@@ -2494,6 +2515,7 @@ function roomItemHTML(r) {
     '</div>' +
     (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
     '<button class="chat-recall-btn" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" style="color:#9ca3af;font-size:10px;padding:4px">📌</button>' +
+    '<button class="chat-recall-btn" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" style="color:#EF4444;font-size:10px;padding:4px" title="删除对话">🗑</button>' +
     '<button class="chat-recall-btn" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" style="color:#9ca3af;font-size:10px;padding:4px">📁</button>' +
     '</div>';
 }
@@ -2559,6 +2581,160 @@ function promptChannelGroup(roomId, roomName) {
 
 function showChannelPinHelp() {
   toast('点击频道旁的 📌 按钮置顶', 'info');
+}
+
+async function deleteConversation(roomId) {
+  if (!confirm('确定要删除这个对话吗？删除后不可恢复。')) return;
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'delete-conversation', user_id: currentUser.id, room_id: roomId })
+  }).catch(e => null);
+  if (!res || res.error) { toast(res?.error || '删除失败', 'error'); return; }
+  if (chatState.currentRoomId === roomId) {
+    chatState.currentRoomId = null;
+    document.getElementById('chatEmpty').classList.remove('hidden');
+    document.getElementById('chatMsgs').classList.add('hidden');
+  }
+  if (chatState.pollTimers && chatState.pollTimers[roomId]) {
+    clearTimeout(chatState.pollTimers[roomId]);
+    delete chatState.pollTimers[roomId];
+  }
+  await loadRoomList();
+  toast('对话已删除', 'success');
+}
+
+async function editMessage(eventId, currentContent) {
+  const newContent = prompt('编辑消息:', currentContent);
+  if (newContent === null || !newContent.trim()) return;
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'edit-message', user_id: currentUser.id, room_id: chatState.currentRoomId, event_id: eventId, content: newContent.trim() })
+  }).catch(() => null);
+  if (!res || res.error) { toast(res?.error || '编辑失败', 'error'); return; }
+  toast('消息已编辑', 'success');
+  chatState.nextBatch[chatState.currentRoomId] = '';
+  setTimeout(() => startPolling(chatState.currentRoomId), 500);
+}
+
+function showReactionPicker(eventId) {
+  const emojis = ['👍','❤️','😂','😮','😢','😡','🎉','🔥','✅','👀','🤔','👏'];
+  const existing = document.getElementById('reactionPicker');
+  if (existing) existing.remove();
+  const picker = document.createElement('div');
+  picker.id = 'reactionPicker';
+  picker.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:8px 12px;display:flex;gap:4px;z-index:100;flex-wrap:wrap;max-width:320px;justify-content:center';
+  picker.innerHTML = emojis.map(e => '<button onclick="sendReaction(\'' + eventId + '\',\'' + e + '\');this.parentElement.remove()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:4px;border-radius:8px;transition:background .15s" onmouseover="this.style.background=\'#f3f4f6\'" onmouseout="this.style.background=\'none\'">' + e + '</button>').join('');
+  document.body.appendChild(picker);
+  setTimeout(() => { if (document.getElementById('reactionPicker')) document.getElementById('reactionPicker').remove(); }, 10000);
+}
+
+async function sendReaction(eventId, reaction) {
+  await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'react', user_id: currentUser.id, room_id: chatState.currentRoomId, event_id: eventId, reaction })
+  }).catch(() => {});
+}
+
+let typingTimer = null;
+function sendTyping() {
+  if (!chatState.currentRoomId || !currentUser) return;
+  api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'typing', user_id: currentUser.id, room_id: chatState.currentRoomId, typing: true })
+  }).catch(() => {});
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    api('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'typing', user_id: currentUser.id, room_id: chatState.currentRoomId, typing: false })
+    }).catch(() => {});
+  }, 3000);
+}
+
+async function leaveChannel(roomId) {
+  if (!confirm('确定要离开这个频道吗？')) return;
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'leave-channel', user_id: currentUser.id, room_id: roomId })
+  }).catch(() => null);
+  if (!res || res.error) { toast(res?.error || '操作失败', 'error'); return; }
+  if (chatState.currentRoomId === roomId) {
+    chatState.currentRoomId = null;
+    document.getElementById('chatEmpty').classList.remove('hidden');
+    document.getElementById('chatMsgs').classList.add('hidden');
+  }
+  await loadRoomList();
+  toast('已离开频道', 'success');
+}
+
+function showRoomSettings() {
+  if (!chatState.currentRoomId) return;
+  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
+  if (!room) return;
+  const isCreator = room.created_by === currentUser.id;
+  let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal">' +
+    '<div class="modal-header"><div class="modal-title">⚙️ 频道设置</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
+  html += '<div class="form-group"><label class="form-label">频道名称</label>' +
+    '<div style="display:flex;gap:8px"><input class="input" id="editRoomName" value="' + esc(room.name || '') + '" style="flex:1">' +
+    '<button class="btn btn-orange btn-sm" onclick="updateRoomName()">保存</button></div></div>';
+  html += '<div style="margin-bottom:12px"><button class="btn btn-red btn-full" onclick="leaveChannel(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()">离开频道</button></div>';
+  if (isCreator) {
+    html += '<div class="section-label">成员管理</div><div id="roomMemberList">加载中...</div>';
+  }
+  html += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  if (isCreator) loadRoomMemberList(room.id);
+}
+
+async function loadRoomMemberList(roomId) {
+  const res = await api('/api/chat?action=channel-members&room_id=' + roomId).catch(() => null);
+  const el = document.getElementById('roomMemberList');
+  if (!res?.members?.length) { el.innerHTML = '<div style="font-size:12px;color:#9ca3af">暂无成员</div>'; return; }
+  el.innerHTML = res.members.map(m => '<div class="list-item" style="margin-bottom:4px">' +
+    avatarHTML(m, true) +
+    '<div class="list-item-info"><div class="list-item-name">' + esc(m.name) + '</div></div>' +
+    (m.id !== currentUser.id && m.id !== chatState.rooms.find(r => r.id === roomId)?.created_by ?
+      '<button class="btn btn-red btn-sm" onclick="kickMember(\'' + roomId + '\',\'' + m.id + '\')">踢出</button>' : '') +
+    '</div>').join('');
+}
+
+async function kickMember(roomId, targetUserId) {
+  if (!confirm('确定要踢出该成员吗？')) return;
+  await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'kick-member', user_id: currentUser.id, room_id: roomId, target_user_id: targetUserId })
+  }).catch(() => {});
+  loadRoomMemberList(roomId);
+  toast('已踢出成员', 'success');
+}
+
+async function showBrowseChannels() {
+  const res = await api('/api/chat?action=channels&user_id=' + (currentUser ? currentUser.id : '')).catch(() => null);
+  const channels = res?.channels || [];
+  const unjoined = channels.filter(c => !c.joined);
+  let html = '<div class="modal-overlay" id="browseChannelsModal" style="display:flex"><div class="modal modal-lg">' +
+    '<div class="modal-header"><div class="modal-title">🔍 浏览频道</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'browseChannelsModal\').remove()">✕</button></div>';
+  if (!unjoined.length) {
+    html += '<div class="empty"><div class="empty-icon">📢</div><div class="empty-text">暂无更多频道</div></div>';
+  } else {
+    html += unjoined.map(c => '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(c.name) + '</div>' +
+      '<div class="list-item-email">' + (c.member_count || 0) + ' 位成员</div></div>' +
+      '<button class="btn btn-green btn-sm" onclick="joinChannel(\'' + c.id + '\')">加入</button></div>').join('');
+  }
+  html += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function joinChannel(roomId) {
+  await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'join-channel', user_id: currentUser.id, room_id: roomId })
+  }).catch(() => {});
+  document.getElementById('browseChannelsModal')?.remove();
+  await loadRoomList();
+  toast('已加入频道', 'success');
 }
 
 // Friend groups in settings
