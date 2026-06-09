@@ -78,7 +78,10 @@ async function ensureTables(env) {
     "CREATE TABLE IF NOT EXISTS chat_rooms (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), matrix_room_id TEXT NOT NULL UNIQUE, type TEXT NOT NULL DEFAULT 'private', name TEXT, created_by TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS chat_room_members (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), room_id TEXT NOT NULL, user_id TEXT NOT NULL, matrix_user_id TEXT, joined_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, messages_sent INTEGER DEFAULT 1, UNIQUE(room_id, user_id))",
-    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))"
+    "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_muted (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, muted_by TEXT NOT NULL, muted_until TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_channel_settings (room_id TEXT PRIMARY KEY, created_by TEXT NOT NULL, admission TEXT DEFAULT 'open', topic TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')))",
+    "CREATE TABLE IF NOT EXISTS chat_banned (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, banned_by TEXT NOT NULL, reason TEXT DEFAULT '', permanent INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))"
   ];
   for (const sql of stmts) {
     try { await env.DB.prepare(sql).raw(); } catch(e) { try { await env.DB.prepare(sql).run(); } catch(e2) {} }
@@ -87,6 +90,7 @@ async function ensureTables(env) {
 
 export async function onRequest(context) {
   const { env, request } = context;
+  env._request = request;
   if (!env.DB) return json({ error: '数据库未绑定' }, 500);
   if (!env.MATRIX_HOMESERVER || (!env.MATRIX_BOT_TOKEN && !env.MATRIX_BOT_PASSWORD)) return json({ error: 'Matrix 未配置' }, 500);
 
@@ -100,6 +104,7 @@ export async function onRequest(context) {
   try {
 
     const body = (method === 'POST' || method === 'PUT') ? await request.json().catch(() => ({})) : {};
+    env._body = body;
     const resolvedAction = action || body.action || '';
     if (method === 'POST' && resolvedAction === 'handshake') return await handleHandshake(env, body);
     if (method === 'POST' && resolvedAction === 'send') return await handleSend(env, body);
@@ -122,6 +127,16 @@ export async function onRequest(context) {
     if (method === 'POST' && resolvedAction === 'leave-channel') return await handleLeaveChannel(env, body);
     if (method === 'POST' && resolvedAction === 'kick-member') return await handleKickMember(env, body);
     if (method === 'POST' && resolvedAction === 'ban-member') return await handleBanMember(env, body);
+    if (method === 'GET' && resolvedAction === 'search-channels') return await handleSearchChannels(env, url);
+    if (method === 'POST' && resolvedAction === 'mute-member') return await handleMuteMember(env, body);
+    if (method === 'POST' && resolvedAction === 'unmute-member') return await handleUnmuteMember(env, body);
+    if (method === 'GET' && resolvedAction === 'check-mute') return await handleCheckMute(env, url);
+    if (method === 'GET' && resolvedAction === 'check-ban') return await handleCheckBan(env, url);
+    if (method === 'POST' && resolvedAction === 'unban-member') return await handleUnbanMember(env, body);
+    if (method === 'GET' && resolvedAction === 'channel-settings') return await handleChannelSettings(env, url);
+    if (method === 'PUT' && resolvedAction === 'channel-settings') return await handleChannelSettings(env, url);
+    if (method === 'POST' && resolvedAction === 'channel-settings') return await handleChannelSettings(env, url);
+    if (method === 'GET' && resolvedAction === 'channel-info') return await handleChannelInfo(env, url);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -278,6 +293,17 @@ async function handleSend(env, body) {
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
   if (!room) return json({ error: '房间不存在' });
 
+  if (room.type === 'channel') {
+    const muted = await env.DB.prepare(
+      "SELECT id, muted_until FROM chat_muted WHERE room_id=? AND user_id=?"
+    ).bind(room_id, user_id).first();
+    if (muted) {
+      if (!muted.muted_until || new Date(muted.muted_until) > new Date()) {
+        return json({ error: '您已被禁言，无法发送消息' });
+      }
+    }
+  }
+
   const members = await env.DB.prepare(
     "SELECT user_id FROM chat_room_members WHERE room_id=?"
   ).bind(room_id).all();
@@ -366,12 +392,14 @@ async function handlePoll(env, url) {
 
   let messages = [];
   let nextBatch = '';
+  const redactedEventIds = new Set();
+  const reactionsMap = {};
 
   try {
-    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:50}}}));
+    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:500}}}));
     let sync;
     if (since) {
-      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=3000');
+      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=300');
     } else {
       sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0');
     }
@@ -379,19 +407,35 @@ async function handlePoll(env, url) {
     const roomData = sync.rooms?.join?.[room.matrix_room_id];
     if (roomData) {
       const events = roomData.timeline?.events || [];
-      const redactedIds = new Set();
       for (const ev of events) {
         if (ev.type === 'm.room.redaction') {
           const redacts = ev.content?.redacts || ev.redacts;
-          if (redacts) redactedIds.add(redacts);
+          if (redacts) redactedEventIds.add(redacts);
+        }
+        if (ev.type === 'm.reaction') {
+          const c = ev.content || {};
+          const relatesTo = c['m.relates_to'];
+          if (relatesTo?.rel_type === 'm.annotation' && relatesTo.event_id && relatesTo.key) {
+            const targetId = relatesTo.event_id;
+            const key = relatesTo.key;
+            if (!reactionsMap[targetId]) reactionsMap[targetId] = {};
+            if (!reactionsMap[targetId][key]) reactionsMap[targetId][key] = new Set();
+            reactionsMap[targetId][key].add(ev.sender || '');
+          }
         }
       }
       for (const ev of events) {
         if (ev.type === 'm.room.message') {
           const parsed = parseMatrixEvent(ev);
-          if (redactedIds.has(ev.event_id) || (!parsed.content && Object.keys(ev.content || {}).length === 0)) {
+          if (redactedEventIds.has(ev.event_id) || (!parsed.content && Object.keys(ev.content || {}).length === 0)) {
             parsed.recalled = true;
             parsed.content = '';
+          }
+          const targetReactions = reactionsMap[ev.event_id];
+          if (targetReactions) {
+            parsed.reactions = Object.entries(targetReactions).map(([key, senders]) => ({
+              key, count: senders.size, senders: [...senders]
+            }));
           }
           messages.push(parsed);
         }
@@ -401,7 +445,7 @@ async function handlePoll(env, url) {
     return json({ error: '同步失败: ' + e.message });
   }
 
-  return json({ messages, next_batch: nextBatch });
+  return json({ messages, next_batch: nextBatch, redacted_event_ids: [...redactedEventIds] });
 }
 
 function parseMatrixEvent(ev) {
@@ -414,6 +458,8 @@ function parseMatrixEvent(ev) {
     sender_doubao_id: content['com.doubao.sender_doubao_id'] || '',
     content: content.body || '',
     reply_to: content['m.relates_to']?.['m.in_reply_to']?.event_id || null,
+    rel_type: content['m.relates_to']?.rel_type || null,
+    relates_to_event_id: content['m.relates_to']?.event_id || null,
     ts: ev.origin_server_ts,
     type: ev.type
   };
@@ -447,7 +493,10 @@ async function handleRooms(env, url) {
       const members = await env.DB.prepare(
         "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
       ).bind(r.id).first();
-      result.push({ ...r, unread, member_count: members?.count || 0 });
+      const creator = await env.DB.prepare(
+        "SELECT name FROM users WHERE id=?"
+      ).bind(r.created_by).first();
+      result.push({ ...r, unread, member_count: members?.count || 0, creator_name: creator?.name || '' });
     }
   }
   try {
@@ -505,6 +554,11 @@ async function handleCreateChannel(env, body) {
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?)"
   ).bind(roomId, user_id).run();
+  try {
+    await env.DB.prepare(
+      "INSERT INTO chat_channel_settings (room_id, created_by, admission, topic) VALUES (?, ?, 'open', '')"
+    ).bind(roomId, user_id).run();
+  } catch(e) {}
 
   return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id });
 }
@@ -514,6 +568,16 @@ async function handleJoinChannel(env, body) {
   if (!user_id || !room_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=? AND type='channel'").bind(room_id).first();
   if (!room) return json({ error: '频道不存在' });
+  const banned = await env.DB.prepare(
+    "SELECT id FROM chat_banned WHERE room_id=? AND user_id=?"
+  ).bind(room_id, user_id).first();
+  if (banned) return json({ error: '您已被封禁，无法加入此频道' });
+  const settings = await env.DB.prepare(
+    "SELECT admission FROM chat_channel_settings WHERE room_id=?"
+  ).bind(room_id).first();
+  if (settings && settings.admission === 'invite') {
+    return json({ error: '该频道仅允许邀请加入' });
+  }
   await env.DB.prepare("INSERT OR IGNORE INTO chat_room_members (room_id, user_id) VALUES (?, ?)").bind(room_id, user_id).run();
   return json({ success: true });
 }
@@ -522,7 +586,10 @@ async function handleChannelMembers(env, url) {
   const room_id = url.searchParams.get('room_id');
   if (!room_id) return json({ error: 'room_id 必填' });
   const members = await env.DB.prepare(
-    "SELECT u.id, u.name, u.avatar, u.doubao_id, m.joined_at FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
+    "SELECT u.id, u.name, u.avatar, u.doubao_id, m.joined_at, " +
+    "(SELECT 1 FROM chat_muted cm WHERE cm.room_id=m.room_id AND cm.user_id=m.user_id AND (cm.muted_until IS NULL OR cm.muted_until > datetime('now'))) as is_muted, " +
+    "(SELECT cm.muted_until FROM chat_muted cm WHERE cm.room_id=m.room_id AND cm.user_id=m.user_id) as muted_until " +
+    "FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
     "WHERE m.room_id=? ORDER BY m.joined_at ASC"
   ).bind(room_id).all();
   return json({ members: members.results.map(sanitize) });
@@ -531,9 +598,9 @@ async function handleChannelMembers(env, url) {
 async function handleListChannels(env, url) {
   const user_id = url.searchParams.get('user_id');
   const channels = await env.DB.prepare(
-    "SELECT cr.id, cr.name, cr.created_by, cr.created_at, " +
+    "SELECT cr.id, cr.name, cr.created_by, u.name as creator_name, cr.created_at, " +
     "(SELECT COUNT(*) FROM chat_room_members WHERE room_id=cr.id) as member_count " +
-    "FROM chat_rooms cr WHERE cr.type='channel' ORDER BY cr.created_at DESC"
+    "FROM chat_rooms cr LEFT JOIN users u ON u.id=cr.created_by WHERE cr.type='channel' ORDER BY cr.created_at DESC"
   ).all();
   let joined = [];
   if (user_id) {
@@ -705,7 +772,7 @@ async function handleKickMember(env, body) {
 }
 
 async function handleBanMember(env, body) {
-  const { user_id, room_id, target_user_id } = body;
+  const { user_id, room_id, target_user_id, reason } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
   if (!room) return json({ error: '房间不存在' });
@@ -714,12 +781,153 @@ async function handleBanMember(env, body) {
   try {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/ban', {
       method: 'POST',
-      body: JSON.stringify({ user_id: target_user_id, reason: '被频道创建者封禁' })
+      body: JSON.stringify({ user_id: target_user_id, reason: reason || '被频道创建者封禁' })
     });
   } catch (e) {}
   await env.DB.prepare("DELETE FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
   await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
+  try {
+    await env.DB.prepare(
+      "INSERT INTO chat_banned (id, room_id, user_id, banned_by, reason, permanent) VALUES (?, ?, ?, ?, ?, 1) " +
+      "ON CONFLICT(room_id, user_id) DO UPDATE SET banned_by=excluded.banned_by, reason=excluded.reason, permanent=1"
+    ).bind(genId(), room_id, target_user_id, user_id, reason || '被频道创建者封禁').run();
+  } catch(e) {}
   return json({ success: true });
+}
+
+async function handleSearchChannels(env, url) {
+  const query = url.searchParams.get('q') || '';
+  const userId = url.searchParams.get('user_id');
+  const channels = await env.DB.prepare(
+    "SELECT cr.*, " +
+    "(SELECT COUNT(*) FROM chat_room_members WHERE room_id = cr.id) as member_count, " +
+    "CASE WHEN crm.id IS NOT NULL THEN 1 ELSE 0 END as joined " +
+    "FROM chat_rooms cr " +
+    "LEFT JOIN chat_room_members crm ON cr.id = crm.room_id AND crm.user_id = ? " +
+    "WHERE cr.type = 'channel' AND cr.name LIKE ? " +
+    "ORDER BY member_count DESC LIMIT 20"
+  ).bind(userId || '', '%' + query + '%').all();
+  return json({ channels: channels.results || [] });
+}
+
+async function handleMuteMember(env, body) {
+  const { user_id, room_id, target_user_id, duration } = body;
+  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '房间不存在' });
+  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以禁言' });
+  let mutedUntil = null;
+  if (duration && duration > 0) {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + duration);
+    mutedUntil = d.toISOString();
+  }
+  await env.DB.prepare(
+    "INSERT INTO chat_muted (id, room_id, user_id, muted_by, muted_until) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(room_id, user_id) DO UPDATE SET muted_by=excluded.muted_by, muted_until=excluded.muted_until"
+  ).bind(genId(), room_id, target_user_id, user_id, mutedUntil).run();
+  return json({ success: true, muted_until: mutedUntil });
+}
+
+async function handleUnmuteMember(env, body) {
+  const { user_id, room_id, target_user_id } = body;
+  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '房间不存在' });
+  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以解除禁言' });
+  await env.DB.prepare("DELETE FROM chat_muted WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
+  return json({ success: true });
+}
+
+async function handleCheckMute(env, url) {
+  const room_id = url.searchParams.get('room_id');
+  const user_id = url.searchParams.get('user_id');
+  if (!room_id || !user_id) return json({ error: '参数不完整' });
+  const muted = await env.DB.prepare(
+    "SELECT muted_until FROM chat_muted WHERE room_id=? AND user_id=?"
+  ).bind(room_id, user_id).first();
+  if (!muted) return json({ muted: false });
+  if (!muted.muted_until) return json({ muted: true, permanent: true, remaining: null });
+  const until = new Date(muted.muted_until);
+  if (until <= new Date()) {
+    await env.DB.prepare("DELETE FROM chat_muted WHERE room_id=? AND user_id=?").bind(room_id, user_id).run();
+    return json({ muted: false });
+  }
+  return json({ muted: true, permanent: false, muted_until: muted.muted_until, remaining: Math.ceil((until - new Date()) / 60000) });
+}
+
+async function handleUnbanMember(env, body) {
+  const { user_id, room_id, target_user_id } = body;
+  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '房间不存在' });
+  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以解封' });
+  try {
+    await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/unban', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: target_user_id, reason: '频道创建者解除封禁' })
+    });
+  } catch (e) {}
+  await env.DB.prepare("DELETE FROM chat_banned WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
+  return json({ success: true });
+}
+
+async function handleCheckBan(env, url) {
+  const room_id = url.searchParams.get('room_id');
+  const user_id = url.searchParams.get('user_id');
+  if (!room_id || !user_id) return json({ error: '参数不完整' });
+  const banned = await env.DB.prepare(
+    "SELECT reason, permanent, created_at FROM chat_banned WHERE room_id=? AND user_id=?"
+  ).bind(room_id, user_id).first();
+  if (!banned) return json({ banned: false });
+  return json({ banned: true, reason: banned.reason, permanent: !!banned.permanent });
+}
+
+async function handleChannelSettings(env, url) {
+  const room_id = url.searchParams.get('room_id');
+  if (!room_id) return json({ error: 'room_id 必填' });
+  if (env._request.method === 'GET') {
+    const settings = await env.DB.prepare(
+      "SELECT * FROM chat_channel_settings WHERE room_id=?"
+    ).bind(room_id).first();
+    if (!settings) return json({ admission: 'open', topic: '' });
+    return json({ admission: settings.admission, topic: settings.topic, created_by: settings.created_by });
+  }
+  const body = env._body || await env._request.json().catch(() => ({}));
+  const { user_id, admission, topic } = body;
+  if (!user_id) return json({ error: 'user_id 必填' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return json({ error: '房间不存在' });
+  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以修改设置' });
+  const allowedAdmissions = ['open', 'invite', 'approval'];
+  const finalAdmission = allowedAdmissions.includes(admission) ? admission : 'open';
+  await env.DB.prepare(
+    "INSERT INTO chat_channel_settings (room_id, created_by, admission, topic) VALUES (?, ?, ?, ?) " +
+    "ON CONFLICT(room_id) DO UPDATE SET admission=excluded.admission, topic=excluded.topic"
+  ).bind(room_id, user_id, finalAdmission, topic || '').run();
+  return json({ success: true });
+}
+
+async function handleChannelInfo(env, url) {
+  const room_id = url.searchParams.get('room_id');
+  if (!room_id) return json({ error: 'room_id 必填' });
+  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=? AND type='channel'").bind(room_id).first();
+  if (!room) return json({ error: '频道不存在' });
+  const memberCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
+  ).bind(room_id).first();
+  const settings = await env.DB.prepare(
+    "SELECT * FROM chat_channel_settings WHERE room_id=?"
+  ).bind(room_id).first();
+  return json({
+    room_id: room.id,
+    name: room.name,
+    topic: settings?.topic || '',
+    created_by: room.created_by,
+    member_count: memberCount?.count || 0,
+    admission: settings?.admission || 'open',
+    created_at: room.created_at
+  });
 }
 
 function sanitize(u) {
