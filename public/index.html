@@ -2375,35 +2375,11 @@ async function loadMessages(roomId) {
   msgsEl.classList.remove('hidden');
   empty.classList.add('hidden');
   msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px">加载中...</div>';
-  if (!chatState.matrixConfig) await loadMatrixConfig();
-  if (chatState.matrixConfig) {
-    const room = chatState.rooms.find(r => r.id === roomId);
-    if (room?.matrix_room_id) {
-      const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:200}}}));
-      const url = chatState.matrixConfig.homeserver + '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0';
-      const syncRes = await fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + chatState.matrixConfig.access_token }
-      }).then(r => r.json()).catch(() => null);
-      if (syncRes?.next_batch) {
-        chatState.nextBatch[roomId] = syncRes.next_batch;
-        const roomData = syncRes.rooms?.join?.[room.matrix_room_id];
-        const events = roomData?.timeline?.events || [];
-        if (events.length) {
-          processMatrixEvents(roomId, events, '');
-          renderMessages(roomId);
-          markRead(roomId);
-          startPolling(roomId);
-          document.getElementById('chatInput').focus();
-          return;
-        }
-      }
-    }
-  }
   const res = await api(`/api/chat?action=poll&room_id=${roomId}&user_id=${currentUser.id}`).catch(() => null);
   if (!res) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
   chatState.nextBatch[roomId] = res.next_batch || '';
   const msgs = res.messages || [];
-  chatState.messages[roomId] = msgs;
+  chatState.messages[roomId] = msgs.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   renderMessages(roomId);
   markRead(roomId);
   startPolling(roomId);
@@ -2509,8 +2485,23 @@ function startPolling(roomId) {
   const matrixRoomId = room?.matrix_room_id;
   const since = chatState.nextBatch[roomId] || '';
 
+  function pollViaBackend() {
+    api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
+      .then(res => {
+        if (!chatState.chatOpen) return;
+        if (Date.now() < chatState.suppressPollUntil) {
+          chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
+          return;
+        }
+        processBackendPollResponse(roomId, res, since);
+        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
+      }).catch(() => {
+        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
+      });
+  }
+
   if (chatState.matrixConfig && matrixRoomId) {
-    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:200}}}));
+    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:500}}}));
     const url = chatState.matrixConfig.homeserver + '/_matrix/client/v3/sync?filter=' + filter + (since ? '&since=' + encodeURIComponent(since) : '') + '&timeout=100';
     fetch(url, {
       headers: { 'Authorization': 'Bearer ' + chatState.matrixConfig.access_token }
@@ -2530,21 +2521,11 @@ function startPolling(roomId) {
       processMatrixEvents(roomId, events, since);
       if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
     }).catch(() => {
-      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
+      chatState.matrixConfig = null;
+      pollViaBackend();
     });
   } else {
-    api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
-      .then(res => {
-        if (!chatState.chatOpen) return;
-        if (Date.now() < chatState.suppressPollUntil) {
-          chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
-          return;
-        }
-        processBackendPollResponse(roomId, res, since);
-        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
-      }).catch(() => {
-        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
-      });
+    pollViaBackend();
   }
 }
 
@@ -2569,7 +2550,7 @@ function processMatrixEvents(roomId, events, since) {
         const key = relatesTo.key;
         if (!reactionsData[targetId]) reactionsData[targetId] = {};
         if (!reactionsData[targetId][key]) reactionsData[targetId][key] = new Set();
-        reactionsData[targetId][key].add(ev.sender || '');
+        reactionsData[targetId][key].add(c['com.doubao.sender_id'] || ev.sender || '');
       }
     }
   }
@@ -2666,7 +2647,8 @@ function processMatrixEvents(roomId, events, since) {
     return true;
   });
 
-  chatState.messages[roomId] = [...filtered, ...deduped];
+  const merged = [...filtered, ...deduped].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  chatState.messages[roomId] = merged;
   if (roomId === chatState.currentRoomId) {
     renderMessages(roomId);
     markRead(roomId);
@@ -2758,7 +2740,8 @@ function processBackendPollResponse(roomId, res, since) {
       if (chatState.sentFingerprints.has(fp) && deduped.some(nm => nm.sender_id === m.sender_id && nm.content === m.content)) return false;
       return true;
     });
-    chatState.messages[roomId] = [...filtered, ...deduped];
+    const merged = [...filtered, ...deduped].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    chatState.messages[roomId] = merged;
     if (roomId === chatState.currentRoomId) {
       renderMessages(roomId);
       markRead(roomId);
