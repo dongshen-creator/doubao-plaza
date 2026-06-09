@@ -151,3 +151,45 @@ CREATE INDEX IF NOT EXISTS idx_reports_reported ON reports(reported_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_features_order ON features(sort_order);
+
+-- 禁言表（由 ensureTables 动态创建）
+CREATE TABLE IF NOT EXISTS chat_muted (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  muted_by TEXT NOT NULL,
+  muted_until TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(room_id, user_id)
+);
+
+-- 频道设置表（由 ensureTables 动态创建）
+CREATE TABLE IF NOT EXISTS chat_channel_settings (
+  room_id TEXT PRIMARY KEY,
+  created_by TEXT NOT NULL,
+  admission TEXT DEFAULT 'open',
+  topic TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 频道封禁表（由 ensureTables 动态创建）
+CREATE TABLE IF NOT EXISTS chat_banned (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  banned_by TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  permanent INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(room_id, user_id)
+);
+
+-- 频道管理员表（由 ensureTables 动态创建）
+CREATE TABLE IF NOT EXISTS chat_admins (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  set_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(room_id, user_id)
+);

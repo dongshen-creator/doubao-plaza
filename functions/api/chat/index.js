@@ -81,7 +81,8 @@ async function ensureTables(env) {
     "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_muted (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, muted_by TEXT NOT NULL, muted_until TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_channel_settings (room_id TEXT PRIMARY KEY, created_by TEXT NOT NULL, admission TEXT DEFAULT 'open', topic TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')))",
-    "CREATE TABLE IF NOT EXISTS chat_banned (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, banned_by TEXT NOT NULL, reason TEXT DEFAULT '', permanent INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))"
+    "CREATE TABLE IF NOT EXISTS chat_banned (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, banned_by TEXT NOT NULL, reason TEXT DEFAULT '', permanent INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS chat_admins (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, set_by TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))"
   ];
   for (const sql of stmts) {
     try { await env.DB.prepare(sql).raw(); } catch(e) { try { await env.DB.prepare(sql).run(); } catch(e2) {} }
@@ -118,6 +119,7 @@ export async function onRequest(context) {
     if (method === 'POST' && resolvedAction === 'recall') return await handleRecall(env, body);
     if (method === 'GET' && resolvedAction === 'unread-count') return await handleUnreadCount(env, url);
     if (method === 'POST' && resolvedAction === 'matrix-login-test') return await handleMatrixLoginTest(env, body);
+    if (method === 'GET' && resolvedAction === 'matrix-config') return await handleMatrixConfig(env);
     if (method === 'POST' && resolvedAction === 'delete-conversation') return await handleDeleteConversation(env, body);
     if (method === 'POST' && resolvedAction === 'edit-message') return await handleEditMessage(env, body);
     if (method === 'POST' && resolvedAction === 'react') return await handleReact(env, body);
@@ -137,6 +139,8 @@ export async function onRequest(context) {
     if (method === 'PUT' && resolvedAction === 'channel-settings') return await handleChannelSettings(env, url);
     if (method === 'POST' && resolvedAction === 'channel-settings') return await handleChannelSettings(env, url);
     if (method === 'GET' && resolvedAction === 'channel-info') return await handleChannelInfo(env, url);
+    if (method === 'POST' && resolvedAction === 'set-admin') return await handleSetAdmin(env, body);
+    if (method === 'POST' && resolvedAction === 'remove-admin') return await handleRemoveAdmin(env, body);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -242,12 +246,16 @@ async function handleHandshake(env, body) {
     "WHERE cr.type='private'"
   ).bind(user_id, friend_id).first();
 
+  if (!__botToken) {
+    if (env.MATRIX_BOT_TOKEN) __botToken = env.MATRIX_BOT_TOKEN;
+    else if (env.MATRIX_BOT_PASSWORD) await matrixLogin(env).catch(() => {});
+  }
   if (existing) {
     const [u1, u2] = await Promise.all([
       env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(user_id).first(),
       env.DB.prepare("SELECT id, name, avatar, doubao_id FROM users WHERE id=?").bind(friend_id).first()
     ]);
-    return json({ room_id: existing.id, matrix_room_id: existing.matrix_room_id, users: [sanitize(u1), sanitize(u2)] });
+    return json({ room_id: existing.id, matrix_room_id: existing.matrix_room_id, users: [sanitize(u1), sanitize(u2)], matrix_config: { homeserver: matrixUrl(env, ''), access_token: __botToken } });
   }
 
   const [u1, u2] = await Promise.all([
@@ -283,7 +291,7 @@ async function handleHandshake(env, body) {
     await env.DB.prepare("INSERT OR IGNORE INTO chat_unread (room_id, user_id, count) VALUES (?, ?, 0)").bind(roomId, friend_id).run();
   } catch(e) {}
 
-  return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id, users: [sanitize(u1), sanitize(u2)] });
+  return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id, users: [sanitize(u1), sanitize(u2)], matrix_config: { homeserver: matrixUrl(env, ''), access_token: __botToken } });
 }
 
 async function handleSend(env, body) {
@@ -399,7 +407,7 @@ async function handlePoll(env, url) {
     const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:500}}}));
     let sync;
     if (since) {
-      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=300');
+      sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&since=' + encodeURIComponent(since) + '&timeout=100');
     } else {
       sync = await matrixFetch(env, '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0');
     }
@@ -494,9 +502,12 @@ async function handleRooms(env, url) {
         "SELECT COUNT(*) as count FROM chat_room_members WHERE room_id=?"
       ).bind(r.id).first();
       const creator = await env.DB.prepare(
-        "SELECT name FROM users WHERE id=?"
-      ).bind(r.created_by).first();
-      result.push({ ...r, unread, member_count: members?.count || 0, creator_name: creator?.name || '' });
+          "SELECT name FROM users WHERE id=?"
+        ).bind(r.created_by).first();
+        const isAdmin = await env.DB.prepare(
+          "SELECT id FROM chat_admins WHERE room_id=? AND user_id=?"
+        ).bind(r.id, user_id).first();
+        result.push({ ...r, unread, member_count: members?.count || 0, creator_name: creator?.name || '', is_admin: !!isAdmin });
     }
   }
   try {
@@ -535,12 +546,14 @@ async function handleRead(env, body) {
 async function handleCreateChannel(env, body) {
   const { user_id, name } = body;
   if (!user_id || !name?.trim()) return json({ error: '参数不完整' });
-  const user = await env.DB.prepare("SELECT id, name FROM users WHERE id=?").bind(user_id).first();
+  const user = await env.DB.prepare("SELECT id, name, is_developer FROM users WHERE id=?").bind(user_id).first();
   if (!user) return json({ error: '用户不存在' });
-  const userChannels = await env.DB.prepare(
-    "SELECT COUNT(*) as count FROM chat_rooms WHERE created_by=? AND type='channel'"
-  ).bind(user_id).first();
-  if (userChannels.count >= 10) return json({ error: '您创建的频道数量已达上限（10个）' });
+  if (!user.is_developer) {
+    const userChannels = await env.DB.prepare(
+      "SELECT COUNT(*) as count FROM chat_rooms WHERE created_by=? AND type='channel'"
+    ).bind(user_id).first();
+    if (userChannels.count >= 1) return json({ error: '每个用户只能创建一个频道' });
+  }
 
   let matrixRoomId;
   try {
@@ -592,9 +605,10 @@ async function handleChannelMembers(env, url) {
   const room_id = url.searchParams.get('room_id');
   if (!room_id) return json({ error: 'room_id 必填' });
   const members = await env.DB.prepare(
-    "SELECT u.id, u.name, u.avatar, u.doubao_id, m.joined_at, " +
+    "SELECT u.id, u.name, u.avatar, u.doubao_id, u.is_developer, m.joined_at, " +
     "(SELECT 1 FROM chat_muted cm WHERE cm.room_id=m.room_id AND cm.user_id=m.user_id AND (cm.muted_until IS NULL OR cm.muted_until > datetime('now'))) as is_muted, " +
-    "(SELECT cm.muted_until FROM chat_muted cm WHERE cm.room_id=m.room_id AND cm.user_id=m.user_id) as muted_until " +
+    "(SELECT cm.muted_until FROM chat_muted cm WHERE cm.room_id=m.room_id AND cm.user_id=m.user_id) as muted_until, " +
+    "(SELECT 1 FROM chat_admins ca WHERE ca.room_id=m.room_id AND ca.user_id=m.user_id) as is_admin " +
     "FROM chat_room_members m JOIN users u ON u.id=m.user_id " +
     "WHERE m.room_id=? ORDER BY m.joined_at ASC"
   ).bind(room_id).all();
@@ -640,16 +654,28 @@ async function handleDeleteConversation(env, body) {
   if (!room) return json({ error: '房间不存在' });
   const member = await env.DB.prepare("SELECT id FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();
   if (!member) return json({ error: '您不是房间成员' });
-  await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=?").bind(room_id).run();
-  await env.DB.prepare("DELETE FROM chat_stranger_limits WHERE room_id=?").bind(room_id).run();
-  await env.DB.prepare("DELETE FROM chat_room_members WHERE room_id=?").bind(room_id).run();
-  await env.DB.prepare("DELETE FROM chat_rooms WHERE id=?").bind(room_id).run();
+  if (room.type === 'channel') {
+    const role = await isAdminOrCreator(env, room_id, user_id);
+    if (!role) return json({ error: '只有频道创建者和管理员可以删除频道' });
+    await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=?").bind(room_id).run();
+    await env.DB.prepare("DELETE FROM chat_stranger_limits WHERE room_id=?").bind(room_id).run();
+    await env.DB.prepare("DELETE FROM chat_room_members WHERE room_id=?").bind(room_id).run();
+    await env.DB.prepare("DELETE FROM chat_rooms WHERE id=?").bind(room_id).run();
+    try {
+      await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/leave', {
+        method: 'POST', body: JSON.stringify({})
+      });
+    } catch (e) {}
+    return json({ success: true, deleted: true });
+  }
+  await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=? AND user_id=?").bind(room_id, user_id).run();
+  await env.DB.prepare("DELETE FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).run();
   try {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/leave', {
       method: 'POST', body: JSON.stringify({})
     });
   } catch (e) {}
-  return json({ success: true });
+  return json({ success: true, deleted: false });
 }
 
 async function handleEditMessage(env, body) {
@@ -740,6 +766,10 @@ async function handleUpdateRoom(env, body) {
   if (!user_id || !room_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
   if (!room) return json({ error: '房间不存在' });
+  if (room.type === 'channel') {
+    const role = await isAdminOrCreator(env, room_id, user_id);
+    if (!role) return json({ error: '只有频道创建者和管理员可以修改设置' });
+  }
   if (name) {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/state/m.room.name/', {
       method: 'PUT',
@@ -769,9 +799,8 @@ async function handleLeaveChannel(env, body) {
 async function handleKickMember(env, body) {
   const { user_id, room_id, target_user_id } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以踢人' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以踢人' });
   await env.DB.prepare("DELETE FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
   await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
   return json({ success: true });
@@ -780,9 +809,8 @@ async function handleKickMember(env, body) {
 async function handleBanMember(env, body) {
   const { user_id, room_id, target_user_id, reason } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以封禁' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以封禁' });
   const txnId = genId();
   try {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/ban', {
@@ -819,9 +847,8 @@ async function handleSearchChannels(env, url) {
 async function handleMuteMember(env, body) {
   const { user_id, room_id, target_user_id, duration } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以禁言' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以禁言' });
   let mutedUntil = null;
   if (duration && duration > 0) {
     const d = new Date();
@@ -838,9 +865,8 @@ async function handleMuteMember(env, body) {
 async function handleUnmuteMember(env, body) {
   const { user_id, room_id, target_user_id } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以解除禁言' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以解除禁言' });
   await env.DB.prepare("DELETE FROM chat_muted WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
   return json({ success: true });
 }
@@ -865,9 +891,8 @@ async function handleCheckMute(env, url) {
 async function handleUnbanMember(env, body) {
   const { user_id, room_id, target_user_id } = body;
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以解封' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以解封' });
   try {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/unban', {
       method: 'POST',
@@ -902,9 +927,8 @@ async function handleChannelSettings(env, url) {
   const body = env._body || await env._request.json().catch(() => ({}));
   const { user_id, admission, topic } = body;
   if (!user_id) return json({ error: 'user_id 必填' });
-  const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
-  if (!room) return json({ error: '房间不存在' });
-  if (room.created_by !== user_id) return json({ error: '只有频道创建者可以修改设置' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (!role) return json({ error: '只有频道创建者和管理员可以修改设置' });
   const allowedAdmissions = ['open', 'invite', 'approval'];
   const finalAdmission = allowedAdmissions.includes(admission) ? admission : 'open';
   await env.DB.prepare(
@@ -934,6 +958,46 @@ async function handleChannelInfo(env, url) {
     admission: settings?.admission || 'open',
     created_at: room.created_at
   });
+}
+
+async function isAdminOrCreator(env, room_id, user_id) {
+  const room = await env.DB.prepare("SELECT created_by FROM chat_rooms WHERE id=?").bind(room_id).first();
+  if (!room) return false;
+  if (room.created_by === user_id) return 'creator';
+  const admin = await env.DB.prepare("SELECT id FROM chat_admins WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();
+  return admin ? 'admin' : false;
+}
+
+async function handleMatrixConfig(env) {
+  const hs = (env.MATRIX_HOMESERVER || 'https://matrix.example.com').replace(/\/+$/, '');
+  if (!__botToken) {
+    if (env.MATRIX_BOT_TOKEN) {
+      __botToken = env.MATRIX_BOT_TOKEN;
+    } else if (env.MATRIX_BOT_PASSWORD) {
+      await matrixLogin(env);
+    }
+  }
+  return json({ homeserver: hs, access_token: __botToken });
+}
+
+async function handleSetAdmin(env, body) {
+  const { user_id, room_id, target_user_id } = body;
+  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (role !== 'creator') return json({ error: '只有频道创建者可以设置管理员' });
+  await env.DB.prepare(
+    "INSERT INTO chat_admins (id, room_id, user_id, set_by) VALUES (?, ?, ?, ?) ON CONFLICT(room_id, user_id) DO NOTHING"
+  ).bind(genId(), room_id, target_user_id, user_id).run();
+  return json({ success: true });
+}
+
+async function handleRemoveAdmin(env, body) {
+  const { user_id, room_id, target_user_id } = body;
+  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+  const role = await isAdminOrCreator(env, room_id, user_id);
+  if (role !== 'creator') return json({ error: '只有频道创建者可以移除管理员' });
+  await env.DB.prepare("DELETE FROM chat_admins WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
+  return json({ success: true });
 }
 
 function sanitize(u) {

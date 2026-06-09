@@ -524,7 +524,9 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
     }
     html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
     html += '<button class="btn btn-red btn-full" onclick="showReportModal(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚨 举报</button>';
-    if (isCreator || (currentUser && (currentUser.role === 'admin' || currentUser.is_admin))) {
+    const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
+    const canManage = isCreator || (room && room.is_admin) || isDeveloper();
+    if (canManage) {
       html += '<button class="btn btn-gray btn-full" onclick="muteUserInChannel(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🔇 禁言</button>';
       html += '<button class="btn btn-red btn-full" onclick="kickMember(chatState.currentRoomId,\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚪 踢出</button>';
       if (isCreator) {
@@ -556,11 +558,36 @@ async function patUser(targetUserId, targetUserName) {
 
 async function muteUserInChannel(userId) {
   if (!chatState.currentRoomId) return;
+  const duration = prompt('禁言时长（分钟），留空为永久禁言:', '');
+  if (duration === null) return;
+  const durationNum = duration.trim() === '' ? null : parseInt(duration) || null;
   await api('/api/chat', {
     method: 'POST',
-    body: JSON.stringify({ action: 'mute-member', user_id: currentUser.id, room_id: chatState.currentRoomId, target_user_id: userId })
+    body: JSON.stringify({ action: 'mute-member', user_id: currentUser.id, room_id: chatState.currentRoomId, target_user_id: userId, duration: durationNum })
   }).catch(() => {});
   toast('已禁言', 'success');
+  const modal = document.getElementById('roomSettingsModal');
+  if (modal) loadRoomMemberList(chatState.currentRoomId);
+}
+
+async function unmuteMember(roomId, userId) {
+  await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'unmute-member', user_id: currentUser.id, room_id: roomId, target_user_id: userId })
+  }).catch(() => {});
+  toast('已解除禁言', 'success');
+  const modal = document.getElementById('roomSettingsModal');
+  if (modal) loadRoomMemberList(roomId);
+}
+
+async function removeChannelAdmin(userId) {
+  if (!chatState.currentRoomId || !confirm('确定要移除该管理员吗？')) return;
+  await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'remove-admin', user_id: currentUser.id, room_id: chatState.currentRoomId, target_user_id: userId })
+  }).catch(() => {});
+  toast('已移除管理员', 'success');
+  loadRoomMemberList(chatState.currentRoomId);
 }
 
 async function setChannelAdmin(userId) {
@@ -654,8 +681,7 @@ function updateNavbar() {
 }
 
 function isDeveloper() {
-  const devIds = ['470208447', 'East_pairs'];
-  return currentUser && devIds.includes(currentUser.doubao_id);
+  return currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
 }
 
 // ===== Login =====
@@ -2207,8 +2233,44 @@ let chatState = {
   suppressPollUntil: 0,
   lastRoomListRefresh: 0,
   reactionsMap: {},
-  sentFingerprints: new Set()
+  sentFingerprints: new Set(),
+  matrixConfig: null,
+  userChannelCount: 0
 };
+
+async function matrixFetchDirect(path) {
+  if (!chatState.matrixConfig) return null;
+  const url = chatState.matrixConfig.homeserver + path;
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + chatState.matrixConfig.access_token }
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function parseMatrixEventFE(ev) {
+  const content = ev.content || {};
+  return {
+    event_id: ev.event_id,
+    sender: content['com.doubao.sender_name'] || '未知用户',
+    sender_id: content['com.doubao.sender_id'] || '',
+    sender_avatar: content['com.doubao.sender_avatar'] || '',
+    sender_doubao_id: content['com.doubao.sender_doubao_id'] || '',
+    content: content.body || '',
+    reply_to: content['m.relates_to']?.['m.in_reply_to']?.event_id || null,
+    rel_type: content['m.relates_to']?.rel_type || null,
+    relates_to_event_id: content['m.relates_to']?.event_id || null,
+    ts: ev.origin_server_ts,
+    type: ev.type
+  };
+}
+
+async function loadMatrixConfig() {
+  const res = await api('/api/chat?action=matrix-config').catch(() => null);
+  if (res && res.homeserver && res.access_token) {
+    chatState.matrixConfig = res;
+  }
+}
 
 function openChat() {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
@@ -2219,6 +2281,7 @@ function openChat() {
   document.getElementById('chatEmpty').classList.remove('hidden');
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList();
+  if (!chatState.matrixConfig) loadMatrixConfig();
 }
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
@@ -2235,6 +2298,7 @@ async function openChatWith(friendId, friendName) {
         body: JSON.stringify({ action: 'handshake', user_id: currentUser.id, friend_id: friendId })
       });
       if (res.error) { toast(res.error, 'error'); return; }
+      if (res.matrix_config) chatState.matrixConfig = res.matrix_config;
     } catch (e) { toast(e.message, 'error'); return; }
     chatState.currentRoomId = res.room_id;
     await loadRoomList();
@@ -2256,6 +2320,7 @@ async function loadRoomList() {
   if (res?.rooms) {
     chatState.rooms = res.rooms;
     chatState.lastRoomListRefresh = Date.now();
+    chatState.userChannelCount = res.rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
     renderRoomList();
     res.rooms.forEach(r => {
       if (!chatState.pollTimers[r.id]) startPolling(r.id);
@@ -2290,6 +2355,7 @@ async function switchRoom(roomId) {
   document.getElementById('chatRoomList').classList.remove('show');
   const room = chatState.rooms.find(r => r.id === roomId);
   document.getElementById('chatSettingsBtn').style.display = (room && room.type === 'channel') ? 'flex' : 'none';
+  document.getElementById('chatSettingsBtn').title = (room && room.type === 'channel') ? '频道设置' : '';
   document.getElementById('chatEmpty').classList.add('hidden');
   document.getElementById('chatMsgs').classList.remove('hidden');
   renderRoomList();
@@ -2309,6 +2375,30 @@ async function loadMessages(roomId) {
   msgsEl.classList.remove('hidden');
   empty.classList.add('hidden');
   msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px">加载中...</div>';
+  if (!chatState.matrixConfig) await loadMatrixConfig();
+  if (chatState.matrixConfig) {
+    const room = chatState.rooms.find(r => r.id === roomId);
+    if (room?.matrix_room_id) {
+      const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:200}}}));
+      const url = chatState.matrixConfig.homeserver + '/_matrix/client/v3/sync?filter=' + filter + '&timeout=0';
+      const syncRes = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + chatState.matrixConfig.access_token }
+      }).then(r => r.json()).catch(() => null);
+      if (syncRes?.next_batch) {
+        chatState.nextBatch[roomId] = syncRes.next_batch;
+        const roomData = syncRes.rooms?.join?.[room.matrix_room_id];
+        const events = roomData?.timeline?.events || [];
+        if (events.length) {
+          processMatrixEvents(roomId, events, '');
+          renderMessages(roomId);
+          markRead(roomId);
+          startPolling(roomId);
+          document.getElementById('chatInput').focus();
+          return;
+        }
+      }
+    }
+  }
   const res = await api(`/api/chat?action=poll&room_id=${roomId}&user_id=${currentUser.id}`).catch(() => null);
   if (!res) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
   chatState.nextBatch[roomId] = res.next_batch || '';
@@ -2324,6 +2414,14 @@ function renderMessages(roomId) {
   const msgsEl = document.getElementById('chatMsgs');
   const msgs = chatState.messages[roomId] || [];
   if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
+  for (const msg of msgs) {
+    const reacts = chatState.reactionsMap[msg.event_id];
+    if (reacts) {
+      msg.reactions = Object.entries(reacts).map(([key, senders]) => ({
+        key, count: senders.length, senders
+      }));
+    }
+  }
   msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
   msgsEl.scrollTop = msgsEl.scrollHeight;
 }
@@ -2404,139 +2502,281 @@ function startPolling(roomId) {
   if (chatState.pollTimers[roomId]) { clearTimeout(chatState.pollTimers[roomId]); }
   if (!chatState.chatOpen) return;
   if (Date.now() < chatState.suppressPollUntil) {
-    chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
+    chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
     return;
   }
+  const room = chatState.rooms.find(r => r.id === roomId);
+  const matrixRoomId = room?.matrix_room_id;
   const since = chatState.nextBatch[roomId] || '';
-  api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
-    .then(res => {
+
+  if (chatState.matrixConfig && matrixRoomId) {
+    const filter = encodeURIComponent(JSON.stringify({room:{timeline:{limit:200}}}));
+    const url = chatState.matrixConfig.homeserver + '/_matrix/client/v3/sync?filter=' + filter + (since ? '&since=' + encodeURIComponent(since) : '') + '&timeout=100';
+    fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + chatState.matrixConfig.access_token }
+    }).then(r => r.json()).then(syncRes => {
       if (!chatState.chatOpen) return;
       if (Date.now() < chatState.suppressPollUntil) {
-        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 1500);
+        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
         return;
       }
-      let needRender = false;
-      if (res.redacted_event_ids?.length) {
-        const existing = chatState.messages[roomId] || [];
-        for (const rid of res.redacted_event_ids) {
-          const msg = existing.find(m => m.event_id === rid);
-          if (msg && !msg.recalled) {
-            msg.recalled = true;
-            msg.content = '';
-            needRender = true;
-          }
-        }
+      if (syncRes.next_batch) chatState.nextBatch[roomId] = syncRes.next_batch;
+      const roomData = syncRes.rooms?.join?.[matrixRoomId];
+      if (!roomData?.timeline?.events?.length) {
+        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
+        return;
       }
-      if (res.messages?.length) {
-        const editMap = {};
-        const nonEditMsgs = [];
-        for (const m of res.messages) {
-          if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
-            editMap[m.relates_to_event_id] = m.content;
-          } else {
-            nonEditMsgs.push(m);
-          }
-        }
-        res.messages = nonEditMsgs;
-        if (Object.keys(editMap).length) {
-          const existing = chatState.messages[roomId] || [];
-          for (const [targetId, newContent] of Object.entries(editMap)) {
-            const target = existing.find(m => m.event_id === targetId);
-            if (target) {
-              target.content = newContent;
-              target.edited = true;
-              needRender = true;
-            }
-          }
-        }
-        for (const m of res.messages) {
-          if (m.reactions?.length) {
-            if (!chatState.reactionsMap[m.event_id]) chatState.reactionsMap[m.event_id] = {};
-            for (const r of m.reactions) {
-              if (!chatState.reactionsMap[m.event_id][r.key]) chatState.reactionsMap[m.event_id][r.key] = [];
-              for (const s of r.senders || []) {
-                if (!chatState.reactionsMap[m.event_id][r.key].includes(s)) {
-                  chatState.reactionsMap[m.event_id][r.key].push(s);
-                }
-              }
-            }
-          }
-        }
-      }
-      const existingMsgs = chatState.messages[roomId] || [];
-      for (const msg of existingMsgs) {
-        const reacts = chatState.reactionsMap[msg.event_id];
-        if (reacts) {
-          msg.reactions = Object.entries(reacts).map(([key, senders]) => ({
-            key, count: senders.length, senders
-          }));
-        }
-      }
-      if (needRender && roomId === chatState.currentRoomId) {
-        renderMessages(roomId);
-      }
-      if (res.messages?.length) {
-        const existing = chatState.messages[roomId] || [];
-        const recalledIds = new Set(existing.filter(e => e.recalled && e.event_id).map(e => e.event_id));
-        const seenMap = new Map();
-        const deduped = [];
-        for (const m of res.messages) {
-          const key = m.event_id || (m.sender_id + '|' + m.content + '|' + m.ts);
-          if (!seenMap.has(key)) {
-            seenMap.set(key, true);
-            if (m.event_id && recalledIds.has(m.event_id)) {
-              m.recalled = true;
-            }
-            if (m.event_id) {
-              const existingMsg = existing.find(em => em.event_id === m.event_id);
-              if (existingMsg && existingMsg.reactions) {
-                m.reactions = existingMsg.reactions;
-              }
-            }
-            deduped.push(m);
-          }
-        }
-        const newIds = new Set(deduped.map(m => m.event_id).filter(Boolean));
-        const filtered = existing.filter(m => {
-          if (m.event_id && newIds.has(m.event_id)) return false;
-          if (m.event_id && m.event_id.startsWith('temp_')) {
-            const match = deduped.find(nm => nm.sender_id === m.sender_id && nm.content === m.content && Math.abs((nm.ts || 0) - (m.ts || 0)) < 10000);
-            if (match) {
-              m.event_id = match.event_id;
-              return false;
-            }
-          }
-          const fp = m.sender_id + '|' + m.content;
-          if (chatState.sentFingerprints.has(fp) && deduped.some(nm => nm.sender_id === m.sender_id && nm.content === m.content)) {
-            return false;
-          }
-          return true;
-        });
-        chatState.messages[roomId] = [...filtered, ...deduped];
-        if (roomId === chatState.currentRoomId) {
-          renderMessages(roomId);
-          markRead(roomId);
-        } else if (since) {
-          const room = chatState.rooms.find(r => r.id === roomId);
-          if (room) {
-            const newMsgCount = deduped.filter(m => !m.recalled && m.sender_id !== currentUser.id).length;
-            if (newMsgCount > 0) {
-              room.unread = (room.unread || 0) + newMsgCount;
-              renderRoomList();
-              updateUnreadBadge();
-            }
-          }
-        }
-      }
-      if (res.next_batch) chatState.nextBatch[roomId] = res.next_batch;
-      if (chatState.chatOpen) {
-        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
-      }
+      const events = roomData.timeline.events;
+      processMatrixEvents(roomId, events, since);
+      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
     }).catch(() => {
-      if (chatState.chatOpen) {
-        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
-      }
+      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
     });
+  } else {
+    api(`/api/chat?action=poll&room_id=${roomId}&since=${encodeURIComponent(since)}&user_id=${currentUser.id}`)
+      .then(res => {
+        if (!chatState.chatOpen) return;
+        if (Date.now() < chatState.suppressPollUntil) {
+          chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
+          return;
+        }
+        processBackendPollResponse(roomId, res, since);
+        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
+      }).catch(() => {
+        if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
+      });
+  }
+}
+
+function processMatrixEvents(roomId, events, since) {
+  let needRender = false;
+  const existing = chatState.messages[roomId] || [];
+  const redactedEventIds = new Set();
+  const reactionsData = {};
+  const editsMap = {};
+  const newMsgs = [];
+
+  for (const ev of events) {
+    if (ev.type === 'm.room.redaction') {
+      const redacts = ev.content?.redacts || ev.redacts;
+      if (redacts) redactedEventIds.add(redacts);
+    }
+    if (ev.type === 'm.reaction') {
+      const c = ev.content || {};
+      const relatesTo = c['m.relates_to'];
+      if (relatesTo?.rel_type === 'm.annotation' && relatesTo.event_id && relatesTo.key) {
+        const targetId = relatesTo.event_id;
+        const key = relatesTo.key;
+        if (!reactionsData[targetId]) reactionsData[targetId] = {};
+        if (!reactionsData[targetId][key]) reactionsData[targetId][key] = new Set();
+        reactionsData[targetId][key].add(ev.sender || '');
+      }
+    }
+  }
+
+  for (const ev of events) {
+    if (ev.type === 'm.room.message') {
+      const content = ev.content || {};
+      if (content['m.relates_to']?.rel_type === 'm.replace' && content['m.relates_to']?.event_id) {
+        editsMap[content['m.relates_to'].event_id] = content.body || (content['m.new_content']?.body) || '';
+        continue;
+      }
+      const parsed = parseMatrixEventFE(ev);
+      if (redactedEventIds.has(ev.event_id)) {
+        parsed.recalled = true;
+        parsed.content = '';
+      }
+      const targetReactions = reactionsData[ev.event_id];
+      if (targetReactions) {
+        parsed.reactions = Object.entries(targetReactions).map(([key, senders]) => ({
+          key, count: senders.size, senders: [...senders]
+        }));
+      }
+      newMsgs.push(parsed);
+    }
+  }
+
+  Object.entries(reactionsData).forEach(([targetId, reacts]) => {
+    if (!chatState.reactionsMap[targetId]) chatState.reactionsMap[targetId] = {};
+    Object.entries(reacts).forEach(([key, senders]) => {
+      if (!chatState.reactionsMap[targetId][key]) chatState.reactionsMap[targetId][key] = [];
+      senders.forEach(s => { if (!chatState.reactionsMap[targetId][key].includes(s)) chatState.reactionsMap[targetId][key].push(s); });
+    });
+  });
+
+  if (Object.keys(reactionsData).length) needRender = true;
+
+  for (const [targetId, newContent] of Object.entries(editsMap)) {
+    const target = existing.find(m => m.event_id === targetId);
+    if (target) {
+      target.content = newContent;
+      target.edited = true;
+      needRender = true;
+    }
+  }
+
+  for (const rid of redactedEventIds) {
+    const msg = existing.find(m => m.event_id === rid);
+    if (msg && !msg.recalled) {
+      msg.recalled = true;
+      msg.content = '';
+      needRender = true;
+    }
+  }
+
+  const existingMsgs = chatState.messages[roomId] || [];
+  for (const msg of existingMsgs) {
+    const reacts = chatState.reactionsMap[msg.event_id];
+    if (reacts) {
+      msg.reactions = Object.entries(reacts).map(([key, senders]) => ({
+        key, count: senders.length, senders
+      }));
+    }
+  }
+
+  if (!newMsgs.length) {
+    if (needRender && roomId === chatState.currentRoomId) renderMessages(roomId);
+    return;
+  }
+
+  const recalledIds = new Set(existing.filter(e => e.recalled && e.event_id).map(e => e.event_id));
+  const seenKeys = new Set();
+  const deduped = [];
+  for (const m of newMsgs) {
+    const key = m.event_id || (m.sender_id + '|' + m.content + '|' + m.ts);
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    if (m.event_id && recalledIds.has(m.event_id)) m.recalled = true;
+    if (m.event_id) {
+      const existingMsg = existing.find(em => em.event_id === m.event_id);
+      if (existingMsg && existingMsg.reactions) m.reactions = existingMsg.reactions;
+    }
+    deduped.push(m);
+  }
+
+  const newIds = new Set(deduped.map(m => m.event_id).filter(Boolean));
+  const filtered = existing.filter(m => {
+    if (m.event_id && newIds.has(m.event_id)) return false;
+    if (m.event_id && m.event_id.startsWith('temp_')) {
+      const match = deduped.find(nm => nm.sender_id === m.sender_id && nm.content === m.content && Math.abs((nm.ts || 0) - (m.ts || 0)) < 30000);
+      if (match) { m.event_id = match.event_id; return false; }
+    }
+    const fp = m.sender_id + '|' + m.content;
+    if (chatState.sentFingerprints.has(fp) && deduped.some(nm => nm.sender_id === m.sender_id && nm.content === m.content)) return false;
+    return true;
+  });
+
+  chatState.messages[roomId] = [...filtered, ...deduped];
+  if (roomId === chatState.currentRoomId) {
+    renderMessages(roomId);
+    markRead(roomId);
+  } else if (since) {
+    const room = chatState.rooms.find(r => r.id === roomId);
+    if (room) {
+      const newMsgCount = deduped.filter(m => !m.recalled && m.sender_id !== currentUser.id).length;
+      if (newMsgCount > 0) {
+        room.unread = (room.unread || 0) + newMsgCount;
+        renderRoomList();
+        updateUnreadBadge();
+      }
+    }
+  }
+}
+
+function processBackendPollResponse(roomId, res, since) {
+  if (!res) return;
+  let needRender = false;
+  if (res.redacted_event_ids?.length) {
+    const existing = chatState.messages[roomId] || [];
+    for (const rid of res.redacted_event_ids) {
+      const msg = existing.find(m => m.event_id === rid);
+      if (msg && !msg.recalled) { msg.recalled = true; msg.content = ''; needRender = true; }
+    }
+  }
+  if (res.messages?.length) {
+    const editMap = {};
+    const nonEditMsgs = [];
+    for (const m of res.messages) {
+      if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
+        editMap[m.relates_to_event_id] = m.content;
+      } else {
+        nonEditMsgs.push(m);
+      }
+    }
+    res.messages = nonEditMsgs;
+    if (Object.keys(editMap).length) {
+      const existing = chatState.messages[roomId] || [];
+      for (const [targetId, newContent] of Object.entries(editMap)) {
+        const target = existing.find(m => m.event_id === targetId);
+        if (target) { target.content = newContent; target.edited = true; needRender = true; }
+      }
+    }
+    for (const m of res.messages) {
+      if (m.reactions?.length) {
+        if (!chatState.reactionsMap[m.event_id]) chatState.reactionsMap[m.event_id] = {};
+        for (const r of m.reactions) {
+          if (!chatState.reactionsMap[m.event_id][r.key]) chatState.reactionsMap[m.event_id][r.key] = [];
+          for (const s of r.senders || []) {
+            if (!chatState.reactionsMap[m.event_id][r.key].includes(s)) chatState.reactionsMap[m.event_id][r.key].push(s);
+          }
+        }
+      }
+    }
+  }
+  const existingMsgs = chatState.messages[roomId] || [];
+  for (const msg of existingMsgs) {
+    const reacts = chatState.reactionsMap[msg.event_id];
+    if (reacts) {
+      msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
+    }
+  }
+  if (res.messages?.length) {
+    const existing = chatState.messages[roomId] || [];
+    const recalledIds = new Set(existing.filter(e => e.recalled && e.event_id).map(e => e.event_id));
+    const seenMap = new Map();
+    const deduped = [];
+    for (const m of res.messages) {
+      const key = m.event_id || (m.sender_id + '|' + m.content + '|' + m.ts);
+      if (!seenMap.has(key)) {
+        seenMap.set(key, true);
+        if (m.event_id && recalledIds.has(m.event_id)) m.recalled = true;
+        if (m.event_id) {
+          const existingMsg = existing.find(em => em.event_id === m.event_id);
+          if (existingMsg && existingMsg.reactions) m.reactions = existingMsg.reactions;
+        }
+        deduped.push(m);
+      }
+    }
+    const newIds = new Set(deduped.map(m => m.event_id).filter(Boolean));
+    const filtered = existing.filter(m => {
+      if (m.event_id && newIds.has(m.event_id)) return false;
+      if (m.event_id && m.event_id.startsWith('temp_')) {
+        const match = deduped.find(nm => nm.sender_id === m.sender_id && nm.content === m.content && Math.abs((nm.ts || 0) - (m.ts || 0)) < 30000);
+        if (match) { m.event_id = match.event_id; return false; }
+      }
+      const fp = m.sender_id + '|' + m.content;
+      if (chatState.sentFingerprints.has(fp) && deduped.some(nm => nm.sender_id === m.sender_id && nm.content === m.content)) return false;
+      return true;
+    });
+    chatState.messages[roomId] = [...filtered, ...deduped];
+    if (roomId === chatState.currentRoomId) {
+      renderMessages(roomId);
+      markRead(roomId);
+    } else if (since) {
+      const room = chatState.rooms.find(r => r.id === roomId);
+      if (room) {
+        const newMsgCount = deduped.filter(m => !m.recalled && m.sender_id !== currentUser.id).length;
+        if (newMsgCount > 0) {
+          room.unread = (room.unread || 0) + newMsgCount;
+          renderRoomList();
+          updateUnreadBadge();
+        }
+      }
+    }
+  } else if (needRender && roomId === chatState.currentRoomId) {
+    renderMessages(roomId);
+  }
+  if (res.next_batch) chatState.nextBatch[roomId] = res.next_batch;
 }
 
 function markRead(roomId) {
@@ -2597,7 +2837,7 @@ async function sendChatMsg() {
   };
   const fp = currentUser.id + '|' + content;
   chatState.sentFingerprints.add(fp);
-  setTimeout(() => chatState.sentFingerprints.delete(fp), 10000);
+  setTimeout(() => chatState.sentFingerprints.delete(fp), 60000);
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
@@ -2605,7 +2845,7 @@ async function sendChatMsg() {
   if (chatState.replyTo) cancelReply();
   btn.disabled = false;
   chatState.lastSendTime = Date.now();
-  chatState.suppressPollUntil = Date.now() + 2000;
+  chatState.suppressPollUntil = Date.now() + 500;
   setTimeout(() => startPolling(chatState.currentRoomId), 300);
 }
 
@@ -2622,6 +2862,10 @@ function cancelReply() {
 }
 
 function showCreateChannel() {
+  if (!isDeveloper()) {
+    const myChannels = chatState.rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id);
+    if (myChannels.length >= 1) { toast('每个用户只能创建一个频道', 'error'); return; }
+  }
   document.getElementById('channelName').value = '';
   document.getElementById('createChannelModal').style.display = 'flex';
 }
@@ -2741,12 +2985,12 @@ function startUnreadPolling() {
         badge.classList.add('hidden');
       }
     }
-    if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 30000)) {
+    if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) {
       loadRoomList();
     }
-    unreadPollTimer = setTimeout(startUnreadPolling, 3000);
+    unreadPollTimer = setTimeout(startUnreadPolling, 1000);
   }).catch(() => {
-    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 3000);
+    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 1000);
   });
 }
 
@@ -2860,6 +3104,7 @@ function roomItemHTML(r) {
   var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
   var name = r.other ? esc(r.other.name) : esc(r.name);
   var isPinned = getPinnedChannels().indexOf(r.id) >= 0;
+  var canDelete = r.type !== 'channel' || r.created_by === currentUser.id || r.is_admin || isDeveloper();
   return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
     '<div class="chat-room-avatar">' + avatar + '</div>' +
     '<div class="chat-room-info">' +
@@ -2868,7 +3113,7 @@ function roomItemHTML(r) {
     '</div>' +
     (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
     '<button class="chat-recall-btn" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" style="color:#9ca3af;font-size:10px;padding:4px">📌</button>' +
-    '<button class="chat-recall-btn" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" style="color:#EF4444;font-size:10px;padding:4px" title="删除对话">🗑</button>' +
+    (canDelete ? '<button class="chat-recall-btn" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" style="color:#EF4444;font-size:10px;padding:4px" title="删除对话">🗑</button>' : '') +
     '<button class="chat-recall-btn" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" style="color:#9ca3af;font-size:10px;padding:4px">📁</button>' +
     '</div>';
 }
@@ -2937,7 +3182,15 @@ function showChannelPinHelp() {
 }
 
 async function deleteConversation(roomId) {
-  if (!confirm('确定要删除这个对话吗？删除后不可恢复。')) return;
+  const room = chatState.rooms.find(r => r.id === roomId);
+  if (room?.type === 'channel') {
+    if (!isDeveloper() && room.created_by !== currentUser.id && !room.is_admin) {
+      toast('只有频道创建者和管理员可以删除频道', 'error'); return;
+    }
+    if (!confirm('确定要删除这个频道吗？此操作不可恢复！')) return;
+  } else {
+    if (!confirm('确定要删除这个对话吗？')) return;
+  }
   const res = await api('/api/chat', {
     method: 'POST',
     body: JSON.stringify({ action: 'delete-conversation', user_id: currentUser.id, room_id: roomId })
@@ -2953,7 +3206,7 @@ async function deleteConversation(roomId) {
     delete chatState.pollTimers[roomId];
   }
   await loadRoomList();
-  toast('对话已删除', 'success');
+  toast(res.deleted ? '频道已删除' : '对话已删除', 'success');
 }
 
 async function editMessage(eventId, currentContent) {
@@ -2992,16 +3245,13 @@ async function sendReaction(eventId, reaction) {
   if (!res || res.error) return;
   if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
   if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
-  if (!chatState.reactionsMap[eventId][reaction].includes(currentUser.id)) {
+  const idx = chatState.reactionsMap[eventId][reaction].indexOf(currentUser.id);
+  if (idx >= 0) {
+    chatState.reactionsMap[eventId][reaction].splice(idx, 1);
+  } else {
     chatState.reactionsMap[eventId][reaction].push(currentUser.id);
   }
-  const msgs = chatState.messages[chatState.currentRoomId] || [];
-  const msg = msgs.find(m => m.event_id === eventId);
-  if (msg) {
-    msg.reactions = Object.entries(chatState.reactionsMap[eventId]).map(([key, senders]) => ({
-      key, count: senders.length, senders
-    }));
-  }
+  if (chatState.reactionsMap[eventId][reaction].length === 0) delete chatState.reactionsMap[eventId][reaction];
   renderMessages(chatState.currentRoomId);
 }
 
@@ -3042,31 +3292,71 @@ function showRoomSettings() {
   const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
   if (!room) return;
   const isCreator = room.created_by === currentUser.id;
-  let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal">' +
-    '<div class="modal-header"><div class="modal-title">⚙️ 频道设置</div>' +
+  const canManage = isCreator || (room && room.is_admin) || isDeveloper();
+  let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">' +
+    '<div class="modal-header"><div class="modal-title">⚙️ 频道设置 - ' + esc(room.name || '') + '</div>' +
     '<button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
   html += '<div class="form-group"><label class="form-label">频道名称</label>' +
     '<div style="display:flex;gap:8px"><input class="input" id="editRoomName" value="' + esc(room.name || '') + '" style="flex:1">' +
     '<button class="btn btn-orange btn-sm" onclick="updateRoomName()">保存</button></div></div>';
-  html += '<div style="margin-bottom:12px"><button class="btn btn-red btn-full" onclick="leaveChannel(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()">离开频道</button></div>';
-  if (isCreator) {
+  html += '<div style="margin-bottom:12px;display:flex;gap:8px">' +
+    '<button class="btn btn-red" style="flex:1" onclick="leaveChannel(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()">离开频道</button>' +
+    (canManage ? '<button class="btn btn-red" onclick="deleteConversation(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()" style="flex:1">🗑 删除频道</button>' : '') +
+    '</div>';
+  if (canManage) {
     html += '<div class="section-label">成员管理</div><div id="roomMemberList">加载中...</div>';
   }
   html += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
-  if (isCreator) loadRoomMemberList(room.id);
+  if (canManage) loadRoomMemberList(room.id);
 }
 
 async function loadRoomMemberList(roomId) {
   const res = await api('/api/chat?action=channel-members&room_id=' + roomId).catch(() => null);
   const el = document.getElementById('roomMemberList');
   if (!res?.members?.length) { el.innerHTML = '<div style="font-size:12px;color:#9ca3af">暂无成员</div>'; return; }
-  el.innerHTML = res.members.map(m => '<div class="list-item" style="margin-bottom:4px">' +
-    avatarHTML(m, true, true) +
-    '<div class="list-item-info"><div class="list-item-name">' + esc(m.name) + '</div></div>' +
-    (m.id !== currentUser.id && m.id !== chatState.rooms.find(r => r.id === roomId)?.created_by ?
-      '<button class="btn btn-red btn-sm" onclick="kickMember(\'' + roomId + '\',\'' + m.id + '\')">踢出</button>' : '') +
-    '</div>').join('');
+  const room = chatState.rooms.find(r => r.id === roomId);
+  const isCreator = room?.created_by === currentUser.id;
+  const canManage = isCreator || (room && room.is_admin) || isDeveloper();
+  el.innerHTML = res.members.map(m => {
+    const isRoomCreator = m.id === room?.created_by;
+    const isAdmin = m.is_admin || isRoomCreator;
+    const isSelf = m.id === currentUser.id;
+    let actions = '';
+    if (canManage && !isSelf && !isRoomCreator) {
+      actions += '<button class="btn btn-red btn-sm" onclick="kickMember(\'' + roomId + '\',\'' + m.id + '\')">踢出</button>';
+      if (m.is_muted) {
+        actions += '<button class="btn btn-blue btn-sm" onclick="unmuteMember(\'' + roomId + '\',\'' + m.id + '\')">解除禁言</button>';
+      } else {
+        actions += '<button class="btn btn-gray btn-sm" onclick="muteUserInChannel(\'' + m.id + '\')">禁言</button>';
+      }
+      if (isCreator && !isAdmin) {
+        actions += '<button class="btn btn-orange btn-sm" onclick="setChannelAdmin(\'' + m.id + '\')">设为管理</button>';
+      }
+      if (isCreator && isAdmin && !isRoomCreator) {
+        actions += '<button class="btn btn-red btn-sm" onclick="removeChannelAdmin(\'' + m.id + '\')">移除管理</button>';
+      }
+    }
+    const badge = isRoomCreator ? ' 👑' : (isAdmin ? ' ⭐' : '');
+    return '<div class="list-item" style="margin-bottom:4px">' +
+      avatarHTML(m, true, true) +
+      '<div class="list-item-info"><div class="list-item-name">' + esc(m.name) + badge + (m.is_muted ? ' 🔇' : '') + '</div></div>' +
+      actions + '</div>';
+  }).join('');
+}
+
+async function updateRoomName() {
+  if (!chatState.currentRoomId) return;
+  const name = document.getElementById('editRoomName')?.value?.trim();
+  if (!name) { toast('请输入频道名称', 'error'); return; }
+  const res = await api('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'update-room', user_id: currentUser.id, room_id: chatState.currentRoomId, name })
+  }).catch(() => null);
+  if (!res || res.error) { toast(res?.error || '修改失败', 'error'); return; }
+  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
+  if (room) room.name = name;
+  toast('名称已更新', 'success');
 }
 
 async function kickMember(roomId, targetUserId) {
