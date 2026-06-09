@@ -1,5 +1,27 @@
-// Cloudflare Pages Function - Delete User Account
+// Cloudflare Pages Function - Get user profile + Delete User Account
+// GET /api/users/[id] - 获取用户信息（用于弹窗等）
 // DELETE /api/users/[id]
+
+export async function onRequestGet(context) {
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  try {
+    const { env } = context;
+    const userId = context.params.id;
+    if (!userId) return Response.json({ success: false, error: '用户ID不能为空' });
+    const user = await env.DB.prepare(
+      "SELECT id, name, avatar, doubao_id, bio, agent_url, privacy_setting, last_login_at, created_at FROM users WHERE id = ?"
+    ).bind(userId).first();
+    if (!user) return Response.json({ success: false, error: '用户不存在' });
+    return Response.json({ success: true, data: user });
+  } catch (e) {
+    return Response.json({ success: false, error: e.message });
+  }
+}
 
 export async function onRequestDelete(context) {
   // 首先检查环境变量

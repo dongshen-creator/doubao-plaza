@@ -542,15 +542,21 @@ async function handleCreateChannel(env, body) {
   ).bind(user_id).first();
   if (userChannels.count >= 10) return json({ error: '您创建的频道数量已达上限（10个）' });
 
-  const matrixRoom = await matrixFetch(env, '/_matrix/client/v3/createRoom', {
-    method: 'POST',
-    body: JSON.stringify({ name: name.trim(), preset: 'public_chat', visibility: 'private' })
-  });
+  let matrixRoomId;
+  try {
+    const matrixRoom = await matrixFetch(env, '/_matrix/client/v3/createRoom', {
+      method: 'POST',
+      body: JSON.stringify({ name: name.trim(), preset: 'public_chat', visibility: 'private' })
+    });
+    matrixRoomId = matrixRoom.room_id;
+  } catch(e) {
+    matrixRoomId = 'local_' + genId();
+  }
 
   const roomId = genId();
   await env.DB.prepare(
     "INSERT INTO chat_rooms (id, matrix_room_id, type, name, created_by) VALUES (?, ?, 'channel', ?, ?)"
-  ).bind(roomId, matrixRoom.room_id, name.trim(), user_id).run();
+  ).bind(roomId, matrixRoomId, name.trim(), user_id).run();
   await env.DB.prepare(
     "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?)"
   ).bind(roomId, user_id).run();
@@ -560,7 +566,7 @@ async function handleCreateChannel(env, body) {
     ).bind(roomId, user_id).run();
   } catch(e) {}
 
-  return json({ room_id: roomId, matrix_room_id: matrixRoom.room_id });
+  return json({ room_id: roomId, matrix_room_id: matrixRoomId });
 }
 
 async function handleJoinChannel(env, body) {

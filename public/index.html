@@ -81,6 +81,9 @@
     .user-card-name{font-size:15px;font-weight:600;color:#1a1a2e}
     .user-card-id{font-size:12px;color:#9ca3af;margin-top:3px}
     .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;word-break:break-all;white-space:pre-wrap}
+    .bio-collapsible{max-height:2.8em;overflow:hidden;transition:max-height .3s ease;cursor:pointer;position:relative}
+    .bio-collapsible.expanded{max-height:500px}
+    .bio-collapse-btn{font-size:11px;color:#FF6B35;cursor:pointer;background:none;border:none;padding:2px 0;display:block}
     .user-card-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.05)}
     .search-wrap{position:relative}
     .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af}
@@ -473,6 +476,13 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   if (existing) existing.remove();
   const isSelf = currentUser && userId === currentUser.id;
   let isFriend = false;
+
+  let userInfo = null;
+  try {
+    const infoRes = await api('/api/users/' + userId).catch(() => null);
+    if (infoRes && infoRes.success) userInfo = infoRes.data;
+  } catch(e) {}
+
   if (!isSelf) {
     try {
       const fRes = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted').catch(() => null);
@@ -481,11 +491,17 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
       }
     } catch(e) {}
   }
-  const isCreator = chatState.currentRoomId && chatState.rooms.find(r => r.id === chatState.currentRoomId && r.created_by === currentUser.id);
+  const room = chatState.currentRoomId ? chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; }) : null;
+  const isCreator = room && room.created_by === currentUser.id;
+
+  const bio = (userInfo && userInfo.bio) || '';
+  const lastLogin = (userInfo && userInfo.last_login_at) || '';
+  const isOnline = lastLogin ? (Date.now() - new Date(lastLogin).getTime() < 5 * 60 * 1000) : false;
+
   let html = '<div class="modal-overlay" id="userPopupModal" style="display:flex" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:320px">';
   html += '<div class="modal-header"><div class="modal-title">用户信息</div>';
   html += '<button class="modal-close" onclick="document.getElementById(\'userPopupModal\').remove()">✕</button></div>';
-  html += '<div style="text-align:center;margin-bottom:16px">';
+  html += '<div style="text-align:center;margin-bottom:12px">';
   if (userAvatar) {
     html += '<img src="' + esc(userAvatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">';
   } else {
@@ -493,8 +509,10 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   }
   html += '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-top:8px">' + esc(userName) + '</div>';
   if (doubaoId) html += '<div style="font-size:12px;color:#9ca3af">@' + esc(doubaoId) + '</div>';
+  html += '<div style="font-size:11px;margin-top:4px;color:' + (isOnline ? '#10b981' : '#9ca3af') + '">' + (isOnline ? '🟢 在线' : '⚪ 离线') + '</div>';
+  html += renderBio(bio);
   html += '</div>';
-  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
   if (isSelf) {
     html += '<button class="btn btn-orange btn-full" onclick="document.getElementById(\'userPopupModal\').remove();showModal(\'settings\')">🏠 这是我的主页</button>';
   } else {
@@ -504,6 +522,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
       html += '<button class="btn btn-blue btn-full" onclick="addFriend(\'' + userId + '\',this);document.getElementById(\'userPopupModal\').remove()">➕ 加好友</button>';
       html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
     }
+    html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
     html += '<button class="btn btn-red btn-full" onclick="showReportModal(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚨 举报</button>';
     if (isCreator || (currentUser && (currentUser.role === 'admin' || currentUser.is_admin))) {
       html += '<button class="btn btn-gray btn-full" onclick="muteUserInChannel(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🔇 禁言</button>';
@@ -515,6 +534,24 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   }
   html += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function patUser(targetUserId, targetUserName) {
+  if (!currentUser) return;
+  toast('你拍了拍 ' + targetUserName, 'info');
+  if (chatState.currentRoomId) {
+    try {
+      await api('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'send',
+          user_id: currentUser.id,
+          room_id: chatState.currentRoomId,
+          content: '👋 拍了拍 ' + targetUserName
+        })
+      });
+    } catch(e) {}
+  }
 }
 
 async function muteUserInChannel(userId) {
@@ -881,6 +918,15 @@ function clearSearch() {
   document.getElementById('searchResults').innerHTML = '';
 }
 
+// ===== Bio Render =====
+function renderBio(text) {
+  if (!text) return '';
+  var isLong = text.length > 60;
+  var id = 'bio_' + Math.random().toString(36).slice(2, 6);
+  if (!isLong) return '<div class="user-card-bio">' + esc(text) + '</div>';
+  return '<div class="user-card-bio bio-collapsible" id="' + id + '">' + esc(text) + '</div><button class="bio-collapse-btn" onclick="document.getElementById(\'' + id + '\').classList.toggle(\'expanded\');this.textContent=this.textContent===\'展开全部\'?\'收起\':\'展开全部\'">展开全部</button>';
+}
+
 // ===== User Card =====
 function userCardHTML(user, index) {
   const delay = index * 0.06;
@@ -897,7 +943,7 @@ function userCardHTML(user, index) {
             ${user.privacy_setting === 'stealth' || user.privacy_setting === 'punished_stealth' ? '<span class="tag tag-gray">隐身</span>' : ''}
           </div>
           ${user.doubao_id ? `<div class="user-card-id">@${esc(user.doubao_id)}</div>` : ''}
-          ${user.bio ? `<div class="user-card-bio">${esc(user.bio)}</div>` : ''}
+          ${renderBio(user.bio)}
         </div>
       </div>
       <div class="user-card-actions">
@@ -1042,11 +1088,28 @@ async function loadMyFriends() {
     
     if (friends.length === 0) { el.innerHTML = ''; return; }
     
+    const groups = getFriendGroups();
+    const groupNames = Object.keys(groups);
+    let groupHtml = '';
+    if (groupNames.length) {
+      groupHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">' +
+        '<button class="btn btn-sm ' + (!_filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="_filterGroup=\'\';loadMyFriends()">全部</button>' +
+        groupNames.map(function(n) {
+          return '<button class="btn btn-sm ' + (_filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="_filterGroup=\'' + esc(n) + '\';loadMyFriends()">' + esc(n) + '</button>';
+        }).join('') +
+        '</div>';
+    }
+    const filteredFriends = _filterGroup ? friends.filter(function(f) {
+      for (var k in groups) { if (groups[k].indexOf(f.friend.id) >= 0) return k === _filterGroup; }
+      return false;
+    }) : friends;
+    
     el.innerHTML = `
       <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">👥 我的好友 (${friends.length})</div>
+        <div class="section-label">👥 我的好友 (${filteredFriends.length})</div>
+        ${groupHtml}
         <div class="grid-3">
-          ${friends.map(f => `
+          ${filteredFriends.map(f => `
             <div class="card friend-row" style="flex-direction:column;align-items:stretch;gap:8px">
               <div style="display:flex;align-items:center;gap:8px">
                 ${avatarHTML(f.friend, true)}
@@ -1055,7 +1118,7 @@ async function loadMyFriends() {
                   <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
                 </div>
               </div>
-              ${f.friend?.bio ? `<div style="font-size:11px;color:#9ca3af;word-break:break-all;white-space:pre-wrap">${esc(f.friend.bio)}</div>` : ''}
+              ${renderBio(f.friend?.bio)}
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-green btn-sm" style="flex:1" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">💬 聊天</button>
                 ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : ''}
@@ -1063,6 +1126,7 @@ async function loadMyFriends() {
               </div>
             </div>
           `).join('')}
+          ${filteredFriends.length === 0 ? '<div style="text-align:center;padding:20px;color:#9ca3af;font-size:13px;grid-column:1/-1">该分组暂无好友</div>' : ''}
         </div>
       </div>
     `;
@@ -1138,7 +1202,7 @@ async function switchSettingsTab(tab, btnEl) {
           <div style="flex:1">
             <div style="font-size:16px;font-weight:600;color:#1a1a2e">${esc(currentUser.name)}</div>
             <div style="font-size:13px;color:#9ca3af">${currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')}</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px">${currentUser.bio ? esc(currentUser.bio) : '暂无简介'}</div>
+            ${currentUser.bio ? renderBio(currentUser.bio) : '<div style="font-size:12px;color:#6b7280;margin-top:2px">暂无简介</div>'}
           </div>
         </div>
         <div class="form-group"><label class="form-label">更换头像</label>
@@ -1211,7 +1275,7 @@ async function switchSettingsTab(tab, btnEl) {
             <div class="list-item-info">
               <div class="list-item-name">${esc(f.friend?.name)}</div>
               <div class="list-item-email">${esc(f.friend?.doubao_id || '')}</div>
-              ${f.friend?.bio ? `<div class="list-item-bio">${esc(f.friend.bio)}</div>` : ''}
+              ${renderBio(f.friend?.bio)}
             </div>
             <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
           </div>
@@ -1236,7 +1300,7 @@ async function switchSettingsTab(tab, btnEl) {
             <div class="list-item-info">
               <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
               <div class="list-item-email">${esc(b.blocked_user?.doubao_id || '')}</div>
-              ${b.blocked_user?.bio ? `<div class="list-item-bio">${esc(b.blocked_user.bio)}</div>` : ''}
+              ${renderBio(b.blocked_user?.bio)}
             </div>
             <button class="btn btn-blue btn-sm" onclick="unblockUser('${b.id}')">移出</button>
           </div>
@@ -1541,8 +1605,23 @@ async function loadAnnouncementsManager() {
   try {
     const res = await api('/api/announcements');
     const announcements = res.data || [];
+    const sysAnn = announcements.find(a => a.is_system);
+    const regularAnn = announcements.filter(a => !a.is_system);
     
     el.innerHTML = `
+      ${sysAnn ? `
+        <div class="card" style="margin-bottom:16px;border-left:4px solid #FF6B35;background:#FFF8F0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span style="font-size:11px;background:#FF6B35;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">初始公告</span>
+            <span style="font-size:14px;font-weight:600;color:#1a1a2e">${esc(sysAnn.title)}</span>
+          </div>
+          <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;color:#9ca3af">${formatDate(sysAnn.created_at)}</div>
+            <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${sysAnn.id}')">编辑</button>
+          </div>
+        </div>
+      ` : ''}
       <div style="margin-bottom:16px">
         <div class="section-label">📢 发布新公告</div>
         <div class="form-group"><label class="form-label">标题</label><input class="input" id="devAnnTitle" placeholder="公告标题" maxlength="100"></div>
@@ -1569,7 +1648,7 @@ async function loadAnnouncementsManager() {
         <button class="btn btn-orange btn-full" onclick="devPublishAnnouncement()">发布公告</button>
       </div>
       <div class="section-label">📋 现有公告</div>
-      ${announcements.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : announcements.map(a => `
+      ${regularAnn.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : regularAnn.map(a => `
         <div class="card" style="margin-bottom:12px">
           <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:8px">${esc(a.title)}</div>
           <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
@@ -1614,6 +1693,7 @@ async function devPublishAnnouncement() {
 }
 
 async function devDeleteAnnouncement(id) {
+  if (id === '__system__') { toast('初始公告不可删除', 'error'); return; }
   if (!confirm('确定删除这条公告？')) return;
   try {
     const res = await api(`/api/announcements?id=${id}`, { method: 'DELETE' });
@@ -2126,7 +2206,8 @@ let chatState = {
   lastSendTime: 0,
   suppressPollUntil: 0,
   lastRoomListRefresh: 0,
-  reactionsMap: {}
+  reactionsMap: {},
+  sentFingerprints: new Set()
 };
 
 function openChat() {
@@ -2209,6 +2290,8 @@ async function switchRoom(roomId) {
   document.getElementById('chatRoomList').classList.remove('show');
   const room = chatState.rooms.find(r => r.id === roomId);
   document.getElementById('chatSettingsBtn').style.display = (room && room.type === 'channel') ? 'flex' : 'none';
+  document.getElementById('chatEmpty').classList.add('hidden');
+  document.getElementById('chatMsgs').classList.remove('hidden');
   renderRoomList();
   if (chatState.messages[roomId]?.length) {
     renderMessages(roomId);
@@ -2227,7 +2310,7 @@ async function loadMessages(roomId) {
   empty.classList.add('hidden');
   msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:#9ca3af;font-size:13px">加载中...</div>';
   const res = await api(`/api/chat?action=poll&room_id=${roomId}&user_id=${currentUser.id}`).catch(() => null);
-  if (!res) { msgsEl.innerHTML = '<div class="chat-empty">加载失败</div>'; return; }
+  if (!res) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
   chatState.nextBatch[roomId] = res.next_batch || '';
   const msgs = res.messages || [];
   chatState.messages[roomId] = msgs;
@@ -2417,11 +2500,15 @@ function startPolling(roomId) {
         const filtered = existing.filter(m => {
           if (m.event_id && newIds.has(m.event_id)) return false;
           if (m.event_id && m.event_id.startsWith('temp_')) {
-            const match = deduped.find(nm => nm.sender_id === m.sender_id && nm.content === m.content && Math.abs((nm.ts || 0) - (m.ts || 0)) < 5000);
+            const match = deduped.find(nm => nm.sender_id === m.sender_id && nm.content === m.content && Math.abs((nm.ts || 0) - (m.ts || 0)) < 10000);
             if (match) {
               m.event_id = match.event_id;
               return false;
             }
+          }
+          const fp = m.sender_id + '|' + m.content;
+          if (chatState.sentFingerprints.has(fp) && deduped.some(nm => nm.sender_id === m.sender_id && nm.content === m.content)) {
+            return false;
           }
           return true;
         });
@@ -2432,9 +2519,12 @@ function startPolling(roomId) {
         } else if (since) {
           const room = chatState.rooms.find(r => r.id === roomId);
           if (room) {
-            room.unread = (room.unread || 0) + deduped.length;
-            renderRoomList();
-            updateUnreadBadge();
+            const newMsgCount = deduped.filter(m => !m.recalled && m.sender_id !== currentUser.id).length;
+            if (newMsgCount > 0) {
+              room.unread = (room.unread || 0) + newMsgCount;
+              renderRoomList();
+              updateUnreadBadge();
+            }
           }
         }
       }
@@ -2505,6 +2595,9 @@ async function sendChatMsg() {
     reply_to: chatState.replyTo || null,
     ts: Date.now()
   };
+  const fp = currentUser.id + '|' + content;
+  chatState.sentFingerprints.add(fp);
+  setTimeout(() => chatState.sentFingerprints.delete(fp), 10000);
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
@@ -2696,11 +2789,35 @@ renderRoomList = function() {
     el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
     return;
   }
+  // Friend group filter tabs
+  var friendGroups = getFriendGroups();
+  var friendGroupNames = Object.keys(friendGroups);
+  var filterGroup = chatState.filterGroup || '';
+  var html = '';
+  if (friendGroupNames.length) {
+    html += '<div style="padding:6px 14px;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #f3f4f6">' +
+      '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
+      friendGroupNames.map(function(n) {
+        return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+      }).join('') +
+      '</div>';
+  }
+  if (filterGroup) {
+    var groupMembers = friendGroups[filterGroup] || [];
+    rooms = rooms.filter(function(r) {
+      if (r.other && r.other.id) return groupMembers.indexOf(r.other.id) >= 0;
+      return false;
+    });
+    if (!rooms.length) {
+      html += '<div style="padding:24px;text-align:center;color:#9ca3af;font-size:12px">该分组暂无聊天</div>';
+      el.innerHTML = html;
+      return;
+    }
+  }
   var pinned = getPinnedChannels();
   var groups = getChannelGroups();
   var unpinned = rooms.filter(function(r) { return pinned.indexOf(r.id) < 0; });
   var pinnedRooms = rooms.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
-  var html = '';
   // Pinned section
   if (pinnedRooms.length) {
     html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:#9ca3af">📌 置顶</div>';
@@ -2868,10 +2985,24 @@ function showReactionPicker(eventId) {
 }
 
 async function sendReaction(eventId, reaction) {
-  await api('/api/chat', {
+  const res = await api('/api/chat', {
     method: 'POST',
     body: JSON.stringify({ action: 'react', user_id: currentUser.id, room_id: chatState.currentRoomId, event_id: eventId, reaction })
-  }).catch(() => {});
+  }).catch(() => null);
+  if (!res || res.error) return;
+  if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
+  if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
+  if (!chatState.reactionsMap[eventId][reaction].includes(currentUser.id)) {
+    chatState.reactionsMap[eventId][reaction].push(currentUser.id);
+  }
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  const msg = msgs.find(m => m.event_id === eventId);
+  if (msg) {
+    msg.reactions = Object.entries(chatState.reactionsMap[eventId]).map(([key, senders]) => ({
+      key, count: senders.length, senders
+    }));
+  }
+  renderMessages(chatState.currentRoomId);
 }
 
 let typingTimer = null;
@@ -3078,7 +3209,7 @@ function settingsAccountHTML() {
     (currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + currentUser.name.charAt(0).toUpperCase() + '\'">' : currentUser.name.charAt(0).toUpperCase()) +
     '</div><div style="flex:1"><div style="font-size:16px;font-weight:600;color:#1a1a2e">' + esc(currentUser.name) + '</div>' +
     '<div style="font-size:13px;color:#9ca3af">' + (currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')) + '</div>' +
-    '<div style="font-size:12px;color:#6b7280;margin-top:2px">' + (currentUser.bio ? esc(currentUser.bio) : '暂无简介') + '</div></div></div>' +
+    (currentUser.bio ? renderBio(currentUser.bio) : '<div style="font-size:12px;color:#6b7280;margin-top:2px">暂无简介</div>') + '</div></div></div>' +
     '<div class="form-group"><label class="form-label">更换头像</label><div style="display:flex;gap:8px"><input class="input" id="newAvatarUrl" placeholder="输入图片链接" value="' + esc(currentUser.avatar || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button></div></div></div>' +
     '<div class="form-group"><label class="form-label">修改密码</label><div style="display:flex;gap:8px"><input class="input" id="newPwd" type="password" placeholder="新密码（6位）" maxlength="6" style="flex:1"><button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button></div></div>' +
     '<div class="form-group"><label class="form-label">白名单邀请码</label><div style="display:flex;gap:8px"><input class="input" id="whitelistCode" placeholder="设置白名单模式的邀请码" value="' + esc(currentUser.invite_code || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="setWhitelistCode()">保存</button></div>' +
