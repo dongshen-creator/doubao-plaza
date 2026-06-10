@@ -50,6 +50,7 @@
       <div><div class="modal-title">使用须知</div><div style="font-size:11px;color:#9ca3af">首次使用前请阅读</div></div>
       <button class="modal-close" onclick="closeModal('announcement')">✕</button>
     </div>
+    <div id="announcementContent">
     <div class="rule"><div class="rule-num">1</div><div class="rule-text">此规则防君子不防小人；</div></div>
     <div class="rule"><div class="rule-num">2</div><div class="rule-text">如果目的是挂人、网络暴力、冲某人主页、开盒（人肉搜索）、就近约会等违背道德、法律的情况，无论动机是否正当，请不要使用此网站；</div></div>
     <div class="rule"><div class="rule-num">3</div><div class="rule-text">第一次使用的，请尽快注册账号并设置密码。请不要泄露你的密码。如果你完全不想被搜索到，可开启"全网隐身"，同时你也将无法搜索别人；如果你想让少数的网友访问，请开启白名单模式并设置邀请码；</div></div>
@@ -57,6 +58,7 @@
     <div class="warning-box" style="margin-top:16px">
       <strong>⚠️ 免责声明</strong><br>
       本网站依托豆包智能体链接、豆包号和浏览器IP进行用户绑定。上传的智能体内容、网页链接属于其他平台的内容本站概不负责。
+    </div>
     </div>
     <button class="btn btn-orange btn-full" style="margin-top:20px" onclick="closeModal('announcement')">我已知晓</button>
   </div>
@@ -198,7 +200,7 @@
         <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
         <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片">🖼</button>
         <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()"></textarea>
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)"></textarea>
         <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
       </div>
     </div>
@@ -274,7 +276,7 @@ function closeModal(name) {
 function avatarHTML(user, small = false, clickable = false) {
   const cls = small ? 'avatar avatar-sm' : 'avatar';
   const style = clickable ? 'cursor:pointer' : '';
-  const onclick = clickable && user ? ' onclick="showUserPopup(\'' + esc(user.id || '') + '\',\'' + esc(user.name || '') + '\',\'' + esc(user.avatar || '') + '\',\'' + esc(user.doubao_id || '') + '\')"' : '';
+  const onclick = clickable && user ? ' onclick="event.stopPropagation();showUserPopup(\'' + esc(user.id || '') + '\',\'' + esc(user.name || '') + '\',\'' + esc(user.avatar || '') + '\',\'' + esc(user.doubao_id || '') + '\')"' : '';
   if (user?.avatar) return `<div class="${cls}" style="${style}"${onclick}><img src="${esc(user.avatar)}" alt="" onerror="this.style.display='none'"></div>`;
   return `<div class="${cls}" style="${style}"${onclick}>${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
 }
@@ -340,8 +342,12 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   const canManage = await checkChannelPermission(chatState.currentRoomId);
 
   const bio = (userInfo && userInfo.bio) || '';
-  const lastLogin = (userInfo && userInfo.last_login_at) || '';
-  const isOnline = lastLogin ? (Date.now() - new Date(lastLogin).getTime() < 5 * 60 * 1000) : false;
+  var onlineText = '';
+  if (userInfo && userInfo.last_login_at && Date.now() - new Date(userInfo.last_login_at).getTime() < 30 * 60 * 1000) {
+    onlineText = '🟢 在线';
+  } else if (userInfo && userInfo.last_login_at) {
+    onlineText = '⚪ 上次在线: ' + formatDate(userInfo.last_login_at);
+  }
 
   let html = '<div class="modal-overlay" id="userPopupModal" style="display:flex" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:320px">';
   html += '<div class="modal-header"><div class="modal-title">用户信息</div>';
@@ -354,7 +360,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   }
   html += '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-top:8px">' + esc(userName) + '</div>';
   if (doubaoId) html += '<div style="font-size:12px;color:#9ca3af">@' + esc(doubaoId) + '</div>';
-  html += '<div style="font-size:11px;margin-top:4px;color:' + (isOnline ? '#10b981' : '#9ca3af') + '">' + (isOnline ? '🟢 在线' : '⚪ 离线') + '</div>';
+  html += '<div style="font-size:11px;margin-top:4px;color:' + (onlineText ? (onlineText.indexOf('🟢') === 0 ? '#10b981' : '#9ca3af') : '#9ca3af') + '">' + (onlineText || '') + '</div>';
   html += renderBio(bio);
   html += '</div>';
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
@@ -414,6 +420,7 @@ function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g
 // 渲染富文本内容（支持HTML标签）
 function renderRichContent(content) {
   if (!content) return '';
+  content = content.replace(/\n/g, '<br>');
   const allowed = new Set(['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody']);
   const div = document.createElement('div');
   div.innerHTML = content;
@@ -440,6 +447,14 @@ function formatDate(str) {
 }
 
 // ===== Init =====
+function loadUsageNotice() {
+  var saved = localStorage.getItem('dp_usage_notice');
+  if (saved) {
+    var el = document.getElementById('announcementContent');
+    if (el) el.innerHTML = renderRichContent(saved);
+  }
+}
+
 async function init() {
   // Try auto login
   if (sessionToken) {
@@ -463,6 +478,7 @@ async function init() {
   }
   
   updateNavbar();
+  loadUsageNotice();
   if (!localStorage.getItem('dp_announcement_seen')) showFirstLoginAnnouncements();
   renderContent();
   startUnreadPolling();
@@ -485,7 +501,7 @@ function updateNavbar() {
       <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
       <div class="nav-user" onclick="showModal('settings')">
-        ${avatarHTML(currentUser, true)}
+        ${avatarHTML(currentUser, true, true)}
         <span class="nav-user-name">${esc(currentUser.name)}</span>
       </div>
       <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪 退出</button>
@@ -817,14 +833,20 @@ function renderBio(text) {
 function userCardHTML(user, index) {
   const delay = index * 0.06;
   const isSelf = currentUser && user.id === currentUser.id;
+  var onlineHtml = '';
+  if (user.last_login_at) {
+    var lastLogin = new Date(user.last_login_at.replace ? user.last_login_at.replace(' ', 'T') + 'Z' : user.last_login_at);
+    var isOnline = Date.now() - lastLogin.getTime() < 30 * 60 * 1000;
+    onlineHtml = '<span style="font-size:10px;color:' + (isOnline ? '#10b981' : '#9ca3af') + ';margin-left:4px">' + (isOnline ? '🟢' : '⚫') + '</span>';
+  }
   
   return `
     <div class="card user-card anim-up" style="animation-delay:${delay}s">
       <div class="user-card-top">
-        ${avatarHTML(user)}
+        ${avatarHTML(user, false, true)}
         <div class="user-card-info">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="user-card-name">${esc(user.name)}</span>
+            <span class="user-card-name">${esc(user.name)}${onlineHtml}</span>
             ${user.privacy_setting === 'whitelist' || user.privacy_setting === 'punished_whitelist' ? '<span class="tag tag-blue">白名单</span>' : ''}
             ${user.privacy_setting === 'stealth' || user.privacy_setting === 'punished_stealth' ? '<span class="tag tag-gray">隐身</span>' : ''}
           </div>
@@ -940,7 +962,7 @@ async function loadFriendRequests() {
         <div class="section-label">📩 待处理的好友申请 (${requests.length})</div>
         ${requests.map(r => `
           <div class="card list-item">
-            ${avatarHTML(r.friend, true)}
+            ${avatarHTML(r.friend, true, true)}
             <div class="list-item-info">
               <div class="list-item-name">${esc(r.friend?.name)}</div>
               <div class="list-item-email">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
@@ -1009,7 +1031,7 @@ async function loadMyFriends() {
           ${filteredFriends.map(f => `
             <div class="card friend-row" style="flex-direction:column;align-items:stretch;gap:8px">
               <div style="display:flex;align-items:center;gap:8px">
-                ${avatarHTML(f.friend, true)}
+                ${avatarHTML(f.friend, true, true)}
                 <div class="friend-row-info">
                   <div class="friend-row-name">${esc(f.friend?.name)}</div>
                   <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
@@ -1182,7 +1204,7 @@ async function switchSettingsTab(tab, btnEl) {
       } else {
         el.innerHTML = friends.map(f => `
           <div class="list-item">
-            ${avatarHTML(f.friend, true)}
+            ${avatarHTML(f.friend, true, true)}
             <div class="list-item-info">
               <div class="list-item-name">${esc(f.friend?.name)}</div>
               <div class="list-item-email">${esc(f.friend?.doubao_id || '')}</div>
@@ -1207,7 +1229,7 @@ async function switchSettingsTab(tab, btnEl) {
       } else {
         el.innerHTML = blocks.map(b => `
           <div class="list-item">
-            ${avatarHTML(b.blocked_user, true)}
+            ${avatarHTML(b.blocked_user, true, true)}
             <div class="list-item-info">
               <div class="list-item-name">${esc(b.blocked_user?.name || '未知用户')}</div>
               <div class="list-item-email">${esc(b.blocked_user?.doubao_id || '')}</div>
@@ -1540,7 +1562,7 @@ async function loadAnnouncementsManager() {
           <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:#9ca3af">${formatDate(sysAnn.created_at)}</div>
-            <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${sysAnn.id}')">编辑</button>
+            <button class="btn btn-blue btn-sm" onclick="devEditUsageNotice()">编辑</button>
           </div>
         </div>
       ` : ''}
@@ -1617,6 +1639,18 @@ async function devDeleteAnnouncement(id) {
   } catch (e) {
     toast(e.message, 'error');
   }
+}
+
+function devEditUsageNotice() {
+  var current = localStorage.getItem('dp_usage_notice') || '';
+  var el = document.getElementById('announcementContent');
+  var defaultContent = el ? el.innerHTML : '';
+  if (!current && defaultContent) current = defaultContent;
+  var newContent = prompt('编辑使用须知（支持HTML）：', current.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
+  if (newContent === null) return;
+  localStorage.setItem('dp_usage_notice', newContent);
+  if (el) el.innerHTML = renderRichContent(newContent);
+  toast('使用须知已更新');
 }
 
 async function devEditAnnouncement(id) {
@@ -2703,6 +2737,14 @@ function startUnreadPolling() {
 
 function autoChatResize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
 
+function handleChatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) return;
+    e.preventDefault();
+    sendChatMsg();
+  }
+}
+
 function handleAtAutocomplete(input) {
   var val = input.value;
   var cursorPos = input.selectionStart;
@@ -2871,6 +2913,20 @@ async function leaveChannel(roomId) {
   await __SB.from('chat_room_members').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
   await __SB.from('chat_unread').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
   if (chatState.currentRoomId === roomId) { chatState.currentRoomId = null; document.getElementById('chatEmpty').classList.remove('hidden'); document.getElementById('chatMsgs').classList.add('hidden'); }
+  var { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', roomId);
+  if (count === 0) {
+    await __SB.from('chat_unread').delete().eq('room_id', roomId);
+    await __SB.from('chat_messages').delete().eq('room_id', roomId);
+    await __SB.from('chat_reactions').delete().eq('room_id', roomId);
+    await __SB.from('chat_channel_settings').delete().eq('room_id', roomId);
+    await __SB.from('chat_muted').delete().eq('room_id', roomId);
+    await __SB.from('chat_banned').delete().eq('room_id', roomId);
+    await __SB.from('chat_admins').delete().eq('room_id', roomId);
+    await __SB.from('chat_rooms').delete().eq('id', roomId);
+    await loadRoomList();
+    toast('频道已无成员，自动删除');
+    return;
+  }
   await loadRoomList();
   toast('已离开频道', 'success');
 }
@@ -2898,10 +2954,9 @@ async function showRoomSettings() {
     html += '<option value="password"' + (currentAdmission === 'password' ? ' selected' : '') + '>密码验证</option>';
     html += '<option value="questionnaire"' + (currentAdmission === 'questionnaire' ? ' selected' : '') + '>问卷测试</option>';
     html += '<option value="custom_page"' + (currentAdmission === 'custom_page' ? ' selected' : '') + '>自定义页面</option>';
-    html += '</select></div>';
-  }
-  if (currentAdmission === 'approval' && canManage) {
-    html += '<div style="margin-top:8px"><button class="btn btn-sm btn-orange" onclick="showApprovalPanel(\'' + chatState.currentRoomId + '\')">审核加入申请</button></div>';
+    html += '<option value="composite"' + (currentAdmission === 'composite' ? ' selected' : '') + '>复合验证</option>';
+    html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:11px">⚙ 管理准入</button>';
+    html += '</div>';
   }
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="channelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🔧 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:11px">+ 添加</button>' : '') + '</div><div id="channelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
@@ -3013,6 +3068,19 @@ async function kickMember(roomId, targetUserId) {
   }).catch(function(){});
   loadRoomMemberList(roomId);
   toast('已踢出成员', 'success');
+  var { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', roomId);
+  if (count === 0) {
+    await __SB.from('chat_unread').delete().eq('room_id', roomId);
+    await __SB.from('chat_messages').delete().eq('room_id', roomId);
+    await __SB.from('chat_reactions').delete().eq('room_id', roomId);
+    await __SB.from('chat_channel_settings').delete().eq('room_id', roomId);
+    await __SB.from('chat_muted').delete().eq('room_id', roomId);
+    await __SB.from('chat_banned').delete().eq('room_id', roomId);
+    await __SB.from('chat_admins').delete().eq('room_id', roomId);
+    await __SB.from('chat_rooms').delete().eq('id', roomId);
+    await loadRoomList();
+    toast('频道已无成员，自动删除');
+  }
 }
 
 async function muteUserInChannel(targetUserId) {
@@ -3021,10 +3089,13 @@ async function muteUserInChannel(targetUserId) {
   if (myLevel < 1) { toast('只有管理员及以上才能禁言', 'error'); return; }
   var targetLevel = await getPermissionLevel(chatState.currentRoomId, targetUserId);
   if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
-  var choice = prompt('禁言时长：\n1 = 1小时\n24 = 24小时\n168 = 7天\n留空或0 = 永久', '');
+  var choice = prompt('禁言时长（分钟）:\n输入分钟数，例如：60=1小时，1440=1天，10080=7天\n留空=永久', '');
   if (choice === null) return;
-  var hours = choice.trim() === '' ? 0 : parseInt(choice) || 0;
-  var mutedUntil = hours > 0 ? new Date(Date.now() + hours * 3600000).toISOString() : null;
+  var minutes = choice.trim() === '' ? 0 : parseInt(choice) || 0;
+  if (choice.trim() !== '' && (isNaN(minutes) || minutes !== parseFloat(choice) || minutes < 0)) {
+    toast('请输入有效的整数分钟数', 'error'); return;
+  }
+  var mutedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null;
   var muteId = 'muted_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   var { error } = await __SB.from('chat_muted').upsert({
     id: muteId, room_id: chatState.currentRoomId, user_id: targetUserId,
@@ -3223,29 +3294,232 @@ async function submitQuestionnaire(roomId, totalQuestions) {
   else { toast('问卷已提交（部分未答），等待管理员审核', 'success'); }
 }
 
-async function showApprovalPanel(roomId) {
-  var { data: requests } = await __SB.from('channel_join_requests').select('*').eq('room_id', roomId).eq('status', 'pending').order('created_at', { ascending: true });
-  if (!requests?.length) { toast('暂无待审核的申请', 'info'); return; }
-  var html = '<div class="modal-overlay" id="approvalPanelModal" style="display:flex"><div class="modal modal-lg">';
-  html += '<div class="modal-header"><div class="modal-title">审核加入申请 (' + requests.length + ')</div><button class="modal-close" onclick="document.getElementById(\'approvalPanelModal\').remove()">✕</button></div>';
-  requests.forEach(function(r) {
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #f3f4f6"><div><span style="font-size:13px">' + esc(r.user_id.slice(0, 12)) + '</span><br><span style="font-size:11px;color:#9ca3af">' + esc(r.message || '无申请理由') + '</span></div><div style="display:flex;gap:4px"><button class="btn btn-sm btn-green" onclick="approveJoinRequest(\'' + r.id + '\',\'' + r.user_id + '\')">通过</button><button class="btn btn-sm btn-red" onclick="rejectJoinRequest(\'' + r.id + '\')">拒绝</button></div></div>';
-  });
+async function showAdmissionManagement() {
+  if (!chatState.currentRoomId) return;
+  var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+  var myLevel = room ? (room.created_by === currentUser.id ? 3 : room.is_admin ? 1 : 0) : 0;
+  if (isDeveloper()) myLevel = 3;
+  if (myLevel < 1) { toast('只有管理员及以上才能管理准入', 'error'); return; }
+  loadAndShowAdmissionPanel(myLevel);
+}
+
+async function loadAndShowAdmissionPanel(myLevel) {
+  var roomId = chatState.currentRoomId;
+  var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
+  if (!settings) settings = {};
+  var currentMode = settings.admission_mode || settings.admission || 'open';
+  var currentPassword = settings.admission_password || '';
+  var currentCustomPageId = settings.admission_custom_page_id || '';
+  var questionnaire = [];
+  try { questionnaire = settings.admission_questionnaire || []; } catch(e) {}
+
+  var html = '<div class="modal-overlay" id="admissionManagementModal" style="display:flex"><div class="modal modal-lg" style="max-width:640px">';
+  html += '<div class="modal-header"><div class="modal-title">准入管理</div><button class="modal-close" onclick="document.getElementById(\'admissionManagementModal\').remove()">✕</button></div>';
+
+  html += '<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid #f3f4f6;padding-bottom:8px">';
+  html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'test\')" id="admTabTest" style="background:#FFF3ED;color:#FF6B35">📋 准入测试</button>';
+  html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'audit\')" id="admTabAudit" style="background:#f3f4f6">📝 审核请求</button>';
+  if (myLevel >= 3) html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'custom\')" id="admTabCustom" style="background:#f3f4f6">📄 自定义界面</button>';
+  html += '</div>';
+
+  html += '<div id="admissionTabContent">';
+  html += renderAdmissionTestTab(currentMode, questionnaire, currentPassword);
+  html += '</div>';
+
   html += '</div></div>';
+
+  var existing = document.getElementById('admissionManagementModal');
+  if (existing) existing.remove();
   document.body.insertAdjacentHTML('beforeend', html);
+
+  window._admSettings = { currentMode: currentMode, questionnaire: questionnaire, currentPassword: currentPassword, currentCustomPageId: currentCustomPageId, myLevel: myLevel };
+}
+
+function renderAdmissionTestTab(mode, questionnaire, password) {
+  var h = '<div>';
+  h += '<div style="margin-bottom:12px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">当前准入模式</div>';
+  h += '<select id="admModeSelect" class="input" style="width:100%">';
+  var modes = {open:'公开', invite:'仅邀请', approval:'需审核', password:'密码验证', questionnaire:'问卷测试', custom_page:'自定义页面', composite:'复合验证'};
+  for (var k in modes) {
+    h += '<option value="' + k + '"' + (mode === k ? ' selected' : '') + '>' + modes[k] + '</option>';
+  }
+  h += '</select>';
+  h += '<button class="btn btn-sm btn-orange" onclick="saveAdmissionMode()" style="margin-top:8px">保存模式</button></div>';
+
+  h += '<div style="margin-bottom:12px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">入群密码</div>';
+  h += '<input id="admPassword" class="input" value="' + esc(password) + '" placeholder="设置入群密码"><button class="btn btn-sm btn-orange" onclick="saveAdmissionPassword()" style="margin-top:8px">保存密码</button></div>';
+
+  h += '<div style="margin-bottom:12px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">问卷题目（≤5题）</div>';
+  h += '<div id="admQuestions">';
+  if (questionnaire && questionnaire.length) {
+    questionnaire.forEach(function(q, i) {
+      h += renderQuestionRow(q, i);
+    });
+  }
+  h += '</div>';
+  h += '<button class="btn btn-sm btn-orange" onclick="addQuestionRow()" style="margin-top:4px"' + (questionnaire && questionnaire.length >= 5 ? ' disabled' : '') + '>+ 添加题目</button>';
+  h += '<button class="btn btn-sm btn-orange" onclick="saveAdmissionQuestionnaire()" style="margin-top:8px;margin-left:8px">保存问卷</button></div>';
+
+  h += '</div>';
+  return h;
+}
+
+function renderQuestionRow(q, i) {
+  return '<div style="background:#f9fafb;border-radius:8px;padding:10px;margin-bottom:8px" data-qidx="' + i + '">' +
+    '<div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">' +
+    '<span style="font-size:12px;font-weight:600">题' + (i+1) + '</span>' +
+    '<input class="input" value="' + esc(q.question || '') + '" placeholder="题目（≤20字）" maxlength="20" style="flex:1" data-field="question">' +
+    '<select class="input" style="width:100px" data-field="type" onchange="onQuestionTypeChange(this)">' +
+    '<option value="single"' + (q.type === 'single' ? ' selected' : '') + '>单选</option>' +
+    '<option value="multiple"' + (q.type === 'multiple' ? ' selected' : '') + '>多选</option>' +
+    '<option value="fill"' + (q.type === 'fill' ? ' selected' : '') + '>填空</option>' +
+    '</select>' +
+    '<button class="btn btn-sm btn-red" onclick="removeQuestionRow(' + i + ')" style="font-size:11px">✕</button>' +
+    '</div>' +
+    '<div class="questionOptions" style="' + (q.type === 'fill' ? 'display:none' : '') + '">' +
+    (q.options || ['']).map(function(opt, j) {
+      return '<div style="display:flex;gap:4px;margin-bottom:4px"><input class="input" value="' + esc(opt || '') + '" placeholder="选项（≤30字）" maxlength="30" style="flex:1" data-field="option" data-oidx="' + j + '"><button class="btn btn-sm btn-gray" onclick="removeOption(this)" style="font-size:10px">-</button></div>';
+    }).join('') +
+    '<button class="btn btn-sm btn-gray" onclick="addOption(this)" style="font-size:10px">+ 添加选项</button>' +
+    '</div>' +
+    '</div>';
+}
+
+function switchAdmissionTab(tab) {
+  var tabs = {test: 'admTabTest', audit: 'admTabAudit', custom: 'admTabCustom'};
+  for (var k in tabs) {
+    var el = document.getElementById(tabs[k]);
+    if (el) el.style.background = k === tab ? '#FFF3ED' : '#f3f4f6';
+  }
+  var content = document.getElementById('admissionTabContent');
+  var s = window._admSettings || {};
+  if (!content) return;
+  if (tab === 'test') {
+    content.innerHTML = renderAdmissionTestTab(s.currentMode, s.questionnaire, s.currentPassword);
+  } else if (tab === 'audit') {
+    loadAuditRequests();
+  } else if (tab === 'custom') {
+    loadCustomPageSelector(s.currentCustomPageId);
+  }
+}
+
+async function saveAdmissionMode() {
+  var mode = document.getElementById('admModeSelect').value;
+  await __SB.from('chat_channel_settings').upsert({ room_id: chatState.currentRoomId, created_by: currentUser.id, admission_mode: mode, admission: mode }, { onConflict: 'room_id' });
+  window._admSettings.currentMode = mode;
+  toast('准入模式已保存');
+}
+
+async function saveAdmissionPassword() {
+  var pwd = document.getElementById('admPassword').value;
+  await __SB.from('chat_channel_settings').upsert({ room_id: chatState.currentRoomId, created_by: currentUser.id, admission_password: pwd }, { onConflict: 'room_id' });
+  window._admSettings.currentPassword = pwd;
+  toast('密码已保存');
+}
+
+function addQuestionRow() {
+  var current = window._admSettings.questionnaire || [];
+  if (current.length >= 5) return;
+  current.push({ question: '', type: 'single', options: [''] });
+  window._admSettings.questionnaire = current;
+  document.getElementById('admQuestions').innerHTML = current.map(function(q,i) { return renderQuestionRow(q,i); }).join('');
+}
+
+function removeQuestionRow(i) {
+  var current = window._admSettings.questionnaire || [];
+  current.splice(i, 1);
+  window._admSettings.questionnaire = current;
+  document.getElementById('admQuestions').innerHTML = current.map(function(q,i) { return renderQuestionRow(q,i); }).join('');
+}
+
+function onQuestionTypeChange(sel) {
+  var row = sel.closest('[data-qidx]');
+  var optionsDiv = row.querySelector('.questionOptions');
+  if (sel.value === 'fill') optionsDiv.style.display = 'none';
+  else optionsDiv.style.display = '';
+}
+
+function addOption(btn) {
+  var row = btn.closest('[data-qidx]');
+  var optDiv = document.createElement('div');
+  optDiv.style.cssText = 'display:flex;gap:4px;margin-bottom:4px';
+  optDiv.innerHTML = '<input class="input" placeholder="选项（≤30字）" maxlength="30" style="flex:1" data-field="option">' +
+    '<button class="btn btn-sm btn-gray" onclick="this.parentElement.remove()" style="font-size:10px">-</button>';
+  btn.parentElement.insertBefore(optDiv, btn);
+}
+
+function removeOption(btn) { btn.parentElement.remove(); }
+
+async function saveAdmissionQuestionnaire() {
+  var rows = document.querySelectorAll('#admQuestions [data-qidx]');
+  var questions = [];
+  rows.forEach(function(row) {
+    var question = row.querySelector('[data-field="question"]').value.trim();
+    var type = row.querySelector('[data-field="type"]').value;
+    var opts = [];
+    row.querySelectorAll('[data-field="option"]').forEach(function(o) {
+      var val = o.value.trim();
+      if (val) opts.push(val);
+    });
+    if (question) questions.push({ question: question, type: type, options: opts });
+  });
+  await __SB.from('chat_channel_settings').upsert({ room_id: chatState.currentRoomId, created_by: currentUser.id, admission_questionnaire: questions }, { onConflict: 'room_id' });
+  window._admSettings.questionnaire = questions;
+  toast('问卷已保存');
+}
+
+async function loadAuditRequests() {
+  var content = document.getElementById('admissionTabContent');
+  if (!content) return;
+  content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">加载中...</div>';
+  var { data: requests } = await __SB.from('channel_join_requests').select('*').eq('room_id', chatState.currentRoomId).eq('status', 'pending').order('created_at', { ascending: true });
+  if (!requests?.length) { content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">暂无待审核的申请</div>'; return; }
+  var html = '';
+  requests.forEach(function(r) {
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #f3f4f6">';
+    html += '<div><span style="font-size:13px">' + esc(r.user_id.slice(0, 12)) + '</span><br><span style="font-size:11px;color:#9ca3af">' + esc(r.message || '无申请理由') + '</span></div>';
+    html += '<div style="display:flex;gap:4px"><button class="btn btn-sm btn-green" onclick="approveJoinRequest(\'' + r.id + '\',\'' + r.user_id + '\')">通过</button><button class="btn btn-sm btn-red" onclick="rejectJoinRequest(\'' + r.id + '\')">拒绝</button></div></div>';
+  });
+  content.innerHTML = html;
+}
+
+async function loadCustomPageSelector(currentPageId) {
+  var content = document.getElementById('admissionTabContent');
+  if (!content) return;
+  content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">加载中...</div>';
+  var res = await api('/api/custom-pages');
+  var pages = res?.data || [];
+  var html = '<div style="font-weight:600;font-size:13px;margin-bottom:8px">选择准入自定义页面</div>';
+  if (!pages.length) {
+    html += '<div style="color:#9ca3af;font-size:12px">暂无自定义页面，请先在开发者模式创建</div>';
+  } else {
+    pages.forEach(function(p) {
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #f3f4f6">';
+      html += '<span style="font-size:13px">' + esc(p.title || p.id) + '</span>';
+      html += '<button class="btn btn-sm ' + (currentPageId === p.id ? 'btn-orange' : 'btn-gray') + '" onclick="selectCustomAdmissionPage(\'' + p.id + '\')">' + (currentPageId === p.id ? '已选择' : '选择') + '</button></div>';
+    });
+  }
+  content.innerHTML = html;
+}
+
+async function selectCustomAdmissionPage(pageId) {
+  await __SB.from('chat_channel_settings').upsert({ room_id: chatState.currentRoomId, created_by: currentUser.id, admission_custom_page_id: pageId }, { onConflict: 'room_id' });
+  window._admSettings.currentCustomPageId = pageId;
+  toast('已设置自定义准入页面');
+  loadCustomPageSelector(pageId);
 }
 
 async function approveJoinRequest(reqId, userId) {
   await __SB.from('channel_join_requests').update({ status: 'approved', reviewed_by: currentUser.id }).eq('id', reqId);
   await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: chatState.currentRoomId, user_id: userId });
-  document.getElementById('approvalPanelModal')?.remove();
   toast('已通过');
+  loadAuditRequests();
 }
 
 async function rejectJoinRequest(reqId) {
   await __SB.from('channel_join_requests').update({ status: 'rejected', reviewed_by: currentUser.id }).eq('id', reqId);
-  document.getElementById('approvalPanelModal')?.remove();
   toast('已拒绝');
+  loadAuditRequests();
 }
 
 async function showBrowseChannels(query) {
@@ -3332,6 +3606,23 @@ async function joinChannel(roomId) {
     await doJoinChannel(roomId);
     return;
   }
+  if (mode === 'composite') {
+    if (settings.admission_password) {
+      var pwd = prompt('请输入入群密码:');
+      if (!pwd || pwd !== settings.admission_password) { toast('密码错误', 'error'); return; }
+    }
+    if (settings.admission_questionnaire && settings.admission_questionnaire.length > 0) {
+      showQuestionnaireModal(roomId, settings);
+      return;
+    }
+    if (settings.admission_custom_page_id) {
+      window.open('/pages/' + settings.admission_custom_page_id, '_blank');
+      var pass = confirm('完成自定义页面后，点击确定加入频道');
+      if (!pass) return;
+    }
+    await doJoinChannel(roomId);
+    return;
+  }
   await doJoinChannel(roomId);
 }
 
@@ -3361,28 +3652,17 @@ async function showCreateChannel() {
 async function createChannel() {
   const name = document.getElementById('channelName').value.trim();
   if (!name) { toast('请输入频道名称', 'error'); return; }
-  var modes = ['open=公开(任何人可加入)', 'invite=仅邀请', 'approval=需审核', 'password=密码验证', 'questionnaire=问卷测试', 'custom_page=自定义页面'];
-  var modeChoice = prompt('选择准入模式:\n' + modes.join('\n') + '\n\n输入模式名称: open/invite/approval/password/questionnaire/custom_page', 'open');
+  var modes = ['open=公开', 'invite=仅邀请', 'approval=需审核', 'password=密码验证', 'questionnaire=问卷测试', 'custom_page=自定义页面', 'composite=复合验证'];
+  var modeChoice = prompt('选择准入模式:\n' + modes.join('\n') + '\n\n输入模式名称', 'open');
   if (modeChoice) modeChoice = modeChoice.trim().toLowerCase();
-  if (!modes.some(function(m) { return m.startsWith(modeChoice); })) modeChoice = 'open';
-  var admission = modeChoice;
-  var admissionPassword = null, admissionQuestionnaire = null;
-  if (modeChoice === 'password') {
-    admissionPassword = prompt('设置入群密码:');
-    if (!admissionPassword) admissionPassword = '123456';
-  }
-  if (modeChoice === 'questionnaire') {
-    admissionQuestionnaire = prompt('问卷配置 (JSON数组, 每题格式 {question,type:single|multiple|fill,options:["A","B"]}):\n默认: 3题问卷', JSON.stringify([{question:'你认识群主吗',type:'single',options:['认识','不认识']}]));
-    if (!admissionQuestionnaire) admissionQuestionnaire = '[{"question":"你认识群主吗","type":"single","options":["认识","不认识"]}]';
-  }
-  var questionnaireObj = null;
-  try { questionnaireObj = typeof admissionQuestionnaire === 'string' ? JSON.parse(admissionQuestionnaire) : admissionQuestionnaire; } catch(e) { questionnaireObj = null; }
+  var validModes = ['open','invite','approval','password','questionnaire','custom_page','composite'];
+  if (validModes.indexOf(modeChoice) < 0) modeChoice = 'open';
   const roomId = 'room_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error: roomErr } = await __SB.from('chat_rooms').insert({ id: roomId, type: 'channel', name, created_by: currentUser.id });
   if (roomErr) { toast('创建失败: ' + roomErr.message, 'error'); return; }
   const { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
   if (memErr) { toast('创建失败(成员): ' + memErr.message, 'error'); return; }
-  var { error: setErr } = await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission_mode: modeChoice, admission: modeChoice, admission_password: admissionPassword, admission_questionnaire: questionnaireObj, topic: '' });
+  var { error: setErr } = await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission_mode: modeChoice, admission: modeChoice, topic: '' });
   if (setErr) { toast('创建失败(设置): ' + setErr.message, 'error'); return; }
   document.getElementById('createChannelModal').classList.add('hidden');
   chatState.currentRoomId = roomId;
@@ -3725,7 +4005,7 @@ async function loadFriendsWithGroups(el) {
       var g = '';
       for (var k in groups) { if (groups[k].indexOf(f.friend.id) >= 0) { g = k; break; } }
       return '<div class="list-item">' +
-        avatarHTML(f.friend, true) +
+        avatarHTML(f.friend, true, true) +
         '<div class="list-item-info"><div class="list-item-name">' + esc(f.friend.name) + '</div>' +
         '<div class="list-item-email">' + esc(f.friend.doubao_id || '') + '</div></div>' +
         '<select class="input" style="width:auto;font-size:11px;padding:4px 8px" onchange="setFriendGroup(\'' + f.friend.id + '\',this.value)">' +
@@ -3788,7 +4068,7 @@ async function loadBlocksTab(el) {
     if (!blocks.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🚫</div><div class="empty-text">黑名单为空</div></div>'; return; }
     el.innerHTML = blocks.map(function(b) {
       return '<div class="list-item">' +
-        avatarHTML(b.blocked_user, true) +
+        avatarHTML(b.blocked_user, true, true) +
         '<div class="list-item-info"><div class="list-item-name">' + esc(b.blocked_user.name || '未知用户') + '</div>' +
         '<div class="list-item-email">' + esc(b.blocked_user.doubao_id || '') + '</div></div>' +
         '<button class="btn btn-blue btn-sm" onclick="unblockUser(\'' + b.id + '\')">移出</button></div>';
