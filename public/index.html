@@ -7,8 +7,17 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/umd/supabase.js"></script>
-  <script src="supabase-config.js"></script>
+  <script src="supabase-sdk.js"></script>
+  <script>
+    // Supabase 初始化 (内嵌，不依赖外部文件加载顺序)
+    (function () {
+      var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
+      var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3c2xvcGdiZmt2bnhya3FsdmpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjgzNjksImV4cCI6MjA5NjYwNDM2OX0.774LBSE3xSHtOM8SN2O3Pj3jz9YqEMGacR4CsYT41T0';
+      window.__SB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        realtime: { params: { eventsPerSecond: 10 } }
+      });
+    })();
+  </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#F7F8FC;color:#1a1a2e;min-height:100vh;-webkit-font-smoothing:antialiased}
