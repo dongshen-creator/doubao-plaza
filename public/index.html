@@ -2317,11 +2317,15 @@ async function openChatWith(friendId, friendName) {
 
   if (friendId) {
     let roomId;
-    const { data: existing } = await __SB.from('chat_room_members').select('room_id, chat_rooms!inner(type)').eq('user_id', currentUser.id).eq('chat_rooms.type', 'private');
-    if (existing) {
-      for (const em of existing) {
-        const { data: other } = await __SB.from('chat_room_members').select('user_id').eq('room_id', em.room_id).neq('user_id', currentUser.id).maybeSingle();
-        if (other?.user_id === friendId) { roomId = em.room_id; break; }
+    const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
+    if (myMemberships?.length) {
+      const myRoomIds = myMemberships.map(m => m.room_id);
+      const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
+      if (privateRooms?.length) {
+        for (const pr of privateRooms) {
+          const { data: other } = await __SB.from('chat_room_members').select('user_id').eq('room_id', pr.id).neq('user_id', currentUser.id).maybeSingle();
+          if (other?.user_id === friendId) { roomId = pr.id; break; }
+        }
       }
     }
     if (!roomId) {
@@ -2354,15 +2358,19 @@ async function loadRoomList() {
   if (!currentUser) return;
   const { data: memberships, error } = await __SB
     .from('chat_room_members')
-    .select('room_id, chat_rooms(*)')
+    .select('room_id, joined_at')
     .eq('user_id', currentUser.id)
     .order('joined_at', { ascending: false });
   if (error) { console.error('loadRoomList error:', error); return; }
   if (!memberships?.length) { chatState.rooms = []; renderRoomList(); return; }
+  const roomIds = memberships.map(m => m.room_id);
+  const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
+  const roomMap = {};
+  if (roomData) roomData.forEach(r => { roomMap[r.id] = r; });
   const rooms = [];
   for (const m of memberships) {
-    if (!m.chat_rooms) continue;
-    const r = m.chat_rooms;
+    const r = roomMap[m.room_id];
+    if (!r) continue;
     const { data: unreadData } = await __SB.from('chat_unread').select('count').eq('room_id', r.id).eq('user_id', currentUser.id).maybeSingle();
     const { data: memberList } = await __SB.from('chat_room_members').select('user_id').eq('room_id', r.id);
     let other = null;
