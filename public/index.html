@@ -2518,7 +2518,7 @@ function startPolling(roomId) {
   if (chatState.pollTimers[roomId]) { clearTimeout(chatState.pollTimers[roomId]); }
   if (!chatState.chatOpen) return;
   if (Date.now() < chatState.suppressPollUntil) {
-    chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
+    chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
     return;
   }
   const since = chatState.nextBatch[roomId] || '';
@@ -2526,13 +2526,13 @@ function startPolling(roomId) {
     .then(res => {
       if (!chatState.chatOpen) return;
       if (Date.now() < chatState.suppressPollUntil) {
-        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 500);
+        chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
         return;
       }
       processBackendPollResponse(roomId, res, since);
-      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 300);
+      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 5000);
     }).catch(() => {
-      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 2000);
+      if (chatState.chatOpen) chatState.pollTimers[roomId] = setTimeout(() => startPolling(roomId), 10000);
     });
 }
 
@@ -2845,9 +2845,9 @@ function startUnreadPolling() {
     if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) {
       loadRoomList();
     }
-    unreadPollTimer = setTimeout(startUnreadPolling, 1000);
+    unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   }).catch(() => {
-    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 1000);
+    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   });
 }
 
