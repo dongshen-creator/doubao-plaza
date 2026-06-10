@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -9,7 +9,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
   <script src="supabase-sdk.js"></script>
   <script>
-    // Supabase 初始化 (内嵌，不依赖外部文件加载顺序)
     (function () {
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
       var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3c2xvcGdiZmt2bnhya3FsdmpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjgzNjksImV4cCI6MjA5NjYwNDM2OX0.774LBSE3xSHtOM8SN2O3Pj3jz9YqEMGacR4CsYT41T0';
@@ -18,205 +17,7 @@
       });
     })();
   </script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#F7F8FC;color:#1a1a2e;min-height:100vh;-webkit-font-smoothing:antialiased}
-    .navbar{background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);position:sticky;top:0;z-index:40;padding:12px 16px}
-    .navbar-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
-    .logo{display:flex;align-items:center;gap:10px}
-    .logo-icon{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 3s ease-in-out infinite}
-    .logo-text{font-size:18px;font-weight:700;color:#1a1a2e}
-    .nav-right{display:flex;align-items:center;gap:8px}
-    .nav-btn{background:transparent;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;color:#6b7280;transition:all .2s}
-    .nav-btn:hover{background:#f3f4f6;color:#1a1a2e}
-    .nav-btn-primary{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .25s}
-    .nav-btn-primary:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35);transform:translateY(-1px)}
-    .nav-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
-    .nav-user{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:10px;cursor:pointer;transition:background .2s}
-    .nav-user:hover{background:#f3f4f6}
-    .nav-user-name{font-size:13px;font-weight:500;color:#374151;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .badge-dot{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
-    .main{max-width:900px;margin:0 auto;padding:20px 16px}
-    .card{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);padding:16px;transition:box-shadow .25s,transform .25s}
-    .card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06),0 8px 24px rgba(0,0,0,0.06);transform:translateY(-2px)}
-    .input{background:#F7F8FC;border:1.5px solid transparent;border-radius:10px;padding:10px 14px;font-size:14px;width:100%;outline:none;color:#1a1a2e;transition:all .2s}
-    .input::placeholder{color:#9ca3af}
-    .input:focus{border-color:#FF6B35;background:#fff;box-shadow:0 0 0 3px rgba(255,107,53,0.08)}
-    .btn{border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .2s}
-    .btn:active{transform:scale(0.97)}
-    .btn-orange{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff}
-    .btn-orange:hover{box-shadow:0 4px 14px rgba(255,107,53,0.35)}
-    .btn-blue{background:#EFF6FF;color:#2563EB}
-    .btn-blue:hover{background:#DBEAFE}
-    .btn-green{background:#ECFDF5;color:#059669}
-    .btn-red{background:#FEF2F2;color:#DC2626}
-    .btn-red:hover{background:#FEE2E2}
-    .btn-gray{background:#f3f4f6;color:#6b7280}
-    .btn-gray:hover{background:#e5e7eb}
-    .btn-full{width:100%;padding:12px;border-radius:12px;font-size:15px}
-    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
-    .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E,#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0;overflow:hidden}
-    .avatar img{width:100%;height:100%;object-fit:cover}
-    .avatar-sm{width:34px;height:34px;font-size:13px}
-    .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-    .tag-green{background:#ECFDF5;color:#059669}
-    .tag-blue{background:#EFF6FF;color:#2563EB}
-    .tag-gray{background:#f3f4f6;color:#6b7280}
-    .tag-red{background:#FEF2F2;color:#DC2626}
-    .tag-orange{background:#FFF3ED;color:#FF6B35}
-    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:65;animation:fadeIn .2s;padding:16px}
-    .modal{background:#fff;border-radius:20px;padding:28px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;animation:scaleIn .25s;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
-    .modal-lg{max-width:520px}
-    .modal-header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
-    .modal-title{font-size:18px;font-weight:700;color:#1a1a2e}
-    .modal-close{margin-left:auto;background:none;border:none;padding:6px;border-radius:8px;cursor:pointer;color:#9ca3af;font-size:18px}
-    .modal-close:hover{background:#f3f4f6;color:#374151}
-    .form-group{margin-bottom:14px}
-    .form-label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
-    .form-error{background:#FEF2F2;border:1px solid #FECACA;color:#DC2626;font-size:13px;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-weight:500}
-    .form-hint{font-size:11px;color:#9ca3af;margin-top:4px}
-    .tabs{display:flex;gap:4px;background:#F7F8FC;border-radius:12px;padding:4px;margin-bottom:16px}
-    .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .2s;background:transparent;color:#9ca3af}
-    .tab.active{background:#fff;color:#FF6B35;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-    .tab:hover:not(.active){color:#374151}
-    .tab-badge{background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center}
-    .section-label{font-size:11px;font-weight:600;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
-    .list-item{display:flex;align-items:center;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:8px}
-    .list-item-info{flex:1;min-width:0}
-    .list-item-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .list-item-email{font-size:11px;color:#9ca3af;margin-top:2px}
-    .list-item-bio{font-size:11px;color:#9ca3af;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .user-card{padding:16px}
-    .user-card-top{display:flex;align-items:flex-start;gap:12px}
-    .user-card-info{flex:1;min-width:0}
-    .user-card-name{font-size:15px;font-weight:600;color:#1a1a2e}
-    .user-card-id{font-size:12px;color:#9ca3af;margin-top:3px}
-    .user-card-bio{font-size:11px;color:#9ca3af;margin-top:4px;word-break:break-all;white-space:pre-wrap}
-    .bio-collapsible{max-height:2.8em;overflow:hidden;transition:max-height .3s ease;cursor:pointer;position:relative}
-    .bio-collapsible.expanded{max-height:500px}
-    .bio-collapse-btn{font-size:11px;color:#FF6B35;cursor:pointer;background:none;border:none;padding:2px 0;display:block}
-    .user-card-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.05)}
-    .search-wrap{position:relative}
-    .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af}
-    .search-input{padding-left:40px}
-    .search-count{margin-top:10px;font-size:12px;color:#9ca3af;font-weight:500}
-    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    @media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}.nav-user-name{display:none}}
-    .welcome{text-align:center;padding:32px 24px}
-    .welcome-icon{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px;box-shadow:0 4px 16px rgba(255,107,53,0.3);animation:float 3s ease-in-out infinite}
-    .welcome h2{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:8px}
-    .welcome p{font-size:14px;color:#9ca3af;max-width:360px;margin:0 auto}
-    .feature-card{text-align:center;padding:16px}
-    .feature-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px}
-    .feature-card h3{font-size:13px;font-weight:600;color:#1a1a2e}
-    .feature-card p{font-size:11px;color:#9ca3af;margin-top:4px}
-    .friend-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;cursor:default}
-    .friend-row-info{flex:1;min-width:0}
-    .friend-row-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .friend-row-id{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .toast-container{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:8px}
-    .toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);font-size:13px;font-weight:500;animation:slideInDown .3s;min-width:240px;max-width:360px}
-    .toast-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
-    .toast-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
-    .toast-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
-    .toast-warning{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
-    .toast-close{background:none;border:none;cursor:pointer;color:#9ca3af;padding:2px;border-radius:4px;font-size:14px}
-    .toast-close:hover{background:rgba(0,0,0,0.05)}
-    .empty{text-align:center;padding:32px 16px}
-    .empty-icon{font-size:40px;margin-bottom:8px}
-    .empty-text{font-size:13px;color:#9ca3af}
-    .rule{display:flex;gap:12px;padding:12px;background:#F7F8FC;border-radius:12px;margin-bottom:10px}
-    .rule-num{width:24px;height:24px;border-radius:8px;background:#FF6B35;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
-    .rule-text{font-size:13px;color:#4b5563;line-height:1.6}
-    .footer{text-align:center;padding:20px;font-size:12px;color:#d1d5db}
-    .status-dot{width:8px;height:8px;border-radius:50%;background:#4ECDC4;animation:pulse 2s ease-in-out infinite}
-    .notification-item{padding:12px;border-radius:12px;margin-bottom:8px;font-size:13px}
-    .notification-warning{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
-    .notification-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-    @keyframes slideInDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-    .anim-up{animation:fadeInUp .35s ease-out both}
-    .anim-up-d1{animation:fadeInUp .35s ease-out .1s both}
-    .anim-up-d2{animation:fadeInUp .35s ease-out .2s both}
-    .anim-up-d3{animation:fadeInUp .35s ease-out .3s both}
-    ::-webkit-scrollbar{width:5px}
-    ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:10px}
-    .hidden{display:none!important}
-    .login-required{text-align:center;padding:60px 20px}
-    .login-required h3{font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:12px}
-    .login-required p{font-size:14px;color:#9ca3af;margin-bottom:24px}
-    .warning-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:16px;margin-bottom:16px;color:#92400E;font-size:13px}
-    .danger-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;margin-bottom:16px;color:#991B1B;font-size:13px}
-    .chat-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:55;background:#F7F8FC;display:none;flex-direction:column;animation:fadeIn .2s}
-    .dark .chat-panel{background:#1a1a2e}
-    .chat-panel.show{display:flex}
-    .chat-header{background:#fff;border-bottom:1px solid rgba(0,0,0,.06);padding:10px 16px;display:flex;align-items:center;gap:10px;height:54px;z-index:2}
-    .dark .chat-header{background:#2a2a3e;border-color:rgba(255,255,255,.06)}
-    .chat-body{flex:1;display:flex;overflow:hidden;min-height:0}
-    .chat-room-list{width:280px;background:#fff;border-right:1px solid #e5e7eb;flex-shrink:0;display:flex;flex-direction:column}
-    .dark .chat-room-list{background:#2a2a3e;border-color:#374151}
-    .chat-room-item{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s;border-bottom:1px solid #f3f4f6}
-    .dark .chat-room-item{border-color:#374151}
-    .chat-room-item:hover{background:#f3f4f6}
-    .dark .chat-room-item:hover{background:#3a3a4e}
-    .chat-room-item.active{background:rgba(255,107,53,.08);border-left:3px solid #FF6B35}
-    .chat-room-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;overflow:hidden}
-    .chat-room-avatar img{width:100%;height:100%;object-fit:cover}
-    .chat-room-info{flex:1;min-width:0}
-    .chat-room-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .dark .chat-room-name{color:#e5e7eb}
-    .chat-room-preview{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
-    .chat-room-unread{background:#EF4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
-    .chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
-    .chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
-    .chat-msg{max-width:75%;word-break:break-word;line-height:1.45;position:relative}
-    .chat-msg-left{align-self:flex-start}
-    .chat-msg-right{align-self:flex-end}
-    .chat-msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;position:relative}
-    .chat-msg-left .chat-msg-bubble{background:#fff;border:1px solid #e5e7eb;border-bottom-left-radius:4px}
-    .chat-msg-right .chat-msg-bubble{background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;border-bottom-right-radius:4px}
-    .dark .chat-msg-left .chat-msg-bubble{background:#2a2a3e;border-color:#374151;color:#e5e7eb}
-    .chat-msg-sender{font-size:11px;font-weight:600;color:#FF6B35;margin-bottom:3px}
-    .chat-msg-time{font-size:10px;color:#9ca3af;margin-top:4px;text-align:right}
-    .chat-msg-right .chat-msg-time{color:rgba(255,255,255,.6)}
-    .chat-msg-reply{font-size:11px;padding:6px 8px;border-radius:8px;margin-bottom:4px;opacity:.7;background:rgba(0,0,0,.05);border-left:3px solid #FF6B35;cursor:pointer}
-    .chat-msg-right .chat-msg-reply{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.4)}
-    .chat-input-area{padding:10px 16px;background:#fff;border-top:1px solid #e5e7eb;display:flex;gap:8px;align-items:flex-end}
-    .dark .chat-input-area{background:#2a2a3e;border-color:#374151}
-    .chat-input{flex:1;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px 14px;font-size:13px;resize:none;outline:none;max-height:120px;min-height:42px;background:transparent;color:#1a1a2e;transition:border-color .2s}
-    .dark .chat-input{color:#e5e7eb;border-color:#374151}
-    .chat-input:focus{border-color:#FF6B35}
-    .chat-send-btn{width:42px;height:42px;border-radius:12px;border:none;background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
-    .chat-send-btn:hover{box-shadow:0 4px 14px rgba(255,107,53,.35);transform:translateY(-1px)}
-    .chat-send-btn:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
-    .chat-empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:32px;color:#9ca3af;font-size:14px}
-    .chat-reply-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#f3f4f6;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280}
-    .dark .chat-reply-bar{background:#3a3a4e;border-color:#4b5563;color:#9ca3af}
-    .chat-reply-bar .close-reply{background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px}
-    .chat-stranger-warn{font-size:11px;color:#EF4444;padding:6px 16px;text-align:center;background:#FEF2F2;border-top:1px solid #FECACA}
-    .dark .chat-stranger-warn{background:#7F1D1D;border-color:#991B1B;color:#FECACA}
-    .chat-new-channel{margin:12px 14px;padding:10px;border:2px dashed #d1d5db;border-radius:12px;text-align:center;cursor:pointer;font-size:12px;color:#9ca3af;transition:all .2s}
-    .chat-new-channel:hover{border-color:#FF6B35;color:#FF6B35;background:rgba(255,107,53,.04)}
-    .chat-action-btn{width:34px;height:34px;border-radius:10px;border:none;background:#f3f4f6;color:#6b7280;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
-    .chat-action-btn:hover{background:#e5e7eb}
-    .dark .chat-action-btn{background:#3a3a4e;color:#9ca3af}
-    .dark .chat-action-btn:hover{background:#4b5563}
-    .chat-recall-btn{background:transparent;border:none;color:#fff;font-size:10px;cursor:pointer;padding:2px 4px;border-radius:4px;transition:all .2s}
-    .chat-recall-btn:hover{background:rgba(255,107,53,0.1);color:#FF6B35}
-    .chat-msg-left .chat-recall-btn{color:rgba(255,107,53,0.7)}
-    .chat-msg img{border-radius:8px;max-width:200px;max-height:200px;display:block}
-    .chat-msg a{color:#FF6B35;text-decoration:underline;word-break:break-all}
-    .chat-msg .file-link{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,107,53,0.1);border-radius:8px;text-decoration:none;color:#FF6B35;font-size:12px}
-    .chat-msg-right .file-link{background:rgba(255,255,255,0.15)}
-    .nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 2px 4px rgba(239,68,68,.3)}
-    @media(max-width:767px){.chat-room-list{position:fixed;top:54px;left:0;right:0;bottom:0;z-index:10;transform:translateX(-100%);transition:transform .25s;width:260px}.chat-room-list.show{transform:translateX(0)}.chat-msg{max-width:88%}.chat-header .chat-show-list{display:block!important}.chat-main,.chat-msgs{width:100%}}
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -397,7 +198,7 @@
         <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
         <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片">🖼</button>
         <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this)"></textarea>
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this);sendTyping()"></textarea>
         <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
       </div>
     </div>
@@ -468,11 +269,7 @@ function showModal(name) {
   if (name === 'settings') loadSettings();
 }
 function closeModal(name) {
-  if (name === 'createChannel') {
-    document.getElementById('createChannelModal').classList.add('hidden');
-  } else {
-    document.getElementById(name + 'Modal').style.display = 'none';
-  }
+  document.getElementById(name + 'Modal').style.display = 'none';
   if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
 }
 
@@ -569,14 +366,9 @@ async function patUser(targetUserId, targetUserName) {
   const content = '👋 拍了拍 ' + targetUserName;
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_messages').insert({
-    event_id: eventId,
-    room_id: chatState.currentRoomId,
-    sender_id: currentUser.id,
-    sender_name: currentUser.name,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content,
-    ts: Date.now()
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content, ts: Date.now()
   });
   if (!error) {
     const msgs = chatState.messages[chatState.currentRoomId] || [];
@@ -587,30 +379,6 @@ async function patUser(targetUserId, targetUserName) {
     }];
     renderMessages(chatState.currentRoomId);
   }
-}
-
-async function muteUserInChannel(userId) {
-  if (!chatState.currentRoomId) return;
-  const duration = prompt('禁言时长（分钟），留空为永久禁言:', '');
-  if (duration === null) return;
-  const durationNum = duration.trim() === '' ? null : parseInt(duration) || null;
-  await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'mute-member', user_id: currentUser.id, room_id: chatState.currentRoomId, target_user_id: userId, duration: durationNum })
-  }).catch(() => {});
-  toast('已禁言', 'success');
-  const modal = document.getElementById('roomSettingsModal');
-  if (modal) loadRoomMemberList(chatState.currentRoomId);
-}
-
-async function unmuteMember(roomId, userId) {
-  await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'unmute-member', user_id: currentUser.id, room_id: roomId, target_user_id: userId })
-  }).catch(() => {});
-  toast('已解除禁言', 'success');
-  const modal = document.getElementById('roomSettingsModal');
-  if (modal) loadRoomMemberList(roomId);
 }
 
 async function removeChannelAdmin(userId) {
@@ -641,6 +409,11 @@ function renderRichContent(content) {
   const allowed = new Set(['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody']);
   const div = document.createElement('div');
   div.innerHTML = content;
+  div.querySelectorAll('img').forEach(function(img) {
+    if (img.src && /^https?:\/\/raw\.githubusercontent\.com\//.test(img.src)) {
+      img.src = img.src.replace(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.*)/, 'https://cdn.jsdelivr.net/gh/$1/$2@$3/$4');
+    }
+  });
   const all = div.querySelectorAll('*');
   for (let i = all.length - 1; i >= 0; i--) {
     if (!allowed.has(all[i].tagName.toLowerCase())) {
@@ -2298,17 +2071,18 @@ let chatState = {
   rooms: [],
   currentRoomId: null,
   messages: {},
+  nextBatch: {},
   pollTimers: {},
+  sbChannels: {},
   replyTo: null,
   chatOpen: false,
   lastSendTime: 0,
+  suppressPollUntil: 0,
   lastRoomListRefresh: 0,
   reactionsMap: {},
-  sbChannels: {},
-  userChannelCount: 0
+  userChannelCount: 0,
+  _openingChat: false
 };
-
-
 
 function openChat() {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
@@ -2320,6 +2094,7 @@ function openChat() {
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList();
 }
+
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
   if (chatState._openingChat) return;
@@ -2402,16 +2177,10 @@ async function loadRoomList() {
     }
     const isAdminData = await __SB.from('chat_admins').select('id').eq('room_id', r.id).eq('user_id', currentUser.id).maybeSingle();
     rooms.push({
-      id: r.id,
-      type: r.type,
-      name: r.name,
-      created_by: r.created_by,
-      created_at: r.created_at,
-      unread: unreadData?.count || 0,
-      member_count: memberList?.length || 0,
-      other,
-      is_admin: !!isAdminData,
-      creator_name: ''
+      id: r.id, type: r.type, name: r.name, created_by: r.created_by,
+      created_at: r.created_at, unread: unreadData?.count || 0,
+      member_count: memberList?.length || 0, other,
+      is_admin: !!isAdminData, creator_name: ''
     });
   }
   chatState.rooms = rooms;
@@ -2430,16 +2199,14 @@ function renderRoomList() {
   }
   el.innerHTML = rooms.map(r => {
     const active = r.id === chatState.currentRoomId;
-    const avatar = r.other ? (r.other.avatar ? `<img src="${esc(r.other.avatar)}">` : esc(r.other.name.charAt(0))) : '📢';
+    const avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
     const name = r.other ? esc(r.other.name) : esc(r.name);
-    return `<div class="chat-room-item ${active ? 'active' : ''}" onclick="switchRoom('${r.id}')">
-      <div class="chat-room-avatar">${avatar}</div>
-      <div class="chat-room-info">
-        <div class="chat-room-name">${name}</div>
-        <div class="chat-room-preview">${r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' : ''}</div>
-      </div>
-      ${r.unread ? `<div class="chat-room-unread">${r.unread > 99 ? '99+' : r.unread}</div>` : ''}
-    </div>`;
+    return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
+      '<div class="chat-room-avatar">' + avatar + '</div>' +
+      '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
+      '<div class="chat-room-preview">' + (r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' : '') + '</div></div>' +
+      (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+    '</div>';
   }).join('');
 }
 
@@ -2477,32 +2244,22 @@ async function loadMessages(roomId) {
   if (error) { console.error('loadMessages error:', error); return; }
   const msgs = (data || []).map(m => ({
     event_id: m.event_id || ('msg_' + m.id),
-    sender: m.sender_name || '未知用户',
-    sender_id: m.sender_id,
-    sender_avatar: m.sender_avatar || '',
-    sender_doubao_id: m.sender_doubao_id || '',
-    content: m.recalled ? '' : m.content,
-    reply_to: m.reply_to || null,
-    rel_type: m.rel_type || null,
-    relates_to_event_id: m.relates_to_event_id || null,
-    ts: m.ts || 0,
-    recalled: !!m.recalled,
-    edited: !!m.rel_type && m.rel_type === 'm.replace'
+    sender: m.sender_name || '未知用户', sender_id: m.sender_id,
+    sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
+    content: m.recalled ? '' : m.content, reply_to: m.reply_to || null,
+    rel_type: m.rel_type || null, relates_to_event_id: m.relates_to_event_id || null,
+    ts: m.ts || 0, recalled: !!m.recalled, edited: !!m.rel_type && m.rel_type === 'm.replace'
   }));
   const editMap = {};
   const nonEdits = [];
   for (const m of msgs) {
-    if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
-      editMap[m.relates_to_event_id] = m.content;
-    } else {
-      nonEdits.push(m);
-    }
+    if (m.rel_type === 'm.replace' && m.relates_to_event_id) { editMap[m.relates_to_event_id] = m.content; }
+    else { nonEdits.push(m); }
   }
   for (const [targetId, newContent] of Object.entries(editMap)) {
     const target = nonEdits.find(x => x.event_id === targetId);
     if (target) { target.content = newContent; target.edited = true; }
   }
-  chatState.messages[roomId] = nonEdits.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   const { data: reacts } = await __SB.from('chat_reactions').select('event_id,reaction,sender_id').eq('room_id', roomId);
   if (reacts) {
     for (const r of reacts) {
@@ -2513,6 +2270,7 @@ async function loadMessages(roomId) {
       }
     }
   }
+  chatState.messages[roomId] = nonEdits.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   renderMessages(roomId);
   markRead(roomId);
   subscribeToRoom(roomId);
@@ -2526,9 +2284,7 @@ function renderMessages(roomId) {
   for (const msg of msgs) {
     const reacts = chatState.reactionsMap[msg.event_id];
     if (reacts) {
-      msg.reactions = Object.entries(reacts).map(([key, senders]) => ({
-        key, count: senders.length, senders
-      }));
+      msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
     }
   }
   msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
@@ -2543,52 +2299,35 @@ function renderMsgHTML(m, roomId) {
   let contentHtml = '';
   const text = m.content || '';
   if (m.recalled) {
-    contentHtml = '<em style="opacity:0.5;font-style:italic">已撤回</em>';
+    contentHtml = '<em style="color:#9ca3af;font-size:12px">消息已撤回</em>';
   } else if (text.startsWith('img:')) {
-    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy">';
+    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0" onerror="this.style.display=\'none\'">';
   } else if (text.startsWith('file:')) {
-    const fileContent = text.slice(5);
-    const lastColon = fileContent.lastIndexOf(':');
-    if (lastColon > 0) {
-      const fileName = fileContent.substring(0, lastColon);
-      const fileUrl = fileContent.substring(lastColon + 1);
-      contentHtml = '<a href="' + esc(fileUrl) + '" target="_blank" class="file-link">📎 ' + esc(fileName) + '</a>';
-    } else {
-      contentHtml = '<a href="' + esc(fileContent) + '" target="_blank" class="file-link">📎 文件</a>';
-    }
+    const fc = text.slice(5);
+    const lc = fc.lastIndexOf(':');
+    const fname = lc > 0 ? fc.substring(0, lc) : fc;
+    const furl = lc > 0 ? fc.substring(lc + 1) : fc;
+    contentHtml = '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:#1a1a2e">📎 ' + esc(fname || '文件') + '</a>';
   } else {
     contentHtml = linkify(esc(text));
   }
-  const editedBadge = m.edited ? '<span style="font-size:10px;opacity:0.6;margin-left:4px">(已编辑)</span>' : '';
-  const reactionsHtml = !m.recalled && m.reactions?.length ? (
-    '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
-    m.reactions.map(r =>
-      '<span onclick="event.stopPropagation();sendReaction(\'' + esc(m.event_id || '') + '\',\'' + esc(r.key) + '\')" style="background:#f3f4f6;border-radius:12px;padding:2px 8px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:2px;border:1px solid transparent;transition:all .15s" onmouseover="this.style.borderColor=\'#FF6B35\'" onmouseout="this.style.borderColor=\'transparent\'">' + r.key + '<span style="font-size:11px;color:#6b7280;margin-left:2px">' + r.count + '</span></span>'
-    ).join('') +
-    '</div>'
-  ) : '';
+  const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + esc(m.event_id || '') + '\',\'' + esc(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
+  const replyBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReplyTo(\'' + esc(m.event_id || '') + '\',\'' + esc(text.slice(0,50).replace(/'/g,"\\'")) + '\')" style="color:#6b7280;font-size:10px">引用</button>' : '';
   const editBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();editMessage(\'' + esc(m.event_id || '') + '\',\'' + esc(text.replace(/'/g,"\\'").replace(/\\/g,"\\\\").slice(0,100)) + '\')" style="color:#6b7280;font-size:10px">编辑</button>' : '';
   const reactionBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();showReactionPicker(\'' + esc(m.event_id || '') + '\')" style="color:#6b7280;font-size:10px">😀</button>' : '';
   const recallBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="recallMessage(\'' + esc(m.event_id || '') + '\')">撤回</button>' : '';
-  return `<div class="chat-msg ${side}" data-eid="${esc(m.event_id || '')}">
-    <div class="chat-msg-bubble">
-      ${!isMine ? `<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup('${esc(m.sender_id || '')}','${esc(m.sender)}','${esc(m.sender_avatar || '')}','${esc(m.sender_doubao_id || '')}')">${esc(m.sender)}${m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : ''}</div>` : ''}
-      ${replyHtml}
-      <div>${contentHtml}${editedBadge}</div>
-      ${reactionsHtml}
-      <div class="chat-msg-time" style="display:flex;justify-content:space-between;align-items:center">
-        <span>${time}</span>
-        <div style="display:flex;gap:4px;align-items:center">
-          ${!m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReply(\'' + esc(m.event_id || '') + '\',\'' + esc(text.slice(0,50).replace(/'/g,"\\'")) + '\')" style="color:#6b7280;font-size:10px">引用</button>' : ''}
-          ${editBtn}${reactionBtn}${recallBtn}
-        </div>
-      </div>
-    </div>
-  </div>`;
+  return '<div class="chat-msg ' + side + '" data-eid="' + esc(m.event_id || '') + '">' +
+    '<div class="chat-msg-bubble">' +
+    (!isMine ? '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + esc(m.sender_id || '') + '\',\'' + esc(m.sender) + '\',\'' + esc(m.sender_avatar || '') + '\',\'' + esc(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' : '') +
+    replyHtml +
+    '<div>' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:#9ca3af">(已编辑)</span>' : '') + '</div>' +
+    '</div>' +
+    reactionsHtml +
+    '<div class="chat-msg-time">' + time + ' ' + replyBtn + recallBtn + editBtn + reactionBtn + '</div>' +
+  '</div>';
 }
 
 function renderReplyBlock(eventId, roomId) {
-  if (!eventId) return '';
   const msgs = chatState.messages[roomId] || [];
   const ref = msgs.find(m => m.event_id === eventId);
   if (!ref) return '<div class="chat-msg-reply" style="opacity:0.4"><em>消息已删除或不可用</em></div>';
@@ -2598,55 +2337,40 @@ function renderReplyBlock(eventId, roomId) {
   if (t.startsWith('img:')) {
     preview = '<img src="' + esc(t.slice(4)) + '" loading="lazy" style="max-width:80px;max-height:60px;border-radius:4px;display:block;margin-top:2px">';
   } else if (t.startsWith('file:')) {
-    const fc = t.slice(5);
-    const lc = fc.lastIndexOf(':');
+    const fc = t.slice(5); const lc = fc.lastIndexOf(':');
     preview = '📎 ' + esc(lc > 0 ? fc.substring(0, lc) : fc || '文件');
   } else {
     preview = linkify(esc(t.length > 80 ? t.slice(0,80) + '…' : t));
   }
-  return `<div class="chat-msg-reply" onclick="document.querySelector('[data-eid=\\'${esc(eventId)}\\']')?.scrollIntoView({behavior:'smooth'})">${esc(ref.sender)}: ${preview}</div>`;
+  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=\\'' + esc(eventId) + '\\\']\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
 }
 
 function subscribeToRoom(roomId) {
-  if (chatState.sbChannels[roomId]) {
-    try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}
-  }
+  if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {} }
   const channel = __SB
     .channel('room:' + roomId)
-    .on('postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
-      payload => { handleRealtimeMessage(roomId, payload.new); }
-    )
-    .on('postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
-      payload => { handleRealtimeUpdate(roomId, payload.new); }
-    )
-    .on('postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
+      payload => { handleRealtimeMessage(roomId, payload.new); })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
+      payload => { handleRealtimeUpdate(roomId, payload.new); })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
       payload => {
-        const r = payload.new;
-        if (!r) return;
+        const r = payload.new; if (!r) return;
         if (!chatState.reactionsMap[r.event_id]) chatState.reactionsMap[r.event_id] = {};
         if (!chatState.reactionsMap[r.event_id][r.reaction]) chatState.reactionsMap[r.event_id][r.reaction] = [];
-        if (!chatState.reactionsMap[r.event_id][r.reaction].includes(r.sender_id)) {
-          chatState.reactionsMap[r.event_id][r.reaction].push(r.sender_id);
-        }
+        if (!chatState.reactionsMap[r.event_id][r.reaction].includes(r.sender_id)) chatState.reactionsMap[r.event_id][r.reaction].push(r.sender_id);
         if (roomId === chatState.currentRoomId) renderMessages(roomId);
-      }
-    )
-    .on('postgres_changes',
-      { event: 'DELETE', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
+      })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
       payload => {
-        const r = payload.old;
-        if (!r) return;
+        const r = payload.old; if (!r) return;
         if (chatState.reactionsMap[r.event_id]?.[r.reaction]) {
           const idx = chatState.reactionsMap[r.event_id][r.reaction].indexOf(r.sender_id);
           if (idx >= 0) chatState.reactionsMap[r.event_id][r.reaction].splice(idx, 1);
           if (chatState.reactionsMap[r.event_id][r.reaction].length === 0) delete chatState.reactionsMap[r.event_id][r.reaction];
         }
         if (roomId === chatState.currentRoomId) renderMessages(roomId);
-      }
-    )
+      })
     .subscribe();
   chatState.sbChannels[roomId] = channel;
 }
@@ -2656,15 +2380,9 @@ function handleRealtimeMessage(roomId, msg) {
   let content = msg.content;
   if (msg.recalled) content = '';
   const newMsg = {
-    event_id: msg.event_id || ('msg_' + msg.id),
-    sender: msg.sender_name || '未知用户',
-    sender_id: msg.sender_id,
-    sender_avatar: msg.sender_avatar || '',
-    sender_doubao_id: msg.sender_doubao_id || '',
-    content,
-    reply_to: msg.reply_to || null,
-    ts: msg.ts || Date.now(),
-    recalled: !!msg.recalled
+    event_id: msg.event_id || ('msg_' + msg.id), sender: msg.sender_name || '未知用户',
+    sender_id: msg.sender_id, sender_avatar: msg.sender_avatar || '', sender_doubao_id: msg.sender_doubao_id || '',
+    content, reply_to: msg.reply_to || null, ts: msg.ts || Date.now(), recalled: !!msg.recalled
   };
   if (msg.rel_type === 'm.replace' && msg.relates_to_event_id) {
     const existing = chatState.messages[roomId] || [];
@@ -2674,16 +2392,9 @@ function handleRealtimeMessage(roomId, msg) {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
     const room = chatState.rooms.find(r => r.id === roomId);
-    if (room) {
-      room.unread = (room.unread || 0) + 1;
-      renderRoomList();
-      updateUnreadBadge();
-    }
+    if (room) { room.unread = (room.unread || 0) + 1; renderRoomList(); updateUnreadBadge(); }
   }
-  if (roomId === chatState.currentRoomId) {
-    renderMessages(roomId);
-    markRead(roomId);
-  }
+  if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
 }
 
 function handleRealtimeUpdate(roomId, msg) {
@@ -2696,17 +2407,12 @@ function handleRealtimeUpdate(roomId, msg) {
   }
 }
 
-
 function markRead(roomId) {
   const msgs = chatState.messages[roomId] || [];
   const last = msgs[msgs.length - 1];
   if (!last) return;
-  __SB.from('chat_unread').upsert({
-    room_id: roomId,
-    user_id: currentUser.id,
-    count: 0,
-    last_event_id: last.event_id || ''
-  }, { onConflict: 'room_id,user_id' }).then(() => {
+  __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: last.event_id || '' },
+    { onConflict: 'room_id,user_id' }).then(() => {
     const room = chatState.rooms.find(r => r.id === roomId);
     if (room) { room.unread = 0; renderRoomList(); updateUnreadBadge(); }
   }).catch(() => {});
@@ -2715,31 +2421,26 @@ function markRead(roomId) {
 function updateUnreadBadge() {
   const badge = document.getElementById('chatUnreadBadge');
   const total = chatState.rooms.reduce((sum, r) => sum + (r.unread || 0), 0);
-  if (total > 0 && notifEnabled) {
-    badge.textContent = total > 99 ? '99+' : total;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
-  }
+  if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
 }
 
 async function sendChatMsg() {
   const input = document.getElementById('chatInput');
   const content = input.value.trim();
   if (!content || !chatState.currentRoomId) return;
+  const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+  if (room && room.type === 'channel') {
+    const { data: muted } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
+    if (muted) {
+      const until = muted.muted_until ? new Date(muted.muted_until) : null;
+      if (!until || until > new Date()) { toast('您已被禁言，无法发送消息', 'error'); return; }
+    }
+  }
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const localMsg = {
-    event_id: eventId,
-    sender: currentUser.name,
-    sender_id: currentUser.id,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content,
-    reply_to: chatState.replyTo || null,
-    ts: Date.now()
-  };
+  const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
@@ -2747,87 +2448,13 @@ async function sendChatMsg() {
   const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
   const { error } = await __SB.from('chat_messages').insert({
-    event_id: eventId,
-    room_id: chatState.currentRoomId,
-    sender_id: currentUser.id,
-    sender_name: currentUser.name,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content,
-    reply_to: replyToSave || null,
-    ts: Date.now()
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content, reply_to: replyToSave || null, ts: Date.now()
   });
-  if (error) {
-    toast('发送失败: ' + error.message, 'error');
-    const idx = msgs.findIndex(m => m.event_id === eventId);
-    if (idx >= 0) { msgs.splice(idx, 1); renderMessages(chatState.currentRoomId); }
-  }
+  if (error) { toast('发送失败: ' + error.message, 'error'); return; }
   btn.disabled = false;
   chatState.lastSendTime = Date.now();
-}
-
-function setReply(eventId, preview) {
-  chatState.replyTo = eventId;
-  document.getElementById('chatReplyText').textContent = preview || '';
-  document.getElementById('chatReplyBar').classList.remove('hidden');
-  document.getElementById('chatInput').focus();
-}
-
-function cancelReply() {
-  chatState.replyTo = null;
-  document.getElementById('chatReplyBar').classList.add('hidden');
-}
-
-async function showCreateChannel() {
-  if (!currentUser) { toast('请先登录', 'warning'); return; }
-  if (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 5000) {
-    await loadRoomList().catch(() => {});
-  }
-  if (!isDeveloper()) {
-    const myChannels = chatState.rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id);
-    if (myChannels.length >= 1) { toast('每个用户只能创建一个频道', 'error'); return; }
-  }
-  document.getElementById('channelName').value = '';
-  const modal = document.getElementById('createChannelModal');
-  modal.classList.remove('hidden');
-}
-
-async function createChannel() {
-  const name = document.getElementById('channelName').value.trim();
-  if (!name) { toast('请输入频道名称', 'error'); return; }
-  const roomId = 'room_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const { error: roomErr } = await __SB.from('chat_rooms').insert({
-    id: roomId, type: 'channel', name, created_by: currentUser.id
-  });
-  if (roomErr) { toast('创建失败: ' + roomErr.message, 'error'); return; }
-  const { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
-  if (memErr) { toast('创建失败(成员): ' + memErr.message, 'error'); return; }
-  const { error: setErr } = await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission: 'open', topic: '' });
-  if (setErr) { toast('创建失败(设置): ' + setErr.message, 'error'); return; }
-  document.getElementById('createChannelModal').classList.add('hidden');
-  chatState.currentRoomId = roomId;
-  await loadRoomList();
-  loadMessages(roomId);
-  toast('频道已创建');
-}
-
-function autoChatResize(ta) {
-  ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-}
-
-function linkify(text) {
-  return text.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
-    var url = match;
-    var ext = url.split('?')[0].split('/').pop().toLowerCase();
-    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext) || /cdn|media|upload|image|img/.test(url))
-      return '<img src="' + url + '" loading="lazy" style="max-width:200px;max-height:200px;border-radius:8px;display:block;margin:4px 0">';
-    if (/\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)(\?|$)/i.test(ext))
-      return '<video src="' + url + '" controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
-    if (/\.(mp3|wav|ogg|aac|m4a|flac|wma)(\?|$)/i.test(ext))
-      return '<audio src="' + url + '" controls style="width:100%;margin:4px 0"></audio>';
-    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
-  }).replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
 }
 
 async function uploadChatImage(input) {
@@ -2837,22 +2464,16 @@ async function uploadChatImage(input) {
   const form = new FormData();
   form.append('image', file);
   let res;
-  try {
-    res = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: form }).then(r => r.json());
-  } catch(e) { input.value = ''; toast('上传失败：' + e.message, 'error'); return; }
+  try { res = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: form }).then(r => r.json()); }
+  catch(e) { input.value = ''; toast('上传失败：' + e.message, 'error'); return; }
   input.value = '';
   if (!res?.success) { toast(res?.error || '图片上传失败', 'error'); return; }
   const url = res.url;
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_messages').insert({
-    event_id: eventId,
-    room_id: chatState.currentRoomId,
-    sender_id: currentUser.id,
-    sender_name: currentUser.name,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content: 'img:' + url,
-    ts: Date.now()
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: 'img:' + url, ts: Date.now()
   });
   if (error) { toast('发送失败: ' + error.message, 'error'); return; }
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'img:' + url, reply_to: null, ts: Date.now() };
@@ -2869,22 +2490,16 @@ async function uploadChatFile(input) {
   const form = new FormData();
   form.append('image', file);
   let res;
-  try {
-    res = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: form }).then(r => r.json());
-  } catch(e) { input.value = ''; toast('上传失败：' + e.message, 'error'); return; }
+  try { res = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: form }).then(r => r.json()); }
+  catch(e) { input.value = ''; toast('上传失败：' + e.message, 'error'); return; }
   input.value = '';
   if (!res?.success) { toast(res?.error || '文件上传失败', 'error'); return; }
   const url = res.url;
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_messages').insert({
-    event_id: eventId,
-    room_id: chatState.currentRoomId,
-    sender_id: currentUser.id,
-    sender_name: currentUser.name,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content: 'file:' + file.name + ':' + url,
-    ts: Date.now()
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: 'file:' + file.name + ':' + url, ts: Date.now()
   });
   if (error) { toast('发送失败: ' + error.message, 'error'); return; }
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };
@@ -2896,8 +2511,7 @@ async function uploadChatFile(input) {
 
 async function recallMessage(eventId) {
   if (!chatState.currentRoomId) return;
-  const { error } = await __SB.from('chat_messages').update({ recalled: true })
-    .eq('event_id', eventId).eq('sender_id', currentUser.id);
+  const { error } = await __SB.from('chat_messages').update({ recalled: true }).eq('event_id', eventId).eq('sender_id', currentUser.id);
   if (error) { toast('撤回失败: ' + error.message, 'error'); return; }
   toast('已撤回', 'success');
   const msgs = chatState.messages[chatState.currentRoomId] || [];
@@ -2906,9 +2520,7 @@ async function recallMessage(eventId) {
   renderMessages(chatState.currentRoomId);
 }
 
-function toggleRoomList() {
-  document.getElementById('chatRoomList').classList.toggle('show');
-}
+function toggleRoomList() { document.getElementById('chatRoomList').classList.toggle('show'); }
 
 function startUnreadPolling() {
   if (unreadPollTimer) clearTimeout(unreadPollTimer);
@@ -2917,19 +2529,324 @@ function startUnreadPolling() {
     if (!currentUser) return;
     const total = (data || []).reduce((s, r) => s + (r.count || 0), 0);
     const badge = document.getElementById('chatUnreadBadge');
-    if (total > 0 && notifEnabled) {
-      badge.textContent = total > 99 ? '99+' : total;
-      badge.classList.remove('hidden');
-    } else {
-      badge.classList.add('hidden');
-    }
-    if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) {
-      loadRoomList();
-    }
+    if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+    if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) { loadRoomList(); }
     unreadPollTimer = setTimeout(startUnreadPolling, 10000);
-  }).catch(() => {
-    if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000);
+  }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000); });
+}
+
+function autoChatResize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
+
+function sendTyping() {
+  // Typing indicators not implemented with Supabase (can use Presence/Broadcast later)
+}
+
+function linkify(text) {
+  return text.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
+    const url = match;
+    const ext = url.split('?')[0].split('/').pop().toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext) || /cdn|media|upload|image|img/.test(url))
+      return '<img src="' + url + '" loading="lazy" style="max-width:200px;max-height:200px;border-radius:8px;display:block;margin:4px 0">';
+    if (/\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)(\?|$)/i.test(ext))
+      return '<video src="' + url + '" controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
+    if (/\.(mp3|wav|ogg|aac|m4a|flac|wma)(\?|$)/i.test(ext))
+      return '<audio src="' + url + '" controls style="width:100%;margin:4px 0"></audio>';
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+  }).replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
+}
+
+async function editMessage(eventId, currentContent) {
+  const newContent = prompt('编辑消息:', currentContent);
+  if (newContent === null || !newContent.trim()) return;
+  const editId = 'edit_' + Date.now().toString(36);
+  const { error } = await __SB.from('chat_messages').insert({
+    event_id: editId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: newContent.trim(), rel_type: 'm.replace', relates_to_event_id: eventId, ts: Date.now()
   });
+  if (error) { toast('编辑失败: ' + error.message, 'error'); return; }
+  const msgs = chatState.messages[chatState.currentRoomId] || [];
+  const msg = msgs.find(m => m.event_id === eventId);
+  if (msg) { msg.content = newContent.trim(); msg.edited = true; }
+  renderMessages(chatState.currentRoomId);
+  toast('消息已编辑', 'success');
+}
+
+function showReactionPicker(eventId) {
+  const emojis = ['👍','❤️','😂','😮','😢','😡','🎉','🔥','✅','👀','🤔','👏'];
+  const existing = document.getElementById('reactionPicker');
+  if (existing) existing.remove();
+  const picker = document.createElement('div');
+  picker.id = 'reactionPicker';
+  picker.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:8px 12px;display:flex;gap:4px;z-index:200;flex-wrap:wrap;max-width:320px;justify-content:center';
+  picker.innerHTML = emojis.map(e => '<button onclick="sendReaction(\'' + eventId + '\',\'' + e + '\');this.parentElement.remove()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:4px;border-radius:8px">' + e + '</button>').join('');
+  document.body.appendChild(picker);
+  setTimeout(() => { if (document.getElementById('reactionPicker')) document.getElementById('reactionPicker').remove(); }, 10000);
+}
+
+async function sendReaction(eventId, reaction) {
+  const rid = 'rxn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const { error } = await __SB.from('chat_reactions').upsert({
+    id: rid, event_id: eventId, reaction, sender_id: currentUser.id, room_id: chatState.currentRoomId
+  }, { onConflict: 'event_id,reaction,sender_id' });
+  if (error) { toast('表情发送失败', 'error'); return; }
+  if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
+  if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
+  const idx = chatState.reactionsMap[eventId][reaction].indexOf(currentUser.id);
+  if (idx >= 0) {
+    chatState.reactionsMap[eventId][reaction].splice(idx, 1);
+    await __SB.from('chat_reactions').delete().eq('event_id', eventId).eq('reaction', reaction).eq('sender_id', currentUser.id);
+  } else {
+    chatState.reactionsMap[eventId][reaction].push(currentUser.id);
+  }
+  if (chatState.reactionsMap[eventId][reaction].length === 0) delete chatState.reactionsMap[eventId][reaction];
+  renderMessages(chatState.currentRoomId);
+}
+
+function cancelReply() {
+  chatState.replyTo = null;
+  document.getElementById('chatReplyBar').classList.add('hidden');
+}
+
+function setReplyTo(eventId, text) {
+  chatState.replyTo = eventId;
+  document.getElementById('chatReplyText').textContent = text;
+  document.getElementById('chatReplyBar').classList.remove('hidden');
+  document.getElementById('chatInput').focus();
+}
+
+async function deleteConversation(roomId) {
+  const room = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (!room) return;
+  if (room.type === 'channel') {
+    const canManage = await checkChannelPermission(roomId);
+    if (!canManage) { toast('只有频道创建者和管理员可以删除频道', 'error'); return; }
+    if (!confirm('确定要删除这个频道吗？此操作不可恢复！')) return;
+  } else {
+    if (!confirm('确定要删除这个对话吗？')) return;
+  }
+  await __SB.from('chat_unread').delete().eq('room_id', roomId);
+  await __SB.from('chat_room_members').delete().eq('room_id', roomId);
+  await __SB.from('chat_messages').delete().eq('room_id', roomId);
+  await __SB.from('chat_reactions').delete().eq('room_id', roomId);
+  await __SB.from('chat_channel_settings').delete().eq('room_id', roomId);
+  await __SB.from('chat_banned').delete().eq('room_id', roomId);
+  await __SB.from('chat_muted').delete().eq('room_id', roomId);
+  await __SB.from('chat_admins').delete().eq('room_id', roomId);
+  const { error } = await __SB.from('chat_rooms').delete().eq('id', roomId);
+  if (error) { toast('删除失败: ' + error.message, 'error'); return; }
+  if (chatState.currentRoomId === roomId) {
+    chatState.currentRoomId = null;
+    document.getElementById('chatEmpty').classList.remove('hidden');
+    document.getElementById('chatMsgs').classList.add('hidden');
+  }
+  if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
+  await loadRoomList();
+  toast('已删除', 'success');
+}
+
+async function leaveChannel(roomId) {
+  if (!confirm('确定要离开这个频道吗？')) return;
+  await __SB.from('chat_room_members').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
+  await __SB.from('chat_unread').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
+  if (chatState.currentRoomId === roomId) { chatState.currentRoomId = null; document.getElementById('chatEmpty').classList.remove('hidden'); document.getElementById('chatMsgs').classList.add('hidden'); }
+  await loadRoomList();
+  toast('已离开频道', 'success');
+}
+
+async function showRoomSettings() {
+  if (!chatState.currentRoomId) return;
+  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
+  if (!room) return;
+  const canManage = await checkChannelPermission(chatState.currentRoomId);
+  let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">';
+  html += '<div class="modal-header"><div class="modal-title">频道设置</div><button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
+  html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:#9ca3af;margin-bottom:4px">频道名称</div><div style="display:flex;gap:8px"><input id="editRoomName" class="input" value="' + esc(room.name || '') + '" style="flex:1"><button class="btn btn-sm btn-orange" onclick="updateRoomName()">更新</button></div></div>';
+  if (canManage) {
+    html += '<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">成员管理</div><div id="roomMemberList" style="max-height:240px;overflow-y:auto"></div></div>';
+  }
+  html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<button class="btn btn-sm btn-gray" onclick="leaveChannel(\'' + chatState.currentRoomId + '\')">离开频道</button>';
+  if (canManage) html += '<button class="btn btn-sm btn-red" onclick="deleteConversation(\'' + chatState.currentRoomId + '\')">删除频道</button>';
+  html += '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  if (canManage) loadRoomMemberList(chatState.currentRoomId);
+}
+
+async function loadRoomMemberList(roomId) {
+  const el = document.getElementById('roomMemberList');
+  if (!el) return;
+  const { data: members } = await __SB.from('chat_room_members').select('user_id').eq('room_id', roomId);
+  if (!members?.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:12px">暂无成员</div>'; return; }
+  const userIds = members.map(m => m.user_id);
+  const userInfos = {};
+  for (const uid of userIds) {
+    try { const r = await api('/api/users/' + uid); if (r?.success) userInfos[uid] = r.data; } catch(e) {}
+  }
+  const room = chatState.rooms.find(r => r.id === roomId);
+  const isCreator = room && room.created_by === currentUser.id;
+  const { data: adminRows } = await __SB.from('chat_admins').select('user_id').eq('room_id', roomId);
+  const adminSet = new Set((adminRows || []).map(a => a.user_id));
+  const { data: mutedRows } = await __SB.from('chat_muted').select('user_id').eq('room_id', roomId);
+  const mutedSet = new Set((mutedRows || []).map(a => a.user_id));
+  let html = '';
+  for (const uid of userIds) {
+    const u = userInfos[uid] || { name: uid.slice(0, 8), avatar: '', doubao_id: '' };
+    const isAdmin = adminSet.has(uid);
+    const isMuted = mutedSet.has(uid);
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<div style="font-size:13px;font-weight:500">' + esc(u.name) + (u.doubao_id ? ' <span style="font-weight:400;opacity:0.7;font-size:11px">@' + esc(u.doubao_id) + '</span>' : '') + (room?.created_by === uid ? ' <span style="color:#FF6B35;font-size:11px">(创建者)</span>' : '') + (isAdmin ? ' <span style="color:#4ECDC4;font-size:11px">(管理员)</span>' : '') + '</div>';
+    html += '</div>';
+    if (uid !== currentUser.id) {
+      html += '<div style="display:flex;gap:4px">';
+      if (isCreator) {
+        if (isAdmin) html += '<button class="btn btn-sm btn-gray" onclick="removeChannelAdmin(\'' + uid + '\')">取消管理</button>';
+        else html += '<button class="btn btn-sm btn-orange" onclick="setChannelAdmin(\'' + uid + '\')">设为管理</button>';
+        html += '<button class="btn btn-sm btn-red" onclick="kickMember(\'' + roomId + '\',\'' + uid + '\')">踢出</button>';
+      }
+      if (isMuted) html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
+      else html += '<button class="btn btn-sm btn-gray" onclick="muteUserInChannel(\'' + uid + '\')">禁言</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+async function updateRoomName() {
+  if (!chatState.currentRoomId) return;
+  const name = document.getElementById('editRoomName')?.value?.trim();
+  if (!name) { toast('请输入频道名称', 'error'); return; }
+  const { error } = await __SB.from('chat_rooms').update({ name }).eq('id', chatState.currentRoomId);
+  if (error) { toast('修改失败: ' + error.message, 'error'); return; }
+  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
+  if (room) room.name = name;
+  toast('名称已更新', 'success');
+}
+
+async function kickMember(roomId, targetUserId) {
+  if (!confirm('确定要踢出该成员吗？')) return;
+  await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'kick-member', user_id: currentUser.id, room_id: roomId, target_user_id: targetUserId }) }).catch(() => {});
+  await __SB.from('chat_room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
+  loadRoomMemberList(roomId);
+  toast('已踢出成员', 'success');
+}
+
+async function muteUserInChannel(targetUserId) {
+  if (!chatState.currentRoomId) return;
+  const { error } = await __SB.from('chat_muted').upsert({ room_id: chatState.currentRoomId, user_id: targetUserId, muted_until: null }, { onConflict: 'room_id,user_id' });
+  if (error) { toast('禁言失败: ' + error.message, 'error'); return; }
+  loadRoomMemberList(chatState.currentRoomId);
+  toast('已禁言', 'success');
+}
+
+async function unmuteMember(roomId, targetUserId) {
+  const { error } = await __SB.from('chat_muted').delete().eq('room_id', roomId).eq('user_id', targetUserId);
+  if (error) { toast('解禁失败: ' + error.message, 'error'); return; }
+  loadRoomMemberList(roomId);
+  toast('已解除禁言', 'success');
+}
+
+async function setChannelAdmin(targetUserId) {
+  if (!chatState.currentRoomId) return;
+  const { error } = await __SB.from('chat_admins').insert({ room_id: chatState.currentRoomId, user_id: targetUserId });
+  if (error) { toast('设置失败: ' + error.message, 'error'); return; }
+  loadRoomMemberList(chatState.currentRoomId);
+  toast('已设为管理员', 'success');
+}
+
+async function removeChannelAdmin(targetUserId) {
+  if (!chatState.currentRoomId) return;
+  const { error } = await __SB.from('chat_admins').delete().eq('room_id', chatState.currentRoomId).eq('user_id', targetUserId);
+  if (error) { toast('移除失败: ' + error.message, 'error'); return; }
+  loadRoomMemberList(chatState.currentRoomId);
+  toast('已取消管理员', 'success');
+}
+
+async function showBrowseChannels(query) {
+  let sbQuery = __SB.from('chat_rooms').select('id, name, created_by, created_at').eq('type', 'channel').order('created_at', { ascending: false });
+  if (query) sbQuery = sbQuery.ilike('name', '%' + query + '%');
+  const { data: channels, error } = await sbQuery;
+  if (error) { toast('加载失败', 'error'); return; }
+  if (!channels) channels = [];
+  for (let i = 0; i < channels.length; i++) {
+    const { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', channels[i].id);
+    channels[i].member_count = count || 0;
+    if (currentUser) {
+      const { data: joinedData } = await __SB.from('chat_room_members').select('id').eq('room_id', channels[i].id).eq('user_id', currentUser.id).maybeSingle();
+      channels[i].joined = !!joinedData;
+    } else { channels[i].joined = false; }
+  }
+  const unjoined = channels.filter(function(c) { return !c.joined; });
+  const modal = document.getElementById('browseChannelsModal');
+  if (modal) modal.remove();
+  let html = '<div class="modal-overlay" id="browseChannelsModal" style="display:flex"><div class="modal modal-lg">';
+  html += '<div class="modal-header"><div class="modal-title">浏览频道</div><button class="modal-close" onclick="document.getElementById(\'browseChannelsModal\').remove()">✕</button></div>';
+  html += '<div style="margin-bottom:12px"><input id="channelSearchInput" class="input" placeholder="搜索频道..." oninput="debounceChannelSearch()" style="width:100%"></div>';
+  if (unjoined.length === 0) {
+    html += '<div style="text-align:center;padding:24px;color:#9ca3af">没有可加入的频道</div>';
+  } else {
+    unjoined.forEach(function(c) {
+      html += '<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:default">';
+      html += '<div><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:#9ca3af">' + (c.member_count || 0) + ' 位成员</div></div>';
+      html += '<button class="btn btn-sm btn-orange" onclick="joinChannel(\'' + c.id + '\')">加入</button></div>';
+    });
+  }
+  html += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+let channelSearchTimer = null;
+function debounceChannelSearch() {
+  clearTimeout(channelSearchTimer);
+  channelSearchTimer = setTimeout(function() {
+    const q = document.getElementById('channelSearchInput')?.value?.trim() || '';
+    document.getElementById('browseChannelsModal')?.remove();
+    showBrowseChannels(q);
+  }, 300);
+}
+
+async function joinChannel(roomId) {
+  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  document.getElementById('browseChannelsModal')?.remove();
+  await loadRoomList();
+  toast('已加入频道', 'success');
+}
+
+function requestJoinChannel(roomId) {
+  // No-op: Supabase channels are all open-join for now
+  joinChannel(roomId);
+}
+
+async function showCreateChannel() {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
+  if (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 5000) { await loadRoomList().catch(() => {}); }
+  if (!isDeveloper()) {
+    const myChannels = chatState.rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id);
+    if (myChannels.length >= 1) { toast('每个用户只能创建一个频道', 'error'); return; }
+  }
+  document.getElementById('channelName').value = '';
+  const modal = document.getElementById('createChannelModal');
+  modal.classList.remove('hidden');
+}
+
+async function createChannel() {
+  const name = document.getElementById('channelName').value.trim();
+  if (!name) { toast('请输入频道名称', 'error'); return; }
+  const roomId = 'room_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const { error: roomErr } = await __SB.from('chat_rooms').insert({ id: roomId, type: 'channel', name, created_by: currentUser.id });
+  if (roomErr) { toast('创建失败: ' + roomErr.message, 'error'); return; }
+  const { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  if (memErr) { toast('创建失败(成员): ' + memErr.message, 'error'); return; }
+  const { error: setErr } = await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission: 'open', topic: '' });
+  if (setErr) { toast('创建失败(设置): ' + setErr.message, 'error'); return; }
+  document.getElementById('createChannelModal').classList.add('hidden');
+  chatState.currentRoomId = roomId;
+  await loadRoomList();
+  loadMessages(roomId);
+  toast('频道已创建');
 }
 
 // ===== Groups & Pinning (localStorage) =====
@@ -3117,252 +3034,6 @@ function promptChannelGroup(roomId, roomName) {
 
 function showChannelPinHelp() {
   toast('点击频道旁的 📌 按钮置顶', 'info');
-}
-
-async function deleteConversation(roomId) {
-  const room = chatState.rooms.find(r => r.id === roomId);
-  if (room?.type === 'channel') {
-    const canManage = await checkChannelPermission(roomId);
-    if (!canManage) {
-      toast('只有频道创建者和管理员可以删除频道', 'error'); return;
-    }
-    if (!confirm('确定要删除这个频道吗？此操作不可恢复！')) return;
-  } else {
-    if (!confirm('确定要删除这个对话吗？')) return;
-  }
-  const res = await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'delete-conversation', user_id: currentUser.id, room_id: roomId })
-  }).catch(e => null);
-  if (!res || res.error) { toast(res?.error || '删除失败', 'error'); return; }
-  if (chatState.currentRoomId === roomId) {
-    chatState.currentRoomId = null;
-    document.getElementById('chatEmpty').classList.remove('hidden');
-    document.getElementById('chatMsgs').classList.add('hidden');
-  }
-  if (chatState.pollTimers && chatState.pollTimers[roomId]) {
-    clearTimeout(chatState.pollTimers[roomId]);
-    delete chatState.pollTimers[roomId];
-  }
-  if (chatState.sbChannels[roomId]) {
-    try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}
-    delete chatState.sbChannels[roomId];
-  }
-  await loadRoomList();
-  toast(res.deleted ? '频道已删除' : '对话已删除', 'success');
-}
-
-async function editMessage(eventId, currentContent) {
-  const newContent = prompt('编辑消息:', currentContent);
-  if (newContent === null || !newContent.trim()) return;
-  const editId = 'edit_' + Date.now().toString(36);
-  const { error } = await __SB.from('chat_messages').insert({
-    event_id: editId,
-    room_id: chatState.currentRoomId,
-    sender_id: currentUser.id,
-    sender_name: currentUser.name,
-    sender_avatar: currentUser.avatar || '',
-    sender_doubao_id: currentUser.doubao_id || '',
-    content: newContent.trim(),
-    rel_type: 'm.replace',
-    relates_to_event_id: eventId,
-    ts: Date.now()
-  });
-  if (error) { toast('编辑失败: ' + error.message, 'error'); return; }
-  const msgs = chatState.messages[chatState.currentRoomId] || [];
-  const msg = msgs.find(m => m.event_id === eventId);
-  if (msg) { msg.content = newContent.trim(); msg.edited = true; }
-  renderMessages(chatState.currentRoomId);
-  toast('消息已编辑', 'success');
-}
-
-function showReactionPicker(eventId) {
-  const emojis = ['👍','❤️','😂','😮','😢','😡','🎉','🔥','✅','👀','🤔','👏'];
-  const existing = document.getElementById('reactionPicker');
-  if (existing) existing.remove();
-  const picker = document.createElement('div');
-  picker.id = 'reactionPicker';
-  picker.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:8px 12px;display:flex;gap:4px;z-index:200;flex-wrap:wrap;max-width:320px;justify-content:center';
-  picker.innerHTML = emojis.map(e => '<button onclick="sendReaction(\'' + eventId + '\',\'' + e + '\');this.parentElement.remove()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:4px;border-radius:8px;transition:background .15s" onmouseover="this.style.background=\'#f3f4f6\'" onmouseout="this.style.background=\'none\'">' + e + '</button>').join('');
-  document.body.appendChild(picker);
-  setTimeout(() => { if (document.getElementById('reactionPicker')) document.getElementById('reactionPicker').remove(); }, 10000);
-}
-
-async function sendReaction(eventId, reaction) {
-  const rid = 'rxn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const { error } = await __SB.from('chat_reactions').upsert({
-    id: rid,
-    event_id: eventId,
-    reaction,
-    sender_id: currentUser.id,
-    room_id: chatState.currentRoomId
-  }, { onConflict: 'event_id,reaction,sender_id' });
-  if (error) { toast('表情发送失败', 'error'); return; }
-  if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
-  if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
-  const idx = chatState.reactionsMap[eventId][reaction].indexOf(currentUser.id);
-  if (idx >= 0) {
-    chatState.reactionsMap[eventId][reaction].splice(idx, 1);
-    await __SB.from('chat_reactions').delete().eq('event_id', eventId).eq('reaction', reaction).eq('sender_id', currentUser.id);
-  } else {
-    chatState.reactionsMap[eventId][reaction].push(currentUser.id);
-  }
-  if (chatState.reactionsMap[eventId][reaction].length === 0) delete chatState.reactionsMap[eventId][reaction];
-  renderMessages(chatState.currentRoomId);
-}
-
-
-async function leaveChannel(roomId) {
-  if (!confirm('确定要离开这个频道吗？')) return;
-  const res = await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'leave-channel', user_id: currentUser.id, room_id: roomId })
-  }).catch(() => null);
-  if (!res || res.error) { toast(res?.error || '操作失败', 'error'); return; }
-  if (chatState.currentRoomId === roomId) {
-    chatState.currentRoomId = null;
-    document.getElementById('chatEmpty').classList.remove('hidden');
-    document.getElementById('chatMsgs').classList.add('hidden');
-  }
-  await loadRoomList();
-  toast('已离开频道', 'success');
-}
-
-async function showRoomSettings() {
-  if (!chatState.currentRoomId) return;
-  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
-  if (!room) return;
-  const canManage = await checkChannelPermission(chatState.currentRoomId);
-  let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">' +
-    '<div class="modal-header"><div class="modal-title">⚙️ 频道设置 - ' + esc(room.name || '') + '</div>' +
-    '<button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
-  html += '<div class="form-group"><label class="form-label">频道名称</label>' +
-    '<div style="display:flex;gap:8px"><input class="input" id="editRoomName" value="' + esc(room.name || '') + '" style="flex:1">' +
-    '<button class="btn btn-orange btn-sm" onclick="updateRoomName()">保存</button></div></div>';
-  html += '<div style="margin-bottom:12px;display:flex;gap:8px">' +
-    '<button class="btn btn-red" style="flex:1" onclick="leaveChannel(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()">离开频道</button>' +
-    (canManage ? '<button class="btn btn-red" onclick="deleteConversation(\'' + room.id + '\');document.getElementById(\'roomSettingsModal\').remove()" style="flex:1">🗑 删除频道</button>' : '') +
-    '</div>';
-  if (canManage) {
-    html += '<div class="section-label">成员管理</div><div id="roomMemberList">加载中...</div>';
-  }
-  html += '</div></div>';
-  document.body.insertAdjacentHTML('beforeend', html);
-  if (canManage) loadRoomMemberList(room.id);
-}
-
-async function loadRoomMemberList(roomId) {
-  const res = await api('/api/chat?action=channel-members&room_id=' + roomId).catch(() => null);
-  const el = document.getElementById('roomMemberList');
-  if (!res?.members?.length) { el.innerHTML = '<div style="font-size:12px;color:#9ca3af">暂无成员</div>'; return; }
-  const room = chatState.rooms.find(r => r.id === roomId);
-  const isCreator = room?.created_by === currentUser.id;
-  const canManage = isCreator || (await checkChannelPermission(roomId));
-  el.innerHTML = res.members.map(m => {
-    const isRoomCreator = m.id === room?.created_by;
-    const isAdmin = m.is_admin || isRoomCreator;
-    const isSelf = m.id === currentUser.id;
-    let actions = '';
-    if (canManage && !isSelf && !isRoomCreator) {
-      actions += '<button class="btn btn-red btn-sm" onclick="kickMember(\'' + roomId + '\',\'' + m.id + '\')">踢出</button>';
-      if (m.is_muted) {
-        actions += '<button class="btn btn-blue btn-sm" onclick="unmuteMember(\'' + roomId + '\',\'' + m.id + '\')">解除禁言</button>';
-      } else {
-        actions += '<button class="btn btn-gray btn-sm" onclick="muteUserInChannel(\'' + m.id + '\')">禁言</button>';
-      }
-      if (isCreator && !isAdmin) {
-        actions += '<button class="btn btn-orange btn-sm" onclick="setChannelAdmin(\'' + m.id + '\')">设为管理</button>';
-      }
-      if (isCreator && isAdmin && !isRoomCreator) {
-        actions += '<button class="btn btn-red btn-sm" onclick="removeChannelAdmin(\'' + m.id + '\')">移除管理</button>';
-      }
-    }
-    const badge = isRoomCreator ? ' 👑' : (isAdmin ? ' ⭐' : '');
-    return '<div class="list-item" style="margin-bottom:4px">' +
-      avatarHTML(m, true, true) +
-      '<div class="list-item-info"><div class="list-item-name">' + esc(m.name) + badge + (m.is_muted ? ' 🔇' : '') + '</div></div>' +
-      actions + '</div>';
-  }).join('');
-}
-
-async function updateRoomName() {
-  if (!chatState.currentRoomId) return;
-  const name = document.getElementById('editRoomName')?.value?.trim();
-  if (!name) { toast('请输入频道名称', 'error'); return; }
-  const res = await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'update-room', user_id: currentUser.id, room_id: chatState.currentRoomId, name })
-  }).catch(() => null);
-  if (!res || res.error) { toast(res?.error || '修改失败', 'error'); return; }
-  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
-  if (room) room.name = name;
-  toast('名称已更新', 'success');
-}
-
-async function kickMember(roomId, targetUserId) {
-  if (!confirm('确定要踢出该成员吗？')) return;
-  await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'kick-member', user_id: currentUser.id, room_id: roomId, target_user_id: targetUserId })
-  }).catch(() => {});
-  loadRoomMemberList(roomId);
-  toast('已踢出成员', 'success');
-}
-
-async function showBrowseChannels(query) {
-  let url = '/api/chat?action=channels&user_id=' + (currentUser ? currentUser.id : '');
-  if (query) url += '&q=' + encodeURIComponent(query);
-  const res = await api(url).catch(() => null);
-  const channels = res?.channels || [];
-  const unjoined = channels.filter(c => !c.joined);
-  let html = '<div class="modal-overlay" id="browseChannelsModal" style="display:flex"><div class="modal modal-lg">' +
-    '<div class="modal-header"><div class="modal-title">🔍 浏览频道</div>' +
-    '<button class="modal-close" onclick="document.getElementById(\'browseChannelsModal\').remove()">✕</button></div>' +
-    '<div style="margin-bottom:12px"><input class="input" id="channelSearchInput" placeholder="搜索频道名称..." value="' + esc(query || '') + '" oninput="debounceChannelSearch()"></div>';
-  if (!unjoined.length) {
-    html += '<div class="empty"><div class="empty-icon">📢</div><div class="empty-text">' + (query ? '未找到匹配频道' : '暂无更多频道') + '</div></div>';
-  } else {
-    html += unjoined.map(c => {
-      const isInviteOnly = c.admission === 'invite_only';
-      const btnLabel = isInviteOnly ? '申请加入' : '加入';
-      const btnClass = isInviteOnly ? 'btn-blue' : 'btn-green';
-      const onclick = isInviteOnly ? 'requestJoinChannel(\'' + c.id + '\')' : 'joinChannel(\'' + c.id + '\')';
-      return '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(c.name) + '</div>' +
-        '<div class="list-item-email">' + (c.member_count || 0) + ' 位成员' + (c.creator_name ? ' · 创建者: ' + esc(c.creator_name) : '') + (isInviteOnly ? ' · 🔒 仅邀请' : '') + '</div></div>' +
-        '<button class="btn ' + btnClass + ' btn-sm" onclick="' + onclick + '">' + btnLabel + '</button></div>';
-    }).join('');
-  }
-  html += '</div></div>';
-  document.body.insertAdjacentHTML('beforeend', html);
-}
-
-let channelSearchTimer = null;
-function debounceChannelSearch() {
-  clearTimeout(channelSearchTimer);
-  channelSearchTimer = setTimeout(() => {
-    const q = document.getElementById('channelSearchInput')?.value?.trim() || '';
-    document.getElementById('browseChannelsModal')?.remove();
-    showBrowseChannels(q);
-  }, 300);
-}
-
-async function requestJoinChannel(roomId) {
-  await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'request-join', user_id: currentUser.id, room_id: roomId })
-  }).catch(() => {});
-  document.getElementById('browseChannelsModal')?.remove();
-  toast('已发送加入申请，等待管理员审批', 'success');
-}
-
-async function joinChannel(roomId) {
-  await api('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'join-channel', user_id: currentUser.id, room_id: roomId })
-  }).catch(() => {});
-  document.getElementById('browseChannelsModal')?.remove();
-  await loadRoomList();
-  toast('已加入频道', 'success');
 }
 
 // Friend groups in settings
