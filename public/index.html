@@ -264,10 +264,7 @@ function toast(message, type = 'success') {
 }
 
 // ===== Modal =====
-function showModal(name) {
-  document.getElementById(name + 'Modal').style.display = 'flex';
-  if (name === 'settings') loadSettings();
-}
+// showModal is defined later with full logic (line ~1361)
 function closeModal(name) {
   document.getElementById(name + 'Modal').style.display = 'none';
   if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
@@ -2294,7 +2291,6 @@ async function loadMessages(roomId) {
         banner = document.createElement('div');
         banner.id = 'channelAnnouncementBanner';
         banner.style.cssText = 'background:#FFF3ED;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;cursor:pointer';
-        var msgsEl = document.getElementById('chatMsgs');
         msgsEl.insertBefore(banner, msgsEl.firstChild);
       }
       banner.innerHTML = '📌 ' + pinned.map(function(a) { return esc(a.title); }).join(' ｜ ') + ' <span style="color:#FF6B35">查看</span>';
@@ -2365,7 +2361,7 @@ function renderMsgHTML(m, roomId) {
   if (m.recalled) {
     contentHtml = '<em style="color:#9ca3af;font-size:12px">消息已撤回</em>';
   } else if (text.startsWith('img:')) {
-    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0" onerror="this.outerHTML=\'<div style=background:#f3f4f6;border-radius:8px;padding:12px;color:#9ca3af;font-size:12px;max-width:240px>\u{1F5BC} 图片加载失败</div>\'">';
+    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0" onerror="this.outerHTML=\'<div style=&quot;background:#f3f4f6;border-radius:8px;padding:12px;color:#9ca3af;font-size:12px;max-width:240px&quot;>图片加载失败</div>\'">';
   } else if (text.startsWith('file:')) {
     const fc = text.slice(5);
     const lc = fc.lastIndexOf(':');
@@ -2412,7 +2408,7 @@ function renderReplyBlock(eventId, roomId) {
   } else {
     preview = linkify(esc(t.length > 80 ? t.slice(0,80) + '…' : t));
   }
-  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=\'' + esc(eventId) + '\']\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
+  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid="' + esc(eventId) + '"]\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
 }
 
 function subscribeToRoom(roomId) {
