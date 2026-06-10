@@ -74,7 +74,8 @@ export async function onRequestPost(context) {
       updated_at: user.updated_at,
       last_login_at: user.last_login_at,
       last_login_ip: clientIP,
-      last_login_ua: userAgent
+      last_login_ua: userAgent,
+      pat_suffix: user.pat_suffix
     };
 
     return Response.json({ success: true, data: safeUser, token });

@@ -199,4 +199,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .dark .btn-red{background:#EF4444;color:#fff}
 .dark .btn-green{background:#10B981;color:#fff}
 .dark .btn-blue{background:#3B82F6;color:#fff}
+.chat-msg-inner{display:flex;align-items:flex-start;gap:8px}
+.chat-msg-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px}
 .dark .btn-gray{background:#4B5563;color:#e5e7eb}
