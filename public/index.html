@@ -2342,7 +2342,7 @@ function renderReplyBlock(eventId, roomId) {
   } else {
     preview = linkify(esc(t.length > 80 ? t.slice(0,80) + '…' : t));
   }
-  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=\\'' + esc(eventId) + '\\\']\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
+  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=\'' + esc(eventId) + '\']\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
 }
 
 function subscribeToRoom(roomId) {
