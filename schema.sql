@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   agent_url TEXT UNIQUE,
   device_fingerprint TEXT,
   invite_code TEXT,
+  pat_suffix TEXT DEFAULT '',
   is_developer INTEGER DEFAULT 0,
   privacy_setting TEXT DEFAULT 'searchable',
   punished_until TEXT,
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   created_by TEXT NOT NULL,
+  is_system INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT
 );

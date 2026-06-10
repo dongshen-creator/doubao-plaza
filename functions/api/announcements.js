@@ -15,14 +15,14 @@ export async function onRequestGet(context) {
   try {
     const { env } = context;
     const results = await env.DB.prepare(
-      `SELECT id, title, content, created_by, created_at, updated_at 
+      `SELECT id, title, content, created_by, is_system, created_at, updated_at 
        FROM announcements ORDER BY created_at DESC`
     ).all();
 
     const data = (results.results || []).map(r => ({
       ...r,
       created_at: r.created_at ? r.created_at.replace(' ', 'T') + 'Z' : null,
-      is_system: r.created_by === 'system'
+      is_system: r.is_system === 1 || r.created_by === 'system'
     }));
 
     // 如果没有系统公告，追加一个虚拟系统公告
@@ -54,7 +54,7 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { title, content, created_by } = body;
+    const { title, content, created_by, is_system } = body;
 
     if (!title || !content || !created_by) {
       return Response.json({ success: false, error: '标题、内容和创建者不能为空' });
@@ -68,8 +68,8 @@ export async function onRequestPost(context) {
     }
 
     const result = await env.DB.prepare(
-      `INSERT INTO announcements (title, content, created_by) VALUES (?, ?, ?)`
-    ).bind(title, content, created_by).run();
+      `INSERT INTO announcements (title, content, created_by, is_system) VALUES (?, ?, ?, ?)`
+    ).bind(title, content, created_by, is_system ? 1 : 0).run();
 
     const announcement = await env.DB.prepare(
       `SELECT id, title, content, created_by, created_at, updated_at FROM announcements WHERE id = ?`
@@ -114,7 +114,7 @@ export async function onRequestPut(context) {
     // 如果是系统公告，用 INSERT OR REPLACE 处理（可能不在数据库中）
     if (id === '__system__') {
       await env.DB.prepare(
-        `INSERT INTO announcements (id, title, content, created_by) VALUES (?, ?, ?, 'system')
+        `INSERT INTO announcements (id, title, content, created_by, is_system) VALUES (?, ?, ?, 'system', 1)
          ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')`
       ).bind('__system__', title, content).run();
 

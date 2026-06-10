@@ -87,6 +87,10 @@ CREATE TABLE IF NOT EXISTS chat_channel_settings (
   room_id TEXT PRIMARY KEY,
   created_by TEXT NOT NULL,
   admission TEXT DEFAULT 'open',
+  admission_password TEXT,
+  admission_custom_page_id TEXT,
+  admission_questionnaire JSON,
+  admission_mode TEXT DEFAULT 'open',
   topic TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

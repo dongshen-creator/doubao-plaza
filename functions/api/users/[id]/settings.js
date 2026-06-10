@@ -85,6 +85,12 @@ export async function onRequestPut(context) {
       return Response.json({ success: true, message: '邀请码设置成功' });
     }
 
+    if (action === 'update_pat_suffix') {
+      const { pat_suffix } = body;
+      await env.DB.prepare("UPDATE users SET pat_suffix = ?, updated_at = datetime('now') WHERE id = ?").bind((pat_suffix || '').slice(0, 10), userId).run();
+      return Response.json({ success: true });
+    }
+
     if (action === 'set_privacy') {
       // 检查是否处于惩罚状态
       const user = await env.DB.prepare(

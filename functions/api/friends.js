@@ -70,13 +70,24 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { user_id, friend_id } = body;
+    const { user_id, friend_id, invite_code } = body;
 
     if (!user_id || !friend_id) {
       return Response.json({ success: false, error: 'user_id 和 friend_id 是必填项' });
     }
     if (user_id === friend_id) {
       return Response.json({ success: false, error: '不能添加自己为好友' });
+    }
+
+    const friend = await env.DB.prepare("SELECT privacy_setting, invite_code FROM users WHERE id = ?").bind(friend_id).first();
+    if (!friend) { return Response.json({ success: false, error: '用户不存在' }); }
+    if (friend.privacy_setting === 'stealth' || friend.privacy_setting === 'punished_stealth') {
+      return Response.json({ success: false, error: '该用户处于隐身模式，无法添加好友' });
+    }
+    if (friend.privacy_setting === 'whitelist' || friend.privacy_setting === 'punished_whitelist') {
+      if (!invite_code || invite_code !== friend.invite_code) {
+        return Response.json({ success: false, error: '邀请码错误，无法添加好友' });
+      }
     }
 
     // 检查是否已存在任何关系
