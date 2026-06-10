@@ -15,14 +15,13 @@ export async function onRequestGet(context) {
   try {
     const { env } = context;
     const results = await env.DB.prepare(
-      `SELECT id, title, content, created_by, is_system, created_at, updated_at 
-       FROM announcements ORDER BY created_at DESC`
+      `SELECT * FROM announcements ORDER BY created_at DESC`
     ).all();
 
     const data = (results.results || []).map(r => ({
       ...r,
       created_at: r.created_at ? r.created_at.replace(' ', 'T') + 'Z' : null,
-      is_system: r.is_system === 1 || r.created_by === 'system'
+      is_system: (r.is_system === 1 || r.is_system === '1' || r.created_by === 'system') ? true : false
     }));
 
     // 如果没有系统公告，追加一个虚拟系统公告
@@ -67,9 +66,16 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '只有开发者才能发布公告' });
     }
 
-    const result = await env.DB.prepare(
-      `INSERT INTO announcements (title, content, created_by, is_system) VALUES (?, ?, ?, ?)`
-    ).bind(title, content, created_by, is_system ? 1 : 0).run();
+    let result;
+    if (is_system) {
+      result = await env.DB.prepare(
+        "INSERT INTO announcements (title, content, created_by, is_system) VALUES (?, ?, ?, ?)"
+      ).bind(title, content, created_by, 1).run();
+    } else {
+      result = await env.DB.prepare(
+        "INSERT INTO announcements (title, content, created_by) VALUES (?, ?, ?)"
+      ).bind(title, content, created_by).run();
+    }
 
     const announcement = await env.DB.prepare(
       `SELECT id, title, content, created_by, created_at, updated_at FROM announcements WHERE id = ?`
@@ -113,10 +119,16 @@ export async function onRequestPut(context) {
 
     // 如果是系统公告，用 INSERT OR REPLACE 处理（可能不在数据库中）
     if (id === '__system__') {
-      await env.DB.prepare(
-        `INSERT INTO announcements (id, title, content, created_by, is_system) VALUES (?, ?, ?, 'system', 1)
-         ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')`
-      ).bind('__system__', title, content).run();
+      try {
+        await env.DB.prepare(
+          "INSERT INTO announcements (id, title, content, created_by, is_system) VALUES (?, ?, ?, 'system', 1) ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')"
+        ).bind('__system__', title, content).run();
+      } catch(e) {
+        // fallback: 列可能不存在
+        await env.DB.prepare(
+          "INSERT INTO announcements (id, title, content, created_by) VALUES (?, ?, ?, 'system') ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')"
+        ).bind('__system__', title, content).run();
+      }
 
       const announcement = await env.DB.prepare(
         `SELECT id, title, content, created_by, created_at, updated_at FROM announcements WHERE id = ?`

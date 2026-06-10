@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS chat_room_members (
   room_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   joined_at TIMESTAMPTZ DEFAULT NOW(),
+  mute_notifications BOOLEAN DEFAULT FALSE,
   UNIQUE(room_id, user_id)
 );
 
