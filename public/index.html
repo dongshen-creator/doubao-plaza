@@ -468,7 +468,11 @@ function showModal(name) {
   if (name === 'settings') loadSettings();
 }
 function closeModal(name) {
-  document.getElementById(name + 'Modal').style.display = 'none';
+  if (name === 'createChannel') {
+    document.getElementById('createChannelModal').classList.add('hidden');
+  } else {
+    document.getElementById(name + 'Modal').style.display = 'none';
+  }
   if (name === 'announcement') localStorage.setItem('dp_announcement_seen', '1');
 }
 
@@ -560,20 +564,28 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
 }
 
 async function patUser(targetUserId, targetUserName) {
-  if (!currentUser) return;
+  if (!currentUser || !chatState.currentRoomId) return;
   toast('你拍了拍 ' + targetUserName, 'info');
-  if (chatState.currentRoomId) {
-    try {
-      await api('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'send',
-          user_id: currentUser.id,
-          room_id: chatState.currentRoomId,
-          content: '👋 拍了拍 ' + targetUserName
-        })
-      });
-    } catch(e) {}
+  const content = '👋 拍了拍 ' + targetUserName;
+  const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const { error } = await __SB.from('chat_messages').insert({
+    event_id: eventId,
+    room_id: chatState.currentRoomId,
+    sender_id: currentUser.id,
+    sender_name: currentUser.name,
+    sender_avatar: currentUser.avatar || '',
+    sender_doubao_id: currentUser.doubao_id || '',
+    content,
+    ts: Date.now()
+  });
+  if (!error) {
+    const msgs = chatState.messages[chatState.currentRoomId] || [];
+    chatState.messages[chatState.currentRoomId] = [...msgs, {
+      event_id: eventId, sender: currentUser.name, sender_id: currentUser.id,
+      sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+      content, reply_to: null, ts: Date.now()
+    }];
+    renderMessages(chatState.currentRoomId);
   }
 }
 
@@ -2310,6 +2322,8 @@ function openChat() {
 }
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
+  if (chatState._openingChat) return;
+  chatState._openingChat = true;
   const panel = document.getElementById('chatPanel');
   panel.classList.add('show');
   chatState.chatOpen = true;
@@ -2329,7 +2343,8 @@ async function openChatWith(friendId, friendName) {
       }
     }
     if (!roomId) {
-      roomId = 'room_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const sortedIds = [currentUser.id, friendId].sort();
+      roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
       await __SB.from('chat_rooms').insert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null });
       await __SB.from('chat_room_members').insert([
         { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id },
@@ -2342,6 +2357,7 @@ async function openChatWith(friendId, friendName) {
   } else {
     loadRoomList();
   }
+  chatState._openingChat = false;
 }
 
 function closeChat() {
@@ -2350,8 +2366,6 @@ function closeChat() {
   Object.values(chatState.pollTimers).forEach(t => clearTimeout(t));
   chatState.pollTimers = {};
   chatState.currentRoomId = null;
-  Object.values(chatState.sbChannels).forEach(c => { try { c.unsubscribe(); } catch(e) {} });
-  chatState.sbChannels = {};
 }
 
 async function loadRoomList() {
@@ -2489,6 +2503,16 @@ async function loadMessages(roomId) {
     if (target) { target.content = newContent; target.edited = true; }
   }
   chatState.messages[roomId] = nonEdits.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const { data: reacts } = await __SB.from('chat_reactions').select('event_id,reaction,sender_id').eq('room_id', roomId);
+  if (reacts) {
+    for (const r of reacts) {
+      if (!chatState.reactionsMap[r.event_id]) chatState.reactionsMap[r.event_id] = {};
+      if (!chatState.reactionsMap[r.event_id][r.reaction]) chatState.reactionsMap[r.event_id][r.reaction] = [];
+      if (!chatState.reactionsMap[r.event_id][r.reaction].includes(r.sender_id)) {
+        chatState.reactionsMap[r.event_id][r.reaction].push(r.sender_id);
+      }
+    }
+  }
   renderMessages(roomId);
   markRead(roomId);
   subscribeToRoom(roomId);
@@ -2584,7 +2608,6 @@ function renderReplyBlock(eventId, roomId) {
 }
 
 function subscribeToRoom(roomId) {
-  if (!chatState.chatOpen) return;
   if (chatState.sbChannels[roomId]) {
     try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}
   }
@@ -2598,12 +2621,38 @@ function subscribeToRoom(roomId) {
       { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
       payload => { handleRealtimeUpdate(roomId, payload.new); }
     )
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
+      payload => {
+        const r = payload.new;
+        if (!r) return;
+        if (!chatState.reactionsMap[r.event_id]) chatState.reactionsMap[r.event_id] = {};
+        if (!chatState.reactionsMap[r.event_id][r.reaction]) chatState.reactionsMap[r.event_id][r.reaction] = [];
+        if (!chatState.reactionsMap[r.event_id][r.reaction].includes(r.sender_id)) {
+          chatState.reactionsMap[r.event_id][r.reaction].push(r.sender_id);
+        }
+        if (roomId === chatState.currentRoomId) renderMessages(roomId);
+      }
+    )
+    .on('postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
+      payload => {
+        const r = payload.old;
+        if (!r) return;
+        if (chatState.reactionsMap[r.event_id]?.[r.reaction]) {
+          const idx = chatState.reactionsMap[r.event_id][r.reaction].indexOf(r.sender_id);
+          if (idx >= 0) chatState.reactionsMap[r.event_id][r.reaction].splice(idx, 1);
+          if (chatState.reactionsMap[r.event_id][r.reaction].length === 0) delete chatState.reactionsMap[r.event_id][r.reaction];
+        }
+        if (roomId === chatState.currentRoomId) renderMessages(roomId);
+      }
+    )
     .subscribe();
   chatState.sbChannels[roomId] = channel;
 }
 
 function handleRealtimeMessage(roomId, msg) {
-  if (!chatState.chatOpen || msg.sender_id === currentUser.id) return;
+  if (msg.sender_id === currentUser.id) return;
   let content = msg.content;
   if (msg.recalled) content = '';
   const newMsg = {
@@ -2624,6 +2673,12 @@ function handleRealtimeMessage(roomId, msg) {
   } else {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
+    const room = chatState.rooms.find(r => r.id === roomId);
+    if (room) {
+      room.unread = (room.unread || 0) + 1;
+      renderRoomList();
+      updateUnreadBadge();
+    }
   }
   if (roomId === chatState.currentRoomId) {
     renderMessages(roomId);
@@ -2689,6 +2744,7 @@ async function sendChatMsg() {
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
   input.value = ''; autoChatResize(input);
+  const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId,
@@ -2698,7 +2754,7 @@ async function sendChatMsg() {
     sender_avatar: currentUser.avatar || '',
     sender_doubao_id: currentUser.doubao_id || '',
     content,
-    reply_to: chatState.replyTo || null,
+    reply_to: replyToSave || null,
     ts: Date.now()
   });
   if (error) {
@@ -2723,6 +2779,7 @@ function cancelReply() {
 }
 
 async function showCreateChannel() {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
   if (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 5000) {
     await loadRoomList().catch(() => {});
   }
@@ -2731,7 +2788,8 @@ async function showCreateChannel() {
     if (myChannels.length >= 1) { toast('每个用户只能创建一个频道', 'error'); return; }
   }
   document.getElementById('channelName').value = '';
-  document.getElementById('createChannelModal').style.display = 'flex';
+  const modal = document.getElementById('createChannelModal');
+  modal.classList.remove('hidden');
 }
 
 async function createChannel() {
@@ -2742,9 +2800,11 @@ async function createChannel() {
     id: roomId, type: 'channel', name, created_by: currentUser.id
   });
   if (roomErr) { toast('创建失败: ' + roomErr.message, 'error'); return; }
-  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
-  await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission: 'open', topic: '' });
-  document.getElementById('createChannelModal').style.display = 'none';
+  const { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  if (memErr) { toast('创建失败(成员): ' + memErr.message, 'error'); return; }
+  const { error: setErr } = await __SB.from('chat_channel_settings').insert({ room_id: roomId, created_by: currentUser.id, admission: 'open', topic: '' });
+  if (setErr) { toast('创建失败(设置): ' + setErr.message, 'error'); return; }
+  document.getElementById('createChannelModal').classList.add('hidden');
   chatState.currentRoomId = roomId;
   await loadRoomList();
   loadMessages(roomId);
@@ -2783,8 +2843,19 @@ async function uploadChatImage(input) {
   input.value = '';
   if (!res?.success) { toast(res?.error || '图片上传失败', 'error'); return; }
   const url = res.url;
-  const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'img:' + url }) });
-  const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '2', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'img:' + url, reply_to: null, ts: Date.now() };
+  const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const { error } = await __SB.from('chat_messages').insert({
+    event_id: eventId,
+    room_id: chatState.currentRoomId,
+    sender_id: currentUser.id,
+    sender_name: currentUser.name,
+    sender_avatar: currentUser.avatar || '',
+    sender_doubao_id: currentUser.doubao_id || '',
+    content: 'img:' + url,
+    ts: Date.now()
+  });
+  if (error) { toast('发送失败: ' + error.message, 'error'); return; }
+  const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'img:' + url, reply_to: null, ts: Date.now() };
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
@@ -2804,8 +2875,19 @@ async function uploadChatFile(input) {
   input.value = '';
   if (!res?.success) { toast(res?.error || '文件上传失败', 'error'); return; }
   const url = res.url;
-  const sendRes = await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'send', user_id: currentUser.id, room_id: chatState.currentRoomId, content: 'file:' + file.name + ':' + url }) });
-  const localMsg = { event_id: sendRes.event_id || Date.now().toString(36) + '3', sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };
+  const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const { error } = await __SB.from('chat_messages').insert({
+    event_id: eventId,
+    room_id: chatState.currentRoomId,
+    sender_id: currentUser.id,
+    sender_name: currentUser.name,
+    sender_avatar: currentUser.avatar || '',
+    sender_doubao_id: currentUser.doubao_id || '',
+    content: 'file:' + file.name + ':' + url,
+    ts: Date.now()
+  });
+  if (error) { toast('发送失败: ' + error.message, 'error'); return; }
+  const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
   renderMessages(chatState.currentRoomId);
@@ -3107,18 +3189,21 @@ function showReactionPicker(eventId) {
 }
 
 async function sendReaction(eventId, reaction) {
+  const rid = 'rxn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_reactions').upsert({
+    id: rid,
     event_id: eventId,
     reaction,
     sender_id: currentUser.id,
     room_id: chatState.currentRoomId
   }, { onConflict: 'event_id,reaction,sender_id' });
-  if (error) return;
+  if (error) { toast('表情发送失败', 'error'); return; }
   if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
   if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
   const idx = chatState.reactionsMap[eventId][reaction].indexOf(currentUser.id);
   if (idx >= 0) {
     chatState.reactionsMap[eventId][reaction].splice(idx, 1);
+    await __SB.from('chat_reactions').delete().eq('event_id', eventId).eq('reaction', reaction).eq('sender_id', currentUser.id);
   } else {
     chatState.reactionsMap[eventId][reaction].push(currentUser.id);
   }
