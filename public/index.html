@@ -2406,7 +2406,14 @@ async function loadMessages(roomId) {
       }
     }
   }
-  chatState.messages[roomId] = nonEdits.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  var existingMsgs = chatState.messages[roomId] || [];
+  var serverEventIds = {};
+  for (var si = 0; si < nonEdits.length; si++) { serverEventIds[nonEdits[si].event_id] = true; }
+  var keptRealtime = [];
+  for (var ei = 0; ei < existingMsgs.length; ei++) {
+    if (!serverEventIds[existingMsgs[ei].event_id]) keptRealtime.push(existingMsgs[ei]);
+  }
+  chatState.messages[roomId] = keptRealtime.concat(nonEdits).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
   renderMessages(roomId);
   var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
   if (loadRoom && loadRoom.type === 'channel') {
@@ -2424,7 +2431,6 @@ async function loadMessages(roomId) {
     }
   }
   markRead(roomId);
-  subscribeToRoom(roomId);
   document.getElementById('chatInput').focus();
   var input2 = document.getElementById('chatInput');
   if (!input2._atBound) { input2.addEventListener('input', function(e) { handleAtAutocomplete(input2); }); input2._atBound = true; }
