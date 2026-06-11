@@ -1037,21 +1037,20 @@ async function loadMyFriends() {
           ${groupHtml}
           <div class="grid-3">
             ${filteredFriends.map(f => `
-              <div class="card friend-row" style="flex-direction:column;align-items:stretch;gap:8px">
-                <div style="display:flex;align-items:center;gap:8px">
+              <div class="card friend-card-grid">
+                <div class="friend-card-main">
                   ${avatarHTML(f.friend, true, true)}
-                  <div class="friend-row-info">
-                    <div class="friend-row-name">${esc(f.friend?.name)}</div>
-                    <div class="friend-row-id">${esc(f.friend?.doubao_id || '')}</div>
+                  <div class="friend-card-text">
+                    <div class="friend-card-name">${esc(f.friend?.name)}</div>
+                    <div class="friend-card-id">${esc(f.friend?.doubao_id || '')}</div>
                   </div>
                 </div>
-                ${renderBio(f.friend?.bio)}
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-green btn-sm" style="flex:1" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">💬 聊天</button>
-                  ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : ''}
-                  <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+                <div class="friend-card-actions">
+                  <button class="btn btn-green btn-sm friend-card-btn" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')"><span class="friend-btn-label">💬</span><span class="friend-btn-text">聊天</span></button>
+                  ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm friend-card-btn"><span class="friend-btn-label">🔗</span><span class="friend-btn-text">主页</span></a>` : ''}
+                  <button class="btn btn-red btn-sm friend-card-btn" onclick="removeFriend('${f.id}')"><span class="friend-btn-label">✕</span><span class="friend-btn-text">移除</span></button>
                 </div>
-                </div>
+                ${renderBio(f.friend?.bio) ? '<div class="friend-card-bio">' + renderBio(f.friend?.bio) + '</div>' : ''}
               </div>
             `).join('')}
           </div>
@@ -1066,8 +1065,19 @@ async function loadMyFriends() {
 function toggleSection(section) {
   var key = 'dp_collapsed_' + section;
   var current = localStorage.getItem(key) === '1';
-  localStorage.setItem(key, current ? '0' : '1');
-  if (section === 'friends') loadMyFriends();
+  var willBeCollapsed = !current;
+  localStorage.setItem(key, willBeCollapsed ? '1' : '0');
+  if (section === 'friends') {
+    var content = document.getElementById('friendsContent');
+    var label = document.querySelector('#myFriends .section-label');
+    if (content && label) {
+      content.style.display = willBeCollapsed ? 'none' : '';
+      var arrow = willBeCollapsed ? '\u25B6' : '\u25BC';
+      var text = label.innerHTML;
+      var newText = arrow + ' ' + text.replace(/^[\u25B6\u25BC]\s*/, '');
+      label.innerHTML = newText;
+    }
+  }
   else if (section === 'features') loadFeatures();
   else if (section === 'announcements') loadAnnouncements();
 }
@@ -2193,7 +2203,7 @@ function openChat() {
   document.getElementById('chatRoomList').classList.add('show');
   document.getElementById('chatEmpty').classList.remove('hidden');
   document.getElementById('chatMsgs').classList.add('hidden');
-  loadRoomList();
+  loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
 }
 
 async function openChatWith(friendId, friendName) {
@@ -2246,66 +2256,72 @@ function closeChat() {
 
 async function loadRoomList() {
   if (!currentUser) return;
-  const { data: memberships, error } = await __SB
-    .from('chat_room_members')
-    .select('room_id, joined_at, mute_notifications')
-    .eq('user_id', currentUser.id)
-    .order('joined_at', { ascending: false });
-  if (error) { console.error('loadRoomList error:', error); return; }
-  if (!memberships?.length) { chatState.rooms = []; renderRoomList(); return; }
-  const roomIds = memberships.map(m => m.room_id);
-  const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
-  const roomMap = {};
-  if (roomData) roomData.forEach(r => { roomMap[r.id] = r; });
-  var { data: unreadAll } = await __SB.from('chat_unread').select('room_id,count').eq('user_id', currentUser.id).in('room_id', roomIds);
-  var { data: memberCounts } = await __SB.from('chat_room_members').select('room_id').in('room_id', roomIds);
-  var { data: adminAll } = await __SB.from('chat_admins').select('room_id').eq('user_id', currentUser.id).in('room_id', roomIds);
-  var unreadMap = {}; var memberCountMap = {}; var adminMap = {};
-  if (unreadAll) unreadAll.forEach(function(u) { unreadMap[u.room_id] = u.count || 0; });
-  if (memberCounts) memberCounts.forEach(function(m) { memberCountMap[m.room_id] = (memberCountMap[m.room_id] || 0) + 1; });
-  if (adminAll) adminAll.forEach(function(a) { adminMap[a.room_id] = true; });
-  const rooms = [];
-  // Parallel fetch private room user info
-  const privateRoomIds = [];
-  for (const m of memberships) {
-    if (roomMap[m.room_id]?.type === 'private') privateRoomIds.push(m.room_id);
-  }
-  const privateUserMap = {};
-  if (privateRoomIds.length > 0) {
-    const { data: otherMembersData } = await __SB.from('chat_room_members').select('room_id, user_id').in('room_id', privateRoomIds).neq('user_id', currentUser.id);
-    if (otherMembersData) {
-      const userIds = [...new Set(otherMembersData.map(function(om) { return om.user_id; }).filter(Boolean))];
-      const userResults = await Promise.all(userIds.map(function(uid) {
-        return api('/api/users/' + uid).then(function(r) { return { uid: uid, res: r }; }).catch(function() { return null; });
-      }));
-      const userInfoMap = {};
-      userResults.forEach(function(ur) { if (ur && ur.res?.success) { var d = ur.res.data; userInfoMap[ur.uid] = { id: d.id, name: d.name, avatar: d.avatar, doubao_id: d.doubao_id }; } });
-      otherMembersData.forEach(function(om) {
-        var uData = userInfoMap[om.user_id];
-        privateUserMap[om.room_id] = uData || { id: om.user_id || '', name: (roomMap[om.room_id]?.name) || '聊天', avatar: '', doubao_id: '' };
+  try {
+    const { data: memberships, error } = await __SB
+      .from('chat_room_members')
+      .select('room_id, joined_at, mute_notifications')
+      .eq('user_id', currentUser.id)
+      .order('joined_at', { ascending: false });
+    if (error) { console.error('loadRoomList error:', error); chatState.rooms = []; renderRoomList(); return; }
+    if (!memberships?.length) { chatState.rooms = []; renderRoomList(); return; }
+    const roomIds = memberships.map(m => m.room_id);
+    const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
+    const roomMap = {};
+    if (roomData) roomData.forEach(r => { roomMap[r.id] = r; });
+    var { data: unreadAll } = await __SB.from('chat_unread').select('room_id,count').eq('user_id', currentUser.id).in('room_id', roomIds);
+    var { data: memberCounts } = await __SB.from('chat_room_members').select('room_id').in('room_id', roomIds);
+    var { data: adminAll } = await __SB.from('chat_admins').select('room_id').eq('user_id', currentUser.id).in('room_id', roomIds);
+    var unreadMap = {}; var memberCountMap = {}; var adminMap = {};
+    if (unreadAll) unreadAll.forEach(function(u) { unreadMap[u.room_id] = u.count || 0; });
+    if (memberCounts) memberCounts.forEach(function(m) { memberCountMap[m.room_id] = (memberCountMap[m.room_id] || 0) + 1; });
+    if (adminAll) adminAll.forEach(function(a) { adminMap[a.room_id] = true; });
+    const rooms = [];
+    // Parallel fetch private room user info
+    const privateRoomIds = [];
+    for (const m of memberships) {
+      if (roomMap[m.room_id]?.type === 'private') privateRoomIds.push(m.room_id);
+    }
+    const privateUserMap = {};
+    if (privateRoomIds.length > 0) {
+      const { data: otherMembersData } = await __SB.from('chat_room_members').select('room_id, user_id').in('room_id', privateRoomIds).neq('user_id', currentUser.id);
+      if (otherMembersData) {
+        const userIds = [...new Set(otherMembersData.map(function(om) { return om.user_id; }).filter(Boolean))];
+        const userResults = await Promise.all(userIds.map(function(uid) {
+          return api('/api/users/' + uid).then(function(r) { return { uid: uid, res: r }; }).catch(function() { return null; });
+        }));
+        const userInfoMap = {};
+        userResults.forEach(function(ur) { if (ur && ur.res?.success && ur.res.data) { var d = ur.res.data; userInfoMap[ur.uid] = { id: d.id, name: d.name, avatar: d.avatar, doubao_id: d.doubao_id }; } });
+        otherMembersData.forEach(function(om) {
+          var uData = userInfoMap[om.user_id];
+          privateUserMap[om.room_id] = uData || { id: om.user_id || '', name: (roomMap[om.room_id]?.name) || '聊天', avatar: '', doubao_id: '' };
+        });
+      }
+    }
+    for (const m of memberships) {
+      const r = roomMap[m.room_id];
+      if (!r) continue;
+      var unreadCount = unreadMap[r.id] || 0;
+      var memberCount = memberCountMap[r.id] || 0;
+      var other = r.type === 'private' ? (privateUserMap[r.id] || { id: '', name: r.name || '聊天', avatar: '', doubao_id: '' }) : null;
+      var isAdmin = !!adminMap[r.id];
+      rooms.push({
+        id: r.id, type: r.type, name: r.name, created_by: r.created_by,
+        created_at: r.created_at, unread: unreadCount,
+        member_count: memberCount, other,
+        is_admin: isAdmin, creator_name: '',
+        mute_notifications: m.mute_notifications || false
       });
     }
+    chatState.rooms = rooms;
+    chatState.lastRoomListRefresh = Date.now();
+    chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
+    renderRoomList();
+    rooms.forEach(r => { if (!chatState.sbChannels[r.id]) subscribeToRoom(r.id); });
+  } catch (e) {
+    console.error('loadRoomList crashed:', e);
+    chatState.rooms = [];
+    renderRoomList();
   }
-  for (const m of memberships) {
-    const r = roomMap[m.room_id];
-    if (!r) continue;
-    var unreadCount = unreadMap[r.id] || 0;
-    var memberCount = memberCountMap[r.id] || 0;
-    var other = r.type === 'private' ? (privateUserMap[r.id] || { id: '', name: r.name || '聊天', avatar: '', doubao_id: '' }) : null;
-    var isAdmin = !!adminMap[r.id];
-    rooms.push({
-      id: r.id, type: r.type, name: r.name, created_by: r.created_by,
-      created_at: r.created_at, unread: unreadCount,
-      member_count: memberCount, other,
-      is_admin: isAdmin, creator_name: '',
-      mute_notifications: m.mute_notifications || false
-    });
-  }
-  chatState.rooms = rooms;
-  chatState.lastRoomListRefresh = Date.now();
-  chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
-  renderRoomList();
-  rooms.forEach(r => { if (!chatState.sbChannels[r.id]) subscribeToRoom(r.id); });
 }
 
 function renderRoomList() {
@@ -2577,22 +2593,24 @@ function subscribeToRoom(roomId) {
 function handleRealtimeMessage(roomId, msg) {
   if (msg.sender_id === currentUser.id) return;
   var roomN = chatState.rooms.find(function(r) { return r.id === roomId; });
-  if (roomN && roomN.mute_notifications) return;
+  var isMuted = roomN && roomN.mute_notifications;
   // Dedup check
   var existingMsgs = chatState.messages[roomId] || [];
   if (existingMsgs.some(function(m) { return m.event_id === (msg.event_id || 'msg_' + msg.id); })) return;
-  // Auto-unhide if this room was hidden
-  var hiddenRooms = getHiddenChannels();
-  if (hiddenRooms.indexOf(roomId) >= 0) {
-    var h = getHiddenChannels();
-    var hIdx = h.indexOf(roomId);
-    if (hIdx >= 0) { h.splice(hIdx, 1); saveHiddenChannels(h); }
+  // Auto-unhide if this room was hidden (only when notifications are enabled)
+  if (notifEnabled) {
+    var hiddenRooms = getHiddenChannels();
+    if (hiddenRooms.indexOf(roomId) >= 0) {
+      var h = getHiddenChannels();
+      var hIdx = h.indexOf(roomId);
+      if (hIdx >= 0) { h.splice(hIdx, 1); saveHiddenChannels(h); }
+    }
   }
   let content = msg.content;
   if (msg.recalled) content = '';
   // 桌面通知 + @我的高亮
   var isAtMe = currentUser && msg.content && msg.content.indexOf('@' + currentUser.name) >= 0;
-  if (content && document.hidden && notifEnabled && Notification.permission === 'granted') {
+  if (content && document.hidden && notifEnabled && !isMuted && Notification.permission === 'granted') {
     var room4n = chatState.rooms.find(function(r) { return r.id === roomId; });
     var roomName4n = room4n ? (room4n.name || (room4n.other && room4n.other.name) || '聊天') : '聊天';
     try {
@@ -2615,8 +2633,19 @@ function handleRealtimeMessage(roomId, msg) {
   } else {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
-    const room = chatState.rooms.find(r => r.id === roomId);
-    if (room) { room.unread = (room.unread || 0) + 1; renderRoomList(); updateUnreadBadge(); }
+    var room = chatState.rooms.find(r => r.id === roomId);
+    if (!room) {
+      room = {
+        id: roomId, type: msg.sender_id === 'system' ? 'channel' : 'private',
+        name: msg.sender_name || '聊天', unread: 0, member_count: 0,
+        other: msg.sender_id !== 'system' ? { id: msg.sender_id, name: msg.sender_name || '未知', avatar: msg.sender_avatar || '', doubao_id: msg.sender_doubao_id || '' } : null,
+        mute_notifications: false, is_admin: false, created_by: '', created_at: ''
+      };
+      chatState.rooms.push(room);
+    }
+    room.unread = (room.unread || 0) + 1;
+    renderRoomList();
+    updateUnreadBadge();
   }
   if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
 }
@@ -2720,9 +2749,11 @@ async function sendChatMsg() {
     content, reply_to: replyToSave || null, ts: Date.now()
   });
   if (error) { toast('发送失败: ' + error.message, 'error'); return; }
-  var h = getHiddenChannels();
-  var hIdx = h.indexOf(chatState.currentRoomId);
-  if (hIdx >= 0) { h.splice(hIdx, 1); saveHiddenChannels(h); loadRoomList(); }
+  if (notifEnabled) {
+    var h = getHiddenChannels();
+    var hIdx = h.indexOf(chatState.currentRoomId);
+    if (hIdx >= 0) { h.splice(hIdx, 1); saveHiddenChannels(h); loadRoomList(); }
+  }
   btn.disabled = false;
   chatState.lastSendTime = Date.now();
 }
