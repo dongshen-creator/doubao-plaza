@@ -2325,7 +2325,12 @@ async function loadRoomList() {
     chatState.lastRoomListRefresh = Date.now();
     chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
     renderRoomList();
-    rooms.forEach(r => { if (!chatState.sbChannels[r.id]) subscribeToRoom(r.id); });
+    var now2 = Date.now();
+    rooms.forEach(r => {
+      var ch = chatState.sbChannels[r.id];
+      if (ch && ch._subTime && now2 - ch._subTime < 30000 && ch.state !== 'closed') return;
+      subscribeToRoom(r.id);
+    });
   } catch (e) {
     console.error('loadRoomList crashed:', e);
     chatState.rooms = [];
@@ -2566,8 +2571,24 @@ function renderReplyBlock(eventId, roomId) {
 }
 
 function subscribeToRoom(roomId) {
-  if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {} }
-  console.log('[CHAT-DEBUG] subscribeToRoom:', roomId);
+  console.trace('[CHAT-DEBUG] subscribeToRoom called for:', roomId);
+  if (!chatState._subDebounce) chatState._subDebounce = {};
+  var now = Date.now();
+  var last = chatState._subDebounce[roomId] || 0;
+  if (now - last < 3000) { console.log('[CHAT-DEBUG] subscribeToRoom skipped (debounce):', roomId, 'last sub was', now - last, 'ms ago'); return; }
+  chatState._subDebounce[roomId] = now;
+  var oldCh = chatState.sbChannels[roomId];
+  if (oldCh) {
+    oldCh._closingIntentionally = true;
+    try { oldCh.unsubscribe(); } catch(e) {}
+    if (oldCh._subTime && now - oldCh._subTime < 10000 && oldCh.state !== 'closed') {
+      console.log('[CHAT-DEBUG] subscribeToRoom skipped (alive):', roomId, 'subscribed', now - oldCh._subTime, 'ms ago, state:', oldCh.state);
+      oldCh._closingIntentionally = false;
+      chatState.sbChannels[roomId] = oldCh;
+      return;
+    }
+  }
+  console.log('[CHAT-DEBUG] subscribeToRoom creating new sub:', roomId);
   const channel = __SB
     .channel('room:' + roomId)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
@@ -2602,7 +2623,21 @@ function subscribeToRoom(roomId) {
           if (chatState.currentRoomId === roomId) loadRoomMemberList(roomId);
         }
       })
-    .subscribe((status) => { console.log('[CHAT-DEBUG] subscribe status for', roomId, ':', status); });
+    .subscribe((status) => {
+      console.log('[CHAT-DEBUG] subscribe status for', roomId, ':', status);
+      if (status === 'SUBSCRIBED') channel._subTime = Date.now();
+      if (status === 'CLOSED' && !channel._closingIntentionally && chatState.chatOpen) {
+        console.log('[CHAT-DEBUG] unintentional CLOSED for', roomId, '- will re-sub after 3s');
+        setTimeout(function() {
+          if (chatState.sbChannels[roomId] === channel && channel.state === 'closed') {
+            console.log('[CHAT-DEBUG] re-subscribing after CLOSED:', roomId);
+            subscribeToRoom(roomId);
+          }
+        }, 3000);
+      }
+    });
+  channel._subTime = now;
+  channel._closingIntentionally = false;
   chatState.sbChannels[roomId] = channel;
 }
 
