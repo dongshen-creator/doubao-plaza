@@ -100,15 +100,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .friend-card-name{font-size:13px;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .friend-card-id{font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .friend-card-actions{display:flex;gap:4px;flex-wrap:wrap}
-.friend-card-btn{flex:0 1 auto;min-width:0}
-.friend-btn-text{display:inline}
-.friend-btn-label{display:none}
 .friend-card-bio{font-size:11px;color:#9ca3af;width:100%;word-break:break-all}
 @media(max-width:500px){
   .friend-card-grid{gap:6px}
   .friend-card-actions{justify-content:flex-start}
-  .friend-btn-text{display:none}
-  .friend-btn-label{display:inline}
 }
 .toast-container{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:8px}
 .toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);font-size:13px;font-weight:500;animation:slideInDown .3s;min-width:240px;max-width:360px}

@@ -1046,9 +1046,9 @@ async function loadMyFriends() {
                   </div>
                 </div>
                 <div class="friend-card-actions">
-                  <button class="btn btn-green btn-sm friend-card-btn" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')"><span class="friend-btn-label">💬</span><span class="friend-btn-text">聊天</span></button>
-                  ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm friend-card-btn"><span class="friend-btn-label">🔗</span><span class="friend-btn-text">主页</span></a>` : ''}
-                  <button class="btn btn-red btn-sm friend-card-btn" onclick="removeFriend('${f.id}')"><span class="friend-btn-label">✕</span><span class="friend-btn-text">移除</span></button>
+                  <button class="btn btn-green btn-sm" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">💬 聊天</button>
+                  ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm">🔗 主页</a>` : ''}
+                  <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
                 </div>
                 ${renderBio(f.friend?.bio) ? '<div class="friend-card-bio">' + renderBio(f.friend?.bio) + '</div>' : ''}
               </div>
@@ -2644,8 +2644,7 @@ function handleRealtimeMessage(roomId, msg) {
       chatState.rooms.push(room);
     }
     room.unread = (room.unread || 0) + 1;
-    renderRoomList();
-    updateUnreadBadge();
+    if (!isMuted) { renderRoomList(); updateUnreadBadge(); }
   }
   if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
 }
@@ -2684,7 +2683,7 @@ function markRead(roomId) {
         { onConflict: 'room_id,user_id' });
     } catch(e) {}
     const room = chatState.rooms.find(r => r.id === roomId);
-    if (room) { room.unread = 0; renderRoomList(); updateUnreadBadge(); }
+    if (room) { room.unread = 0; updateUnreadBadge(); }
   })();
 }
 
@@ -2718,6 +2717,18 @@ async function sendChatMsg() {
   const content = input.value.trim();
   if (!content || !chatState.currentRoomId) return;
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+  const btn = document.getElementById('chatSendBtn');
+  btn.disabled = true;
+  // Render message immediately for instant feedback, then check mute asynchronously
+  const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
+  const prevMsgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  renderMessages(chatState.currentRoomId);
+  input.value = ''; autoChatResize(input);
+  const replyToSave = chatState.replyTo;
+  if (chatState.replyTo) cancelReply();
+  // Mute check — do after rendering to avoid blocking
   if (room && room.type === 'channel') {
     const { data: muted, error: muteErr } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
     if (muteErr) { console.warn('禁言检查失败:', muteErr); }
@@ -2725,30 +2736,28 @@ async function sendChatMsg() {
       const until = muted.muted_until ? new Date(muted.muted_until) : null;
       if (!until || until > new Date()) {
         toast('您已被禁言，无法发送消息', 'error');
-        const input = document.getElementById('chatInput');
-        input.placeholder = '你已被禁言';
+        chatState.messages[chatState.currentRoomId] = prevMsgs;
+        renderMessages(chatState.currentRoomId);
         input.disabled = true;
+        input.placeholder = '你已被禁言';
         setTimeout(function() { input.disabled = false; input.placeholder = '输入消息…'; }, 3000);
+        btn.disabled = false;
         return;
       }
     }
   }
-  const btn = document.getElementById('chatSendBtn');
-  btn.disabled = true;
-  const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
-  const msgs = chatState.messages[chatState.currentRoomId] || [];
-  chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
-  renderMessages(chatState.currentRoomId);
-  input.value = ''; autoChatResize(input);
-  const replyToSave = chatState.replyTo;
-  if (chatState.replyTo) cancelReply();
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
     sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
     content, reply_to: replyToSave || null, ts: Date.now()
   });
-  if (error) { toast('发送失败: ' + error.message, 'error'); return; }
+  if (error) {
+    toast('发送失败: ' + error.message, 'error');
+    chatState.messages[chatState.currentRoomId] = prevMsgs;
+    renderMessages(chatState.currentRoomId);
+    btn.disabled = false;
+    return;
+  }
   if (notifEnabled) {
     var h = getHiddenChannels();
     var hIdx = h.indexOf(chatState.currentRoomId);
