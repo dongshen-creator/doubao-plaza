@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>逗包用户广场</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
-  <script src="supabase-sdk.js"></script>
+  <script src="supabase-sdk.js?v=2"></script>
   <script>
     (function () {
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
@@ -17,7 +20,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -226,6 +229,7 @@ let pendingReportUserId = null;
 let deviceFingerprint = null;
 let notifEnabled = localStorage.getItem('dp_notif') !== 'off';
 let unreadPollTimer = null;
+let messagePollTimer = null;
 
 // ===== Get Device Fingerprint =====
 async function getDeviceFingerprint() {
@@ -2204,6 +2208,7 @@ function openChat() {
   document.getElementById('chatEmpty').classList.remove('hidden');
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
+  startMessagePolling();
 }
 
 async function openChatWith(friendId, friendName) {
@@ -2244,11 +2249,13 @@ async function openChatWith(friendId, friendName) {
     loadRoomList();
   }
   chatState._openingChat = false;
+  startMessagePolling();
 }
 
 function closeChat() {
   document.getElementById('chatPanel').classList.remove('show');
   chatState.chatOpen = false;
+  stopMessagePolling();
   Object.values(chatState.pollTimers).forEach(t => clearTimeout(t));
   chatState.pollTimers = {};
   chatState.currentRoomId = null;
@@ -2665,6 +2672,10 @@ function debugChat() {
   console.log('chatState.currentRoomId:', chatState.currentRoomId);
   console.log('rooms count:', chatState.rooms.length);
   console.log('sbChannels:', Object.keys(chatState.sbChannels));
+  for (var k in chatState.sbChannels) {
+    var ch = chatState.sbChannels[k];
+    console.log('  channel[' + k + '] state:', ch ? (ch.state || 'unknown') : 'null');
+  }
   console.log('messages keys:', Object.keys(chatState.messages));
   for (var k in chatState.messages) {
     console.log('  messages[' + k + ']:', (chatState.messages[k] || []).length, 'msgs');
@@ -2673,6 +2684,10 @@ function debugChat() {
   if (typeof __SB !== 'undefined') {
     var ch = __SB.channel('room:debug_test_' + Date.now());
     console.log('channel create test:', ch ? 'OK' : 'FAIL');
+    ch.subscribe(function(status) {
+      console.log('[CHAT-DEBUG] test channel subscribe status:', status);
+      ch.unsubscribe();
+    });
   }
   console.log('=== CHAT DEBUG END ===');
 }
@@ -2881,6 +2896,61 @@ async function recallMessage(eventId) {
 }
 
 function toggleRoomList() { document.getElementById('chatRoomList').classList.toggle('show'); }
+
+function stopMessagePolling() {
+  if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
+}
+
+async function pollNewMessages() {
+  if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
+  if (!currentUser || !chatState.currentRoomId || !chatState.chatOpen) { return; }
+  var roomId = chatState.currentRoomId;
+  var msgs = chatState.messages[roomId] || [];
+  var lastTs = 0;
+  for (var i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].ts && !msgs[i].recalled) { lastTs = msgs[i].ts; break; }
+  }
+  if (!lastTs) { messagePollTimer = setTimeout(pollNewMessages, 5000); return; }
+  try {
+    var { data, error } = await __SB.from('chat_messages')
+      .select('id, event_id, room_id, sender_id, sender_name, sender_avatar, sender_doubao_id, content, reply_to, recalled, rel_type, relates_to_event_id, ts')
+      .eq('room_id', roomId).gt('ts', lastTs).order('ts', { ascending: true }).limit(50);
+    if (error || !data || data.length === 0) { messagePollTimer = setTimeout(pollNewMessages, 5000); return; }
+    var existingMsgs = chatState.messages[roomId] || [];
+    var existingIds = {};
+    for (var j = 0; j < existingMsgs.length; j++) { existingIds[existingMsgs[j].event_id] = true; }
+    var newMsgs = [];
+    for (var k = 0; k < data.length; k++) {
+      var m = data[k];
+      var eid = m.event_id || ('msg_' + m.id);
+      if (existingIds[eid]) continue;
+      if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
+        var target = existingMsgs.find(function(x) { return x.event_id === m.relates_to_event_id; });
+        if (target) { target.content = m.recalled ? '' : m.content; target.edited = true; existingIds[eid] = true; }
+        continue;
+      }
+      newMsgs.push({
+        event_id: eid, sender: m.sender_name || '未知用户', sender_id: m.sender_id,
+        sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
+        content: m.recalled ? '' : m.content, reply_to: m.reply_to || null,
+        rel_type: m.rel_type || null, relates_to_event_id: m.relates_to_event_id || null,
+        ts: m.ts || 0, recalled: !!m.recalled
+      });
+      existingIds[eid] = true;
+    }
+    if (newMsgs.length > 0) {
+      chatState.messages[roomId] = existingMsgs.concat(newMsgs).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
+      if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
+      if (!chatState._openingChat) { loadRoomList(); }
+    }
+  } catch(e) { console.warn('[CHAT-POLL] pollNewMessages error:', e); }
+  messagePollTimer = setTimeout(pollNewMessages, 5000);
+}
+
+function startMessagePolling() {
+  stopMessagePolling();
+  messagePollTimer = setTimeout(pollNewMessages, 5000);
+}
 
 function startUnreadPolling() {
   if (unreadPollTimer) clearTimeout(unreadPollTimer);
