@@ -2528,6 +2528,16 @@ function subscribeToRoom(roomId) {
         }
         if (roomId === chatState.currentRoomId) renderMessages(roomId);
       })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_room_members', filter: 'room_id=eq.' + roomId },
+      payload => {
+        const deleted = payload.old;
+        if (!deleted) return;
+        if (deleted.user_id === currentUser.id) {
+          handleKickedFromRoom(roomId);
+        } else {
+          if (chatState.currentRoomId === roomId) loadRoomMemberList(roomId);
+        }
+      })
     .subscribe();
   chatState.sbChannels[roomId] = channel;
 }
@@ -2581,15 +2591,32 @@ function handleRealtimeUpdate(roomId, msg) {
   }
 }
 
+function handleKickedFromRoom(roomId) {
+  toast('你已被请离频道', 'warning');
+  if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
+  delete chatState.messages[roomId];
+  chatState.rooms = chatState.rooms.filter(function(r) { return r.id !== roomId; });
+  if (chatState.currentRoomId === roomId) {
+    chatState.currentRoomId = null;
+    document.getElementById('chatEmpty').classList.remove('hidden');
+    document.getElementById('chatMsgs').classList.add('hidden');
+  }
+  renderRoomList();
+  updateUnreadBadge();
+}
+
 function markRead(roomId) {
   const msgs = chatState.messages[roomId] || [];
   const last = msgs[msgs.length - 1];
   if (!last) return;
-  __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: last.event_id || '' },
-    { onConflict: 'room_id,user_id' }).then(() => {
+  (async function() {
+    try {
+      await __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: last.event_id || '' },
+        { onConflict: 'room_id,user_id' });
+    } catch(e) {}
     const room = chatState.rooms.find(r => r.id === roomId);
     if (room) { room.unread = 0; renderRoomList(); updateUnreadBadge(); }
-  }).catch(() => {});
+  })();
 }
 
 async function markAllRead() {
@@ -2597,7 +2624,6 @@ async function markAllRead() {
   if (!rooms.length) { toast('没有会话', 'info'); return; }
   for (var i = 0; i < rooms.length; i++) {
     var room = rooms[i];
-    if (!room.unread) continue;
     var msgs = chatState.messages[room.id];
     var lastEventId = '';
     if (msgs && msgs.length) lastEventId = msgs[msgs.length - 1].event_id || '';
@@ -3712,14 +3738,19 @@ async function showBrowseChannels(query) {
   }
   var content = document.getElementById('browseChannelsContent');
   if (!content) return;
-  if (unjoined.length === 0) {
-    content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">没有可加入的频道</div>';
+  if (channels.length === 0) {
+    content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">没有找到频道</div>';
   } else {
     var listHtml = '';
-    unjoined.forEach(function(c) {
+    channels.forEach(function(c) {
       listHtml += '<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:default">';
       listHtml += '<div><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:#9ca3af">' + (c.member_count || 0) + ' 位成员</div></div>';
-      listHtml += '<button class="btn btn-sm btn-orange" onclick="joinChannel(\'' + c.id + '\')">' + (c.admission === 'approval' ? '申请加入' : c.admission === 'invite' ? '仅邀请' : c.admission === 'password' ? '输入密码加入' : c.admission === 'questionnaire' ? '开始测试' : c.admission === 'custom_page' ? '自定义页面' : '加入') + '</button></div>';
+      if (c.joined) {
+        listHtml += '<button class="btn btn-sm btn-green" onclick="switchRoom(\'' + c.id + '\');document.getElementById(\'browseChannelsModal\').remove()">已加入</button>';
+      } else {
+        listHtml += '<button class="btn btn-sm btn-orange" onclick="joinChannel(\'' + c.id + '\')">' + (c.admission === 'approval' ? '申请加入' : c.admission === 'invite' ? '仅邀请' : c.admission === 'password' ? '输入密码加入' : c.admission === 'questionnaire' ? '开始测试' : c.admission === 'custom_page' ? '自定义页面' : '加入') + '</button>';
+      }
+      listHtml += '</div>';
     });
     content.innerHTML = listHtml;
   }
