@@ -2558,10 +2558,11 @@ function renderReplyBlock(eventId, roomId) {
 
 function subscribeToRoom(roomId) {
   if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {} }
+  console.log('[CHAT-DEBUG] subscribeToRoom:', roomId);
   const channel = __SB
     .channel('room:' + roomId)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
-      payload => { handleRealtimeMessage(roomId, payload.new); })
+      payload => { console.log('[CHAT-DEBUG] INSERT event received:', roomId, payload.new); handleRealtimeMessage(roomId, payload.new); })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: 'room_id=eq.' + roomId },
       payload => { handleRealtimeUpdate(roomId, payload.new); })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_reactions', filter: 'room_id=eq.' + roomId },
@@ -2592,17 +2593,18 @@ function subscribeToRoom(roomId) {
           if (chatState.currentRoomId === roomId) loadRoomMemberList(roomId);
         }
       })
-    .subscribe();
+    .subscribe((status) => { console.log('[CHAT-DEBUG] subscribe status for', roomId, ':', status); });
   chatState.sbChannels[roomId] = channel;
 }
 
 function handleRealtimeMessage(roomId, msg) {
-  if (msg.sender_id === currentUser.id) return;
+  console.log('[CHAT-DEBUG] handleRealtimeMessage called:', roomId, 'sender:', msg.sender_id, 'content:', (msg.content || '').slice(0, 30));
+  if (msg.sender_id === currentUser.id) { console.log('[CHAT-DEBUG] skipped: own message'); return; }
   var roomN = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isMuted = roomN && roomN.mute_notifications;
   // Dedup check
   var existingMsgs = chatState.messages[roomId] || [];
-  if (existingMsgs.some(function(m) { return m.event_id === (msg.event_id || 'msg_' + msg.id); })) return;
+  if (existingMsgs.some(function(m) { return m.event_id === (msg.event_id || 'msg_' + msg.id); })) { console.log('[CHAT-DEBUG] skipped: dedup'); return; }
   // Auto-unhide if this room was hidden (only when notifications are enabled)
   if (notifEnabled) {
     var hiddenRooms = getHiddenChannels();
@@ -2652,7 +2654,27 @@ function handleRealtimeMessage(roomId, msg) {
     room.unread = (room.unread || 0) + 1;
     if (!isMuted) { renderRoomList(); updateUnreadBadge(); }
   }
-  if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
+  if (roomId === chatState.currentRoomId) { console.log('[CHAT-DEBUG] renderMessages called for current room:', roomId); renderMessages(roomId); markRead(roomId); }
+  console.log('[CHAT-DEBUG] handleRealtimeMessage done. messages[' + roomId + '] count:', (chatState.messages[roomId] || []).length);
+}
+
+function debugChat() {
+  console.log('=== CHAT DEBUG START ===');
+  console.log('currentUser:', currentUser ? currentUser.id : 'NULL');
+  console.log('chatState.chatOpen:', chatState.chatOpen);
+  console.log('chatState.currentRoomId:', chatState.currentRoomId);
+  console.log('rooms count:', chatState.rooms.length);
+  console.log('sbChannels:', Object.keys(chatState.sbChannels));
+  console.log('messages keys:', Object.keys(chatState.messages));
+  for (var k in chatState.messages) {
+    console.log('  messages[' + k + ']:', (chatState.messages[k] || []).length, 'msgs');
+  }
+  console.log('__SB available:', typeof __SB !== 'undefined');
+  if (typeof __SB !== 'undefined') {
+    var ch = __SB.channel('room:debug_test_' + Date.now());
+    console.log('channel create test:', ch ? 'OK' : 'FAIL');
+  }
+  console.log('=== CHAT DEBUG END ===');
 }
 
 function handleRealtimeUpdate(roomId, msg) {
