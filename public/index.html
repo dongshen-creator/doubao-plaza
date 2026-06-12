@@ -3593,7 +3593,13 @@ async function submitQuestionnaireV2(roomId, questionsJson, context) {
     var q = questions[i];
     if (q.type === 'fill') {
       var ta = document.querySelector('textarea[data-q="' + i + '"]');
-      fillAnswers.push({ question: q.question, answer: ta ? ta.value : '' });
+      var ans = ta ? ta.value.trim() : '';
+      if (q.fill_mode === 'standard') {
+        var correctAns = (q.correct_answer && q.correct_answer[0] || '').trim();
+        if (ans !== correctAns) { allCorrect = false; break; }
+      } else {
+        fillAnswers.push({ question: q.question, answer: ans });
+      }
       continue;
     }
     var correctSet = new Set(q.correct_answer || []);
@@ -3607,6 +3613,11 @@ async function submitQuestionnaireV2(roomId, questionsJson, context) {
   }
 
   document.getElementById('questionnaireModal')?.remove();
+
+  if (!allCorrect) {
+    toast('未通过测试，请重新尝试', 'error');
+    return;
+  }
 
   if (fillAnswers.length > 0) {
     var reqId = 'req_' + Date.now().toString(36);
@@ -3729,7 +3740,16 @@ function renderQuestionRow(q, i) {
   h += '<button class="btn btn-sm btn-red" onclick="removeQuestionRow(' + i + ')" style="font-size:11px">✕</button>';
   h += '</div>';
   if (q.type === 'fill') {
-    h += '<div style="font-size:11px;color:#9ca3af;padding-left:20px">📝 填空题 — 答案将在审核时展示，由管理员人工判断</div>';
+    h += '<div style="padding-left:20px;margin-bottom:4px">';
+    h += '<select data-field="fill_mode" style="font-size:12px;padding:2px 6px;border:1px solid #ddd;border-radius:6px" onchange="onQuestionTypeChange(this)">';
+    h += '<option value="open"' + (q.fill_mode !== 'standard' ? ' selected' : '') + '>开放式（提交审核）</option>';
+    h += '<option value="standard"' + (q.fill_mode === 'standard' ? ' selected' : '') + '>标准答案式（自动校验）</option>';
+    h += '</select></div>';
+    if (q.fill_mode === 'standard') {
+      h += '<div style="padding-left:20px;margin-top:4px">';
+      h += '<input class="input" value="' + esc(q.correct_answer?.[0] || '') + '" placeholder="输入标准答案" maxlength="100" style="width:100%" data-field="fill_answer">';
+      h += '</div>';
+    }
   } else {
     h += '<div class="questionOptions" style="padding-left:20px">';
     h += '<div style="font-size:10px;color:#9ca3af;margin-bottom:4px">选项（点击 ○/☑ 标记正确答案）</div>';
@@ -3818,7 +3838,17 @@ function syncQuestionnaireFromDOM() {
       var correctCheck = o.parentElement.querySelector('[data-correct]');
       if (correctCheck && correctCheck.checked) correct.push(idx);
     });
-    questions.push({ question: q.value.trim(), type: t.value, options: opts, correct_answer: correct });
+    if (t.value === 'fill') {
+      var fillMode = row.querySelector('[data-field="fill_mode"]')?.value || 'open';
+      var fillAns = row.querySelector('[data-field="fill_answer"]')?.value?.trim() || '';
+      questions.push({
+        question: q.value.trim(), type: 'fill', options: [],
+        correct_answer: fillMode === 'standard' && fillAns ? [fillAns] : [],
+        fill_mode: fillMode
+      });
+    } else {
+      questions.push({ question: q.value.trim(), type: t.value, options: opts, correct_answer: correct });
+    }
   });
   window._admSettings.questionnaire = questions;
 }
