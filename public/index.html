@@ -384,7 +384,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
     }
     html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
     html += '<button class="btn btn-red btn-full" onclick="showReportModal(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚨 举报</button>';
-    if (canManage) {
+    if (canManage && !(userInfo && (userInfo.is_developer === 1 || userInfo.is_developer === true))) {
       html += '<button class="btn btn-gray btn-full" onclick="muteUserInChannel(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🔇 禁言</button>';
       html += '<button class="btn btn-red btn-full" onclick="kickMember(chatState.currentRoomId,\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚪 踢出</button>';
       if (isCreator) {
@@ -801,7 +801,7 @@ async function doSearch() {
   countEl.style.display = 'block';
 
   try {
-    let url = `/api/users?search=${encodeURIComponent(q)}&current_user=${currentUser.id}`;
+    let url = `/api/users?search=${encodeURIComponent(q)}&current_user=${currentUser.id}&limit=50`;
     if (doubaoId) url += `&doubao_id=${encodeURIComponent(doubaoId)}`;
     if (inviteCode) url += `&invite_code=${encodeURIComponent(inviteCode)}`;
     
@@ -2211,6 +2211,11 @@ function openChat() {
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
   startMessagePolling();
+  if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    setTimeout(function() {
+      document.getElementById('chatInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 500);
+  }
 }
 
 async function openChatWith(friendId, friendName) {
@@ -2372,8 +2377,7 @@ async function switchRoom(roomId) {
     markRead(roomId);
     subscribeToRoom(roomId);
     document.getElementById('chatInput').focus();
-    var input = document.getElementById('chatInput');
-    if (!input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
+    checkAndApplyMute(roomId);
   } else {
     loadMessages(roomId);
     subscribeToRoom(roomId);
@@ -2446,8 +2450,7 @@ async function loadMessages(roomId) {
   }
   markRead(roomId);
   document.getElementById('chatInput').focus();
-  var input2 = document.getElementById('chatInput');
-  if (!input2._atBound) { input2.addEventListener('input', function(e) { handleAtAutocomplete(input2); }); input2._atBound = true; }
+  checkAndApplyMute(roomId);
   var msgsContainer = document.getElementById('chatMsgs');
   msgsContainer.onscroll = function() {
     if (msgsContainer.scrollTop === 0 && chatState.currentRoomId === roomId) {
@@ -2493,8 +2496,9 @@ function renderMessages(roomId) {
       msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
     }
   }
+  var isNearBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 80;
   msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
-  msgsEl.scrollTop = msgsEl.scrollHeight;
+  if (isNearBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
 function renderMsgHTML(m, roomId) {
@@ -3073,7 +3077,7 @@ function showAtPopup(input, atIdx, partial) {
   popup.id = 'atAutocompletePopup';
   popup.style.cssText = 'position:fixed;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);z-index:300;max-height:180px;overflow-y:auto;min-width:160px';
   popup.style.left = rect.left + 'px';
-  popup.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+  popup.style.top = (rect.bottom + 4) + 'px';
   matches.forEach(function(name) {
     var item = document.createElement('div');
     item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6';
@@ -3286,11 +3290,13 @@ async function toggleMuteNotifications(roomId) {
   toast(checked ? '已静音此会话' : '已取消静音');
 }
 
-function clearChatHistory(roomId) {
-  if (!confirm('确定清空此会话的聊天记录？（仅清空你本地的显示，不影响其他人）')) return;
+async function clearChatHistory(roomId) {
+  if (!confirm('确定清空此会话的所有聊天记录？（此操作不可恢复）')) return;
+  var { error } = await __SB.from('chat_messages').delete().eq('room_id', roomId);
+  if (error) { toast('清空失败: ' + error.message, 'error'); return; }
   chatState.messages[roomId] = [];
   if (chatState.currentRoomId === roomId) renderMessages(roomId);
-  toast('本地聊天记录已清空');
+  toast('聊天记录已清空');
 }
 
 async function loadRoomMemberList(roomId) {
@@ -3359,6 +3365,13 @@ async function kickMember(roomId, targetUserId) {
   if (myLevel < 1) { toast('只有管理员及以上才能踢人', 'error'); return; }
   var targetLevel = await getPermissionLevel(roomId, targetUserId);
   if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
+  try {
+    var tRes = await api('/api/users/' + targetUserId);
+    if (tRes.success && tRes.data && (tRes.data.is_developer === 1 || tRes.data.is_developer === true)) {
+      toast('不能踢出开发者', 'error');
+      return;
+    }
+  } catch(e) {}
   if (!confirm('确定要踢出该成员吗？')) return;
   await api('/api/chat', { method: 'POST', body: JSON.stringify({ action: 'kick-member', user_id: currentUser.id, room_id: roomId, target_user_id: targetUserId }) }).catch(() => {});
   await __SB.from('chat_room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
@@ -3385,12 +3398,35 @@ async function kickMember(roomId, targetUserId) {
   }
 }
 
+async function checkAndApplyMute(roomId) {
+  if (!roomId || !currentUser) return;
+  var input = document.getElementById('chatInput');
+  var { data: muted } = await __SB.from('chat_muted').select('muted_until').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+  if (muted) {
+    var until = muted.muted_until ? new Date(muted.muted_until) : null;
+    if (!until || until > new Date()) {
+      input.disabled = true;
+      input.placeholder = '你已被禁言';
+      return;
+    }
+  }
+  input.disabled = false;
+  input.placeholder = '输入消息…';
+}
+
 async function muteUserInChannel(targetUserId) {
   if (!chatState.currentRoomId) return;
   var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
   if (myLevel < 1) { toast('只有管理员及以上才能禁言', 'error'); return; }
   var targetLevel = await getPermissionLevel(chatState.currentRoomId, targetUserId);
   if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
+  try {
+    var tRes = await api('/api/users/' + targetUserId);
+    if (tRes.success && tRes.data && (tRes.data.is_developer === 1 || tRes.data.is_developer === true)) {
+      toast('不能禁言开发者', 'error');
+      return;
+    }
+  } catch(e) {}
   var choice = prompt('禁言时长（分钟）:\n输入分钟数，例如：60=1小时，1440=1天，10080=7天\n留空=永久', '');
   if (choice === null) return;
   var minutes = choice.trim() === '' ? 0 : parseInt(choice) || 0;
@@ -4608,6 +4644,16 @@ function loadTheme() {
   if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.body.classList.add('dark');
   }
+}
+
+// ===== Mobile Keyboard Adaptation =====
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', function() {
+    var panel = document.getElementById('chatPanel');
+    if (panel && panel.classList.contains('show')) {
+      panel.style.height = window.visualViewport.height + 'px';
+    }
+  });
 }
 
 // ===== Start =====
