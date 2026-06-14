@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
     const userId = context.params.id;
     if (!userId) return Response.json({ success: false, error: '用户ID不能为空' });
     const user = await env.DB.prepare(
-      "SELECT id, name, avatar, doubao_id, bio, agent_url, privacy_setting, last_login_at, created_at FROM users WHERE id = ?"
+      "SELECT id, name, avatar, doubao_id, bio, agent_url, privacy_setting, is_developer, last_login_at, created_at FROM users WHERE id = ?"
     ).bind(userId).first();
     if (!user) return Response.json({ success: false, error: '用户不存在' });
     return Response.json({ success: true, data: user });
@@ -40,6 +40,12 @@ export async function onRequestDelete(context) {
       return Response.json({ success: false, error: '用户ID不能为空' });
     }
 
+    await env.DB.prepare(`DELETE FROM chat_room_members WHERE user_id = ?`).bind(userId).run();
+    await env.DB.prepare(`DELETE FROM chat_muted WHERE user_id = ?`).bind(userId).run();
+    await env.DB.prepare(`DELETE FROM chat_unread WHERE user_id = ?`).bind(userId).run();
+    await env.DB.prepare(`DELETE FROM chat_banned WHERE user_id = ?`).bind(userId).run();
+    await env.DB.prepare(`DELETE FROM chat_admins WHERE user_id = ?`).bind(userId).run();
+    await env.DB.prepare(`DELETE FROM chat_stranger_limits WHERE user_id = ?`).bind(userId).run();
     await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
     await env.DB.prepare(`DELETE FROM friendships WHERE user_id = ? OR friend_id = ?`).bind(userId, userId).run();
     await env.DB.prepare(`DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?`).bind(userId, userId).run();

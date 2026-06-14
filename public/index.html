@@ -410,6 +410,10 @@ async function patUser(targetUserId, targetUserName) {
     sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
     content, ts: Date.now()
   });
+  if (error) {
+    toast('拍一拍发送失败: ' + (error.message || '未知错误'), 'error');
+    return;
+  }
   if (!error) {
     const msgs = chatState.messages[chatState.currentRoomId] || [];
     chatState.messages[chatState.currentRoomId] = [...msgs, {
@@ -2211,6 +2215,12 @@ function openChat() {
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
   startMessagePolling();
+  if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    setTimeout(function() {
+      var input = document.getElementById('chatInput');
+      if (input) input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+  }
 }
 
 async function openChatWith(friendId, friendName) {
@@ -2493,8 +2503,9 @@ function renderMessages(roomId) {
       msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
     }
   }
+  var isNearBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 80;
   msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
-  msgsEl.scrollTop = msgsEl.scrollHeight;
+  if (isNearBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
 function renderMsgHTML(m, roomId) {
@@ -2799,7 +2810,21 @@ async function sendChatMsg() {
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;
-  // Render message immediately for instant feedback, then check mute asynchronously
+  // Mute check — do before rendering to prevent flash
+  if (room && room.type === 'channel') {
+    const { data: muted, error: muteErr } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
+    if (muteErr) { console.warn('禁言检查失败:', muteErr); }
+    if (muted) {
+      const until = muted.muted_until ? new Date(muted.muted_until) : null;
+      if (!until || until > new Date()) {
+        toast('您已被禁言，无法发送消息', 'error');
+        input.disabled = true;
+        input.placeholder = '你已被禁言';
+        btn.disabled = false;
+        return;
+      }
+    }
+  }
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
   const prevMsgs = chatState.messages[chatState.currentRoomId] || [];
@@ -2808,24 +2833,6 @@ async function sendChatMsg() {
   input.value = ''; autoChatResize(input);
   const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
-  // Mute check — do after rendering to avoid blocking
-  if (room && room.type === 'channel') {
-    const { data: muted, error: muteErr } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
-    if (muteErr) { console.warn('禁言检查失败:', muteErr); }
-    if (muted) {
-      const until = muted.muted_until ? new Date(muted.muted_until) : null;
-      if (!until || until > new Date()) {
-        toast('您已被禁言，无法发送消息', 'error');
-        chatState.messages[chatState.currentRoomId] = prevMsgs;
-        renderMessages(chatState.currentRoomId);
-        input.disabled = true;
-        input.placeholder = '你已被禁言';
-        setTimeout(function() { input.disabled = false; input.placeholder = '输入消息…'; }, 3000);
-        btn.disabled = false;
-        return;
-      }
-    }
-  }
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
     sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
@@ -3067,7 +3074,30 @@ function showAtPopup(input, atIdx, partial) {
       if (matches.length >= 5) break;
     }
   }
-  if (matches.length === 0) return;
+  if (matches.length === 0) {
+    __SB.from('chat_room_members').select('user_id').eq('room_id', chatState.currentRoomId).then(function(mr) {
+      if (!mr.data || mr.data.length === 0) return;
+      var userIds = mr.data.map(function(r) { return r.user_id; }).filter(function(id) { return id !== (currentUser && currentUser.id); }).slice(0, 20);
+      return Promise.all(userIds.map(function(uid) { return api('/api/users/' + uid).catch(function(){ return null; }); }));
+    }).then(function(results) {
+      if (!results) return;
+      results.forEach(function(r) {
+        if (!r || !r.success || !r.data) return;
+        var u = r.data;
+        if (u && u.name && !seen[u.name] && (!partial || u.name.toLowerCase().indexOf(partial.toLowerCase()) >= 0)) {
+          seen[u.name] = true;
+          matches.push(u.name);
+        }
+      });
+      if (matches.length > 5) matches = matches.slice(0, 5);
+      if (matches.length === 0) return;
+      buildAndShowAtPopup(input, valAt, atIdx, cursorAt, matches);
+    }).catch(function() {});
+    return;
+  }
+  buildAndShowAtPopup(input, valAt, atIdx, cursorAt, matches);
+}
+function buildAndShowAtPopup(input, valAt, atIdx, cursorAt, matches) {
   var rect = input.getBoundingClientRect();
   var popup = document.createElement('div');
   popup.id = 'atAutocompletePopup';
@@ -3321,19 +3351,22 @@ async function loadRoomMemberList(roomId) {
     const u = userInfos[uid] || { name: uid.slice(0, 8), avatar: '', doubao_id: '' };
     const isAdmin = adminSet.has(uid);
     const isMuted = mutedSet.has(uid);
+    const isDev = u.is_developer === 1 || u.is_developer === true;
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">';
     html += '<div style="display:flex;align-items:center;gap:8px">';
-    html += '<div style="font-size:13px;font-weight:500">' + esc(u.name) + (u.doubao_id ? ' <span style="font-weight:400;opacity:0.7;font-size:11px">@' + esc(u.doubao_id) + '</span>' : '') + (room?.created_by === uid ? ' <span style="color:#FF6B35;font-size:11px">(创建者)</span>' : '') + (isAdmin ? ' <span style="color:#4ECDC4;font-size:11px">(管理员)</span>' : '') + '</div>';
+    html += '<div style="font-size:13px;font-weight:500">' + esc(u.name) + (u.doubao_id ? ' <span style="font-weight:400;opacity:0.7;font-size:11px">@' + esc(u.doubao_id) + '</span>' : '') + (room?.created_by === uid ? ' <span style="color:#FF6B35;font-size:11px">(创建者)</span>' : '') + (isAdmin ? ' <span style="color:#4ECDC4;font-size:11px">(管理员)</span>' : '') + (isDev ? ' <span style="color:#FF6B35;font-size:11px">(开发者)</span>' : '') + '</div>';
     html += '</div>';
     if (uid !== currentUser.id) {
       html += '<div style="display:flex;gap:4px">';
       if (isCreator) {
         if (isAdmin) html += '<button class="btn btn-sm btn-gray" onclick="removeChannelAdmin(\'' + uid + '\')">取消管理</button>';
         else html += '<button class="btn btn-sm btn-orange" onclick="setChannelAdmin(\'' + uid + '\')">设为管理</button>';
-        html += '<button class="btn btn-sm btn-red" onclick="kickMember(\'' + roomId + '\',\'' + uid + '\')">踢出</button>';
+        if (!isDev) html += '<button class="btn btn-sm btn-red" onclick="kickMember(\'' + roomId + '\',\'' + uid + '\')">踢出</button>';
       }
-      if (isMuted) html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
-      else html += '<button class="btn btn-sm btn-gray" onclick="muteUserInChannel(\'' + uid + '\')">禁言</button>';
+      if (!isDev) {
+        if (isMuted) html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
+        else html += '<button class="btn btn-sm btn-gray" onclick="muteUserInChannel(\'' + uid + '\')">禁言</button>';
+      }
       html += '</div>';
     }
     html += '</div>';
@@ -4578,6 +4611,26 @@ function loadTheme() {
   if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.body.classList.add('dark');
   }
+}
+
+// ===== Mobile Keyboard Adaptation =====
+if (window.visualViewport) {
+  var _lastVpHeight = window.visualViewport.height;
+  window.visualViewport.addEventListener('resize', function() {
+    var panel = document.getElementById('chatPanel');
+    if (!panel || !panel.classList.contains('show')) return;
+    var heightDiff = _lastVpHeight - window.visualViewport.height;
+    _lastVpHeight = window.visualViewport.height;
+    if (heightDiff > 100) {
+      panel.style.height = window.visualViewport.height + 'px';
+      var input = document.getElementById('chatInput');
+      if (input) {
+        setTimeout(function() { input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+      }
+    } else if (heightDiff < -50) {
+      panel.style.height = '';
+    }
+  });
 }
 
 // ===== Start =====

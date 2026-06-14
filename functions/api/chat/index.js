@@ -805,6 +805,8 @@ async function handleKickMember(env, body) {
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以踢人' });
+  const targetUser = await env.DB.prepare("SELECT is_developer FROM users WHERE id=?").bind(target_user_id).first();
+  if (targetUser && targetUser.is_developer) return json({ error: '不能踢出开发者' });
   const room = await env.DB.prepare("SELECT created_by FROM chat_rooms WHERE id=?").bind(room_id).first();
   if (!room) return json({ error: '频道不存在' });
   if (target_user_id === room.created_by) return json({ error: '不能踢出频道创建者' });
@@ -822,6 +824,8 @@ async function handleBanMember(env, body) {
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以封禁' });
+  const targetUser = await env.DB.prepare("SELECT is_developer FROM users WHERE id=?").bind(target_user_id).first();
+  if (targetUser && targetUser.is_developer) return json({ error: '不能封禁开发者' });
   const txnId = genId();
   try {
     await matrixFetch(env, '/_matrix/client/v3/rooms/' + encodeURIComponent(room.matrix_room_id) + '/ban', {
@@ -860,6 +864,8 @@ async function handleMuteMember(env, body) {
   if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以禁言' });
+  const targetUser = await env.DB.prepare("SELECT is_developer FROM users WHERE id=?").bind(target_user_id).first();
+  if (targetUser && targetUser.is_developer) return json({ error: '不能禁言开发者' });
   let mutedUntil = null;
   if (duration && duration > 0) {
     const d = new Date();
