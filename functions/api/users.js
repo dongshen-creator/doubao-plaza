@@ -110,12 +110,10 @@ export async function onRequestGet(context) {
       }
     }
 
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(url.searchParams.get('offset') || '0');
     const results = await env.DB.prepare(
       `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at 
-       FROM users ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).bind(...params, limit, offset).all();
+       FROM users ${whereClause} ORDER BY created_at DESC`
+    ).bind(...params).all();
 
     return Response.json({ success: true, data: results.results });
   } catch (e) {
