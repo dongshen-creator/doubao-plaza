@@ -374,15 +374,15 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
     if (userInfo && (userInfo.privacy_setting === 'stealth' || userInfo.privacy_setting === 'punished_stealth')) {
       html += '<div style="text-align:center;padding:8px;color:#9ca3af;font-size:12px">此用户处于隐身模式</div>';
     } else if (isFriend) {
-      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 发送消息</button>';
+      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + escJS(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 发送消息</button>';
     } else if (userInfo && (userInfo.privacy_setting === 'whitelist' || userInfo.privacy_setting === 'punished_whitelist')) {
       html += '<button class="btn btn-blue btn-full" onclick="var code=prompt(\'请输入邀请码\');if(code)addFriendWithCode(\'' + userId + '\',code);document.getElementById(\'userPopupModal\').remove()">➕ 加好友(需邀请码)</button>';
-      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
+      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + escJS(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
     } else {
       html += '<button class="btn btn-blue btn-full" onclick="addFriend(\'' + userId + '\',this);document.getElementById(\'userPopupModal\').remove()">➕ 加好友</button>';
-      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
+      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + escJS(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
     }
-    html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + esc(userName) + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
+    html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + escJS(userName) + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
     html += '<button class="btn btn-red btn-full" onclick="showReportModal(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚨 举报</button>';
     if (canManage) {
       html += '<button class="btn btn-gray btn-full" onclick="muteUserInChannel(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🔇 禁言</button>';
@@ -497,6 +497,39 @@ async function init() {
   window.addEventListener('beforeunload', function() {
     Object.values(chatState.sbChannels).forEach(function(c) { try { c.unsubscribe(); } catch(e) {} });
   });
+  if (window.visualViewport) {
+    var _lastVpHeight = window.visualViewport.height;
+    window.visualViewport.addEventListener('resize', function() {
+      var diff = _lastVpHeight - window.visualViewport.height;
+      if (diff > 100) {
+        document.getElementById('chatPanel').style.height = window.visualViewport.height + 'px';
+        var inp = document.getElementById('msgInput');
+        if (inp && document.activeElement === inp) inp.focus();
+      } else if (diff < -50) {
+        document.getElementById('chatPanel').style.height = '';
+      }
+      _lastVpHeight = window.visualViewport.height;
+    });
+  }
+  triggerCleanup();
+  setInterval(triggerCleanup, 3600000);
+}
+
+var _cleanupRunning = false;
+async function triggerCleanup() {
+  if (_cleanupRunning) return;
+  _cleanupRunning = true;
+  try {
+    var res = await fetch('/api/chat?action=cleanup-messages', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: currentUser?.id || '' })
+    });
+    var data = await res.json();
+    if (data.success && data.deleted_messages > 0) {
+      console.log('[CLEANUP] 已清理 ' + data.deleted_messages + ' 条旧消息, ' + data.deleted_reactions + ' 条旧反应');
+    }
+  } catch(e) {}
+  _cleanupRunning = false;
 }
 
 // ===== Navbar =====
@@ -1595,7 +1628,7 @@ async function loadAnnouncementsManager() {
           <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:#9ca3af">${formatDate(sysAnn.created_at)}</div>
-            <button class="btn btn-blue btn-sm" onclick="devEditUsageNotice()">编辑</button>
+            <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${escJS(sysAnn.id)}')">编辑</button>
           </div>
         </div>
       ` : ''}
@@ -2493,8 +2526,21 @@ function renderMessages(roomId) {
       msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
     }
   }
+  var savedAnchor = null;
+  if (msgsEl.scrollTop < msgsEl.scrollHeight - msgsEl.clientHeight - 100) {
+    var anchorEl = msgsEl.querySelector('[data-eid]');
+    if (anchorEl) {
+      savedAnchor = { eid: anchorEl.getAttribute('data-eid'), offset: anchorEl.getBoundingClientRect().top - msgsEl.getBoundingClientRect().top };
+    }
+  }
   msgsEl.innerHTML = msgs.map(m => renderMsgHTML(m, roomId)).join('');
-  msgsEl.scrollTop = msgsEl.scrollHeight;
+  if (savedAnchor) {
+    var newAnchor = msgsEl.querySelector('[data-eid="' + savedAnchor.eid + '"]');
+    if (newAnchor) msgsEl.scrollTop = newAnchor.offsetTop - savedAnchor.offset;
+    else msgsEl.scrollTop = msgsEl.scrollHeight;
+  } else if (msgsEl.scrollTop >= msgsEl.scrollHeight - msgsEl.clientHeight - 100 || !msgsEl.scrollTop) {
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
 }
 
 function renderMsgHTML(m, roomId) {
@@ -3190,22 +3236,22 @@ async function deleteConversation(roomId) {
   } else {
     if (!confirm('确定要删除这个对话吗？')) return;
   }
-  await __SB.from('chat_unread').delete().eq('room_id', roomId);
-  await __SB.from('chat_room_members').delete().eq('room_id', roomId);
-  await __SB.from('chat_messages').delete().eq('room_id', roomId);
-  await __SB.from('chat_reactions').delete().eq('room_id', roomId);
-  await __SB.from('chat_channel_settings').delete().eq('room_id', roomId);
-  await __SB.from('chat_banned').delete().eq('room_id', roomId);
-  await __SB.from('chat_muted').delete().eq('room_id', roomId);
-  await __SB.from('chat_admins').delete().eq('room_id', roomId);
-  const { error } = await __SB.from('chat_rooms').delete().eq('id', roomId);
-  if (error) { toast('删除失败: ' + error.message, 'error'); return; }
+  try {
+    var res = await fetch('/api/chat?action=delete-conversation', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: currentUser.id, room_id: roomId })
+    });
+    var result = await res.json();
+    if (!result.success) { toast(result.error || '删除失败', 'error'); return; }
+  } catch(e) {}
   if (chatState.currentRoomId === roomId) {
     chatState.currentRoomId = null;
     document.getElementById('chatEmpty').classList.remove('hidden');
     document.getElementById('chatMsgs').classList.add('hidden');
   }
   if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
+  delete chatState.messages[roomId];
+  chatState.rooms = (chatState.rooms || []).filter(function(r) { return r.id !== roomId; });
   await loadRoomList();
   toast('已删除', 'success');
 }
@@ -3391,6 +3437,12 @@ async function muteUserInChannel(targetUserId) {
   if (myLevel < 1) { toast('只有管理员及以上才能禁言', 'error'); return; }
   var targetLevel = await getPermissionLevel(chatState.currentRoomId, targetUserId);
   if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
+  var mRes = await fetch('/api/chat/room-members?room_id=' + encodeURIComponent(chatState.currentRoomId));
+  if (mRes.ok) {
+    var mData = await mRes.json();
+    var targetMember = mData.members.find(function(m) { return m.id === targetUserId; });
+    if (targetMember && targetMember.is_developer) { toast('不能禁言开发者', 'error'); return; }
+  }
   var choice = prompt('禁言时长（分钟）:\n输入分钟数，例如：60=1小时，1440=1天，10080=7天\n留空=永久', '');
   if (choice === null) return;
   var minutes = choice.trim() === '' ? 0 : parseInt(choice) || 0;
@@ -4439,9 +4491,11 @@ function settingsAccountHTML() {
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><span style="font-size:13px">' + (name || rid.slice(0,8)) + '</span><button class="btn btn-sm btn-orange" onclick="unhideChannel(\'' + rid + '\')">恢复</button></div>';
     });
   }
-  html += '</div></div>' +
-    '<div class="danger-box"><strong>⚠️ 危险区域</strong><br>注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>' +
+  html += '</div></div>';
+  if (currentUser.privacy_setting !== 'punished_stealth') {
+    html += '<div class="danger-box"><strong>⚠️ 危险区域</strong><br>注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>' +
     '<button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button></div>';
+  }
 }
 
 async function loadFriendsWithGroups(el) {

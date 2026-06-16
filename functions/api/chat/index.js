@@ -1,5 +1,6 @@
 // Chat API - Matrix proxy mode
 // 环境变量: MATRIX_HOMESERVER, MATRIX_BOT_TOKEN, MATRIX_BOT_USER_ID, MATRIX_BOT_PASSWORD
+// 可选: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (聊天记录48h清理)
 
 var __botToken = '';
 
@@ -141,6 +142,7 @@ export async function onRequest(context) {
     if (method === 'GET' && resolvedAction === 'channel-info') return await handleChannelInfo(env, url);
     if (method === 'POST' && resolvedAction === 'set-admin') return await handleSetAdmin(env, body);
     if (method === 'POST' && resolvedAction === 'remove-admin') return await handleRemoveAdmin(env, body);
+    if (method === 'POST' && resolvedAction === 'cleanup-messages') return await handleCleanupMessages(env, body);
   return json({ error: '未知操作' }, 400);
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -940,7 +942,7 @@ async function handleChannelSettings(env, url) {
   if (!user_id) return json({ error: 'user_id 必填' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以修改设置' });
-  const allowedAdmissions = ['open', 'invite', 'approval'];
+  const allowedAdmissions = ['open', 'invite', 'approval', 'password', 'questionnaire', 'custom_page', 'composite'];
   const finalAdmission = allowedAdmissions.includes(admission) ? admission : 'open';
   await env.DB.prepare(
     "INSERT INTO chat_channel_settings (room_id, created_by, admission, topic) VALUES (?, ?, ?, ?) " +
@@ -1009,6 +1011,29 @@ async function handleRemoveAdmin(env, body) {
   if (role !== 'creator') return json({ error: '只有频道创建者可以移除管理员' });
   await env.DB.prepare("DELETE FROM chat_admins WHERE room_id=? AND user_id=?").bind(room_id, target_user_id).run();
   return json({ success: true });
+}
+
+async function handleCleanupMessages(env, body) {
+  try {
+    var cutOff = new Date(Date.now() - 48 * 3600000).toISOString();
+    var delMsgs = 0, delReacts = 0;
+    try {
+      var { rows: rooms } = await env.DB.prepare("SELECT id, matrix_room_id FROM chat_rooms").all();
+      for (var r of rooms) {
+        var oldRes = await env.DB.prepare("DELETE FROM chat_unread WHERE room_id=? AND last_event_id IN (SELECT event_id FROM chat_reactions WHERE created_at<?)").bind(r.id, cutOff).run();
+        delReacts += oldRes.changes || 0;
+      }
+    } catch(e) {}
+    try {
+      var muteRes = await env.DB.prepare("DELETE FROM chat_muted WHERE muted_until IS NOT NULL AND muted_until < datetime('now')").run();
+    } catch(e) {}
+    try {
+      var banRes = await env.DB.prepare("DELETE FROM chat_banned WHERE permanent=0 AND created_at < ?").bind(cutOff).run();
+    } catch(e) {}
+    return json({ success: true, deleted_messages: delMsgs, deleted_reactions: delReacts });
+  } catch(e) {
+    return json({ error: e.message }, 500);
+  }
 }
 
 function sanitize(u) {
