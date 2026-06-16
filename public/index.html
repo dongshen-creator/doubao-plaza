@@ -498,19 +498,19 @@ async function init() {
     Object.values(chatState.sbChannels).forEach(function(c) { try { c.unsubscribe(); } catch(e) {} });
   });
   if (window.visualViewport) {
-    var _lastVpHeight = window.visualViewport.height;
+    var _chatLastVp = window.visualViewport.height;
     window.visualViewport.addEventListener('resize', function() {
-      var diff = _lastVpHeight - window.visualViewport.height;
+      var diff = _chatLastVp - window.visualViewport.height;
       if (diff > 60) {
         document.getElementById('chatPanel').style.height = window.visualViewport.height + 'px';
-        document.getElementById('chatPanel').style.top = window.visualViewport.offsetTop + 'px';
         var inp = document.getElementById('chatInput');
-        if (inp && document.activeElement === inp) { setTimeout(function() { inp.focus(); inp.scrollIntoView({block: 'end'}); }, 100); }
+        if (inp && document.activeElement === inp) {
+          setTimeout(function() { inp.scrollIntoView({block: 'nearest'}); }, 150);
+        }
       } else if (diff < -30) {
         document.getElementById('chatPanel').style.height = '';
-        document.getElementById('chatPanel').style.top = '';
       }
-      _lastVpHeight = window.visualViewport.height;
+      _chatLastVp = window.visualViewport.height;
     });
   }
   triggerCleanup();
@@ -1360,14 +1360,19 @@ async function updateAvatar() {
 }
 
 async function updatePatSuffix() {
-  var suffix = document.getElementById('patSuffixInput')?.value?.trim() || '';
-  if (suffix.length > 10) { toast('后缀不能超过10个字', 'error'); return; }
-  await api('/api/users/' + currentUser.id + '/settings', {
-    method: 'PUT',
-    body: JSON.stringify({ action: 'update_pat_suffix', pat_suffix: suffix })
-  });
-  currentUser.pat_suffix = suffix;
-  toast('已保存');
+  try {
+    var suffix = document.getElementById('patSuffixInput')?.value?.trim() || '';
+    if (suffix.length > 10) { toast('后缀不能超过10个字', 'error'); return; }
+    var res = await api('/api/users/' + currentUser.id + '/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'update_pat_suffix', pat_suffix: suffix })
+    });
+    if (!res || !res.success) { toast(res?.error || '保存失败', 'error'); return; }
+    currentUser.pat_suffix = suffix;
+    toast('已保存');
+  } catch(e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
 }
 
 async function setWhitelistCode() {
@@ -3408,11 +3413,15 @@ async function updateRoomAvatar() {
   var canEdit = await checkChannelPermission(chatState.currentRoomId);
   if (!canEdit) { toast('只有管理员及以上才能修改频道头像', 'error'); return; }
   const avatar = document.getElementById('editRoomAvatar')?.value?.trim() || '';
-  const { error } = await __SB.from('chat_channel_settings').upsert({
-    room_id: chatState.currentRoomId, created_by: currentUser.id, avatar_url: avatar
-  }, { onConflict: 'room_id' });
-  if (error) { toast('修改失败: ' + error.message, 'error'); return; }
-  toast('头像已更新', 'success');
+  try {
+    const { error } = await __SB.from('chat_channel_settings').upsert({
+      room_id: chatState.currentRoomId, created_by: currentUser.id, avatar_url: avatar
+    }, { onConflict: 'room_id' });
+    if (error) { toast('修改失败: ' + error.message, 'error'); return; }
+    toast('头像已更新', 'success');
+  } catch(e) {
+    toast('修改失败: ' + e.message, 'error');
+  }
 }
 
 async function kickMember(roomId, targetUserId) {

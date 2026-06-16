@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS chat_channel_settings (
   admission_questionnaire JSON,
   admission_mode TEXT DEFAULT 'open',
   topic TEXT DEFAULT '',
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
