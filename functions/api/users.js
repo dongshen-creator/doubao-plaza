@@ -115,12 +115,7 @@ export async function onRequestGet(context) {
        FROM users ${whereClause} ORDER BY created_at DESC`
     ).bind(...params).all();
 
-    return new Response(JSON.stringify({ success: true, data: results.results }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=5, s-maxage=5'
-      }
-    });
+    return Response.json({ success: true, data: results.results });
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误：' + e.message });
   }
