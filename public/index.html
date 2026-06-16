@@ -501,12 +501,14 @@ async function init() {
     var _lastVpHeight = window.visualViewport.height;
     window.visualViewport.addEventListener('resize', function() {
       var diff = _lastVpHeight - window.visualViewport.height;
-      if (diff > 100) {
+      if (diff > 60) {
         document.getElementById('chatPanel').style.height = window.visualViewport.height + 'px';
-        var inp = document.getElementById('msgInput');
-        if (inp && document.activeElement === inp) inp.focus();
-      } else if (diff < -50) {
+        document.getElementById('chatPanel').style.top = window.visualViewport.offsetTop + 'px';
+        var inp = document.getElementById('chatInput');
+        if (inp && document.activeElement === inp) { setTimeout(function() { inp.focus(); inp.scrollIntoView({block: 'end'}); }, 100); }
+      } else if (diff < -30) {
         document.getElementById('chatPanel').style.height = '';
+        document.getElementById('chatPanel').style.top = '';
       }
       _lastVpHeight = window.visualViewport.height;
     });
@@ -3284,12 +3286,13 @@ async function showRoomSettings() {
   const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
   if (!room) return;
   const canManage = await checkChannelPermission(chatState.currentRoomId);
-  var currentTopic = '', currentAdmission = 'open';
+  var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
   var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', chatState.currentRoomId).maybeSingle();
-  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; }
+  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; }
   let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">';
   html += '<div class="modal-header"><div class="modal-title">频道设置</div><button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:#9ca3af;margin-bottom:4px">频道名称</div><div style="display:flex;gap:8px"><input id="editRoomName" class="input" value="' + esc(room.name || '') + '" style="flex:1"' + (canManage ? '' : ' disabled') + '><button class="btn btn-sm btn-orange" onclick="updateRoomName()">更新</button></div></div>';
+  html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:#9ca3af;margin-bottom:4px">频道头像 URL</div><div style="display:flex;gap:8px"><input id="editRoomAvatar" class="input" value="' + esc(currentAvatar || '') + '" placeholder="https://... 输入图片链接" style="flex:1"' + (canManage ? '' : ' disabled') + '><button class="btn btn-sm btn-orange" onclick="updateRoomAvatar()">更新</button></div></div>';
   html += '<div style="margin-top:12px"><div style="font-size:12px;color:#9ca3af;margin-bottom:4px">频道简介 (Topic)</div><div style="display:flex;gap:8px"><input id="editRoomTopic" class="input" value="' + esc(currentTopic || '') + '" style="flex:1"' + (canManage ? '' : ' disabled') + '>';
   if (canManage) html += '<button class="btn btn-sm btn-orange" onclick="updateRoomTopic()">更新</button>';
   html += '</div></div>';
@@ -3400,6 +3403,18 @@ async function updateRoomName() {
   toast('名称已更新', 'success');
 }
 
+async function updateRoomAvatar() {
+  if (!chatState.currentRoomId) return;
+  var canEdit = await checkChannelPermission(chatState.currentRoomId);
+  if (!canEdit) { toast('只有管理员及以上才能修改频道头像', 'error'); return; }
+  const avatar = document.getElementById('editRoomAvatar')?.value?.trim() || '';
+  const { error } = await __SB.from('chat_channel_settings').upsert({
+    room_id: chatState.currentRoomId, created_by: currentUser.id, avatar_url: avatar
+  }, { onConflict: 'room_id' });
+  if (error) { toast('修改失败: ' + error.message, 'error'); return; }
+  toast('头像已更新', 'success');
+}
+
 async function kickMember(roomId, targetUserId) {
   var myLevel = await getPermissionLevel(roomId, currentUser.id);
   if (myLevel < 1) { toast('只有管理员及以上才能踢人', 'error'); return; }
@@ -3437,12 +3452,6 @@ async function muteUserInChannel(targetUserId) {
   if (myLevel < 1) { toast('只有管理员及以上才能禁言', 'error'); return; }
   var targetLevel = await getPermissionLevel(chatState.currentRoomId, targetUserId);
   if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
-  var mRes = await fetch('/api/chat/room-members?room_id=' + encodeURIComponent(chatState.currentRoomId));
-  if (mRes.ok) {
-    var mData = await mRes.json();
-    var targetMember = mData.members.find(function(m) { return m.id === targetUserId; });
-    if (targetMember && targetMember.is_developer) { toast('不能禁言开发者', 'error'); return; }
-  }
   var choice = prompt('禁言时长（分钟）:\n输入分钟数，例如：60=1小时，1440=1天，10080=7天\n留空=永久', '');
   if (choice === null) return;
   var minutes = choice.trim() === '' ? 0 : parseInt(choice) || 0;
@@ -3472,7 +3481,7 @@ async function setChannelAdmin(targetUserId) {
   if (!chatState.currentRoomId) return;
   var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
   if (myLevel < 2) { toast('只有频道创建者及以上才能设置管理员', 'error'); return; }
-  const { error } = await __SB.from('chat_admins').insert({ room_id: chatState.currentRoomId, user_id: targetUserId });
+  const { error } = await __SB.from('chat_admins').insert({ id: 'admin_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), room_id: chatState.currentRoomId, user_id: targetUserId, set_by: currentUser.id });
   if (error) { toast('设置失败: ' + error.message, 'error'); return; }
   loadRoomMemberList(chatState.currentRoomId);
   toast('已设为管理员', 'success');
@@ -3639,13 +3648,21 @@ function showQuestionnaireModal(roomId, settings, context) {
 async function submitQuestionnaireV2(roomId, questionsJson, context) {
   var questions = typeof questionsJson === 'string' ? JSON.parse(questionsJson.replace(/&quot;/g, '"')) : questionsJson;
   var allCorrect = true;
-  var fillAnswers = [];
+  var allFillStandardCorrect = true;
+  var fillOpenAnswers = [];
 
   for (var i = 0; i < questions.length; i++) {
     var q = questions[i];
     if (q.type === 'fill') {
       var ta = document.querySelector('textarea[data-q="' + i + '"]');
-      fillAnswers.push({ question: q.question, answer: ta ? ta.value : '' });
+      fillOpenAnswers.push({ question: q.question, answer: ta ? ta.value : '' });
+      continue;
+    }
+    if (q.type === 'fill_standard') {
+      var ta2 = document.querySelector('textarea[data-q="' + i + '"]');
+      var userAnswer = (ta2 ? ta2.value : '').trim().toLowerCase();
+      var correctAnswer = (q.correct_answer || '').trim().toLowerCase();
+      if (userAnswer !== correctAnswer) { allFillStandardCorrect = false; }
       continue;
     }
     var correctSet = new Set(q.correct_answer || []);
@@ -3658,16 +3675,22 @@ async function submitQuestionnaireV2(roomId, questionsJson, context) {
     if (!allCorrect) break;
   }
 
+  if (allCorrect && !allFillStandardCorrect) allCorrect = false;
+
   document.getElementById('questionnaireModal')?.remove();
 
-  if (fillAnswers.length > 0) {
+  if (fillOpenAnswers.length > 0) {
+    if (context === 'composite' && !allCorrect) {
+      toast('选择题或标准填空题未通过，无法提交开放填空审核', 'error');
+      return;
+    }
     var reqId = 'req_' + Date.now().toString(36);
     var { error: reqErr } = await __SB.from('channel_join_requests').insert({
       id: reqId, room_id: roomId, user_id: currentUser.id, status: 'pending',
-      message: fillAnswers.map(function(f) { return f.question + ': ' + f.answer; }).join(' | ')
+      message: fillOpenAnswers.map(function(f) { return f.question + ': ' + f.answer; }).join(' | ')
     });
     if (reqErr) { toast('提交失败: ' + reqErr.message, 'error'); return; }
-    toast('含填空题，已提交审核', 'success');
+    toast('含开放填空题，已提交审核', 'success');
     return;
   }
 
@@ -3776,12 +3799,17 @@ function renderQuestionRow(q, i) {
   h += '<select class="input" style="width:100px" data-field="type" onchange="onQuestionTypeChange(this)">';
   h += '<option value="single"' + (q.type === 'single' ? ' selected' : '') + '>单选</option>';
   h += '<option value="multiple"' + (q.type === 'multiple' ? ' selected' : '') + '>多选</option>';
-  h += '<option value="fill"' + (q.type === 'fill' ? ' selected' : '') + '>填空</option>';
+  h += '<option value="fill_standard"' + (q.type === 'fill_standard' ? ' selected' : '') + '>标准填空</option>';
+  h += '<option value="fill"' + (q.type === 'fill' ? ' selected' : '') + '>开放填空</option>';
   h += '</select>';
   h += '<button class="btn btn-sm btn-red" onclick="removeQuestionRow(' + i + ')" style="font-size:11px">✕</button>';
   h += '</div>';
-  if (q.type === 'fill') {
-    h += '<div style="font-size:11px;color:#9ca3af;padding-left:20px">📝 填空题 — 答案将在审核时展示，由管理员人工判断</div>';
+  if (q.type === 'fill_standard') {
+    h += '<div style="padding-left:20px"><div style="font-size:10px;color:#9ca3af;margin-bottom:4px">📝 标准答案（填写正确即自动通过）</div>';
+    h += '<input class="input" value="' + esc(q.correct_answer || '') + '" placeholder="正确答案（≤30字）" maxlength="30" style="flex:1" data-field="correct_answer">';
+    h += '</div>';
+  } else if (q.type === 'fill') {
+    h += '<div style="font-size:11px;color:#9ca3af;padding-left:20px">📝 开放填空 — 答案将在审核时展示，由管理员人工判断</div>';
   } else {
     h += '<div class="questionOptions" style="padding-left:20px">';
     h += '<div style="font-size:10px;color:#9ca3af;margin-bottom:4px">选项（点击 ○/☑ 标记正确答案）</div>';
@@ -3862,15 +3890,23 @@ function syncQuestionnaireFromDOM() {
     var q = row.querySelector('[data-field="question"]');
     var t = row.querySelector('[data-field="type"]');
     if (!q || !t) return;
-    var opts = [];
-    var correct = [];
-    row.querySelectorAll('[data-field="option"]').forEach(function(o, idx) {
-      var val = o.value.trim();
-      if (val) opts.push(val);
-      var correctCheck = o.parentElement.querySelector('[data-correct]');
-      if (correctCheck && correctCheck.checked) correct.push(idx);
-    });
-    questions.push({ question: q.value.trim(), type: t.value, options: opts, correct_answer: correct });
+    var questionData = { question: q.value.trim(), type: t.value };
+    if (t.value === 'fill_standard') {
+      var ca = row.querySelector('[data-field="correct_answer"]');
+      questionData.correct_answer = ca ? ca.value.trim() : '';
+    } else if (t.value !== 'fill') {
+      var opts = [];
+      var correct = [];
+      row.querySelectorAll('[data-field="option"]').forEach(function(o, idx) {
+        var val = o.value.trim();
+        if (val) opts.push(val);
+        var correctCheck = o.parentElement.querySelector('[data-correct]');
+        if (correctCheck && correctCheck.checked) correct.push(idx);
+      });
+      questionData.options = opts;
+      questionData.correct_answer = correct;
+    }
+    questions.push(questionData);
   });
   window._admSettings.questionnaire = questions;
 }
@@ -3928,15 +3964,23 @@ async function saveAdmissionQuestionnaire() {
     var qText = question.value.trim();
     if (!qText) return;
     var type = row.querySelector('[data-field="type"]').value;
-    var opts = [];
-    var correctAnswers = [];
-    row.querySelectorAll('[data-field="option"]').forEach(function(o, idx) {
-      var val = o.value.trim();
-      if (val) opts.push(val);
-      var correctCheck = o.parentElement.querySelector('[data-correct]');
-      if (correctCheck && correctCheck.checked) correctAnswers.push(idx);
-    });
-    questions.push({ question: qText, type: type, options: opts, correct_answer: correctAnswers });
+    var questionData = { question: qText, type: type };
+    if (type === 'fill_standard') {
+      var ca = row.querySelector('[data-field="correct_answer"]');
+      questionData.correct_answer = ca ? ca.value.trim() : '';
+    } else if (type !== 'fill') {
+      var opts = [];
+      var correctAnswers = [];
+      row.querySelectorAll('[data-field="option"]').forEach(function(o, idx) {
+        var val = o.value.trim();
+        if (val) opts.push(val);
+        var correctCheck = o.parentElement.querySelector('[data-correct]');
+        if (correctCheck && correctCheck.checked) correctAnswers.push(idx);
+      });
+      questionData.options = opts;
+      questionData.correct_answer = correctAnswers;
+    }
+    questions.push(questionData);
   });
   await __SB.from('chat_channel_settings').upsert({
     room_id: chatState.currentRoomId, created_by: currentUser.id, admission_questionnaire: questions
@@ -3951,11 +3995,15 @@ async function loadAuditRequests() {
   content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">加载中...</div>';
   var { data: requests } = await __SB.from('channel_join_requests').select('*').eq('room_id', chatState.currentRoomId).eq('status', 'pending').order('created_at', { ascending: true });
   if (!requests?.length) { content.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af">暂无待审核的申请</div>'; return; }
+  var userIds = requests.map(function(r) { return r.user_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; });
+  var { data: users } = await __SB.from('users').select('id, name').in('id', userIds);
+  var userMap = {};
+  if (users) users.forEach(function(u) { userMap[u.id] = u.name; });
   var html = '';
   requests.forEach(function(r) {
     html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px;border-bottom:1px solid #f3f4f6;gap:8px">';
     html += '<div style="flex:1;min-width:0">';
-    html += '<span style="font-size:13px;font-weight:500">' + esc(r.user_id.slice(0, 12)) + '</span>';
+    html += '<span style="font-size:13px;font-weight:500">' + esc(userMap[r.user_id] || r.user_id.slice(0, 12)) + '</span>';
     html += '<div style="font-size:11px;color:#6b7280;margin-top:4px;word-break:break-all">' + (r.message ? esc(r.message) : '无申请理由') + '</div>';
     html += '<div style="font-size:10px;color:#9ca3af;margin-top:2px">' + formatDate(r.created_at) + '</div>';
     html += '</div>';
@@ -4454,7 +4502,7 @@ switchSettingsTab = function(tab, btnEl) {
 };
 
 function settingsAccountHTML() {
-  return '<div class="card" style="margin-bottom:16px;padding:16px">' +
+  var html = '<div class="card" style="margin-bottom:16px;padding:16px">' +
     '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:12px">👤 个人信息</div>' +
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">' +
     '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#FF6B35,#FF8F5E);display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:600;overflow:hidden;flex-shrink:0">' +
@@ -4496,6 +4544,7 @@ function settingsAccountHTML() {
     html += '<div class="danger-box"><strong>⚠️ 危险区域</strong><br>注销账号将永久删除您的所有数据，包括好友关系、黑名单等，此操作不可恢复！<br>' +
     '<button class="btn btn-red btn-full" style="margin-top:12px" onclick="deleteAccount()">💀 注销账号</button></div>';
   }
+  return html;
 }
 
 async function loadFriendsWithGroups(el) {

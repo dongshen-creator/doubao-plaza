@@ -81,13 +81,15 @@ async function ensureTables(env) {
     "CREATE TABLE IF NOT EXISTS chat_stranger_limits (room_id TEXT NOT NULL, user_id TEXT NOT NULL, messages_sent INTEGER DEFAULT 1, UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_unread (room_id TEXT NOT NULL, user_id TEXT NOT NULL, last_event_id TEXT, count INTEGER DEFAULT 0, UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_muted (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, muted_by TEXT NOT NULL, muted_until TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
-    "CREATE TABLE IF NOT EXISTS chat_channel_settings (room_id TEXT PRIMARY KEY, created_by TEXT NOT NULL, admission TEXT DEFAULT 'open', topic TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')))",
+     "CREATE TABLE IF NOT EXISTS chat_channel_settings (room_id TEXT PRIMARY KEY, created_by TEXT NOT NULL, admission TEXT DEFAULT 'open', topic TEXT DEFAULT '', avatar_url TEXT, created_at TEXT DEFAULT (datetime('now')))",
     "CREATE TABLE IF NOT EXISTS chat_banned (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, banned_by TEXT NOT NULL, reason TEXT DEFAULT '', permanent INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))",
     "CREATE TABLE IF NOT EXISTS chat_admins (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, user_id TEXT NOT NULL, set_by TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), UNIQUE(room_id, user_id))"
   ];
   for (const sql of stmts) {
     try { await env.DB.prepare(sql).raw(); } catch(e) { try { await env.DB.prepare(sql).run(); } catch(e2) {} }
   }
+  await env.DB.prepare("ALTER TABLE chat_channel_settings ADD COLUMN avatar_url TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN pat_suffix TEXT").run().catch(function() {});
 }
 
 export async function onRequest(context) {
@@ -938,16 +940,16 @@ async function handleChannelSettings(env, url) {
     return json({ admission: settings.admission, topic: settings.topic, created_by: settings.created_by });
   }
   const body = env._body || await env._request.json().catch(() => ({}));
-  const { user_id, admission, topic } = body;
+  const { user_id, admission, topic, avatar_url } = body;
   if (!user_id) return json({ error: 'user_id 必填' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以修改设置' });
   const allowedAdmissions = ['open', 'invite', 'approval', 'password', 'questionnaire', 'custom_page', 'composite'];
   const finalAdmission = allowedAdmissions.includes(admission) ? admission : 'open';
   await env.DB.prepare(
-    "INSERT INTO chat_channel_settings (room_id, created_by, admission, topic) VALUES (?, ?, ?, ?) " +
-    "ON CONFLICT(room_id) DO UPDATE SET admission=excluded.admission, topic=excluded.topic"
-  ).bind(room_id, user_id, finalAdmission, topic || '').run();
+    "INSERT INTO chat_channel_settings (room_id, created_by, admission, topic, avatar_url) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(room_id) DO UPDATE SET admission=excluded.admission, topic=excluded.topic, avatar_url=COALESCE(excluded.avatar_url, chat_channel_settings.avatar_url)"
+  ).bind(room_id, user_id, finalAdmission, topic || '', avatar_url || null).run();
   return json({ success: true });
 }
 
@@ -966,6 +968,7 @@ async function handleChannelInfo(env, url) {
     room_id: room.id,
     name: room.name,
     topic: settings?.topic || '',
+    avatar_url: settings?.avatar_url || '',
     created_by: room.created_by,
     member_count: memberCount?.count || 0,
     admission: settings?.admission || 'open',
