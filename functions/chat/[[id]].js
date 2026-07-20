@@ -4,8 +4,13 @@
 // [[id]] 捕获 /chat/{id} 以及 /chat/{id}/子路径
 
 export async function onRequestGet(context) {
-  const fullPath = context.params.id || '';
-  const roomId = fullPath.split('/')[0]; // 取第一段作为 roomId
+  // [[id]] catch-all 参数是数组形式，需正确处理
+  let fullPath = context.params.id || '';
+  if (Array.isArray(fullPath)) {
+    fullPath = fullPath.join('/');
+  }
+  fullPath = String(fullPath);
+  const roomId = fullPath.split('/').filter(Boolean)[0] || ''; // 取第一段作为 roomId
 
   if (!roomId) {
     return Response.redirect(

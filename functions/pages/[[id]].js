@@ -57,52 +57,72 @@ function getContentType(filename) {
 }
 
 export async function onRequestGet(context) {
-  const { env, params } = context;
-  const fullPath = params.id || '';
-  const parts = fullPath.split('/');
-  const pageId = parts[0];
-  const filePath = parts.slice(1).join('/') || 'index.html';
+  try {
+    const { env, params } = context;
+    // [[id]] catch-all 参数是数组形式（如 ["daniel","xyz","123"]）
+    // 需要正确处理数组参数，避免 toString 导致逗号分隔异常
+    let fullPath = (params && params.id) || '';
+    if (Array.isArray(fullPath)) {
+      fullPath = fullPath.join('/');
+    }
+    fullPath = String(fullPath);
+    const parts = fullPath.split('/').filter(Boolean);
+    const pageId = parts[0] || '';
+    const filePath = parts.slice(1).join('/') || 'index.html';
 
-  // 1) 尝试从 R2 读取
-  if (env.PAGES_BUCKET) {
-    try {
-      const r2Key = `pages/${pageId}/${filePath}`;
-      const obj = await env.PAGES_BUCKET.get(r2Key);
-      if (obj) {
-        const ct = obj.httpMetadata?.contentType || getContentType(filePath);
-        if (ct === 'text/html') {
-          const html = await new Response(obj.body).text();
-          return new Response(injectIntoHTML(html, loginWallHead()), {
-            headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
+    if (!pageId) {
+      return notFoundResponse('页面不存在');
+    }
+
+    // 1) 尝试从 R2 读取
+    if (env && env.PAGES_BUCKET) {
+      try {
+        const r2Key = `pages/${pageId}/${filePath}`;
+        const obj = await env.PAGES_BUCKET.get(r2Key);
+        if (obj) {
+          const ct = obj.httpMetadata?.contentType || getContentType(filePath);
+          if (ct === 'text/html') {
+            const html = await new Response(obj.body).text();
+            return new Response(injectIntoHTML(html, loginWallHead()), {
+              headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
+            });
+          }
+          return new Response(obj.body, {
+            headers: {
+              'Content-Type': ct,
+              'Cache-Control': 'public, max-age=86400',
+            },
           });
         }
-        return new Response(obj.body, {
-          headers: {
-            'Content-Type': ct,
-            'Cache-Control': 'public, max-age=86400',
-          },
-        });
-      }
-    } catch (_) { /* R2 not available or error */ }
+      } catch (e) { /* R2 not available or error */ }
+    }
+
+    // 2) 如果是 index.html，回退到 D1
+    if (filePath === 'index.html' && env && env.DB) {
+      try {
+        const page = await env.DB.prepare(
+          `SELECT title, html_content FROM custom_pages WHERE id = ?`
+        ).bind(pageId).first();
+
+        if (page) {
+          return new Response(injectIntoHTML(page.html_content, loginWallHead()), {
+            headers: { 'Content-Type': 'text/html' },
+          });
+        }
+      } catch (e) { /* DB error */ }
+    }
+
+    // 3) 404
+    return notFoundResponse('文件不存在');
+  } catch (e) {
+    // 兜底：任何未捕获异常都返回 404，而非 1101
+    console.error('pages/[[id]] error:', e);
+    return notFoundResponse('服务器错误');
   }
+}
 
-  // 2) 如果是 index.html，回退到 D1
-  if (filePath === 'index.html' && env.DB) {
-    try {
-      const page = await env.DB.prepare(
-        `SELECT title, html_content FROM custom_pages WHERE id = ?`
-      ).bind(pageId).first();
-
-      if (page) {
-        return new Response(injectIntoHTML(page.html_content, loginWallHead()), {
-          headers: { 'Content-Type': 'text/html' },
-        });
-      }
-    } catch (_) { /* DB error */ }
-  }
-
-  // 3) 404
-  return new Response('<!DOCTYPE html><html><head><title>404</title><meta charset="utf-8"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif"><div style="text-align:center"><h1>404</h1><p>文件不存在</p><a href="/" style="color:#FF6B35">返回首页</a></div></body></html>', {
+function notFoundResponse(msg) {
+  return new Response('<!DOCTYPE html><html><head><title>404</title><meta charset="utf-8"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif"><div style="text-align:center"><h1>404</h1><p>' + msg + '</p><a href="/" style="color:#FF6B35">返回首页</a></div></body></html>', {
     status: 404,
     headers: { 'Content-Type': 'text/html' },
   });

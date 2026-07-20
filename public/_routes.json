@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "include": ["/api/*", "/pages/*", "/chat/*"],
+  "exclude": [
+    "/style.css",
+    "/supabase-sdk.js",
+    "/index.html",
+    "/"
+  ]
+}
