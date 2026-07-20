@@ -3,3 +3,4 @@ node_modules/
 scripts/monitor_state.json
 scripts/pending_fixes.jsonl
 .env
+.wrangler/
