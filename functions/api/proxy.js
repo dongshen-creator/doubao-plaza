@@ -57,12 +57,21 @@ export async function onRequestPost(context) {
     forwardHeaders.set('X-Access-Token', accessToken);
   }
 
+  // 超时控制：Cloudflare Pages Functions 有 30 秒执行限制
+  // 仅对「等待响应头」阶段设超时（25秒），响应头到达后立即清除
+  // 这样流式 SSE 响应体不受超时影响，可以长时间传输
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
   try {
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: forwardHeaders,
-      body: body
+      body: body,
+      signal: controller.signal
     });
+    // 响应头已到达，清除超时——流式响应体可以自由传输
+    clearTimeout(timeoutId);
 
     // 返回响应，保留流式特性（SSE）
     const respHeaders = new Headers();
@@ -77,6 +86,8 @@ export async function onRequestPost(context) {
     if (respContentType && respContentType.includes('text/event-stream')) {
       respHeaders.set('Cache-Control', 'no-cache');
       respHeaders.set('Connection', 'keep-alive');
+      // 标记为流式，禁用 Cloudflare 缓冲
+      respHeaders.set('X-Accel-Buffering', 'no');
     }
 
     // Coze 登录响应：提取 Set-Cookie 中的 db_session 值
@@ -102,10 +113,22 @@ export async function onRequestPost(context) {
       headers: respHeaders
     });
   } catch (err) {
-    return Response.json({ 
+    clearTimeout(timeoutId);
+    // 超时错误：目标服务器在 25 秒内未返回响应头
+    if (err.name === 'AbortError') {
+      return Response.json({
+        error: '目标服务器响应超时（25秒未收到响应头）。可能原因：模型加载中、服务器繁忙或网络延迟。请稍后重试或更换模型/渠道。',
+        target: targetUrl.substring(0, 100),
+        timeout: true
+      }, {
+        status: 504,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+    return Response.json({
       error: '代理请求失败: ' + (err.message || '未知错误'),
       target: targetUrl.substring(0, 100)
-    }, { 
+    }, {
       status: 502,
       headers: {
         'Access-Control-Allow-Origin': '*'
@@ -129,9 +152,14 @@ export async function onRequestGet(context) {
     });
   }
 
+  // 超时控制（与 POST 相同逻辑）
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
   try {
     const parsed = new URL(targetUrl);
     if (parsed.protocol !== 'https:') {
+      clearTimeout(timeoutId);
       return Response.json({ error: '仅支持 HTTPS' }, { status: 400 });
     }
 
@@ -153,8 +181,10 @@ export async function onRequestGet(context) {
 
     const response = await fetch(targetUrl, {
       method: 'GET',
-      headers: getHeaders
+      headers: getHeaders,
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const respHeaders = new Headers();
     const respContentType = response.headers.get('Content-Type');
@@ -166,6 +196,16 @@ export async function onRequestGet(context) {
       headers: respHeaders
     });
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return Response.json({
+        error: '目标服务器响应超时（25秒）。请稍后重试。',
+        timeout: true
+      }, {
+        status: 504,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
+    }
     return Response.json({ 
       error: '代理请求失败: ' + (err.message || '未知错误')
     }, { 
