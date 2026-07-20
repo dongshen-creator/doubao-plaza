@@ -1,0 +1,234 @@
+// Cloudflare Pages Function - Friends API (完整版)
+// GET    /api/friends?user_id=xxx&status=pending|accepted  - 获取好友/申请列表
+// POST   /api/friends             - 发送好友申请
+// PUT    /api/friends?id=xxx      - 审核好友申请 (accept/reject)
+// DELETE /api/friends?id=xxx      - 删除好友
+
+// 统一鉴权：从 Authorization 头取 token，校验会话有效性，返回 user_id 或 null
+async function getAuthUserId(env, request) {
+  const auth = request.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const token = auth.slice(7).trim();
+  if (!token) return null;
+  const session = await env.DB.prepare(
+    `SELECT user_id FROM sessions WHERE token = ? AND expires_at > datetime('now')`
+  ).bind(token).first();
+  return session ? session.user_id : null;
+}
+
+export async function onRequestGet(context) {
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    const { env } = context;
+    const url = new URL(context.request.url);
+    const userId = url.searchParams.get('user_id');
+    const status = url.searchParams.get('status') || 'accepted';
+
+    if (!userId) {
+      return Response.json({ success: false, error: 'user_id 是必填参数' });
+    }
+
+    // 鉴权：仅本人可查看自己的好友列表
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId || authUserId !== userId) {
+      return Response.json({ success: false, error: '无权访问' }, { status: 403 });
+    }
+
+    // 获取好友列表（包含对方信息）
+    const results = await env.DB.prepare(
+      `SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, f.updated_at,
+              u.id as friend_user_id, u.name as friend_name, 
+              u.avatar as friend_avatar, u.bio as friend_bio,
+              u.doubao_id as friend_doubao_id, u.agent_url as friend_agent_url
+       FROM friendships f
+       JOIN users u ON (CASE WHEN f.user_id = ? THEN u.id = f.friend_id ELSE u.id = f.user_id END)
+       WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = ?
+       ORDER BY f.updated_at DESC`
+    ).bind(userId, userId, userId, status).all();
+
+    // 标记是"我发出的"还是"对方发出的"
+    const friendships = results.results.map((r) => ({
+      id: r.id,
+      status: r.status,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      is_outgoing: r.user_id === userId, // 是否是我发出的申请
+      friend: {
+        id: r.friend_user_id,
+        name: r.friend_name,
+        avatar: r.friend_avatar,
+        bio: r.friend_bio,
+        doubao_id: r.friend_doubao_id,
+        agent_url: r.friend_agent_url,
+      }
+    }));
+
+    return Response.json({ success: true, data: friendships });
+  } catch (e) {
+    return Response.json({ success: false, error: '服务器错误：' + e.message });
+  }
+}
+
+export async function onRequestPost(context) {
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    const { env } = context;
+    const body = await context.request.json().catch(() => ({}));
+    const { user_id, friend_id, invite_code } = body;
+
+    if (!user_id || !friend_id) {
+      return Response.json({ success: false, error: 'user_id 和 friend_id 是必填项' });
+    }
+    if (user_id === friend_id) {
+      return Response.json({ success: false, error: '不能添加自己为好友' });
+    }
+
+    // 鉴权：仅本人可发起好友申请
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId || authUserId !== user_id) {
+      return Response.json({ success: false, error: '无权操作，请先登录' }, { status: 403 });
+    }
+
+    const friend = await env.DB.prepare("SELECT privacy_setting, invite_code FROM users WHERE id = ?").bind(friend_id).first();
+    if (!friend) { return Response.json({ success: false, error: '用户不存在' }); }
+    if (friend.privacy_setting === 'stealth' || friend.privacy_setting === 'punished_stealth') {
+      return Response.json({ success: false, error: '该用户处于隐身模式，无法添加好友' });
+    }
+    if (friend.privacy_setting === 'whitelist' || friend.privacy_setting === 'punished_whitelist') {
+      if (!invite_code || invite_code !== friend.invite_code) {
+        return Response.json({ success: false, error: '邀请码错误，无法添加好友' });
+      }
+    }
+
+    // 检查是否已存在任何关系
+    const existing = await env.DB.prepare(
+      `SELECT * FROM friendships WHERE 
+       (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`
+    ).bind(user_id, friend_id, friend_id, user_id).first();
+
+    if (existing) {
+      if (existing.status === 'accepted') {
+        return Response.json({ success: false, error: '你们已经是好友' });
+      } else if (existing.status === 'pending') {
+        return Response.json({ success: false, error: '好友申请已发送，等待对方处理' });
+      } else if (existing.status === 'rejected') {
+        // 之前被拒绝过，可以重新申请
+        await env.DB.prepare(
+          `UPDATE friendships SET status = 'pending', user_id = ?, friend_id = ?, updated_at = datetime('now') WHERE id = ?`
+        ).bind(user_id, friend_id, existing.id).run();
+        return Response.json({ success: true, data: { id: existing.id, status: 'pending' } });
+      }
+    }
+
+    const result = await env.DB.prepare(
+      `INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')`
+    ).bind(user_id, friend_id).run();
+    return Response.json({ success: true, data: { id: result.meta.last_row_id, status: 'pending' } });
+  } catch (e) {
+    return Response.json({ success: false, error: e.message });
+  }
+}
+
+export async function onRequestPut(context) {
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    const { env } = context;
+    const url = new URL(context.request.url);
+    const id = url.searchParams.get('id');
+    const body = await context.request.json().catch(() => ({}));
+    const { action } = body;
+
+    if (!id) {
+      return Response.json({ success: false, error: 'id 是必填参数' });
+    }
+
+    if (!['accept', 'reject'].includes(action)) {
+      return Response.json({ success: false, error: 'action 必须是 accept 或 reject' });
+    }
+
+    // 鉴权：校验该好友申请是发给当前登录用户的（被申请方才能审核）
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '无权操作，请先登录' }, { status: 403 });
+    }
+    const record = await env.DB.prepare(
+      `SELECT user_id, friend_id, status FROM friendships WHERE id = ?`
+    ).bind(id).first();
+    if (!record) {
+      return Response.json({ success: false, error: '好友申请不存在' });
+    }
+    if (record.friend_id !== authUserId) {
+      return Response.json({ success: false, error: '无权审核此好友申请' }, { status: 403 });
+    }
+
+    const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+
+    await env.DB.prepare(
+      `UPDATE friendships SET status = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(newStatus, id).run();
+    return Response.json({ success: true, message: action === 'accept' ? '已通过好友申请' : '已拒绝好友申请' });
+  } catch (e) {
+    return Response.json({ success: false, error: e.message });
+  }
+}
+
+export async function onRequestDelete(context) {
+  // 首先检查环境变量
+  if (!context.env.DB) {
+    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    const { env } = context;
+    const url = new URL(context.request.url);
+    const id = url.searchParams.get('id');
+
+    if (!id) {
+      return Response.json({ success: false, error: 'id 是必填参数' });
+    }
+
+    // 鉴权：校验该好友关系属于当前登录用户
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '无权操作，请先登录' }, { status: 403 });
+    }
+    const record = await env.DB.prepare(
+      `SELECT user_id, friend_id FROM friendships WHERE id = ?`
+    ).bind(id).first();
+    if (!record) {
+      return Response.json({ success: false, error: '好友关系不存在' });
+    }
+    if (record.user_id !== authUserId && record.friend_id !== authUserId) {
+      return Response.json({ success: false, error: '无权操作' }, { status: 403 });
+    }
+
+    await env.DB.prepare(`DELETE FROM friendships WHERE id = ?`).bind(id).run();
+    return Response.json({ success: true, message: '已移除好友' });
+  } catch (e) {
+    return Response.json({ success: false, error: e.message });
+  }
+}
