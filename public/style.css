@@ -347,6 +347,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   }
   /* 聊天视图header中添加返回按钮 */
   .chat-back-btn { display: flex !important; }
+  /* 移动端上下文面板改为抽屉覆盖 */
+  .chat-view-context.show {
+    width: 100% !important;
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    z-index: 30;
+  }
 }
 .chat-back-btn { display: none; }
 
@@ -547,11 +554,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
    聊天视图（融入三栏架构）
    主内容区内部：header + msgs + input
    ═══════════════════════════════════════════════ */
-.chat-view-main{display:flex;flex-direction:column;height:100%;min-height:0}
+.chat-view-main{display:flex;flex-direction:row;height:100%;min-height:0}
+.chat-view-center{display:flex;flex-direction:column;flex:1;min-width:0}
 .chat-view-header{padding:12px 16px;border-bottom:1px solid var(--border-color);background:var(--bg-secondary);flex-shrink:0}
 .chat-view-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:0}
 .chat-view-input{padding:10px 16px;background:var(--bg-secondary);border-top:1px solid var(--border-strong);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
 .chat-empty-inline{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:32px;color:var(--text-faint);font-size:14px}
+
+/* 右侧上下文面板 */
+.chat-view-context{width:0;overflow:hidden;border-left:1px solid var(--border-color);background:var(--bg-secondary);flex-shrink:0;transition:width .25s ease;display:flex;flex-direction:column}
+.chat-view-context.show{width:280px}
+.chat-context-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:13px;padding:16px;text-align:center}
+.ctx-panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0}
+.ctx-close-btn{background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-muted);padding:4px 8px;border-radius:var(--radius);transition:background var(--transition)}
+.ctx-close-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+.ctx-panel-body{flex:1;overflow-y:auto;padding:12px}
+.ctx-section{margin-bottom:16px}
+.ctx-section-title{font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 4px}
+.ctx-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;font-size:13px}
+.ctx-label{color:var(--text-muted)}
+.ctx-value{color:var(--text-primary);font-weight:500}
+
+/* 频道权限身份标签 */
+.chat-role-tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}
+.role-owner{background:rgba(245,158,11,.15);color:#F59E0B}
+.role-admin{background:rgba(59,130,246,.15);color:#3B82F6}
+.role-dev{background:rgba(139,92,246,.15);color:#8B5CF6}
+
+/* 工具类 */
+.btn-red{background:rgba(239,68,68,.1);color:#EF4444;border:1px solid rgba(239,68,68,.2)}
+.btn-red:hover{background:rgba(239,68,68,.2)}
+.btn-full{width:100%}
 
 /* 主内容区在聊天视图下需要填满高度 */
 .app-main:has(.chat-view-main) {
@@ -566,7 +599,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   height: calc(100dvh - 57px - 53px);
 }
 /* 侧边栏在聊天视图下也需要填满高度 */
-.app-sidebar:has(#chatRoomItems) {
+.app-sidebar:has(#chatChannelItems) {
   overflow-y: auto;
 }
 .chat-header{background:var(--bg-secondary);border-bottom:1px solid var(--border-color);padding:10px 16px;display:flex;align-items:center;gap:10px;height:54px;z-index:2;transition:background .25s,border-color .25s}

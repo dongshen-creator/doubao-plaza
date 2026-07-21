@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -970,48 +970,62 @@ function renderChatView(sidebar, main) {
     return;
   }
 
-  // 侧边栏：会话列表
+  // 侧边栏：拆分为频道和私聊两个区域
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px">
-        <span class="sidebar-header" style="margin:0">会话</span>
+        <span class="sidebar-header" style="margin:0">频道</span>
         <button class="btn btn-sm btn-gray" onclick="showCreateChannel()" style="font-size:11px">＋ 频道</button>
       </div>
-      <div id="chatRoomItems"></div>
+      <div id="chatChannelItems"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">私聊</div>
+      <div id="chatPrivateItems"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">操作</div>
+      <div style="padding:0 4px">
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showBrowseChannels()">🔍 浏览公开频道</button>
+      </div>
     </div>
   `;
 
-  // 主内容区：消息区域
+  // 主内容区：消息区域 + 右侧上下文面板
   main.innerHTML = `
     <div class="chat-view-main" id="chatMainArea">
-      <div class="chat-view-header" id="chatViewHeader">
-        <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 消息</div>
-        <div style="font-size:12px;color:var(--text-faint)">选择一个会话开始聊天</div>
-      </div>
-      <div class="chat-view-body" id="chatMsgs">
-        <div class="chat-empty-inline" id="chatEmpty">
-          <div style="font-size:48px;margin-bottom:12px">💬</div>
-          <div>选择一个聊天或创建频道</div>
+      <div class="chat-view-center">
+        <div class="chat-view-header" id="chatViewHeader">
+          <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 消息</div>
+          <div style="font-size:12px;color:var(--text-faint)">选择一个会话开始聊天</div>
+        </div>
+        <div class="chat-view-body" id="chatMsgs">
+          <div class="chat-empty-inline" id="chatEmpty">
+            <div style="font-size:48px;margin-bottom:12px">💬</div>
+            <div>选择一个聊天或创建频道</div>
+          </div>
+        </div>
+        <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
+          <button class="close-reply" onclick="cancelReply()">✕</button>
+        </div>
+        <div class="chat-view-input" id="chatViewInput" style="display:none">
+          <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
+          <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
+          <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频" aria-label="上传图片或视频">🖼</button>
+          <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件" aria-label="上传文件">📎</button>
+          <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
+          <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
         </div>
       </div>
-      <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
-        <button class="close-reply" onclick="cancelReply()">✕</button>
-      </div>
-      <div class="chat-view-input" id="chatViewInput" style="display:none">
-        <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
-        <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
-        <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频">🖼</button>
-        <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
-        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
-      </div>
+      <aside class="chat-view-context" id="chatContextPanel" aria-label="上下文面板">
+        <div class="chat-context-empty">选中频道后显示设置</div>
+      </aside>
     </div>
   `;
 
-  // 兼容旧引用：将旧ID映射到新元素
-  // chatMsgs -> chatViewBody, chatRoomList -> sidebar内的chatRoomItems
+  // 兼容旧引用：chatRoomItems 映射到频道列表区域
   // 初始化聊天状态
   chatState.chatOpen = true;
   chatState.currentRoomId = null;
@@ -3016,24 +3030,69 @@ async function loadRoomList() {
 }
 
 function renderRoomList() {
-  const el = document.getElementById('chatRoomItems');
-  if (!el) return; // 不在聊天视图时元素不存在，安全跳过
-  const rooms = chatState.rooms;
-  if (!rooms?.length) {
-    el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
-    return;
+  // 分离频道和私聊
+  var channels = (chatState.rooms || []).filter(function(r) { return r.type === 'channel'; });
+  var privates = (chatState.rooms || []).filter(function(r) { return r.type !== 'channel'; });
+
+  // 渲染频道列表
+  var channelEl = document.getElementById('chatChannelItems');
+  if (channelEl) {
+    if (!channels.length) {
+      channelEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 4px">暂无频道，点击右上角创建</div>';
+    } else {
+      channelEl.innerHTML = channels.map(function(r) {
+        var active = r.id === chatState.currentRoomId;
+        var avatar = '📢';
+        var name = esc(r.name);
+        // 频道权限身份标签
+        var roleTag = '';
+        if (r.is_admin) {
+          if (r.created_by === currentUser.id) roleTag = '<span class="chat-role-tag role-owner">创建者</span>';
+          else if (isDeveloper()) roleTag = '<span class="chat-role-tag role-dev">开发者</span>';
+          else roleTag = '<span class="chat-role-tag role-admin">管理员</span>';
+        }
+        return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
+          '<div class="chat-room-avatar">' + avatar + '</div>' +
+          '<div class="chat-room-info"><div class="chat-room-name">' + name + roleTag + '</div>' +
+          '<div class="chat-room-preview">频道 · ' + (r.member_count || 0) + ' 人</div></div>' +
+          (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+        '</div>';
+      }).join('');
+    }
   }
-  el.innerHTML = rooms.map(r => {
-    const active = r.id === chatState.currentRoomId;
-    const avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
-    const name = r.other ? esc(r.other.name) : esc(r.name);
-    return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
-      '<div class="chat-room-avatar">' + avatar + '</div>' +
-      '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
-      '<div class="chat-room-preview">' + (r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' : '') + '</div></div>' +
-      (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
-    '</div>';
-  }).join('');
+
+  // 渲染私聊列表
+  var privateEl = document.getElementById('chatPrivateItems');
+  if (privateEl) {
+    if (!privates.length) {
+      privateEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 4px">暂无私聊<br>在好友列表点击 💬 开始对话</div>';
+    } else {
+      privateEl.innerHTML = privates.map(function(r) {
+        var active = r.id === chatState.currentRoomId;
+        var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : '💬';
+        var name = r.other ? esc(r.other.name) : esc(r.name);
+        return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
+          '<div class="chat-room-avatar">' + avatar + '</div>' +
+          '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
+          '<div class="chat-room-preview">私聊</div></div>' +
+          (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // 兼容：如果有 chatRoomItems（旧引用），也渲染合并列表
+  var legacyEl = document.getElementById('chatRoomItems');
+  if (legacyEl) {
+    legacyEl.innerHTML = channels.concat(privates).map(function(r) {
+      var active = r.id === chatState.currentRoomId;
+      var name = r.other ? esc(r.other.name) : esc(r.name);
+      return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
+        '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div></div>' +
+        (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
 }
 
 async function switchRoom(roomId) {
@@ -3049,7 +3108,19 @@ async function switchRoom(roomId) {
   if (header) {
     var roomName = room ? (room.name || (room.other && room.other.name) || '聊天') : '聊天';
     var isChannel = room && room.type === 'channel';
-    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button><div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + (isChannel ? '<button class="chat-toolbar-btn" onclick="showRoomSettings()" title="频道设置">⚙️</button>' : '') + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+    var settingsBtn = isChannel ? '<button class="chat-toolbar-btn" onclick="toggleChatContext()" title="频道设置" aria-label="频道设置">⚙️</button>' : '';
+    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button><div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+  }
+  // 频道选中时在右侧上下文面板显示频道信息
+  var ctxPanel = document.getElementById('chatContextPanel');
+  if (ctxPanel) {
+    if (room && room.type === 'channel') {
+      ctxPanel.classList.add('show');
+      renderChatContextPanel(room);
+    } else {
+      ctxPanel.classList.remove('show');
+      ctxPanel.innerHTML = '<div class="chat-context-empty">选中频道后显示设置</div>';
+    }
   }
   var empty = document.getElementById('chatEmpty');
   var msgs = document.getElementById('chatMsgs');
@@ -3078,6 +3149,61 @@ function backToRoomList() {
   if (appMain) appMain.classList.remove('show-mobile');
   if (appSidebar) appSidebar.classList.remove('hidden-mobile');
   chatState.currentRoomId = null;
+}
+
+// 切换右侧上下文面板显示/隐藏
+function toggleChatContext() {
+  var panel = document.getElementById('chatContextPanel');
+  if (!panel) return;
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+    if (room) renderChatContextPanel(room);
+  }
+}
+
+// 渲染频道上下文面板（频道设置、成员、公告等）
+function renderChatContextPanel(room) {
+  var panel = document.getElementById('chatContextPanel');
+  if (!panel) return;
+  var isAdmin = room.is_admin;
+  var isOwner = room.created_by === currentUser.id;
+  var isDev = isDeveloper();
+
+  // 权限身份标签
+  var roleTag = '';
+  if (isOwner) roleTag = '<span class="chat-role-tag role-owner">创建者</span>';
+  else if (isDev) roleTag = '<span class="chat-role-tag role-dev">开发者</span>';
+  else if (isAdmin) roleTag = '<span class="chat-role-tag role-admin">管理员</span>';
+
+  panel.innerHTML = `
+    <div class="ctx-panel-header">
+      <span style="font-size:14px;font-weight:700">频道设置</span>
+      <button class="ctx-close-btn" onclick="toggleChatContext()" aria-label="关闭面板">✕</button>
+    </div>
+    <div class="ctx-panel-body">
+      <div class="ctx-section">
+        <div class="ctx-section-title">频道信息</div>
+        <div class="ctx-info-row"><span class="ctx-label">名称</span><span class="ctx-value">${esc(room.name)}</span></div>
+        <div class="ctx-info-row"><span class="ctx-label">成员</span><span class="ctx-value">${room.member_count || 0} 人</span></div>
+        <div class="ctx-info-row"><span class="ctx-label">你的身份</span>${roleTag || '<span class="ctx-value">普通成员</span>'}</div>
+      </div>
+      ${isAdmin ? `
+      <div class="ctx-section">
+        <div class="ctx-section-title">管理操作</div>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">频道详情设置</button>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showChannelAnnouncementEditor()">编辑频道公告</button>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">管理成员</button>
+      </div>
+      ` : ''}
+      <div class="ctx-section">
+        <div class="ctx-section-title">个人设置</div>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="toggleMuteRoom('${room.id}')">${room.mute_notifications ? '取消免打扰' : '免打扰'}</button>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="togglePinRoom('${room.id}')">${room.pinned ? '取消置顶' : '置顶'}</button>
+        ${!isOwner ? '<button class="btn btn-red btn-full" style="font-size:12px" onclick="deleteConversation(\'' + room.id + '\')">退出频道</button>' : ''}
+      </div>
+    </div>
+  `;
 }
 
 async function loadMessages(roomId) {
@@ -5699,7 +5825,8 @@ function savePicgoKey() {
 
 function applyChatBackground() {
   var bg = localStorage.getItem('dp_chat_bg') || '';
-  var panel = document.querySelector('.chat-msgs');
+  // 适配新三栏聊天视图：chatMsgs 元素
+  var panel = document.getElementById('chatMsgs') || document.querySelector('.chat-msgs');
   if (!panel) return;
   if (bg) {
     panel.style.backgroundImage = 'url("' + bg.replace(/"/g, '') + '")';
@@ -5743,27 +5870,59 @@ function uploadChatBg(file) {
   if (!file) return;
   var status = document.getElementById('chatBgStatus');
   if (status) status.textContent = '上传中...';
-  
-  // 通过 CORS 代理转发上传（图床均不支持浏览器直连 CORS）
+
+  // 校验文件类型
+  var allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  if (file.type && allowedTypes.indexOf(file.type) === -1) {
+    if (status) status.textContent = '不支持的格式，请用 PNG/JPG/GIF/WEBP';
+    toast('不支持的图片格式', 'error');
+    return;
+  }
+  // 校验文件大小（5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    if (status) status.textContent = '文件过大，请压缩到 5MB 以内';
+    toast('文件过大（超过5MB），请压缩后重试', 'error');
+    return;
+  }
+
+  // 优先使用项目自带 R2 上传 API
+  var fd = new FormData();
+  fd.append('file', file);
+  fd.append('user_id', currentUser.id);
+  fetch('/api/upload/image', { method: 'POST', body: fd })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success && data.url) {
+        localStorage.setItem('dp_chat_bg', data.url);
+        applyChatBackground();
+        if (status) status.textContent = '背景图已应用';
+        toast('聊天背景已上传并应用', 'success');
+      } else {
+        throw new Error(data.error || '上传失败');
+      }
+    })
+    .catch(function(err) {
+      console.warn('R2 上传失败，尝试外部图床降级:', err.message);
+      // 降级：尝试外部图床
+      uploadChatBgFallback(file, status);
+    });
+}
+
+// 外部图床降级方案
+function uploadChatBgFallback(file, status) {
   var PROXY = '/api/proxy';
-  var picgoKey = localStorage.getItem('dp_picgo_key') || '';
-  
-  // 图床列表
   var services = [
-    { url: 'https://www.picgo.net/api/1/upload', fields: { key: picgoKey, source: file }, needKey: true, name: 'picgo.net' },
-    { url: 'https://img.remit.ee/api/upload', fields: { file: file }, needKey: false, name: 'img.remit.ee' },
-    { url: 'https://sm.ms/api/v2/upload', fields: { smfile: file }, needKey: false, name: 'sm.ms' }
+    { url: 'https://sm.ms/api/v2/upload', fields: { smfile: file }, name: 'sm.ms' },
+    { url: 'https://img.remit.ee/api/upload', fields: { file: file }, name: 'img.remit.ee' }
   ];
-  
   var tryNext = function(idx) {
     if (idx >= services.length) {
-      if (status) status.textContent = '上传失败：所有图床均不可用';
-      toast('上传失败：所有图床均不可用', 'error');
+      if (status) status.textContent = '上传失败：R2 和外部图床均不可用，可尝试手动输入URL';
+      toast('自动上传失败，请手动输入图片URL', 'error');
       return;
     }
     var svc = services[idx];
-    if (svc.needKey && !picgoKey) { tryNext(idx + 1); return; }
-    if (status) status.textContent = '正在通过 ' + svc.name + ' 上传...';
+    if (status) status.textContent = '降级：通过 ' + svc.name + ' 上传...';
     var fd = new FormData();
     for (var k in svc.fields) fd.append(k, svc.fields[k]);
     fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': svc.url }, body: fd })
@@ -5775,13 +5934,11 @@ function uploadChatBg(file) {
           else if (typeof data.url === 'string') url = data.url;
           else if (data.data && typeof data.data.url === 'string') url = data.data.url;
           else if (data.data && data.data.links && data.data.links.image) url = data.data.links.image;
-          else if (typeof data.link === 'string') url = data.link;
-          else if (typeof data.src === 'string') url = data.src;
         }
         if (!url) throw new Error('未获取到图片URL');
         localStorage.setItem('dp_chat_bg', url);
         applyChatBackground();
-        if (status) status.textContent = '背景图已应用';
+        if (status) status.textContent = '背景图已应用（外部图床）';
         toast('聊天背景已应用', 'success');
       })
       .catch(function(err) {
