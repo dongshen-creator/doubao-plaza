@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -795,20 +795,19 @@ function updateNavbar() {
   const el = document.getElementById('navRight');
   if (currentUser) {
     el.innerHTML = `
-      ${isDeveloper() ? '<button class="nav-btn" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
-      <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
-      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
-      <button class="nav-btn" style="position:relative" onclick="showModal('settings')">⚙️</button>
+      ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
+      <button class="nav-btn nav-mobile-only" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
+      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <div class="nav-user" onclick="showModal('settings')">
         ${avatarHTML(currentUser, true, true)}
         <span class="nav-user-name">${esc(currentUser.name)}</span>
       </div>
-      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪 退出</button>
+      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪</button>
     `;
   } else {
     el.innerHTML = `
-      <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
-      <button class="nav-btn" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
+      <button class="nav-btn nav-mobile-only" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
+      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <button class="nav-btn" onclick="showModal('login')">🔑 登录</button>
       <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
     `;
@@ -928,7 +927,23 @@ function doLogout() {
 var _currentView = 'home';
 
 function switchView(view) {
+  // 特殊视图：聊天和设置直接触发模态/面板，不改变当前视图高亮
+  if (view === 'chat') {
+    openChat();
+    return;
+  }
+  if (view === 'settings') {
+    if (!currentUser) { showModal('login'); return; }
+    showModal('settings');
+    return;
+  }
+  if (view === 'theme') {
+    toggleTheme();
+    return;
+  }
+
   _currentView = view;
+  _prevView = view;
 
   // 更新活动栏激活状态
   document.querySelectorAll('.activity-item').forEach(function(item) {
@@ -937,28 +952,6 @@ function switchView(view) {
 
   var sidebar = document.getElementById('appSidebar');
   var main = document.getElementById('mainContent');
-
-  // 特殊视图：聊天和设置直接触发模态/面板
-  if (view === 'chat') {
-    openChat();
-    // 恢复到之前的视图
-    _currentView = _prevView || 'home';
-    document.querySelectorAll('.activity-item').forEach(function(item) {
-      item.classList.toggle('active', item.dataset.view === _currentView);
-    });
-    return;
-  }
-  if (view === 'settings') {
-    if (!currentUser) { showModal('login'); return; }
-    showModal('settings');
-    _currentView = _prevView || 'home';
-    document.querySelectorAll('.activity-item').forEach(function(item) {
-      item.classList.toggle('active', item.dataset.view === _currentView);
-    });
-    return;
-  }
-
-  _prevView = view;
 
   // 渲染对应视图
   if (view === 'home') renderHomeView(sidebar, main);
@@ -974,7 +967,7 @@ function renderHomeView(sidebar, main) {
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
-      <div class="sidebar-header">搜索</div>
+      <div class="sidebar-header">搜索用户</div>
       <div class="search-wrap" style="padding:0 4px">
         <span class="search-icon">🔍</span>
         <input class="input search-input" id="searchInput" placeholder="搜索用户..." oninput="debounceSearch()" style="font-size:13px">
@@ -985,13 +978,6 @@ function renderHomeView(sidebar, main) {
       </div>
       <button class="nav-btn" id="clearBtn" style="display:none;margin-top:8px" onclick="clearSearch()">✕ 清除</button>
       <div class="search-count" id="searchCount" style="display:none;padding:0 4px"></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">快捷导航</div>
-      <div class="sidebar-item" onclick="switchView('friends')"><span class="sidebar-item-icon">👥</span><span class="sidebar-item-text">我的好友</span></div>
-      <div class="sidebar-item" onclick="switchView('announcements')"><span class="sidebar-item-icon">📢</span><span class="sidebar-item-text">网站公告</span></div>
-      <div class="sidebar-item" onclick="switchView('features')"><span class="sidebar-item-icon">🔧</span><span class="sidebar-item-text">功能导航</span></div>
-      <div class="sidebar-item" onclick="switchView('chat')"><span class="sidebar-item-icon">💬</span><span class="sidebar-item-text">聊天</span></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-header" id="friendRequestsHeader"></div>
@@ -1006,13 +992,9 @@ function renderHomeView(sidebar, main) {
       <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
     </div>
     <div id="searchResults"></div>
-    <div id="featuresSection"></div>
-    <div id="announcementsSection"></div>
   `;
 
   loadFriendRequests();
-  loadFeatures();
-  loadAnnouncements();
 }
 
 // ── 好友视图 ──
@@ -1020,21 +1002,14 @@ function renderFriendsView(sidebar, main) {
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
-      <div class="sidebar-header">搜索好友</div>
-      <div class="search-wrap" style="padding:0 4px">
-        <span class="search-icon">🔍</span>
-        <input class="input search-input" id="searchInput" placeholder="搜索用户..." oninput="debounceSearch()" style="font-size:13px">
+      <div class="sidebar-header">操作</div>
+      <div style="padding:0 4px">
+        <button class="btn btn-orange btn-full" style="font-size:13px" onclick="switchView('home')">🔍 去搜索用户</button>
       </div>
-      <div style="display:flex;gap:4px;margin-top:8px;padding:0 4px">
-        <input class="input" id="searchDoubaoId" placeholder="豆包号" style="font-size:12px;flex:1">
-        <input class="input" id="searchInviteCode" placeholder="邀请码" style="font-size:12px;flex:1">
-      </div>
-      <button class="nav-btn" id="clearBtn" style="display:none;margin-top:8px" onclick="clearSearch()">✕ 清除</button>
-      <div class="search-count" id="searchCount" style="display:none;padding:0 4px"></div>
     </div>
     <div class="sidebar-section">
-      <div class="sidebar-header">好友列表</div>
-      <div id="myFriends"></div>
+      <div class="sidebar-header" id="friendRequestsHeader"></div>
+      <div id="friendRequests"></div>
     </div>
   `;
 
@@ -1043,10 +1018,7 @@ function renderFriendsView(sidebar, main) {
       <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">👥 我的好友</h2>
       <p style="font-size:13px;color:var(--text-faint);margin-top:4px">管理你的好友列表，点击好友开始聊天</p>
     </div>
-    <div id="searchResults"></div>
-    <div id="friendRequests"></div>
-    <div id="featuresSection"></div>
-    <div id="announcementsSection"></div>
+    <div id="myFriends"></div>
   `;
 
   loadFriendRequests();

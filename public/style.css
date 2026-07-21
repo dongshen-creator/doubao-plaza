@@ -141,9 +141,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .badge-dot{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 2px 4px rgba(239,68,68,.3)}
 
-/* ── 主内容区（保留旧类兼容） ── */
-.main{max-width:900px;margin:0 auto;padding:20px 16px}
-
 /* ═══════════════════════════════════════════════════════════
    三栏 IDE 式布局
    活动栏(48px) + 侧边栏(280px) + 主内容区(flex)
@@ -243,10 +240,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 
 /* ── 主内容区 ── */
 .app-main {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 20px 24px;
   overflow-y: auto;
-  min-width: 0;
 }
 
 /* ── 侧边栏内部组件 ── */
@@ -295,6 +292,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 /* ── 响应式：移动端隐藏活动栏和侧边栏 ── */
 @media (min-width: 768px) {
   .activity-bar { display: flex; }
+  .nav-mobile-only { display: none !important; }
+}
+
+@media (max-width: 767px) {
+  .nav-desktop-only { display: none !important; }
 }
 
 @media (min-width: 1024px) {
@@ -303,8 +305,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 }
 
 @media (max-width: 767px) {
-  .app-layout { min-height: auto; }
-  .app-main { padding: 12px 10px; }
+  .app-layout { min-height: auto; flex-direction: column; }
+  .app-sidebar {
+    width: 100% !important;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .app-main { padding: 12px 10px; flex: 1 1 auto; }
 }
 
 /* ── 卡片 ── */
