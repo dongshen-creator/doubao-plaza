@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 
@@ -941,7 +941,7 @@ function renderFriendsView(sidebar, main) {
   // 侧边栏：搜索 + 好友申请 + 好友列表
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
-    <div class="sidebar-section">
+    <div class="sidebar-section friends-search-section">
       <div class="sidebar-header">搜索用户</div>
       <div class="search-wrap" style="padding:0 4px">
         <span class="search-icon">🔍</span>
@@ -964,13 +964,13 @@ function renderFriendsView(sidebar, main) {
     </div>
   `;
 
-  // 主内容区：默认显示欢迎卡片+搜索结果，选中好友后显示私聊
+  // 主内容区：渐变欢迎卡片 + 搜索结果 + 私聊
   main.innerHTML = `
     <div id="friendsMainContainer" style="height:100%;display:flex;flex-direction:column">
-      <div class="card welcome anim-up" style="margin-bottom:16px" id="friendsWelcomeCard">
-        <div class="welcome-icon">✨</div>
-        <h2>好友广场</h2>
-        <p>搜索并连接豆包智能体用户，点击好友开始私聊</p>
+      <div class="friends-hero anim-up" id="friendsWelcomeCard">
+        <div class="friends-hero-icon">✨</div>
+        <h2 class="friends-hero-title">好友广场</h2>
+        <p class="friends-hero-desc">搜索并连接豆包智能体用户<br>点击好友开始私聊</p>
       </div>
       <div id="searchResults"></div>
       <div id="privateChatArea" style="display:none;flex:1;min-height:0"></div>
@@ -1397,11 +1397,11 @@ async function doSearch() {
     countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
 
     if (users.length === 0) {
-      resultsEl.innerHTML = `<div class="card empty anim-up"><div class="empty-icon">🔍</div><div class="empty-text">未找到匹配用户</div></div>`;
+      resultsEl.innerHTML = `<div class="friends-empty anim-up"><div class="friends-empty-icon">🔍</div><div class="friends-empty-text">未找到匹配用户</div></div>`;
       return;
     }
 
-    resultsEl.innerHTML = `<div class="grid-2">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
+    resultsEl.innerHTML = `<div class="search-results-grid">${users.map((u, i) => userCardHTML(u, i)).join('')}</div>`;
   } catch (e) {
     countEl.textContent = '搜索出错';
     resultsEl.innerHTML = '';
@@ -1438,25 +1438,25 @@ function userCardHTML(user, index) {
   }
   
   return `
-    <div class="card user-card anim-up" style="animation-delay:${delay}s">
-      <div class="user-card-top">
+    <div class="user-card-compact anim-up" style="animation-delay:${delay}s">
+      <div class="user-card-compact-top">
         ${avatarHTML(user, false, true)}
-        <div class="user-card-info">
+        <div class="user-card-compact-info">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span class="user-card-name">${esc(user.name)}${onlineHtml}</span>
+            <span class="user-card-compact-name">${esc(user.name)}${onlineHtml}</span>
             ${user.privacy_setting === 'whitelist' || user.privacy_setting === 'punished_whitelist' ? '<span class="tag tag-blue">白名单</span>' : ''}
             ${user.privacy_setting === 'stealth' || user.privacy_setting === 'punished_stealth' ? '<span class="tag tag-gray">隐身</span>' : ''}
           </div>
-          ${user.doubao_id ? `<div class="user-card-id">@${esc(user.doubao_id)}</div>` : ''}
-          ${renderBio(user.bio)}
+          ${user.doubao_id ? `<div class="user-card-compact-id">@${esc(user.doubao_id)}</div>` : ''}
+          ${renderBio(user.bio) ? '<div class="user-card-compact-bio">' + renderBio(user.bio) + '</div>' : ''}
         </div>
       </div>
-      <div class="user-card-actions">
-        ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1">🔗 访问主页</a>` : '<div style="flex:1"></div>'}
+      <div class="user-card-compact-actions">
+        ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : '<div style="flex:1"></div>'}
         ${!isSelf ? `<button class="btn btn-blue btn-sm" onclick="addFriend('${user.id}',this)">➕ 加好友</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-green btn-sm" onclick="openChatWith('${user.id}','${esc(user.name)}')">💬 聊天</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)">🚫</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-red btn-sm" onclick="showReportModal('${user.id}')">🚨</button>` : ''}
+        ${!isSelf ? `<button class="btn btn-green btn-sm" onclick="openChatWith('${user.id}','${esc(user.name)}')">💬</button>` : ''}
+        ${!isSelf ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)" title="拉黑" aria-label="拉黑">🚫</button>` : ''}
+        ${!isSelf ? `<button class="btn btn-red btn-sm" onclick="showReportModal('${user.id}')" title="举报" aria-label="举报">🚨</button>` : ''}
       </div>
     </div>`;
 }
@@ -1555,17 +1555,19 @@ async function loadFriendRequests() {
     if (requests.length === 0) { el.innerHTML = ''; return; }
     
     el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label">📩 待处理的好友申请 (${requests.length})</div>
+      <div class="anim-up">
+        <div class="sidebar-header" style="display:flex;align-items:center;gap:4px">📩 好友申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">${requests.length}</span></div>
         ${requests.map(r => `
-          <div class="card list-item">
+          <div class="friend-request-item">
             ${avatarHTML(r.friend, true, true)}
-            <div class="list-item-info">
-              <div class="list-item-name">${esc(r.friend?.name)}</div>
-              <div class="list-item-email">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
+            <div class="friend-request-info">
+              <div class="friend-request-name">${esc(r.friend?.name)}</div>
+              <div class="friend-request-id">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
             </div>
-            <button class="btn btn-green btn-sm" onclick="handleFriendRequest('${r.id}', 'accept')">✅ 通过</button>
-            <button class="btn btn-gray btn-sm" onclick="handleFriendRequest('${r.id}', 'reject')">❌ 拒绝</button>
+            <div class="friend-request-actions">
+              <button class="btn btn-green btn-sm" style="font-size:11px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'accept')" title="通过" aria-label="通过">✅</button>
+              <button class="btn btn-gray btn-sm" style="font-size:11px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'reject')" title="拒绝" aria-label="拒绝">❌</button>
+            </div>
           </div>
         `).join('')}
       </div>
@@ -1621,26 +1623,24 @@ async function loadMyFriends() {
     }) : friends;
     
     el.innerHTML = `
-      <div class="anim-up" style="margin-bottom:16px">
-        <div class="section-label" style="cursor:pointer" onclick="toggleSection('friends')">${localStorage.getItem('dp_collapsed_friends') === '1' ? '▶' : '▼'} 👥 我的好友 (${filteredFriends.length})</div>
+      <div class="anim-up">
+        <div class="section-label" style="cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:4px" onclick="toggleSection('friends')">${localStorage.getItem('dp_collapsed_friends') === '1' ? '▶' : '▼'} <span>👥 我的好友</span> <span style="font-size:11px;color:var(--text-faint);background:var(--bg-input);padding:1px 8px;border-radius:10px">${filteredFriends.length}</span></div>
         <div id="friendsContent" style="${localStorage.getItem('dp_collapsed_friends') === '1' ? 'display:none' : ''}">
           ${groupHtml}
-          <div class="grid-3">
+          <div class="friend-list-compact">
             ${filteredFriends.map(f => `
-              <div class="card friend-card-grid">
-                <div class="friend-card-main">
-                  ${avatarHTML(f.friend, true, true)}
-                  <div class="friend-card-text">
-                    <div class="friend-card-name">${esc(f.friend?.name)}</div>
-                    <div class="friend-card-id">${esc(f.friend?.doubao_id || '')}</div>
-                  </div>
+              <div class="friend-item" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">
+                <div class="friend-item-avatar">${avatarHTML(f.friend, true, true)}</div>
+                <div class="friend-item-info">
+                  <div class="friend-item-name">${esc(f.friend?.name)}</div>
+                  <div class="friend-item-id">${esc(f.friend?.doubao_id || '')}</div>
+                  ${renderBio(f.friend?.bio) ? '<div class="friend-item-bio">' + renderBio(f.friend?.bio) + '</div>' : ''}
                 </div>
-                <div class="friend-card-actions">
-                  <button class="btn btn-green btn-sm" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">💬 聊天</button>
-                  ${f.friend?.agent_url ? `<a href="${esc(f.friend.agent_url)}" target="_blank" class="btn btn-orange btn-sm">🔗 主页</a>` : ''}
-                  <button class="btn btn-red btn-sm" onclick="removeFriend('${f.id}')">移除</button>
+                <div class="friend-item-actions">
+                  <button class="friend-item-chat" onclick="event.stopPropagation();openChatWith('${f.friend.id}','${esc(f.friend.name)}')" title="聊天" aria-label="聊天">💬</button>
+                  ${f.friend?.agent_url ? '<a href="' + esc(f.friend.agent_url) + '" target="_blank" class="friend-item-link" onclick="event.stopPropagation()" title="主页">🔗</a>' : ''}
+                  <button class="friend-item-remove" onclick="event.stopPropagation();removeFriend('${f.id}')" title="移除" aria-label="移除好友">✕</button>
                 </div>
-                ${renderBio(f.friend?.bio) ? '<div class="friend-card-bio">' + renderBio(f.friend?.bio) + '</div>' : ''}
               </div>
             `).join('')}
           </div>
