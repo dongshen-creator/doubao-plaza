@@ -149,11 +149,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
    三栏 IDE 式布局
    活动栏(48px) + 侧边栏(280px) + 主内容区(flex)
    ═══════════════════════════════════════════════════════════ */
+/* ── 三栏布局：各自独立滚动 ── */
 .app-layout {
   display: flex;
   width: 100%;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ── 活动栏 ── */
@@ -167,8 +169,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   flex-shrink: 0;
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   z-index: 20;
   transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+.activity-bar::-webkit-scrollbar {
+  display: none;
 }
 .activity-item {
   width: 48px;

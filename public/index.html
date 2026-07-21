@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 
@@ -211,7 +211,8 @@
       <div class="modal-title">创建新频道</div>
       <button class="modal-close" onclick="closeModal('createChannel')">✕</button>
     </div>
-    <div class="form-group"><label class="form-label">频道名称</label><input class="input" id="channelName" placeholder="输入频道名称" maxlength="50"></div>
+    <div class="form-group"><label class="form-label">频道名称</label><input class="input" id="channelName" placeholder="输入频道名称" maxlength="50" onkeydown="if(event.key==='Enter')createChannel()"></div>
+    <div class="form-group"><label class="form-label">准入模式</label><select class="input" id="channelAdmissionMode"><option value="open">公开 (任何人可加入)</option><option value="invite">仅邀请</option><option value="approval">需审核</option><option value="password">密码验证</option><option value="questionnaire">问卷测试</option><option value="custom_page">自定义页面</option><option value="composite">复合验证</option></select></div>
     <button class="btn btn-orange btn-full" onclick="createChannel()">创建</button>
   </div>
 </div>
@@ -974,21 +975,18 @@ function renderChatView(sidebar, main) {
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px">
-        <span class="sidebar-header" style="margin:0">频道</span>
-        <button class="btn btn-sm btn-gray" onclick="showCreateChannel()" style="font-size:11px">＋ 频道</button>
+      <div style="display:flex;gap:4px;padding:0 4px">
+        <button class="btn btn-orange btn-full" style="font-size:12px;flex:1" onclick="showBrowseChannels()">🔍 浏览频道</button>
+        <button class="btn btn-gray" style="font-size:12px" onclick="showCreateChannel()" title="创建频道">＋</button>
       </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">频道</div>
       <div id="chatChannelItems"></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-header">私聊</div>
       <div id="chatPrivateItems"></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">操作</div>
-      <div style="padding:0 4px">
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showBrowseChannels()">🔍 浏览公开频道</button>
-      </div>
     </div>
   `;
 
@@ -3192,15 +3190,15 @@ function renderChatContextPanel(room) {
       <div class="ctx-section">
         <div class="ctx-section-title">管理操作</div>
         <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">频道详情设置</button>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showChannelAnnouncementEditor()">编辑频道公告</button>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showAnnouncementEditor(null)">编辑频道公告</button>
         <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">管理成员</button>
       </div>
       ` : ''}
       <div class="ctx-section">
         <div class="ctx-section-title">个人设置</div>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="toggleMuteRoom('${room.id}')">${room.mute_notifications ? '取消免打扰' : '免打扰'}</button>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="togglePinRoom('${room.id}')">${room.pinned ? '取消置顶' : '置顶'}</button>
-        ${!isOwner ? '<button class="btn btn-red btn-full" style="font-size:12px" onclick="deleteConversation(\'' + room.id + '\')">退出频道</button>' : ''}
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="togglePinChannel('${room.id}');renderChatContextPanel(chatState.rooms.find(function(r){return r.id==='${room.id}'}))">${getPinnedChannels().indexOf(room.id) >= 0 ? '取消置顶' : '置顶会话'}</button>
+        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="hideChannel('${room.id}')">隐藏会话</button>
+        ${!isOwner ? '<button class="btn btn-red btn-full" style="font-size:12px" onclick="leaveChannel(\'' + room.id + '\')">退出频道</button>' : ''}
       </div>
     </div>
   `;
@@ -5249,11 +5247,10 @@ async function showCreateChannel() {
 async function createChannel() {
   const name = document.getElementById('channelName').value.trim();
   if (!name) { toast('请输入频道名称', 'error'); return; }
-  var modes = ['open=公开', 'invite=仅邀请', 'approval=需审核', 'password=密码验证', 'questionnaire=问卷测试', 'custom_page=自定义页面', 'composite=复合验证'];
-  var modeChoice = prompt('选择准入模式:\n' + modes.join('\n') + '\n\n输入模式名称', 'open');
-  if (modeChoice) modeChoice = modeChoice.trim().toLowerCase();
-  var validModes = ['open','invite','approval','password','questionnaire','custom_page','composite'];
-  if (validModes.indexOf(modeChoice) < 0) modeChoice = 'open';
+  var modeSelect = document.getElementById('channelAdmissionMode');
+  var modeChoice = modeSelect ? modeSelect.value : 'open';
+  document.getElementById('channelName').value = '';
+  if (modeSelect) modeSelect.value = 'open';
   const roomId = 'room_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error: roomErr } = await __SB.from('chat_rooms').insert({ id: roomId, type: 'channel', name, created_by: currentUser.id });
   if (roomErr) { toast('创建失败: ' + roomErr.message, 'error'); return; }
@@ -5269,7 +5266,7 @@ async function createChannel() {
   chatState.currentRoomId = roomId;
   await loadRoomList();
   loadMessages(roomId);
-  toast('频道已创建');
+  toast('频道「' + name + '」已创建', 'success');
 }
 
 // ===== Groups & Pinning (localStorage) =====
