@@ -726,3 +726,97 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
     max-width: 1200px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   响应式适配补丁（360-1440px）
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 超小屏（≤360px）：紧凑布局 ── */
+@media (max-width: 360px) {
+  .navbar { padding: 8px 10px; }
+  .main { padding: 12px 10px; }
+  .logo-text { font-size: 15px; }
+  .logo-icon { width: 30px; height: 30px; font-size: 15px; }
+  .modal { padding: 16px; border-radius: 16px; }
+  .modal-title { font-size: 16px; }
+  .card { padding: 12px; border-radius: 12px; }
+  .welcome { padding: 20px 16px; }
+  .welcome h2 { font-size: 20px; }
+  .welcome-icon { width: 52px; height: 52px; font-size: 26px; }
+  .chat-input-area { padding: 8px 10px; }
+  .chat-input { font-size: 12px; padding: 8px 10px; }
+  .chat-send-btn { width: 38px; height: 38px; font-size: 14px; }
+  .tabbar-btn { font-size: 9px; }
+  .tabbar-btn-icon { font-size: 18px; }
+  .mobile-tabbar-inner { height: 52px; }
+  body { padding-bottom: 52px; }
+}
+
+/* ── 小屏（361-480px）：标准移动端 ── */
+@media (min-width: 361px) and (max-width: 480px) {
+  .chat-msg { max-width: 90%; }
+}
+
+/* ── 平板竖屏（768-1023px）：聊天双栏 ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .chat-panel { flex-direction: row; }
+  .chat-room-list {
+    position: relative;
+    top: 0;
+    left: 0;
+    transform: none;
+    width: 280px;
+    border-right: 1px solid var(--border-color);
+    flex-shrink: 0;
+  }
+  .chat-room-list.show { transform: none; }
+  .chat-main { flex: 1; }
+  .chat-header .chat-show-list { display: none !important; }
+}
+
+/* ── 平板横屏及以上（≥1024px）：三栏式聊天 ── */
+@media (min-width: 1024px) {
+  .chat-panel { flex-direction: row; }
+  .chat-room-list {
+    position: relative;
+    top: 0;
+    left: 0;
+    transform: none;
+    width: 300px;
+    border-right: 1px solid var(--border-color);
+    flex-shrink: 0;
+  }
+  .chat-room-list.show { transform: none; }
+  .chat-main { flex: 1; }
+  .chat-header .chat-show-list { display: none !important; }
+}
+
+/* ── 模态框在小屏上的优化 ── */
+@media (max-width: 480px) {
+  .modal-overlay { padding: 8px; }
+  .modal { max-width: 100%; border-radius: 16px; }
+  .modal-lg { max-width: 100%; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { white-space: nowrap; flex-shrink: 0; }
+}
+
+/* ── 开发者面板响应式 ── */
+@media (max-width: 640px) {
+  #developerModal .modal { max-height: 90vh; }
+  .dev-page-card { padding: 10px; }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ── 触摸设备优化 ── */
+@media (hover: none) and (pointer: coarse) {
+  .chat-room-actions { opacity: 1; }
+  .chat-msg-actions { opacity: 1; }
+  .card:hover { transform: none; }
+  .nav-btn:hover { background: transparent; }
+}
+
+/* ── 打印优化 ── */
+@media print {
+  .navbar, .mobile-tabbar, .chat-panel, .modal-overlay { display: none !important; }
+  .main { max-width: 100%; padding: 0; }
+}
