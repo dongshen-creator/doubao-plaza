@@ -264,6 +264,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   padding: 8px 8px 4px;
 }
 .sidebar-section+.sidebar-section{border-top:2px solid var(--border-strong);margin-top:8px;padding-top:12px}
+/* 无好友申请时隐藏 section 的间距和分隔 */
+.sidebar-section:has(#friendRequests:empty) .sidebar-header:empty{display:none}
+.sidebar-section:has(#friendRequests:empty){padding:0;margin:0;border:none;min-height:0}
+/* 有内容时正常显示 */
+.sidebar-section:has(#friendRequests:not(:empty)){border-top:1px solid var(--border-color);padding-top:8px}
 .sidebar-header {
   font-size: 11px;
   font-weight: 700;
@@ -565,9 +570,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .rule{display:flex;gap:12px;padding:12px;background:var(--bg-input);border-radius:12px;margin-bottom:10px}
 .rule-num{width:24px;height:24px;border-radius:8px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
 .rule-text{font-size:13px;color:var(--text-secondary);line-height:1.6}
-
-/* ── 页脚 ── */
-.footer{text-align:center;padding:16px;font-size:12px;color:var(--text-faint);border-top:1px solid var(--border-color);flex-shrink:0}
 
 /* ── 状态点 ── */
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite}
@@ -1166,3 +1168,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   .navbar, .mobile-tabbar, .chat-panel, .modal-overlay { display: none !important; }
   .main { max-width: 100%; padding: 0; }
 }
+
+/* ── 禁言横幅 ── */
+.chat-muted-banner{background:#fee2e2;color:#dc2626;padding:6px 12px;font-size:12px;text-align:center;border-radius:0}
+
+/* ── 小尺寸模态框 ── */
+.modal-sm{max-width:320px}
+
+/* ── 私聊区域背景（区分于频道聊天） ── */
+#privateChatArea .chat-view-body{background:var(--bg-primary)}
+#privateChatArea .chat-empty-inline{padding:48px 24px;text-align:center;color:var(--text-faint)}
+#privateChatArea .chat-empty-inline > div:first-child{font-size:48px;margin-bottom:12px}
+
+/* ── 骨架屏 ── */
+.skeleton-item{display:flex;align-items:center;gap:8px;padding:8px 10px;animation:skeleton-pulse 1.5s ease-in-out infinite}
+.skeleton-avatar{width:32px;height:32px;border-radius:50%;background:var(--bg-input);flex-shrink:0}
+.skeleton-lines{flex:1;display:flex;flex-direction:column;gap:4px}
+.skeleton-line{height:8px;border-radius:4px;background:var(--bg-input)}
+.skeleton-line.w60{width:60%}
+.skeleton-line.w50{width:50%}
+.skeleton-line.w70{width:70%}
+.skeleton-line.w40{width:40%}
+.skeleton-line.w35{width:35%}
+.skeleton-line.w45{width:45%}
+@keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ── 浏览频道 loading ── */
+.browse-loading{text-align:center;padding:32px 16px;color:var(--text-faint);font-size:13px}
+.browse-loading::after{content:'';display:inline-block;width:16px;height:16px;border:2px solid var(--border-color);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}

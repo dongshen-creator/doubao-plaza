@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 
@@ -53,7 +53,7 @@
 <div class="app-layout" id="appLayout">
   <!-- 活动栏（最左列） -->
   <aside class="activity-bar" id="activityBar" aria-label="活动栏">
-    <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span></button>
+    <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span><span class="activity-badge" id="actBarFriendsBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
@@ -71,8 +71,6 @@
     <!-- 主内容由 JS 渲染 -->
   </main>
 </div>
-
-<footer class="footer">逗包用户广场 · 连接豆包智能体用户</footer>
 
 <!-- Announcement Modal -->
 <div class="modal-overlay" id="announcementModal" style="display:none">
@@ -410,6 +408,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
       html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + escJS(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 私信</button>';
     }
     html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + escJS(userName) + '\',\'' + escJS((userInfo && userInfo.pat_suffix) || '') + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
+    html += '<button class="btn btn-gray btn-full" style="margin-bottom:8px" onclick="blockUser(\'' + userId + '\',this);closeUserPopup()">🚫 拉黑用户</button>';
     html += '<button class="btn btn-red btn-full" onclick="showReportModal(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🚨 举报</button>';
     if (canManage) {
       html += '<button class="btn btn-gray btn-full" onclick="muteUserInChannel(\'' + userId + '\');document.getElementById(\'userPopupModal\').remove()">🔇 禁言</button>';
@@ -424,6 +423,11 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   }
   html += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeUserPopup() {
+  var p = document.getElementById('userPopupModal');
+  if (p) p.remove();
 }
 
 async function patUser(targetUserId, targetUserName, targetSuffix) {
@@ -962,6 +966,10 @@ function renderFriendsView(sidebar, main) {
       <div class="sidebar-header">我的好友</div>
       <div id="myFriends"></div>
     </div>
+    <div class="sidebar-section" id="tempChatSection" style="display:none">
+      <div class="sidebar-header">临时私聊</div>
+      <div id="tempChatItems"></div>
+    </div>
   `;
 
   // 主内容区：渐变欢迎卡片 + 搜索结果 + 私聊
@@ -979,13 +987,68 @@ function renderFriendsView(sidebar, main) {
 
   loadFriendRequests();
   loadMyFriends();
+  loadTempChats().catch(function(e) { console.error('loadTempChats:', e); });
+}
+
+// 加载临时私聊（非好友的私聊房间）
+async function loadTempChats() {
+  if (!currentUser) return;
+  var section = document.getElementById('tempChatSection');
+  if (!section) return;
+
+  // 获取所有私聊房间
+  var privateRooms = chatState.rooms.filter(function(r) { return r.type === 'private'; });
+  if (privateRooms.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  // 获取好友列表
+  var friendIds = [];
+  try {
+    var res = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
+    if (res && res.success && res.data) {
+      friendIds = res.data.map(function(f) { return f.friend_id || (f.friend && f.friend.id) || f.id; });
+    }
+  } catch(e) {}
+
+  // 筛选非好友的私聊
+  var tempChats = privateRooms.filter(function(r) {
+    return r.other && friendIds.indexOf(r.other.id) < 0;
+  });
+
+  if (tempChats.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  var listEl = document.getElementById('tempChatItems');
+  if (!listEl) return;
+
+  listEl.innerHTML = tempChats.map(function(r) {
+    var name = r.other ? (r.other.name || '未知用户') : '未知用户';
+    var avatar = r.other && r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
+    var unreadBadge = r.unread > 0 ? '<span class="chat-room-unread">' + r.unread + '</span>' : '';
+    return '<div class="friend-item" onclick="openChatWith(\'' + (r.other ? r.other.id : '') + '\',\'' + esc(name) + '\')">' +
+      '<div class="friend-item-avatar">' + avatar + '</div>' +
+      '<div class="friend-item-info"><div class="friend-item-name">' + esc(name) + '</div></div>' +
+      unreadBadge +
+    '</div>';
+  }).join('');
 }
 
 // 在好友视图主栏中打开私聊
 async function openPrivateChatInFriends(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
-  if (chatState._openingChat) return;
-  chatState._openingChat = true;
+  // 停止旧轮询和退订旧频道
+  stopMessagePolling();
+  // 退订旧频道
+  if (chatState.currentRoomId && chatState.sbChannels[chatState.currentRoomId]) {
+    try { chatState.sbChannels[chatState.currentRoomId].unsubscribe(); } catch(e) {}
+  }
+  // 记录正在打开的目标，支持中断
+  chatState._openingTarget = friendId;
 
   // 隐藏欢迎卡片和搜索结果
   var welcome = document.getElementById('friendsWelcomeCard');
@@ -996,6 +1059,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
   // 查找或创建私聊房间
   var roomId;
   const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
   if (myMemberships?.length) {
     const myRoomIds = myMemberships.map(m => m.room_id);
     const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
@@ -1006,6 +1070,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
       }
     }
   }
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
   if (!roomId) {
     const sortedIds = [currentUser.id, friendId].sort();
     roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
@@ -1016,6 +1081,8 @@ async function openPrivateChatInFriends(friendId, friendName) {
     ]);
   }
 
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
+
   // 在私聊区域渲染聊天界面
   var area = document.getElementById('privateChatArea');
   if (area) {
@@ -1023,10 +1090,11 @@ async function openPrivateChatInFriends(friendId, friendName) {
     area.innerHTML = `
       <div class="chat-view-main" id="chatMainArea" style="height:100%">
         <div class="chat-view-center">
-          <div class="chat-view-header" id="chatViewHeader">
-            <button class="chat-action-btn" onclick="closePrivateChatInFriends()" title="返回" aria-label="返回">←</button>
-            <div style="flex:1">
-              <div style="font-size:15px;font-weight:700">${esc(friendName)}</div>
+          <div class="chat-view-header" id="chatViewHeader" style="border-bottom:1px solid var(--border-color);padding:8px 16px;display:flex;align-items:center;gap:8px">
+            <button class="chat-action-btn" onclick="closePrivateChatInFriends()" title="返回" aria-label="返回" style="font-size:18px">←</button>
+            <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:14px">👤</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(friendName)}</div>
               <div style="font-size:11px;color:var(--text-faint)">私聊</div>
             </div>
           </div>
@@ -1040,6 +1108,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
             <button class="close-reply" onclick="cancelReply()">✕</button>
           </div>
+          <div class="chat-muted-banner" id="chatMutedBanner" style="display:none">你已被禁言</div>
           <div class="chat-view-input" id="chatViewInput" style="display:flex">
             <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
             <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
@@ -1056,7 +1125,8 @@ async function openPrivateChatInFriends(friendId, friendName) {
   chatState.chatOpen = true;
   chatState.currentRoomId = roomId;
   await loadRoomList();
-  loadMessages(roomId);
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
+  await loadMessages(roomId);
   subscribeToRoom(roomId);
   startMessagePolling();
   chatState._openingChat = false;
@@ -1092,7 +1162,16 @@ function renderChatView(sidebar, main) {
     </div>
     <div class="sidebar-section">
       <div class="sidebar-header">频道</div>
+      <div id="chatChannelSkeleton">
+        <div class="skeleton-item"><div class="skeleton-avatar"></div><div class="skeleton-lines"><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div></div>
+        <div class="skeleton-item"><div class="skeleton-avatar"></div><div class="skeleton-lines"><div class="skeleton-line w50"></div><div class="skeleton-line w35"></div></div></div>
+        <div class="skeleton-item"><div class="skeleton-avatar"></div><div class="skeleton-lines"><div class="skeleton-line w70"></div><div class="skeleton-line w45"></div></div></div>
+      </div>
       <div id="chatChannelItems"></div>
+    </div>
+    <div class="sidebar-section" id="joinRequestsSection" style="display:none">
+      <div class="sidebar-header" id="joinRequestsHeader"></div>
+      <div id="channelJoinRequests"></div>
     </div>
   `;
 
@@ -1113,6 +1192,7 @@ function renderChatView(sidebar, main) {
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
           <button class="close-reply" onclick="cancelReply()">✕</button>
         </div>
+        <div class="chat-muted-banner" id="chatMutedBanner" style="display:none">你已被禁言</div>
         <div class="chat-view-input" id="chatViewInput" style="display:none">
           <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
           <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
@@ -1132,6 +1212,81 @@ function renderChatView(sidebar, main) {
   chatState.currentRoomId = null;
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); });
   startMessagePolling();
+}
+
+// ===== Load Channel Join Requests (sidebar) =====
+async function loadChannelJoinRequests() {
+  if (!currentUser) return;
+  var sidebar = document.getElementById('chatChannelItems');
+  if (!sidebar) return;
+
+  // 获取当前用户管理的所有频道
+  var managedRooms = chatState.rooms.filter(function(r) {
+    return r.type === 'channel' && (r.is_admin || r.created_by === currentUser.id || isDeveloper());
+  });
+  if (managedRooms.length === 0) {
+    var section = document.getElementById('joinRequestsSection');
+    if (section) section.style.display = 'none';
+    updateActivityBadges();
+    return;
+  }
+
+  var roomIds = managedRooms.map(function(r) { return r.id; });
+  var { data: requests, error } = await __SB.from('channel_join_requests')
+    .select('*')
+    .in('room_id', roomIds)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  var section = document.getElementById('joinRequestsSection');
+  if (!section) return;
+
+  if (!requests || requests.length === 0) {
+    section.style.display = 'none';
+    updateActivityBadges();
+    return;
+  }
+
+  section.style.display = '';
+  var headerEl = document.getElementById('joinRequestsHeader');
+  if (headerEl) {
+    headerEl.innerHTML = '📩 入群申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
+  }
+
+  var listEl = document.getElementById('channelJoinRequests');
+  if (!listEl) return;
+
+  // 获取申请人信息
+  var userIds = requests.map(function(r) { return r.user_id; });
+  var userMap = {};
+  await Promise.all(userIds.map(async function(uid) {
+    try {
+      var res = await fetch('/api/users/' + uid);
+      var data = await res.json();
+      if (data && data.user) userMap[uid] = data.user;
+    } catch(e) {}
+  }));
+
+  // 获取频道名
+  var roomMap = {};
+  managedRooms.forEach(function(r) { roomMap[r.id] = r.name; });
+
+  listEl.innerHTML = requests.map(function(req) {
+    var user = userMap[req.user_id] || {};
+    var roomName = roomMap[req.room_id] || '未知频道';
+    return '<div class="friend-request-item">' +
+      '<div class="avatar avatar-sm">' + (user.name ? esc(user.name[0]) : '?') + '</div>' +
+      '<div class="friend-request-info">' +
+        '<div class="friend-request-name">' + esc(user.name || req.user_id.substring(0, 8)) + '</div>' +
+        '<div class="friend-request-id">→ ' + esc(roomName) + '</div>' +
+      '</div>' +
+      '<div class="friend-request-actions">' +
+        '<button class="btn btn-green btn-sm" style="font-size:11px;padding:4px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过">✅</button>' +
+        '<button class="btn btn-gray btn-sm" style="font-size:11px;padding:4px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝">❌</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  updateActivityBadges();
 }
 
 // ── 公告视图 ──
@@ -1397,7 +1552,7 @@ async function doSearch() {
     countEl.textContent = users.length > 0 ? `找到 ${users.length} 个用户` : '未找到匹配用户';
 
     if (users.length === 0) {
-      resultsEl.innerHTML = `<div class="friends-empty anim-up"><div class="friends-empty-icon">🔍</div><div class="friends-empty-text">未找到匹配用户</div></div>`;
+      resultsEl.innerHTML = `<div class="friends-empty anim-up" style="padding:48px 24px"><div class="friends-empty-icon" style="font-size:48px;margin-bottom:12px">🔍</div><div class="friends-empty-text" style="font-size:15px;font-weight:600;color:var(--text-muted)">未找到匹配用户</div><div style="font-size:12px;color:var(--text-faint);margin-top:4px">试试用豆包号或邀请码搜索</div></div>`;
       return;
     }
 
@@ -1551,13 +1706,19 @@ async function loadFriendRequests() {
     
     const requests = res.data.filter(r => !r.is_outgoing); // Only show incoming requests
     const el = document.getElementById('friendRequests');
+    const headerEl = document.getElementById('friendRequestsHeader');
     
-    if (requests.length === 0) { el.innerHTML = ''; return; }
+    if (requests.length === 0) {
+      el.innerHTML = '';
+      if (headerEl) headerEl.innerHTML = '';
+      return;
+    }
     
-    el.innerHTML = `
-      <div class="anim-up">
-        <div class="sidebar-header" style="display:flex;align-items:center;gap:4px">📩 好友申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">${requests.length}</span></div>
-        ${requests.map(r => `
+    if (headerEl) {
+      headerEl.innerHTML = '📩 好友申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
+    }
+    
+    el.innerHTML = requests.map(r => `
           <div class="friend-request-item">
             ${avatarHTML(r.friend, true, true)}
             <div class="friend-request-info">
@@ -1569,12 +1730,11 @@ async function loadFriendRequests() {
               <button class="btn btn-gray btn-sm" style="font-size:11px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'reject')" title="拒绝" aria-label="拒绝">❌</button>
             </div>
           </div>
-        `).join('')}
-      </div>
-    `;
+        `).join('');
   } catch (e) {
     // silently fail
   }
+  updateActivityBadges();
 }
 
 async function handleFriendRequest(id, action) {
@@ -1991,6 +2151,20 @@ function toggleNotif() {
   if (!notifEnabled) {
     document.getElementById('chatUnreadBadge').classList.add('hidden');
   }
+}
+
+function toggleMutePrivate() {
+  var toggle = document.getElementById('mutePrivateToggle');
+  localStorage.setItem('dp_mute_private', toggle.checked ? '1' : '0');
+  updateActivityBadges();
+  toast('私聊免打扰已' + (toggle.checked ? '开启' : '关闭'), 'success');
+}
+
+function toggleMuteChannel() {
+  var toggle = document.getElementById('muteChannelToggle');
+  localStorage.setItem('dp_mute_channel', toggle.checked ? '1' : '0');
+  updateActivityBadges();
+  toast('频道免打扰已' + (toggle.checked ? '开启' : '关闭'), 'success');
 }
 
 async function unblockUser(blockId) {
@@ -3016,6 +3190,9 @@ async function loadRoomList() {
     const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
     const roomMap = {};
     if (roomData) roomData.forEach(r => { roomMap[r.id] = r; });
+    var { data: channelSettings } = await __SB.from('chat_channel_settings').select('room_id, avatar_url, guest_mode').in('room_id', roomIds);
+    var settingsMap = {};
+    if (channelSettings) channelSettings.forEach(function(s) { settingsMap[s.room_id] = s; });
     var { data: unreadAll } = await __SB.from('chat_unread').select('room_id,count').eq('user_id', currentUser.id).in('room_id', roomIds);
     var { data: memberCounts } = await __SB.from('chat_room_members').select('room_id').in('room_id', roomIds);
     var { data: adminAll } = await __SB.from('chat_admins').select('room_id').eq('user_id', currentUser.id).in('room_id', roomIds);
@@ -3057,13 +3234,16 @@ async function loadRoomList() {
         created_at: r.created_at, unread: unreadCount,
         member_count: memberCount, other,
         is_admin: isAdmin, creator_name: '',
-        mute_notifications: m.mute_notifications || false
+        mute_notifications: m.mute_notifications || false,
+        avatar_url: settingsMap[r.id] ? (settingsMap[r.id].avatar_url || '') : '',
+        guest_mode: settingsMap[r.id] ? (settingsMap[r.id].guest_mode || false) : false
       });
     }
     chatState.rooms = rooms;
     chatState.lastRoomListRefresh = Date.now();
     chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
     renderRoomList();
+    loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
     var now2 = Date.now();
     rooms.forEach(r => {
       var ch = chatState.sbChannels[r.id];
@@ -3075,9 +3255,14 @@ async function loadRoomList() {
     chatState.rooms = [];
     renderRoomList();
   }
+  loadTempChats().catch(function(e) { console.error('loadTempChats:', e); });
+  updateActivityBadges();
 }
 
 function renderRoomList() {
+  // 移除骨架屏占位
+  var skeleton = document.getElementById('chatChannelSkeleton');
+  if (skeleton) skeleton.remove();
   // 分离频道和私聊
   var channels = (chatState.rooms || []).filter(function(r) { return r.type === 'channel'; });
   var privates = (chatState.rooms || []).filter(function(r) { return r.type !== 'channel'; });
@@ -3090,7 +3275,7 @@ function renderRoomList() {
     } else {
       channelEl.innerHTML = channels.map(function(r) {
         var active = r.id === chatState.currentRoomId;
-        var avatar = '📢';
+        var avatar = (r.avatar_url) ? '<img src="' + esc(r.avatar_url) + '" onerror="this.style.display=\'none\';this.parentElement.textContent=\'📢\'">' : '📢';
         var name = esc(r.name);
         // 频道权限身份标签
         var roleTag = '';
@@ -3157,7 +3342,15 @@ async function switchRoom(roomId) {
     var roomName = room ? (room.name || (room.other && room.other.name) || '聊天') : '聊天';
     var isChannel = room && room.type === 'channel';
     var settingsBtn = isChannel ? '<button class="chat-toolbar-btn" onclick="toggleChatContext()" title="频道设置" aria-label="频道设置">⚙️</button>' : '';
-    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button><div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+    var headerAvatar = '';
+    if (room && room.type === 'channel') {
+      headerAvatar = room.avatar_url ? '<img src="' + esc(room.avatar_url) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '📢';
+    } else if (room && room.other && room.other.avatar) {
+      headerAvatar = '<img src="' + esc(room.other.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
+    } else {
+      headerAvatar = '👤';
+    }
+    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
   }
   // 频道选中时在右侧上下文面板显示频道信息
   var ctxPanel = document.getElementById('chatContextPanel');
@@ -3186,9 +3379,27 @@ async function switchRoom(roomId) {
     if (input) input.focus();
     if (input && !input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
   } else {
-    loadMessages(roomId);
+    stopMessagePolling();
+    await loadMessages(roomId);
     subscribeToRoom(roomId);
   }
+  checkMutedStatus(roomId);
+}
+
+// 检查当前用户是否在指定频道中被禁言，更新横幅显示
+async function checkMutedStatus(roomId) {
+  var banner = document.getElementById('chatMutedBanner');
+  if (!banner) return;
+  var room = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (!room || room.type !== 'channel') { banner.style.display = 'none'; return; }
+  try {
+    var { data: muted } = await __SB.from('chat_muted').select('muted_until').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+    if (muted) {
+      var until = muted.muted_until ? new Date(muted.muted_until) : null;
+      if (!until || until > new Date()) { banner.style.display = ''; return; }
+    }
+    banner.style.display = 'none';
+  } catch(e) { banner.style.display = 'none'; }
 }
 
 function backToRoomList() {
@@ -3228,7 +3439,7 @@ async function renderChatContextPanel(room) {
   // 加载频道设置数据
   var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
   var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', room.id).maybeSingle();
-  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; }
+  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; room.guest_mode = sData.guest_mode || false; }
 
   panel.innerHTML = `
     <div class="ctx-panel-header">
@@ -3251,6 +3462,12 @@ async function renderChatContextPanel(room) {
           <div style="display:flex;gap:4px">
             <input id="editRoomName" class="input" value="${esc(room.name || '')}" style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
             ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomName()">更新</button>' : ''}
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像预览</div>
+          <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1px solid var(--border-color)">
+            ${currentAvatar ? '<img src="' + esc(currentAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'📢\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">📢</div>'}
           </div>
         </div>
         <div style="margin-bottom:8px">
@@ -3282,7 +3499,15 @@ async function renderChatContextPanel(room) {
           <option value="custom_page"${currentAdmission === 'custom_page' ? ' selected' : ''}>自定义页面</option>
           <option value="composite"${currentAdmission === 'composite' ? ' selected' : ''}>复合验证</option>
         </select>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px" onclick="showAdmissionManagement()">⚙ 管理准入</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px" onclick="showAdmissionManagement()">⚙ 准入设置</button>
+      </div>
+      <!-- 游客模式 -->
+      <div class="ctx-section">
+        <div class="ctx-section-title">游客模式</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="guestModeToggle" ${room.guest_mode ? 'checked' : ''} onchange="toggleGuestMode('${room.id}')">
+          <span>开启后，新加入的普通成员默认被禁言</span>
+        </label>
       </div>
       ` : ''}
 
@@ -3370,6 +3595,7 @@ async function loadMessages(roomId) {
     if (!serverEventIds[existingMsgs[ei].event_id]) keptRealtime.push(existingMsgs[ei]);
   }
   chatState.messages[roomId] = keptRealtime.concat(nonEdits).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
+  if (roomId !== chatState.currentRoomId) return;
   renderMessages(roomId);
   var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
   if (loadRoom && loadRoom.type === 'channel') {
@@ -3426,6 +3652,7 @@ async function loadOlderMessages(roomId) {
 }
 
 function renderMessages(roomId) {
+  if (roomId !== chatState.currentRoomId) return;
   const msgsEl = document.getElementById('chatMsgs');
   if (!msgsEl) return;
   applyChatBackground();
@@ -3767,6 +3994,66 @@ function updateUnreadBadge() {
   const total = chatState.rooms.reduce((sum, r) => sum + (r.unread || 0), 0);
   if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
   else { badge.classList.add('hidden'); }
+  updateActivityBadges();
+}
+
+// 更新活动栏红点徽章（好友栏=私聊未读+好友申请，频道栏=频道未读+入群申请）
+function updateActivityBadges() {
+  if (!currentUser || !chatState.rooms) {
+    var fb = document.getElementById('actBarFriendsBadge');
+    var cb = document.getElementById('actBarChatBadge');
+    if (fb) fb.style.display = 'none';
+    if (cb) cb.style.display = 'none';
+    return;
+  }
+
+  // 私聊未读（好友栏红点）
+  var privateUnread = 0;
+  var channelUnread = 0;
+  chatState.rooms.forEach(function(r) {
+    if (r.unread > 0) {
+      if (r.type === 'private') privateUnread += r.unread;
+      else if (r.type === 'channel') channelUnread += r.unread;
+    }
+  });
+
+  // 好友申请数量
+  var friendReqCount = 0;
+  var reqEl = document.getElementById('friendRequests');
+  if (reqEl && reqEl.children.length > 0) friendReqCount = reqEl.children.length;
+
+  // 入群申请数量
+  var joinReqCount = 0;
+  var joinEl = document.getElementById('channelJoinRequests');
+  if (joinEl && joinEl.children.length > 0) joinReqCount = joinEl.children.length;
+
+  // 检查免打扰设置
+  var privateMute = localStorage.getItem('dp_mute_private') === '1';
+  var channelMute = localStorage.getItem('dp_mute_channel') === '1';
+
+  // 好友栏红点 = 私聊未读 + 好友申请
+  var friendsTotal = privateMute ? friendReqCount : (privateUnread + friendReqCount);
+  var fb = document.getElementById('actBarFriendsBadge');
+  if (fb) {
+    if (friendsTotal > 0) {
+      fb.textContent = friendsTotal > 99 ? '99+' : friendsTotal;
+      fb.style.display = 'flex';
+    } else {
+      fb.style.display = 'none';
+    }
+  }
+
+  // 频道栏红点 = 频道未读 + 入群申请
+  var channelTotal = channelMute ? joinReqCount : (channelUnread + joinReqCount);
+  var cb = document.getElementById('actBarChatBadge');
+  if (cb) {
+    if (channelTotal > 0) {
+      cb.textContent = channelTotal > 99 ? '99+' : channelTotal;
+      cb.style.display = 'flex';
+    } else {
+      cb.style.display = 'none';
+    }
+  }
 }
 
 async function sendChatMsg() {
@@ -3776,7 +4063,24 @@ async function sendChatMsg() {
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;
-  // Render message immediately for instant feedback, then check mute asynchronously
+  // 禁言检查 — 在渲染消息之前先检查，避免竞态
+  if (room && room.type === 'channel') {
+    const { data: muted, error: muteErr } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
+    if (muteErr) { console.warn('禁言检查失败:', muteErr); }
+    if (muted) {
+      const until = muted.muted_until ? new Date(muted.muted_until) : null;
+      if (!until || until > new Date()) {
+        toast('您已被禁言，无法发送消息', 'error');
+        input.disabled = true;
+        input.placeholder = '你已被禁言';
+        var banner = document.getElementById('chatMutedBanner');
+        if (banner) banner.style.display = '';
+        setTimeout(function() { input.disabled = false; input.placeholder = '输入消息…'; }, 3000);
+        btn.disabled = false;
+        return;
+      }
+    }
+  }
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
   const prevMsgs = chatState.messages[chatState.currentRoomId] || [];
@@ -3785,24 +4089,6 @@ async function sendChatMsg() {
   input.value = ''; autoChatResize(input);
   const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
-  // Mute check — do after rendering to avoid blocking
-  if (room && room.type === 'channel') {
-    const { data: muted, error: muteErr } = await __SB.from('chat_muted').select('muted_until').eq('room_id', chatState.currentRoomId).eq('user_id', currentUser.id).maybeSingle();
-    if (muteErr) { console.warn('禁言检查失败:', muteErr); }
-    if (muted) {
-      const until = muted.muted_until ? new Date(muted.muted_until) : null;
-      if (!until || until > new Date()) {
-        toast('您已被禁言，无法发送消息', 'error');
-        chatState.messages[chatState.currentRoomId] = prevMsgs;
-        renderMessages(chatState.currentRoomId);
-        input.disabled = true;
-        input.placeholder = '你已被禁言';
-        setTimeout(function() { input.disabled = false; input.placeholder = '输入消息…'; }, 3000);
-        btn.disabled = false;
-        return;
-      }
-    }
-  }
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
     sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
@@ -4383,7 +4669,7 @@ async function showRoomSettings() {
     html += '<option value="questionnaire"' + (currentAdmission === 'questionnaire' ? ' selected' : '') + '>问卷测试</option>';
     html += '<option value="custom_page"' + (currentAdmission === 'custom_page' ? ' selected' : '') + '>自定义页面</option>';
     html += '<option value="composite"' + (currentAdmission === 'composite' ? ' selected' : '') + '>复合验证</option>';
-    html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:11px">⚙ 管理准入</button>';
+    html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:11px">⚙ 准入设置</button>';
     html += '</div>';
   }
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="channelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
@@ -4464,8 +4750,13 @@ async function loadRoomMemberList(roomId) {
         else html += '<button class="btn btn-sm btn-orange" onclick="setChannelAdmin(\'' + uid + '\')">设为管理</button>';
         html += '<button class="btn btn-sm btn-red" onclick="kickMember(\'' + roomId + '\',\'' + uid + '\')">踢出</button>';
       }
-      if (isMuted) html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
-      else html += '<button class="btn btn-sm btn-gray" onclick="muteUserInChannel(\'' + uid + '\')">禁言</button>';
+      if (isMuted) {
+        html += '<span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 6px;border-radius:4px">🔇 禁言中</span>';
+        html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
+      } else {
+        var safeMuteName = esc(u.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        html += '<button class="btn btn-sm btn-gray" onclick="muteUserInChannel(\'' + uid + '\',\'' + safeMuteName + '\')">禁言</button>';
+      }
       html += '</div>';
     }
     html += '</div>';
@@ -4497,6 +4788,27 @@ async function updateRoomAvatar() {
     }, { onConflict: 'room_id' });
     if (error) { toast('修改失败: ' + error.message, 'error'); return; }
     toast('头像已更新', 'success');
+    await loadRoomList();
+    var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+    if (room) {
+      // 更新 header 中的头像
+      var header = document.getElementById('chatViewHeader');
+      if (header) {
+        var roomName = room.name || (room.other && room.other.name) || '聊天';
+        var isChannel = room.type === 'channel';
+        var headerAvatar = '';
+        if (isChannel) {
+          headerAvatar = room.avatar_url ? '<img src="' + esc(room.avatar_url) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '📢';
+        } else if (room.other && room.other.avatar) {
+          headerAvatar = '<img src="' + esc(room.other.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
+        } else {
+          headerAvatar = '👤';
+        }
+        var settingsBtn = isChannel ? '<button class="chat-toolbar-btn" onclick="toggleChatContext()" title="频道设置" aria-label="频道设置">⚙️</button>' : '';
+        header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+      }
+      renderChatContextPanel(room);
+    }
   } catch(e) {
     toast('修改失败: ' + e.message, 'error');
   }
@@ -4532,28 +4844,46 @@ async function kickMember(roomId, targetUserId) {
   }
 }
 
-async function muteUserInChannel(targetUserId) {
+function muteUserInChannel(userId, userName) {
   if (!chatState.currentRoomId) return;
-  var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
-  if (myLevel < 1) { toast('只有管理员及以上才能禁言', 'error'); return; }
-  var targetLevel = await getPermissionLevel(chatState.currentRoomId, targetUserId);
-  if (targetLevel >= myLevel) { toast('不能对地位高于或等于自己的用户操作', 'error'); return; }
-  var choice = prompt('禁言时长（分钟）:\n输入分钟数，例如：60=1小时，1440=1天，10080=7天\n留空=永久', '');
-  if (choice === null) return;
-  var minutes = choice.trim() === '' ? 0 : parseInt(choice) || 0;
-  if (choice.trim() !== '' && (isNaN(minutes) || minutes !== parseFloat(choice) || minutes < 0)) {
-    toast('请输入有效的整数分钟数', 'error'); return;
-  }
-  var mutedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null;
-  var muteId = 'muted_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  // 先检查权限
+  getPermissionLevel(chatState.currentRoomId, userId).then(function(targetLevel) {
+    getPermissionLevel(chatState.currentRoomId, currentUser.id).then(function(myLevel) {
+      if (myLevel <= targetLevel) {
+        toast('只能对低阶用户进行禁言操作', 'error');
+        return;
+      }
+      // 显示禁言模态框
+      var html = '<div class="modal-overlay" id="muteModal" style="display:flex"><div class="modal modal-sm">';
+      html += '<div class="modal-header"><div class="modal-title">🔇 禁言 ' + esc(userName || '') + '</div><button class="modal-close" onclick="document.getElementById(\'muteModal\').remove()">✕</button></div>';
+      html += '<div style="padding:16px">';
+      html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">选择禁言时长：</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:8px">';
+      html += '<button class="btn btn-gray btn-full" style="font-size:13px" onclick="executeMute(\'' + userId + '\',10)">10 分钟</button>';
+      html += '<button class="btn btn-gray btn-full" style="font-size:13px" onclick="executeMute(\'' + userId + '\',60)">1 小时</button>';
+      html += '<button class="btn btn-gray btn-full" style="font-size:13px" onclick="executeMute(\'' + userId + '\',1440)">1 天</button>';
+      html += '<button class="btn btn-gray btn-full" style="font-size:13px" onclick="executeMute(\'' + userId + '\',10080)">7 天</button>';
+      html += '<button class="btn btn-red btn-full" style="font-size:13px" onclick="executeMute(\'' + userId + '\',null)">永久禁言</button>';
+      html += '</div></div></div>';
+      document.body.insertAdjacentHTML('beforeend', html);
+    });
+  });
+}
+
+async function executeMute(userId, minutes) {
+  var roomId = chatState.currentRoomId;
+  var mutedUntil = minutes ? new Date(Date.now() + minutes * 60000).toISOString() : null;
   var { error } = await __SB.from('chat_muted').upsert({
-    id: muteId, room_id: chatState.currentRoomId, user_id: targetUserId,
-    muted_by: currentUser.id, muted_until: mutedUntil
+    room_id: roomId,
+    user_id: userId,
+    muted_until: mutedUntil,
+    muted_by: currentUser.id
   }, { onConflict: 'room_id,user_id' });
+  var modal = document.getElementById('muteModal');
+  if (modal) modal.remove();
   if (error) { toast('禁言失败: ' + error.message, 'error'); return; }
-  toast('已禁言', 'success');
-  var modal = document.getElementById('roomSettingsModal');
-  if (modal) loadRoomMemberList(chatState.currentRoomId);
+  toast('已禁言' + (minutes ? ' ' + minutes + ' 分钟' : ' 永久'), 'success');
+  loadRoomMemberList(roomId);
 }
 
 async function unmuteMember(roomId, targetUserId) {
@@ -4781,6 +5111,20 @@ async function updateAdmissionMode() {
   toast('准入模式已更新', 'success');
 }
 
+async function toggleGuestMode(roomId) {
+  var toggle = document.getElementById('guestModeToggle');
+  var newValue = toggle.checked;
+  var { error } = await __SB.from('chat_channel_settings').upsert({
+    room_id: roomId,
+    guest_mode: newValue
+  }, { onConflict: 'room_id' });
+  if (error) { toast('设置失败: ' + error.message, 'error'); toggle.checked = !newValue; return; }
+  toast('游客模式已' + (newValue ? '开启' : '关闭'), 'success');
+  // 更新本地状态
+  var room = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (room) room.guest_mode = newValue;
+}
+
 function showQuestionnaireModal(roomId, settings, context) {
   var questions;
   try { questions = typeof settings.admission_questionnaire === 'string' ? JSON.parse(settings.admission_questionnaire) : settings.admission_questionnaire; } catch(e) { questions = []; }
@@ -4883,7 +5227,7 @@ async function showAdmissionManagement() {
   var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   var myLevel = room ? (room.created_by === currentUser.id ? 3 : room.is_admin ? 1 : 0) : 0;
   if (isDeveloper()) myLevel = 3;
-  if (myLevel < 1) { toast('只有管理员及以上才能管理准入', 'error'); return; }
+  if (myLevel < 1) { toast('只有管理员及以上才能管理准入设置', 'error'); return; }
   loadAndShowAdmissionPanel(myLevel);
 }
 
@@ -4898,7 +5242,7 @@ async function loadAndShowAdmissionPanel(myLevel) {
   try { questionnaire = settings.admission_questionnaire || []; } catch(e) {}
 
   var html = '<div class="modal-overlay" id="admissionManagementModal" style="display:flex"><div class="modal modal-lg" style="max-width:640px">';
-  html += '<div class="modal-header"><div class="modal-title">准入管理</div><button class="modal-close" onclick="document.getElementById(\'admissionManagementModal\').remove()">✕</button></div>';
+  html += '<div class="modal-header"><div class="modal-title">准入设置</div><button class="modal-close" onclick="document.getElementById(\'admissionManagementModal\').remove()">✕</button></div>';
 
   html += '<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid #f3f4f6;padding-bottom:8px">';
   html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'test\')" id="admTabTest" style="background:var(--accent-bg);color:var(--accent)">📋 准入测试</button>';
@@ -5154,24 +5498,7 @@ async function saveAdmissionQuestionnaire() {
 async function loadAuditRequests() {
   var content = document.getElementById('admissionTabContent');
   if (!content) return;
-  content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">加载中...</div>';
-  var { data: requests } = await __SB.from('channel_join_requests').select('*').eq('room_id', chatState.currentRoomId).eq('status', 'pending').order('created_at', { ascending: true });
-  if (!requests?.length) { content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">暂无待审核的申请</div>'; return; }
-  var userIds = requests.map(function(r) { return r.user_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; });
-  var { data: users } = await __SB.from('users').select('id, name').in('id', userIds);
-  var userMap = {};
-  if (users) users.forEach(function(u) { userMap[u.id] = u.name; });
-  var html = '';
-  requests.forEach(function(r) {
-    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px;border-bottom:1px solid var(--border-color);gap:8px">';
-    html += '<div style="flex:1;min-width:0">';
-    html += '<span style="font-size:13px;font-weight:500">' + esc(userMap[r.user_id] || r.user_id.slice(0, 12)) + '</span>';
-    html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;word-break:break-all">' + (r.message ? esc(r.message) : '无申请理由') + '</div>';
-    html += '<div style="font-size:10px;color:var(--text-faint);margin-top:2px">' + formatDate(r.created_at) + '</div>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sm btn-green" onclick="approveJoinRequest(\'' + r.id + '\',\'' + r.user_id + '\')">通过</button><button class="btn btn-sm btn-red" onclick="rejectJoinRequest(\'' + r.id + '\')">拒绝</button></div></div>';
-  });
-  content.innerHTML = html;
+  content.innerHTML = '<div style="text-align:center;padding:32px 24px;color:var(--text-faint)"><div style="font-size:32px;margin-bottom:12px">📩</div><div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px">入群申请已在侧边栏显示</div><div style="font-size:12px">请在频道列表下方的「入群申请」区块中处理</div></div>';
 }
 
 async function loadCustomPageSelector(currentPageId) {
@@ -5200,24 +5527,45 @@ async function selectCustomAdmissionPage(pageId) {
   loadCustomPageSelector(pageId);
 }
 
-async function approveJoinRequest(reqId, userId) {
+async function approveJoinRequest(reqId, roomId, userId) {
+  var targetRoomId = roomId || chatState.currentRoomId;
   await __SB.from('channel_join_requests').update({ status: 'approved', reviewed_by: currentUser.id }).eq('id', reqId);
-  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: chatState.currentRoomId, user_id: userId });
+  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: targetRoomId, user_id: userId });
   toast('已通过');
   loadAuditRequests();
+  loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
+  loadRoomList().catch(function(e) { console.error('loadRoomList:', e); });
 }
 
 async function rejectJoinRequest(reqId) {
   await __SB.from('channel_join_requests').update({ status: 'rejected', reviewed_by: currentUser.id }).eq('id', reqId);
   toast('已拒绝');
   loadAuditRequests();
+  loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
 }
 
 async function showBrowseChannels(query) {
+  // 先显示 loading 占位
+  var modal = document.getElementById('browseChannelsModal');
+  if (!modal) {
+    var html = '<div class="modal-overlay" id="browseChannelsModal" style="display:flex"><div class="modal modal-lg">';
+    html += '<div class="modal-header"><div class="modal-title">浏览频道</div><button class="modal-close" onclick="document.getElementById(\'browseChannelsModal\').remove()">✕</button></div>';
+    html += '<div style="margin-bottom:12px"><input id="channelSearchInput" class="input" placeholder="搜索频道..." oninput="debounceChannelSearch()" style="width:100%"></div>';
+    html += '<div id="browseChannelsContent" style="max-height:400px;overflow-y:auto"><div class="browse-loading">加载中</div></div>';
+    html += '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  } else {
+    var contentEl = document.getElementById('browseChannelsContent');
+    if (contentEl) contentEl.innerHTML = '<div class="browse-loading">加载中</div>';
+  }
+  var content = document.getElementById('browseChannelsContent');
+  if (!content) return;
+
+  // 然后加载数据
   let sbQuery = __SB.from('chat_rooms').select('id, name, created_by, created_at').eq('type', 'channel').order('created_at', { ascending: false });
   if (query) sbQuery = sbQuery.ilike('name', '%' + query + '%');
   const { data: channels, error } = await sbQuery;
-  if (error) { toast('加载失败', 'error'); return; }
+  if (error) { toast('加载失败', 'error'); content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">加载失败</div>'; return; }
   if (!channels) channels = [];
   var roomIds = channels.map(function(c) { return c.id; });
   var { data: settingsRows } = await __SB.from('chat_channel_settings').select('room_id, admission, admission_mode').in('room_id', roomIds);
@@ -5234,20 +5582,7 @@ async function showBrowseChannels(query) {
     } else { channels[i].joined = false; }
   }
   const unjoined = channels.filter(function(c) { return !c.joined; });
-  var modal = document.getElementById('browseChannelsModal');
-  if (!modal) {
-    var html = '<div class="modal-overlay" id="browseChannelsModal" style="display:flex"><div class="modal modal-lg">';
-    html += '<div class="modal-header"><div class="modal-title">浏览频道</div><button class="modal-close" onclick="document.getElementById(\'browseChannelsModal\').remove()">✕</button></div>';
-    html += '<div style="margin-bottom:12px"><input id="channelSearchInput" class="input" placeholder="搜索频道..." oninput="debounceChannelSearch()" style="width:100%"></div>';
-    html += '<div id="browseChannelsContent" style="max-height:400px;overflow-y:auto"><div style="text-align:center;padding:24px;color:var(--text-faint)">加载中...</div></div>';
-    html += '</div></div>';
-    document.body.insertAdjacentHTML('beforeend', html);
-  } else {
-    var content = document.getElementById('browseChannelsContent');
-    if (content) content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">加载中...</div>';
-  }
-  var content = document.getElementById('browseChannelsContent');
-  if (!content) return;
+  // 加载完成后替换内容
   if (channels.length === 0) {
     content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">没有找到频道</div>';
   } else {
@@ -5279,6 +5614,21 @@ async function joinChannel(roomId) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
   var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
   if (!settings) { settings = {}; }
+  // 开发者直接加入
+  if (isDeveloper()) {
+    const { error } = await __SB.from('chat_room_members').insert({
+      id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      room_id: roomId,
+      user_id: currentUser.id
+    });
+    if (!error) {
+      toast('开发者身份已直接加入', 'success');
+      document.getElementById('browseChannelsModal')?.remove();
+      await loadRoomList();
+      switchRoom(roomId);
+    }
+    return;
+  }
   var mode = settings.admission_mode || settings.admission || 'open';
 
   if (mode === 'open') { await doJoinChannel(roomId); return; }
@@ -5739,6 +6089,14 @@ function settingsAccountHTML() {
     '<div class="form-group" style="margin-top:16px"><label class="form-label">消息通知</label>' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
     '<input type="checkbox" id="notifToggle" ' + (notifEnabled ? 'checked' : '') + ' onchange="toggleNotif()">接收新消息通知（聊天按钮红点提醒）</label></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color)">' +
+    '<div><div style="font-size:13px;font-weight:600">私聊免打扰</div>' +
+    '<div style="font-size:11px;color:var(--text-faint)">开启后不在好友栏显示私聊消息红点</div></div>' +
+    '<input type="checkbox" id="mutePrivateToggle" ' + (localStorage.getItem('dp_mute_private') === '1' ? 'checked' : '') + ' onchange="toggleMutePrivate()"></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color)">' +
+    '<div><div style="font-size:13px;font-weight:600">频道免打扰</div>' +
+    '<div style="font-size:11px;color:var(--text-faint)">开启后不在频道栏显示频道消息红点</div></div>' +
+    '<input type="checkbox" id="muteChannelToggle" ' + (localStorage.getItem('dp_mute_channel') === '1' ? 'checked' : '') + ' onchange="toggleMuteChannel()"></div>' +
     '<div class="form-group"><label class="form-label">输入框自动上移（手机适配）</label>' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
     '<input type="checkbox" id="chatKeyboardLiftToggle" ' + (chatKeyboardLift ? 'checked' : '') + ' onchange="toggleChatKeyboardLift()">键盘弹出时自动抬起输入框，避免被遮挡（iOS Safari / Android Chrome 适用）</label>' +
