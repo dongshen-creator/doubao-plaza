@@ -1068,7 +1068,7 @@ async function showFirstLoginAnnouncements() {
           allAnns.map(function(a) {
             return '<div class="card" style="margin-bottom:12px">' +
               '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">' + (a.is_system ? '📌 ' : '') + esc(a.title) + '</div>' +
-              '<div style="font-size:13px;color:#4b5563;word-break:break-all">' + renderRichContent(a.content) + '</div>' +
+              '<div style="font-size:13px;color:var(--text-secondary);word-break:break-all">' + renderRichContent(a.content) + '</div>' +
               '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
               '</div>';
           }).join('') +
@@ -1540,7 +1540,7 @@ async function switchSettingsTab(tab, btnEl) {
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">🔐 最近登录</div>
-        <div style="font-size:12px;color:#4b5563;line-height:1.8">
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.8">
           <div>IP：${esc(currentUser.last_login_ip || '未知')}</div>
           <div>时间：${formatDate(currentUser.last_login_at)}</div>
           <div>设备：${esc(currentUser.last_login_ua || '未知')}</div>
@@ -1939,7 +1939,7 @@ async function loadAnnouncementsManager() {
             <span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">初始公告</span>
             <span style="font-size:14px;font-weight:600;color:var(--text-primary)">${esc(sysAnn.title)}</span>
           </div>
-          <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
+          <div style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:var(--text-faint)">${formatDate(sysAnn.created_at)}</div>
             <div style="display:flex;gap:6px">
@@ -1978,7 +1978,7 @@ async function loadAnnouncementsManager() {
       ${regularAnn.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : regularAnn.map(a => `
         <div class="card" style="margin-bottom:12px">
           <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">${esc(a.title)}</div>
-          <div style="font-size:13px;color:#4b5563;word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
+          <div style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:var(--text-faint)">${formatDate(a.created_at)}</div>
             <div style="display:flex;gap:6px">
@@ -2314,7 +2314,7 @@ async function loadPagesManager() {
       </div>
       <div class="card" style="margin-bottom:16px;padding:16px;background:var(--bg-input)">
         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">📖 API 调用文档</div>
-        <div style="font-size:12px;color:#4b5563;line-height:1.6">
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">
           <p style="margin-bottom:8px"><strong>获取当前登录用户信息：</strong></p>
           <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/users/auto-login', {
   method: 'POST',
@@ -4148,13 +4148,19 @@ async function loadChannelAnnouncements(roomId) {
   if (!data?.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>'; return; }
   var room = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isAdmin = room && (room.created_by === currentUser.id || isDeveloper());
+  // 非管理员过滤掉仅管理员可见的公告
+  if (!isAdmin) {
+    data = data.filter(function(a) { return a.visibility !== 'admin'; });
+    if (!data.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>'; return; }
+  }
   el.innerHTML = data.map(function(a) {
+    var visBadge = a.visibility === 'admin' ? '<span class="tag tag-orange" style="margin-left:6px;font-size:9px">🔒管理员</span>' : '';
     return '<div class="card" style="margin-bottom:8px;padding:10px 12px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
-      '<div style="font-weight:600;font-size:13px">' + (a.pinned ? '📌 ' : '') + esc(a.title) + '</div>' +
+      '<div style="font-weight:600;font-size:13px">' + (a.pinned ? '📌 ' : '') + esc(a.title) + visBadge + '</div>' +
       (isAdmin ? '<div style="display:flex;gap:4px"><button class="btn btn-sm btn-gray" style="padding:2px 6px;font-size:11px" onclick="showAnnouncementEditor(\'' + a.id + '\')">编辑</button><button class="btn btn-sm btn-red" style="padding:2px 6px;font-size:11px" onclick="deleteChannelAnnouncement(\'' + a.id + '\',\'' + roomId + '\')">删除</button></div>' : '') +
       '</div>' +
-      '<div style="font-size:12px;color:#4b5563;margin-top:4px">' + renderRichContent(a.content) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">' + renderRichContent(a.content) + '</div>' +
       '<div style="font-size:10px;color:var(--text-faint);margin-top:4px">' + formatDate(a.created_at) + '</div>' +
       '</div>';
   }).join('');
@@ -4168,20 +4174,90 @@ async function showAnnouncementEditor(announcementId) {
   var existing = resp?.data;
   var title = isEdit && existing ? existing.title : '';
   var content = isEdit && existing ? existing.content : '';
-  var pinned = isEdit && existing ? existing.pinned : 0;
-  var newTitle = prompt('公告标题:', title);
-  if (newTitle === null) return;
-  var newContent = prompt('公告内容（支持HTML）:', content);
-  if (newContent === null) return;
-  var newPinned = confirm('置顶此公告？') ? 1 : 0;
-  if (isEdit) {
-    await __SB.from('chat_channel_announcements').update({ title: newTitle, content: newContent, pinned: newPinned, updated_at: new Date().toISOString() }).eq('id', announcementId);
-  } else {
-    var aId = 'ann_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    await __SB.from('chat_channel_announcements').insert({ id: aId, room_id: chatState.currentRoomId, title: newTitle, content: newContent, pinned: newPinned, created_by: currentUser.id });
+  var pinned = isEdit && existing ? (existing.pinned || 0) : 0;
+  var visibility = isEdit && existing ? (existing.visibility || 'all') : 'all';
+
+  // 构建动态模态框（替代 prompt）
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'announcementEditorModal';
+  overlay.innerHTML = '<div class="modal modal-lg" role="dialog" aria-label="公告编辑器">' +
+    '<div class="modal-header">' +
+    '<div class="modal-title">' + (isEdit ? '✏️ 编辑公告' : '📢 发布公告') + '</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'announcementEditorModal\').remove()" aria-label="关闭">✕</button>' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label class="form-label">标题</label>' +
+    '<input type="text" id="annTitleInput" class="input" value="' + escAttr(title) + '" placeholder="输入公告标题…" maxlength="100">' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label class="form-label">内容（支持 HTML）</label>' +
+    '<textarea id="annContentInput" class="input" rows="6" placeholder="输入公告内容…" style="resize:vertical;min-height:120px;font-family:inherit">' + esc(content) + '</textarea>' +
+    '<div class="form-hint">支持 HTML 标签，如 &lt;b&gt;、&lt;a&gt;、&lt;img&gt; 等</div>' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label class="form-label">可见性</label>' +
+    '<select id="annVisibilityInput" class="input" style="cursor:pointer">' +
+    '<option value="all"' + (visibility === 'all' ? ' selected' : '') + '>👥 所有成员可见</option>' +
+    '<option value="admin"' + (visibility === 'admin' ? ' selected' : '') + '>🔒 仅管理员可见</option>' +
+    '</select>' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="annPinnedInput" ' + (pinned ? 'checked' : '') + ' style="width:18px;height:18px;cursor:pointer">' +
+    '<span style="font-size:13px;color:var(--text-secondary)">📌 置顶此公告</span>' +
+    '</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px">' +
+    '<button class="btn btn-gray" style="flex:1" onclick="document.getElementById(\'announcementEditorModal\').remove()">取消</button>' +
+    '<button class="btn btn-orange" style="flex:1" onclick="saveAnnouncement(' + (isEdit ? '\'' + announcementId + '\'' : 'null') + ')">' + (isEdit ? '更新' : '发布') + '</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  // 自动聚焦标题
+  setTimeout(function() { var t = document.getElementById('annTitleInput'); if (t) t.focus(); }, 100);
+}
+
+function escAttr(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function saveAnnouncement(announcementId) {
+  var newTitle = document.getElementById('annTitleInput').value.trim();
+  var newContent = document.getElementById('annContentInput').value;
+  var newVisibility = document.getElementById('annVisibilityInput').value;
+  var newPinned = document.getElementById('annPinnedInput').checked ? 1 : 0;
+  if (!newTitle) { toast('请输入标题', 'error'); return; }
+  if (!newContent.trim()) { toast('请输入内容', 'error'); return; }
+  var modal = document.getElementById('announcementEditorModal');
+  if (modal) modal.remove();
+  try {
+    if (announcementId) {
+      await __SB.from('chat_channel_announcements').update({ title: newTitle, content: newContent, pinned: newPinned, visibility: newVisibility, updated_at: new Date().toISOString() }).eq('id', announcementId);
+    } else {
+      var aId = 'ann_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      await __SB.from('chat_channel_announcements').insert({ id: aId, room_id: chatState.currentRoomId, title: newTitle, content: newContent, pinned: newPinned, visibility: newVisibility, created_by: currentUser.id });
+    }
+    loadChannelAnnouncements(chatState.currentRoomId);
+    toast(announcementId ? '公告已更新' : '公告已发布', 'success');
+  } catch(e) {
+    console.error('saveAnnouncement error:', e);
+    // 如果 visibility 列不存在，尝试不带 visibility 重试
+    try {
+      if (announcementId) {
+        await __SB.from('chat_channel_announcements').update({ title: newTitle, content: newContent, pinned: newPinned, updated_at: new Date().toISOString() }).eq('id', announcementId);
+      } else {
+        var aId2 = 'ann_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        await __SB.from('chat_channel_announcements').insert({ id: aId2, room_id: chatState.currentRoomId, title: newTitle, content: newContent, pinned: newPinned, created_by: currentUser.id });
+      }
+      loadChannelAnnouncements(chatState.currentRoomId);
+      toast(announcementId ? '公告已更新（可见性字段未生效，请运行迁移脚本）' : '公告已发布（可见性字段未生效，请运行迁移脚本）', 'warning');
+    } catch(e2) {
+      console.error('saveAnnouncement retry error:', e2);
+      toast('保存公告失败: ' + (e2.message || e2), 'error');
+    }
   }
-  loadChannelAnnouncements(chatState.currentRoomId);
-  toast(isEdit ? '公告已更新' : '公告已发布');
 }
 
 async function deleteChannelAnnouncement(announcementId, roomId) {
@@ -5196,7 +5272,7 @@ function settingsAccountHTML() {
     '<input type="checkbox" id="chatKeyboardLiftToggle" ' + (chatKeyboardLift ? 'checked' : '') + ' onchange="toggleChatKeyboardLift()">键盘弹出时自动抬起输入框，避免被遮挡（iOS Safari / Android Chrome 适用）</label>' +
     '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div></div>' +
     '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">🔐 最近登录</div>' +
-    '<div style="font-size:12px;color:#4b5563;line-height:1.8"><div>IP：' + esc(currentUser.last_login_ip || '未知') + '</div><div>时间：' + formatDate(currentUser.last_login_at) + '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);line-height:1.8"><div>IP：' + esc(currentUser.last_login_ip || '未知') + '</div><div>时间：' + formatDate(currentUser.last_login_at) + '</div>' +
     '<div>设备：' + esc(currentUser.last_login_ua || '未知') + '</div></div></div>' +
     '<div class="form-group"><button class="btn btn-orange btn-full" onclick="markAllRead()">📬 全部已读</button></div>' +
     '<div class="form-group"><label class="form-label">已隐藏的会话</label><div>';

@@ -199,6 +199,9 @@ ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS admission_questionnai
 ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS admission_mode TEXT DEFAULT 'open';
 ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
+-- ===== 16.1 公告可见性字段（幂等） =====
+ALTER TABLE chat_channel_announcements ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'all';
+
 -- ===== 17. 外键约束（幂等：先检查是否存在，先清理孤立数据） =====
 -- 先清理引用了已删除房间的孤立记录，否则外键会创建失败
 DELETE FROM chat_unread WHERE room_id NOT IN (SELECT id FROM chat_rooms);
