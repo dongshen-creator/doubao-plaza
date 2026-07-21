@@ -128,7 +128,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .navbar-inner{max-width:100%;margin:0;display:flex;align-items:center;justify-content:space-between;height:57px}
 .navbar-inner .logo{padding-left:16px;flex-shrink:0}
 .navbar-inner .nav-right{padding-right:0;flex-shrink:0;display:flex;align-items:center;gap:6px}
-.navbar-inner .nav-right>*:last-child{margin-right:8px}
+.navbar-inner .nav-right>*:last-child{margin-right:0}
 .logo{display:flex;align-items:center;gap:10px;cursor:pointer}
 .logo-icon{width:36px;height:36px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 3s ease-in-out infinite;box-shadow:0 2px 8px var(--accent-shadow)}
 .logo-text{font-size:18px;font-weight:700;color:var(--text-primary)}
