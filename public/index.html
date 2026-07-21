@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -3017,6 +3017,7 @@ async function loadRoomList() {
 
 function renderRoomList() {
   const el = document.getElementById('chatRoomItems');
+  if (!el) return; // 不在聊天视图时元素不存在，安全跳过
   const rooms = chatState.rooms;
   if (!rooms?.length) {
     el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
@@ -3850,9 +3851,12 @@ function startUnreadPolling() {
     if (!currentUser) return;
     const total = (data || []).reduce((s, r) => s + (r.count || 0), 0);
     const badge = document.getElementById('chatUnreadBadge');
-    if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
-    else { badge.classList.add('hidden'); }
-    if (chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) { loadRoomList(); }
+    if (badge) {
+      if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
+      else { badge.classList.add('hidden'); }
+    }
+    // 仅在聊天视图打开时才刷新会话列表
+    if (_currentView === 'chat' && chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) { loadRoomList(); }
     unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000); });
 }
