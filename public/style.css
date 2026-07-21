@@ -167,7 +167,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   flex-direction: column;
   padding: 8px 0;
   flex-shrink: 0;
-  height: 100%;
+  align-self: stretch;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -241,6 +241,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
   flex-shrink: 0;
+  align-self: stretch;
   transition: width var(--transition-slow), background var(--transition-slow), border-color var(--transition-slow);
 }
 .app-sidebar.has-content {
@@ -254,6 +255,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   min-width: 0;
   padding: 20px 24px;
   overflow-y: auto;
+  align-self: stretch;
 }
 
 /* ── 侧边栏内部组件 ── */
