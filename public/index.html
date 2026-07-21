@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 
@@ -5322,121 +5322,126 @@ function setChannelGroup(roomId, groupName) {
   saveChannelGroups(g);
 }
 
-// Modify renderRoomList to show pinned + groups
+// Modify renderRoomList to show pinned + groups (split into channels and privates)
 renderRoomList = function() {
-  var el = document.getElementById('chatRoomItems');
-  var rooms = chatState.rooms;
+  var rooms = chatState.rooms || [];
   var hiddenRooms = getHiddenChannels();
   rooms = rooms.filter(function(r) { return hiddenRooms.indexOf(r.id) < 0; });
-  if (!rooms || !rooms.length) {
-    el.innerHTML = '<div class="chat-empty" style="font-size:13px;padding:24px">暂无聊天<br>在好友列表点击 💬 开始对话</div>';
-    return;
-  }
-  // Friend group filter tabs
+
+  // 分离频道和私聊
+  var channels = rooms.filter(function(r) { return r.type === 'channel'; });
+  var privates = rooms.filter(function(r) { return r.type !== 'channel'; });
+
+  var pinned = getPinnedChannels();
+  var filterGroup = chatState.filterGroup || '';
   var friendGroups = getFriendGroups();
   var friendGroupNames = Object.keys(friendGroups);
-  var filterGroup = chatState.filterGroup || '';
-  var html = '';
-  if (friendGroupNames.length) {
-    html += '<div style="padding:6px 14px;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border-color)">' +
-      '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
-      friendGroupNames.map(function(n) {
-        return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
-      }).join('') +
-      '</div>';
-  }
-  if (filterGroup) {
-    var groupMembers = friendGroups[filterGroup] || [];
-    rooms = rooms.filter(function(r) {
-      if (r.other && r.other.id) return groupMembers.indexOf(r.other.id) >= 0;
-      return false;
-    });
-    if (!rooms.length) {
-      html += '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:12px">该分组暂无聊天</div>';
-      el.innerHTML = html;
-      return;
+
+  // ── 渲染频道列表 ──
+  var channelEl = document.getElementById('chatChannelItems');
+  if (channelEl) {
+    if (!channels.length) {
+      channelEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 4px">暂无频道，点击右上角创建</div>';
+    } else {
+      var pinnedChannels = channels.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
+      var unpinnedChannels = channels.filter(function(r) { return pinned.indexOf(r.id) < 0; });
+      var channelHtml = '';
+      if (pinnedChannels.length) {
+        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)">📌 置顶</div>';
+        channelHtml += pinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
+      }
+      if (unpinnedChannels.length) {
+        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)">频道</div>';
+        channelHtml += unpinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
+      }
+      channelEl.innerHTML = channelHtml;
     }
   }
-  var pinned = getPinnedChannels();
-  var groups = getChannelGroups();
-  var unpinned = rooms.filter(function(r) { return pinned.indexOf(r.id) < 0; });
-  var pinnedRooms = rooms.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
-  // Pinned section
-  if (pinnedRooms.length) {
-    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:var(--text-faint)">📌 置顶</div>';
-    html += pinnedRooms.map(function(r) { return roomItemHTML(r); }).join('');
+
+  // ── 渲染私聊列表 ──
+  var privateEl = document.getElementById('chatPrivateItems');
+  if (privateEl) {
+    if (!privates.length) {
+      privateEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 4px">暂无私聊<br>在好友列表点击 💬 开始对话</div>';
+    } else {
+      var filteredPrivates = privates;
+      if (filterGroup && friendGroups[filterGroup]) {
+        var groupMembers = friendGroups[filterGroup] || [];
+        filteredPrivates = privates.filter(function(r) {
+          return r.other && groupMembers.indexOf(r.other.id) >= 0;
+        });
+      }
+      var privateHtml = '';
+      // 好友分组筛选标签
+      if (friendGroupNames.length) {
+        privateHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
+          '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
+          friendGroupNames.map(function(n) {
+            return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+          }).join('') +
+          '</div>';
+      }
+      if (!filteredPrivates.length) {
+        privateHtml += '<div style="padding:12px;text-align:center;color:var(--text-faint);font-size:12px">该分组暂无聊天</div>';
+      } else {
+        privateHtml += filteredPrivates.map(function(r) { return roomItemHTML(r); }).join('');
+      }
+      privateEl.innerHTML = privateHtml;
+    }
   }
-  // Grouped sections
-  var assigned = {};
-  for (var gName in groups) {
-    (groups[gName] || []).forEach(function(rid) { assigned[rid] = gName; });
-  }
-  var usedGroups = {};
-  unpinned.forEach(function(r) {
-    var g = assigned[r.id] || '';
-    if (g) usedGroups[g] = true;
-  });
-  // Ungrouped
-  var ungrouped = unpinned.filter(function(r) { return !assigned[r.id]; });
-  if (ungrouped.length) {
-    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:var(--text-faint)">聊天</div>';
-    html += ungrouped.map(function(r) { return roomItemHTML(r); }).join('');
-  }
-  // Groups
-  for (var gName in usedGroups) {
-    var gr = unpinned.filter(function(r) { return assigned[r.id] === gName; });
-    if (!gr.length) continue;
-    html += '<div style="padding:6px 14px;font-size:10px;font-weight:600;color:var(--text-faint)">' + esc(gName) + '</div>';
-    html += gr.map(function(r) { return roomItemHTML(r); }).join('');
-  }
-  // Group management
-  html += '<div style="padding:8px 14px;display:flex;gap:4px">' +
-    '<button class="btn btn-sm btn-gray" onclick="showBrowseChannels()" style="font-size:10px;flex:1">🔍 浏览频道</button>' +
-    '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:10px">📁</button>' +
-    '<button class="btn btn-sm btn-gray" onclick="showChannelPinHelp()" style="font-size:10px">📌</button>' +
-    '</div>';
-  // Hidden chats section
+
+  // ── 兼容：隐藏频道折叠区 ──
   var hiddenIds = getHiddenChannels();
   if (hiddenIds.length) {
-    var hiddenRooms = (chatState.rooms || []).filter(function(r) { return hiddenIds.indexOf(r.id) >= 0; });
-    html += '<div class="chat-hidden-section">' +
-      '<div class="chat-hidden-header" onclick="chatState._showHidden=!chatState._showHidden;renderRoomList()">' +
-      '<span>🙈 已隐藏 (' + hiddenIds.length + ')</span><span>' + (chatState._showHidden ? '▾' : '▸') + '</span></div>';
-    if (chatState._showHidden) {
-      hiddenRooms.forEach(function(r) {
-        var name = r.other ? esc(r.other.name) : esc(r.name);
-        var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
-        html += '<div class="chat-room-item" onclick="unhideChannel(\'' + r.id + '\');switchRoom(\'' + r.id + '\')">' +
-          '<div class="chat-room-avatar">' + avatar + '</div>' +
-          '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
-          '<div class="chat-room-preview">点击恢复</div></div>' +
-          (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
-          '</div>';
-      });
+    var hiddenRoomsData = (chatState.rooms || []).filter(function(r) { return hiddenIds.indexOf(r.id) >= 0; });
+    var hideEl = channelEl || privateEl;
+    if (hideEl) {
+      var hideHtml = '<div class="chat-hidden-section">' +
+        '<div class="chat-hidden-header" onclick="chatState._showHidden=!chatState._showHidden;renderRoomList()">' +
+        '<span>🙈 已隐藏 (' + hiddenIds.length + ')</span><span>' + (chatState._showHidden ? '▾' : '▸') + '</span></div>';
+      if (chatState._showHidden) {
+        hiddenRoomsData.forEach(function(r) {
+          var name = r.other ? esc(r.other.name) : esc(r.name);
+          var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
+          hideHtml += '<div class="chat-room-item" onclick="unhideChannel(\'' + r.id + '\');switchRoom(\'' + r.id + '\')">' +
+            '<div class="chat-room-avatar">' + avatar + '</div>' +
+            '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
+            '<div class="chat-room-preview">点击恢复</div></div>' +
+            (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
+            '</div>';
+        });
+      }
+      hideHtml += '</div>';
+      if (channelEl) channelEl.insertAdjacentHTML('beforeend', hideHtml);
     }
-    html += '</div>';
   }
-  el.innerHTML = html;
 };
 
 function roomItemHTML(r) {
   var active = r.id === chatState.currentRoomId;
-  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
+  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : '📢';
   var name = r.other ? esc(r.other.name) : esc(r.name);
   var isPinned = getPinnedChannels().indexOf(r.id) >= 0;
   var canDelete = r.type !== 'channel' || r.created_by === currentUser.id || r.is_admin || isDeveloper();
+  // 频道权限身份标签
+  var roleTag = '';
+  if (r.type === 'channel' && r.is_admin) {
+    if (r.created_by === currentUser.id) roleTag = '<span class="chat-role-tag role-owner">创建者</span>';
+    else if (isDeveloper()) roleTag = '<span class="chat-role-tag role-dev">开发者</span>';
+    else roleTag = '<span class="chat-role-tag role-admin">管理员</span>';
+  }
   return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
     '<div class="chat-room-avatar">' + avatar + '</div>' +
     '<div class="chat-room-info">' +
-    '<div class="chat-room-name">' + (isPinned ? '📌 ' : '') + name + '</div>' +
-    '<div class="chat-room-preview">' + (r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' + (r.creator_name ? ' · ' + esc(r.creator_name) : '') : '') + '</div>' +
+    '<div class="chat-room-name">' + (isPinned ? '📌 ' : '') + name + roleTag + '</div>' +
+    '<div class="chat-room-preview">' + (r.type === 'channel' ? '频道 · ' + (r.member_count || 0) + ' 人' + (r.creator_name ? ' · ' + esc(r.creator_name) : '') : '私聊') + '</div>' +
     '</div>' +
     (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
     '<div class="chat-room-actions">' +
-    '<button class="chat-room-act" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" title="置顶">📌</button>' +
-    (canDelete ? '<button class="chat-room-act danger" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" title="删除对话">🗑</button>' : '') +
-    '<button class="chat-room-act" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" title="分组">📁</button>' +
-    '<button class="chat-room-act" onclick="event.stopPropagation();hideChannel(\'' + r.id + '\')" title="隐藏会话">🙈</button>' +
+    '<button class="chat-room-act" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" title="置顶" aria-label="置顶">📌</button>' +
+    (canDelete ? '<button class="chat-room-act danger" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" title="删除对话" aria-label="删除对话">🗑</button>' : '') +
+    '<button class="chat-room-act" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" title="分组" aria-label="分组">📁</button>' +
+    '<button class="chat-room-act" onclick="event.stopPropagation();hideChannel(\'' + r.id + '\')" title="隐藏会话" aria-label="隐藏会话">🙈</button>' +
     '</div>' +
     '</div>';
 }
