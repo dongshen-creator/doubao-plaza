@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -203,44 +203,9 @@
   </div>
 </div>
 
-<!-- Chat Panel -->
-<div class="chat-panel" id="chatPanel" role="dialog" aria-label="聊天面板">
-  <div class="chat-header">
-    <button class="nav-btn chat-show-list" onclick="toggleRoomList()" style="padding:6px 10px;display:none">☰</button>
-    <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">← 返回</button>
-    <div style="flex:1;font-size:16px;font-weight:700">💬 消息</div>
-    <button class="nav-btn" onclick="showRoomSettings()" id="chatSettingsBtn" style="padding:6px 10px;display:none">⚙️</button>
-    <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">✕</button>
-  </div>
-  <div class="chat-body">
-    <div class="chat-room-list" id="chatRoomList">
-      <div style="padding:12px 14px;font-size:12px;font-weight:600;color:var(--text-faint);display:flex;justify-content:space-between;align-items:center">
-        <span>聊天</span>
-        <button class="btn btn-sm btn-gray" onclick="showCreateChannel()" style="font-size:11px">＋ 频道</button>
-      </div>
-      <div id="chatRoomItems" style="flex:1;overflow-y:auto"></div>
-    </div>
-    <div class="chat-main" id="chatMain">
-      <div class="chat-empty" id="chatEmpty">
-        <div><div style="font-size:48px;margin-bottom:12px">💬</div><div>选择一个聊天或创建频道</div></div>
-      </div>
-      <div class="chat-msgs hidden" id="chatMsgs" role="log" aria-live="polite" aria-label="聊天消息"></div>
-      <div id="chatStrangerWarn" class="chat-stranger-warn hidden"></div>
-      <div id="chatReplyBar" class="chat-reply-bar hidden">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
-        <button class="close-reply" onclick="cancelReply()">✕</button>
-      </div>
-      <div class="chat-input-area">
-        <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
-        <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
-        <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频">🖼</button>
-        <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
-        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- Chat Panel (旧独立覆盖层，已迁移到三栏视图，保留空壳兼容standalone模式) -->
+<div class="chat-panel" id="chatPanel" style="display:none"></div>
+<!-- 频道创建模态框 -->
 <div class="modal-overlay hidden" id="createChannelModal">
   <div class="modal modal-sm">
     <div class="modal-header">
@@ -464,8 +429,10 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
 
 async function patUser(targetUserId, targetUserName, targetSuffix) {
   if (!currentUser || !chatState.currentRoomId) return;
-  var suffix = (targetSuffix || '').trim();
-  var content = '拍了拍 ' + targetUserName + (suffix ? ' 的' + suffix : '');
+  // 转义后缀防止XSS
+  var suffix = esc(targetSuffix || '').trim();
+  var safeName = esc(targetUserName || '');
+  var content = '拍了拍 ' + safeName + (suffix ? ' 的' + suffix : '');
   toast('你' + content, 'info');
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_messages').insert({
@@ -927,11 +894,7 @@ function doLogout() {
 var _currentView = 'home';
 
 function switchView(view) {
-  // 特殊视图：聊天和设置直接触发模态/面板，不改变当前视图高亮
-  if (view === 'chat') {
-    openChat();
-    return;
-  }
+  // 特殊视图：设置直接触发模态框，不改变当前视图高亮
   if (view === 'settings') {
     if (!currentUser) { showModal('login'); return; }
     showModal('settings');
@@ -958,6 +921,7 @@ function switchView(view) {
   else if (view === 'friends') renderFriendsView(sidebar, main);
   else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
   else if (view === 'features') renderFeaturesView(sidebar, main);
+  else if (view === 'chat') renderChatView(sidebar, main);
 }
 
 var _prevView = 'home';
@@ -997,7 +961,65 @@ function renderHomeView(sidebar, main) {
   loadFriendRequests();
 }
 
-// ── 好友视图 ──
+// ── 聊天视图（复用三栏：侧边栏=会话列表，主内容区=消息区） ──
+function renderChatView(sidebar, main) {
+  if (!currentUser) {
+    sidebar.classList.remove('has-content');
+    sidebar.innerHTML = '';
+    main.innerHTML = '<div class="login-required" style="text-align:center;padding:48px 24px"><div class="welcome-icon" style="margin-bottom:24px">🔒</div><h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3><p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可使用聊天功能</p><button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal(\'login\')">立即登录</button></div>';
+    return;
+  }
+
+  // 侧边栏：会话列表
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML = `
+    <div class="sidebar-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px">
+        <span class="sidebar-header" style="margin:0">会话</span>
+        <button class="btn btn-sm btn-gray" onclick="showCreateChannel()" style="font-size:11px">＋ 频道</button>
+      </div>
+      <div id="chatRoomItems"></div>
+    </div>
+  `;
+
+  // 主内容区：消息区域
+  main.innerHTML = `
+    <div class="chat-view-main" id="chatMainArea">
+      <div class="chat-view-header" id="chatViewHeader">
+        <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 消息</div>
+        <div style="font-size:12px;color:var(--text-faint)">选择一个会话开始聊天</div>
+      </div>
+      <div class="chat-view-body" id="chatMsgs">
+        <div class="chat-empty-inline" id="chatEmpty">
+          <div style="font-size:48px;margin-bottom:12px">💬</div>
+          <div>选择一个聊天或创建频道</div>
+        </div>
+      </div>
+      <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
+        <button class="close-reply" onclick="cancelReply()">✕</button>
+      </div>
+      <div class="chat-view-input" id="chatViewInput" style="display:none">
+        <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
+        <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
+        <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频">🖼</button>
+        <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
+        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
+      </div>
+    </div>
+  `;
+
+  // 兼容旧引用：将旧ID映射到新元素
+  // chatMsgs -> chatViewBody, chatRoomList -> sidebar内的chatRoomItems
+  // 初始化聊天状态
+  chatState.chatOpen = true;
+  chatState.currentRoomId = null;
+  loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); });
+  startMessagePolling();
+}
+
+// 好友视图
 function renderFriendsView(sidebar, main) {
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
@@ -2760,29 +2782,25 @@ async function getPermissionLevel(roomId, userId) {
 // ===== 独立聊天模式：通过 URL 参数直接打开指定房间 =====
 // 根据可视视口精确更新独立模式聊天面板尺寸（适配分屏/键盘）
 function updateStandaloneViewport() {
-  var panel = document.getElementById('chatPanel');
-  if (!panel || !window.visualViewport) return;
-  var vp = window.visualViewport;
-  // 用 visualViewport 精确尺寸代替 100vh（分屏时 100vh 可能指整个物理屏幕）
-  panel.style.position = 'fixed';
-  panel.style.top = vp.offsetTop + 'px';
-  panel.style.left = vp.offsetLeft + 'px';
-  panel.style.width = vp.width + 'px';
-  panel.style.height = vp.height + 'px';
+  // 独立模式现在使用三栏视图，不再需要手动调整chatPanel尺寸
+  // 保留函数兼容旧调用，但不再操作已废弃的chatPanel
+  return;
 }
 
 function applyChatStandaloneLayout() {
-  // 隐藏主页内容和导航栏，只保留聊天面板
-  document.getElementById('mainContent').style.display = 'none';
+  // 独立聊天模式：隐藏导航栏和TabBar，直接渲染聊天视图
   var nav = document.querySelector('nav.navbar');
   if (nav) nav.style.display = 'none';
   var tabbar = document.getElementById('mobileTabbar');
   if (tabbar) tabbar.style.display = 'none';
+  var footer = document.querySelector('.footer');
+  if (footer) footer.style.display = 'none';
   document.body.style.paddingBottom = '';
-  // 聊天面板用 visualViewport 精确尺寸占满可视区域（适配分屏）
-  var panel = document.getElementById('chatPanel');
-  panel.style.zIndex = '9999';
-  updateStandaloneViewport();
+  // 渲染聊天视图到三栏布局
+  var sidebar = document.getElementById('appSidebar');
+  var main = document.getElementById('mainContent');
+  if (main) main.style.display = '';
+  if (typeof renderChatView === 'function') renderChatView(sidebar, main);
 }
 
 // 聊天面板视口适配（兼容手机键盘 + 平板分屏）
@@ -2843,8 +2861,8 @@ function setupChatViewportListeners() {
 
 async function openChatByRoomId(roomId) {
   if (!currentUser) { showModal('login'); return; }
-  var panel = document.getElementById('chatPanel');
-  panel.classList.add('show');
+  // 切换到聊天视图
+  switchView('chat');
   chatState.chatOpen = true;
   // 加载房间列表（获取用户所有房间的信息）
   await loadRoomList();
@@ -2852,9 +2870,10 @@ async function openChatByRoomId(roomId) {
   var room = chatState.rooms.find(function(r) { return r.id === roomId; });
   if (!room) {
     toast('您不在该会话中，或会话不存在', 'warning');
-    document.getElementById('chatRoomList').classList.add('show');
-    document.getElementById('chatEmpty').classList.remove('hidden');
-    document.getElementById('chatMsgs').classList.add('hidden');
+    var empty = document.getElementById('chatEmpty');
+    var msgs = document.getElementById('chatMsgs');
+    if (empty) empty.style.display = '';
+    if (msgs) msgs.style.display = 'none';
     return;
   }
   // 复用 switchRoom 完成房间打开（加载消息、订阅、聚焦等）
@@ -2864,28 +2883,15 @@ async function openChatByRoomId(roomId) {
 
 function openChat() {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
-  const panel = document.getElementById('chatPanel');
-  panel.classList.add('show');
-  chatState.chatOpen = true;
-  document.getElementById('chatRoomList').classList.add('show');
-  document.getElementById('chatEmpty').classList.remove('hidden');
-  document.getElementById('chatMsgs').classList.add('hidden');
-  loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
-  startMessagePolling();
-  // 同步移动端 TabBar 活动状态
-  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarChat');
+  switchView('chat');
 }
 
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
   if (chatState._openingChat) return;
   chatState._openingChat = true;
-  const panel = document.getElementById('chatPanel');
-  panel.classList.add('show');
-  chatState.chatOpen = true;
-  document.getElementById('chatRoomList').classList.remove('show');
-  // 同步移动端 TabBar 活动状态
-  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarChat');
+  // 切换到聊天视图
+  switchView('chat');
 
   if (friendId) {
     let roomId;
@@ -2909,11 +2915,8 @@ async function openChatWith(friendId, friendName) {
         { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId }
       ]);
     }
-    chatState.currentRoomId = roomId;
     await loadRoomList();
-    loadMessages(roomId);
-  } else {
-    loadRoomList();
+    switchRoom(roomId);
   }
   chatState._openingChat = false;
   startMessagePolling();
@@ -2925,14 +2928,16 @@ function closeChat() {
     window.location.href = '/';
     return;
   }
-  document.getElementById('chatPanel').classList.remove('show');
   chatState.chatOpen = false;
   stopMessagePolling();
   Object.values(chatState.pollTimers).forEach(t => clearTimeout(t));
   chatState.pollTimers = {};
   chatState.currentRoomId = null;
-  // 关闭聊天后重置移动端 TabBar 活动状态到首页
-  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarHome');
+  // 退订所有实时频道
+  Object.values(chatState.sbChannels).forEach(function(c) { try { c.unsubscribe(); } catch(e) {} });
+  chatState.sbChannels = {};
+  // 切换回首页
+  switchView('home');
 }
 
 async function loadRoomList() {
@@ -3032,33 +3037,54 @@ function renderRoomList() {
 
 async function switchRoom(roomId) {
   chatState.currentRoomId = roomId;
-  document.getElementById('chatRoomList').classList.remove('show');
+  // 移动端：显示消息区，隐藏会话列表
+  var appMain = document.querySelector('.app-main');
+  var appSidebar = document.querySelector('.app-sidebar');
+  if (appMain) appMain.classList.add('show-mobile');
+  if (appSidebar) appSidebar.classList.add('hidden-mobile');
   const room = chatState.rooms.find(r => r.id === roomId);
-  document.getElementById('chatSettingsBtn').style.display = (room && room.type === 'channel') ? 'flex' : 'none';
-  document.getElementById('chatSettingsBtn').title = (room && room.type === 'channel') ? '频道设置' : '';
-  document.getElementById('chatEmpty').classList.add('hidden');
-  document.getElementById('chatMsgs').classList.remove('hidden');
+  // 更新聊天视图header（含移动端返回按钮）
+  var header = document.getElementById('chatViewHeader');
+  if (header) {
+    var roomName = room ? (room.name || (room.other && room.other.name) || '聊天') : '聊天';
+    var isChannel = room && room.type === 'channel';
+    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button><div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + (isChannel ? '<button class="chat-toolbar-btn" onclick="showRoomSettings()" title="频道设置">⚙️</button>' : '') + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+  }
+  var empty = document.getElementById('chatEmpty');
+  var msgs = document.getElementById('chatMsgs');
+  var inputArea = document.getElementById('chatViewInput');
+  if (empty) empty.style.display = 'none';
+  if (msgs) msgs.style.display = '';
+  if (inputArea) inputArea.style.display = 'flex';
   applyChatBackground();
   renderRoomList();
   if (chatState.messages[roomId]?.length) {
     renderMessages(roomId);
     markRead(roomId);
     subscribeToRoom(roomId);
-    document.getElementById('chatInput').focus();
     var input = document.getElementById('chatInput');
-    if (!input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
+    if (input) input.focus();
+    if (input && !input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
   } else {
     loadMessages(roomId);
     subscribeToRoom(roomId);
   }
 }
 
+function backToRoomList() {
+  var appMain = document.querySelector('.app-main');
+  var appSidebar = document.querySelector('.app-sidebar');
+  if (appMain) appMain.classList.remove('show-mobile');
+  if (appSidebar) appSidebar.classList.remove('hidden-mobile');
+  chatState.currentRoomId = null;
+}
+
 async function loadMessages(roomId) {
   const msgsEl = document.getElementById('chatMsgs');
   const empty = document.getElementById('chatEmpty');
-  msgsEl.classList.remove('hidden');
-  empty.classList.add('hidden');
-  msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">加载中...</div>';
+  if (msgsEl) msgsEl.style.display = '';
+  if (empty) empty.style.display = 'none';
+  if (msgsEl) msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">加载中...</div>';
   var [msgResult, reactResult] = await Promise.all([
     __SB.from('chat_messages').select('id, event_id, room_id, sender_id, sender_name, sender_avatar, sender_doubao_id, content, reply_to, recalled, rel_type, relates_to_event_id, ts').eq('room_id', roomId).order('id', { ascending: true }).limit(200),
     __SB.from('chat_reactions').select('event_id,reaction,sender_id').eq('room_id', roomId)
@@ -3158,9 +3184,10 @@ async function loadOlderMessages(roomId) {
 
 function renderMessages(roomId) {
   const msgsEl = document.getElementById('chatMsgs');
+  if (!msgsEl) return;
   applyChatBackground();
   const msgs = chatState.messages[roomId] || [];
-  if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty">暂无消息，发送第一条吧</div>'; return; }
+  if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty-inline" style="padding:32px;text-align:center;color:var(--text-faint)">暂无消息，发送第一条吧</div>'; return; }
   for (const msg of msgs) {
     const reacts = chatState.reactionsMap[msg.event_id];
     if (reacts) {
@@ -3409,8 +3436,16 @@ function handleRealtimeMessage(roomId, msg) {
       };
       chatState.rooms.push(room);
     }
-    room.unread = (room.unread || 0) + 1;
-    if (!isMuted) { renderRoomList(); updateUnreadBadge(); }
+    // 仅非当前打开的会话增加未读数；当前会话直接标记已读
+    if (chatState.currentRoomId === roomId && chatState.chatOpen) {
+      room.unread = 0;
+      // 当前会话有新消息，立即渲染并标记已读
+      renderMessages(roomId);
+      markRead(roomId);
+    } else {
+      room.unread = (room.unread || 0) + 1;
+      if (!isMuted) { renderRoomList(); updateUnreadBadge(); }
+    }
   }
 }
 
@@ -3460,9 +3495,9 @@ function markRead(roomId) {
     try {
       await __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: last.event_id || '' },
         { onConflict: 'room_id,user_id' });
-    } catch(e) {}
+    } catch(e) { console.error('markRead failed:', e); }
     const room = chatState.rooms.find(r => r.id === roomId);
-    if (room) { room.unread = 0; updateUnreadBadge(); }
+    if (room) { room.unread = 0; renderRoomList(); updateUnreadBadge(); }
   })();
 }
 
@@ -3719,7 +3754,14 @@ async function recallMessage(eventId, roomId) {
   renderMessages(roomId);
 }
 
-function toggleRoomList() { document.getElementById('chatRoomList').classList.toggle('show'); }
+function toggleRoomList() {
+  var appMain = document.querySelector('.app-main');
+  var appSidebar = document.querySelector('.app-sidebar');
+  if (appMain && appSidebar) {
+    appMain.classList.toggle('show-mobile');
+    appSidebar.classList.toggle('hidden-mobile');
+  }
+}
 
 function stopMessagePolling() {
   if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
@@ -3993,14 +4035,18 @@ async function sendReaction(eventId, reaction) {
 
 function cancelReply() {
   chatState.replyTo = null;
-  document.getElementById('chatReplyBar').classList.add('hidden');
+  var bar = document.getElementById('chatReplyBar');
+  if (bar) bar.style.display = 'none';
 }
 
 function setReplyTo(eventId, text) {
   chatState.replyTo = eventId;
-  document.getElementById('chatReplyText').textContent = text;
-  document.getElementById('chatReplyBar').classList.remove('hidden');
-  document.getElementById('chatInput').focus();
+  var bar = document.getElementById('chatReplyBar');
+  var replyText = document.getElementById('chatReplyText');
+  if (replyText) replyText.textContent = text;
+  if (bar) bar.style.display = 'flex';
+  var input = document.getElementById('chatInput');
+  if (input) input.focus();
 }
 
 async function deleteConversation(roomId) {

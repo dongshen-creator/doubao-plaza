@@ -26,7 +26,7 @@ export async function onRequestGet(context) {
     const userId = context.params.id;
     if (!userId) return Response.json({ success: false, error: '用户ID不能为空' });
     const user = await env.DB.prepare(
-      "SELECT id, name, avatar, doubao_id, bio, agent_url, privacy_setting, last_login_at, created_at FROM users WHERE id = ?"
+      "SELECT id, name, avatar, doubao_id, bio, agent_url, privacy_setting, pat_suffix, last_login_at, created_at FROM users WHERE id = ?"
     ).bind(userId).first();
     if (!user) return Response.json({ success: false, error: '用户不存在' });
     return Response.json({ success: true, data: user });
