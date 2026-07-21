@@ -55,6 +55,10 @@
   --modal-bg: #ffffff;
   --chat-recv-bubble: #ffffff;
   --chat-recv-border: #e5e7eb;
+
+  /* 兼容别名：修复未定义变量引用 */
+  --border: var(--border-strong);
+  --bg-card: var(--bg-secondary);
 }
 
 /* ── 暗色主题变量 ── */
@@ -109,6 +113,10 @@
   --modal-bg: #1a1a2e;
   --chat-recv-bubble: #2a2a3e;
   --chat-recv-border: #374151;
+
+  /* 兼容别名：修复未定义变量引用 */
+  --border: var(--border-strong);
+  --bg-card: var(--bg-secondary);
 }
 
 /* ── 基础重置 ── */
@@ -122,9 +130,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .logo-icon{width:36px;height:36px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 3s ease-in-out infinite;box-shadow:0 2px 8px var(--accent-shadow)}
 .logo-text{font-size:18px;font-weight:700;color:var(--text-primary)}
 .nav-right{display:flex;align-items:center;gap:8px}
-.nav-btn{background:transparent;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--text-muted);transition:all .2s}
+.nav-btn{background:transparent;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--text-muted);transition:all .2s;min-width:44px;min-height:44px;justify-content:center}
 .nav-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
-.nav-btn-primary{background:var(--accent-gradient);color:var(--text-on-accent);border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .25s}
+.nav-btn-primary{background:var(--accent-gradient);color:var(--text-on-accent);border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .25s;min-height:44px}
 .nav-btn-primary:hover{box-shadow:0 4px 14px var(--accent-shadow);transform:translateY(-1px)}
 .nav-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-light),#4ECDC4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
 .nav-user{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:10px;cursor:pointer;transition:background .2s;position:relative}
@@ -511,3 +519,206 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 
 .theme-cyan{--accent:#06B6D4;--accent-light:#22D3EE;--accent-gradient:linear-gradient(135deg,#06B6D4,#22D3EE);--accent-bg:rgba(6,182,212,0.08);--accent-bg-hover:rgba(6,182,212,0.04);--accent-shadow:rgba(6,182,212,0.35);--border-focus:#06B6D4}
 .dark.theme-cyan{--accent:#06B6D4;--accent-light:#22D3EE;--accent-gradient:linear-gradient(135deg,#06B6D4,#22D3EE);--accent-bg:rgba(6,182,212,0.12);--accent-bg-hover:rgba(6,182,212,0.06);--accent-shadow:rgba(6,182,212,0.25)}
+
+/* ═══════════════════════════════════════════════════════════
+   设计令牌系统 v2.0（方案B）
+   中性令牌，不干扰6种主题色系统
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 间距网格（8px基准） ── */
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+}
+
+/* ── 圆角层级 ── */
+:root {
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+}
+
+/* ── 字体层级 ── */
+:root {
+  --text-caption: 12px;
+  --text-caption-lh: 18px;
+  --text-body: 14px;
+  --text-body-lh: 20px;
+  --text-subtitle: 15px;
+  --text-subtitle-lh: 22px;
+  --text-title: 16px;
+  --text-title-lh: 24px;
+  --text-hero: 20px;
+  --text-hero-lh: 28px;
+}
+
+/* ── 过渡时长 ── */
+:root {
+  --transition-fast: 0.15s ease;
+  --transition: 0.2s ease;
+  --transition-slow: 0.25s ease;
+}
+
+/* ── 工具类（减少内联样式） ── */
+.flex-center{display:flex;align-items:center;justify-content:center}
+.flex-between{display:flex;align-items:center;justify-content:space-between}
+.flex-col{display:flex;flex-direction:column}
+.gap-xs{gap:var(--space-xs)}
+.gap-sm{gap:var(--space-sm)}
+.gap-md{gap:var(--space-md)}
+.gap-lg{gap:var(--space-lg)}
+.text-caption{font-size:var(--text-caption);line-height:var(--text-caption-lh);color:var(--text-muted)}
+.text-secondary{color:var(--text-secondary)}
+.text-muted{color:var(--text-muted)}
+.text-accent{color:var(--accent)}
+.rounded-sm{border-radius:var(--radius-sm)}
+.rounded{border-radius:var(--radius)}
+.rounded-lg{border-radius:var(--radius-lg)}
+.rounded-full{border-radius:var(--radius-full)}
+.transition{transition:all var(--transition-fast)}
+
+/* ── 无障碍：尊重 prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 无障碍：键盘焦点样式 ── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── 点击热区最小尺寸（移动端可访问性） ── */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   移动端底部 TabBar（渐进增强，<768px 显示）
+   复用现有函数，不废弃顶部导航栏
+   ═══════════════════════════════════════════════════════════ */
+.mobile-tabbar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-color);
+  z-index: 45;
+  padding: 0 env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  transition: background var(--transition-slow), border-color var(--transition-slow), transform var(--transition-slow);
+}
+.mobile-tabbar.hide {
+  transform: translateY(100%);
+}
+.mobile-tabbar-inner {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  height: 56px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+.tabbar-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  transition: color var(--transition);
+  position: relative;
+  min-width: 44px;
+  padding: 4px 2px;
+}
+.tabbar-btn-icon {
+  font-size: 20px;
+  line-height: 1;
+  position: relative;
+}
+.tabbar-btn.active {
+  color: var(--accent);
+}
+.tabbar-btn:active {
+  transform: scale(0.92);
+}
+.tabbar-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: #EF4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+.tabbar-btn.hidden-badge .tabbar-badge {
+  display: none;
+}
+
+/* ── 移动端：隐藏顶部导航栏部分按钮，避免重复 ── */
+@media (max-width: 767px) {
+  .mobile-tabbar { display: block; }
+  body { padding-bottom: 56px; }
+  .nav-btn#themeToggle,
+  .nav-btn[onclick*="openChat()"],
+  .nav-btn[onclick*="showModal('settings')"] {
+    display: none;
+  }
+  .nav-right .nav-btn-primary[onclick*="showModal('login')"],
+  .nav-right .nav-btn[onclick*="showModal('login')"],
+  .nav-right .nav-btn[onclick*="showModal('register')"],
+  .nav-right .nav-btn-primary[onclick*="showModal('register')"] {
+    display: none;
+  }
+}
+
+/* ── 平板及桌面：三栏布局渐进增强（>=1024px） ── */
+@media (min-width: 1024px) {
+  .navbar-inner {
+    max-width: 100%;
+    padding: 0 24px;
+  }
+  .main {
+    max-width: 100%;
+    padding: 24px;
+  }
+}
+
+/* ── 超宽屏优化（>=1440px） ── */
+@media (min-width: 1440px) {
+  .navbar-inner,
+  .main {
+    max-width: 1200px;
+  }
+}

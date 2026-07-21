@@ -20,7 +20,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 
@@ -745,10 +745,12 @@ async function toggleMigration() {
 var _cleanupRunning = false;
 async function triggerCleanup() {
   if (_cleanupRunning) return;
+  if (!currentUser || !sessionToken) return;  // 未登录时跳过
   _cleanupRunning = true;
   try {
     var res = await fetch('/api/chat?action=cleanup-messages', {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + sessionToken }
     });
     var data = await res.json();
     if (data.success && data.deleted_messages > 0) {
@@ -780,6 +782,8 @@ function updateNavbar() {
       <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
     `;
   }
+  // 同步移动端 TabBar 状态
+  if (typeof tabbarUpdateAuthState === 'function') tabbarUpdateAuthState();
 }
 
 function isDeveloper() {
@@ -1883,32 +1887,39 @@ function insertAtCursor(id, text) {
 var _insertTarget = 'devAnnContent';
 function toggleInsertPanel(targetId) {
   if (targetId) _insertTarget = targetId;
-  var p = document.getElementById('insertPanel');
+  var panelId = _insertTarget.startsWith('edit') ? 'editInsertPanel' : 'devInsertPanel';
+  var p = document.getElementById(panelId);
   if (!p) return;
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
 function onInsertUrlChange() {
-  const url = document.getElementById('insertUrl').value.trim();
+  var panelId = _insertTarget.startsWith('edit') ? 'editInsertPanel' : 'devInsertPanel';
+  var panel = document.getElementById(panelId);
+  if (!panel) return;
+  const url = panel.querySelector('#insertUrl').value.trim();
   if (!url) return;
   const type = detectMediaType(url);
-  document.getElementById('insertType').value = type;
+  panel.querySelector('#insertType').value = type;
   const labels = { image:'🖼️ 图片', video:'🎬 视频', audio:'🎵 音频', iframe:'📺 嵌入', link:'🔗 链接' };
-  document.getElementById('insertTypeLabel').textContent = labels[type] || '🔗 链接';
+  panel.querySelector('#insertTypeLabel').textContent = labels[type] || '🔗 链接';
 }
 
 function devInsertMedia() {
-  const url = document.getElementById('insertUrl').value.trim();
-  const width = document.getElementById('insertWidth').value.trim();
-  const height = document.getElementById('insertHeight').value.trim();
-  const type = document.getElementById('insertType').value;
+  var panelId = _insertTarget.startsWith('edit') ? 'editInsertPanel' : 'devInsertPanel';
+  var panel = document.getElementById(panelId);
+  if (!panel) return;
+  const url = panel.querySelector('#insertUrl').value.trim();
+  const width = panel.querySelector('#insertWidth').value.trim();
+  const height = panel.querySelector('#insertHeight').value.trim();
+  const type = panel.querySelector('#insertType').value;
   if (!url) { toast('请输入链接', 'error'); return; }
   const html = generateMediaHTML(type, url, width, height);
   insertAtCursor(_insertTarget, html);
-  document.getElementById('insertUrl').value = '';
-  document.getElementById('insertWidth').value = '';
-  document.getElementById('insertHeight').value = '';
-  document.getElementById('insertPanel').style.display = 'none';
+  panel.querySelector('#insertUrl').value = '';
+  panel.querySelector('#insertWidth').value = '';
+  panel.querySelector('#insertHeight').value = '';
+  panel.style.display = 'none';
   toast('已插入内容');
 }
 
@@ -1946,7 +1957,7 @@ async function loadAnnouncementsManager() {
           <button class="btn btn-blue btn-sm" onclick="toggleInsertPanel('devAnnContent')">📎 插入</button>
           <span style="font-size:11px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
         </div>
-        <div id="insertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
+        <div id="devInsertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">文件链接</label>
             <input class="input" id="insertUrl" placeholder="https://example.com/image.jpg" oninput="onInsertUrlChange()">
           </div>
@@ -2041,7 +2052,7 @@ async function devEditAnnouncement(id) {
           <button class="btn btn-blue btn-sm" onclick="toggleInsertPanel('editAnnContent')">📎 插入</button>
           <span style="font-size:11px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
         </div>
-        <div id="insertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
+        <div id="editInsertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">文件链接</label>
             <input class="input" id="insertUrl" placeholder="https://example.com/image.jpg" oninput="onInsertUrlChange()">
           </div>
@@ -2589,6 +2600,9 @@ function applyChatStandaloneLayout() {
   document.getElementById('mainContent').style.display = 'none';
   var nav = document.querySelector('nav.navbar');
   if (nav) nav.style.display = 'none';
+  var tabbar = document.getElementById('mobileTabbar');
+  if (tabbar) tabbar.style.display = 'none';
+  document.body.style.paddingBottom = '';
   // 聊天面板用 visualViewport 精确尺寸占满可视区域（适配分屏）
   var panel = document.getElementById('chatPanel');
   panel.style.zIndex = '9999';
@@ -2682,6 +2696,8 @@ function openChat() {
   document.getElementById('chatMsgs').classList.add('hidden');
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); toast('加载会话列表失败', 'error'); });
   startMessagePolling();
+  // 同步移动端 TabBar 活动状态
+  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarChat');
 }
 
 async function openChatWith(friendId, friendName) {
@@ -2692,6 +2708,8 @@ async function openChatWith(friendId, friendName) {
   panel.classList.add('show');
   chatState.chatOpen = true;
   document.getElementById('chatRoomList').classList.remove('show');
+  // 同步移动端 TabBar 活动状态
+  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarChat');
 
   if (friendId) {
     let roomId;
@@ -2737,6 +2755,8 @@ function closeChat() {
   Object.values(chatState.pollTimers).forEach(t => clearTimeout(t));
   chatState.pollTimers = {};
   chatState.currentRoomId = null;
+  // 关闭聊天后重置移动端 TabBar 活动状态到首页
+  if (typeof tabbarSetActive === 'function') tabbarSetActive('tabbarHome');
 }
 
 async function loadRoomList() {
@@ -5393,14 +5413,18 @@ function clearChatBg() {
   applyChatBackground();
   var status = document.getElementById('chatBgStatus');
   if (status) status.textContent = '已恢复默认背景';
-  var urlInput = document.getElementById('chatBgUrl');
-  if (urlInput) urlInput.value = '';
+  var urlInputs = document.querySelectorAll('input[id="chatBgUrl"]');
+  urlInputs.forEach(function(input) { input.value = ''; });
   toast('已清除聊天背景', 'success');
 }
 
 function setChatBgUrl() {
-  var urlInput = document.getElementById('chatBgUrl');
-  var url = urlInput ? (urlInput.value || '').trim() : '';
+  var urlInputs = document.querySelectorAll('input[id="chatBgUrl"]');
+  var url = '';
+  for (var i = 0; i < urlInputs.length; i++) {
+    var v = (urlInputs[i].value || '').trim();
+    if (v) { url = v; break; }
+  }
   if (!url) { toast('请输入图片URL', 'error'); return; }
   localStorage.setItem('dp_chat_bg', url);
   applyChatBackground();
@@ -5475,5 +5499,125 @@ init();
   <div id="mediaViewerContent" style="max-width:90vw;max-height:90vh;position:relative"></div>
   <button style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="closeMediaViewer()">✕</button>
 </div>
+
+<!-- 移动端底部 TabBar（渐进增强，复用现有函数） -->
+<nav class="mobile-tabbar" id="mobileTabbar" aria-label="移动端导航">
+  <div class="mobile-tabbar-inner">
+    <button class="tabbar-btn active" id="tabbarHome" onclick="tabbarGoHome()" aria-label="广场首页">
+      <span class="tabbar-btn-icon">🏠</span>
+      <span>广场</span>
+    </button>
+    <button class="tabbar-btn hidden-badge" id="tabbarChat" onclick="tabbarGoChat()" aria-label="聊天">
+      <span class="tabbar-btn-icon">💬
+        <span class="tabbar-badge" id="tabbarChatBadge">0</span>
+      </span>
+      <span>聊天</span>
+    </button>
+    <button class="tabbar-btn" id="tabbarTheme" onclick="tabbarToggleTheme()" aria-label="切换主题">
+      <span class="tabbar-btn-icon" id="tabbarThemeIcon">🌙</span>
+      <span>主题</span>
+    </button>
+    <button class="tabbar-btn" id="tabbarSettings" onclick="tabbarGoSettings()" aria-label="设置或登录">
+      <span class="tabbar-btn-icon" id="tabbarSettingsIcon">⚙️</span>
+      <span id="tabbarSettingsLabel">登录</span>
+    </button>
+  </div>
+</nav>
+
+<script>
+// ===== 移动端 TabBar 同步逻辑 =====
+function tabbarGoHome() {
+  // 回到广场首页：关闭聊天面板，渲染主页
+  if (typeof closeChat === 'function') closeChat();
+  if (typeof renderContent === 'function') renderContent();
+  tabbarSetActive('tabbarHome');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function tabbarGoChat() {
+  if (typeof openChat === 'function') openChat();
+  tabbarSetActive('tabbarChat');
+}
+
+function tabbarToggleTheme() {
+  if (typeof toggleTheme === 'function') toggleTheme();
+  tabbarUpdateThemeIcon();
+}
+
+function tabbarGoSettings() {
+  if (currentUser) {
+    showModal('settings');
+  } else {
+    showModal('login');
+  }
+}
+
+function tabbarSetActive(activeId) {
+  var btns = document.querySelectorAll('.tabbar-btn');
+  btns.forEach(function(b) { b.classList.remove('active'); });
+  var el = document.getElementById(activeId);
+  if (el) el.classList.add('active');
+}
+
+function tabbarUpdateThemeIcon() {
+  var icon = document.getElementById('tabbarThemeIcon');
+  if (icon) icon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+}
+
+function tabbarUpdateAuthState() {
+  // 根据登录状态更新设置/登录按钮
+  var settingsIcon = document.getElementById('tabbarSettingsIcon');
+  var settingsLabel = document.getElementById('tabbarSettingsLabel');
+  if (!settingsIcon || !settingsLabel) return;
+  if (currentUser) {
+    settingsIcon.textContent = '⚙️';
+    settingsLabel.textContent = '设置';
+  } else {
+    settingsIcon.textContent = '🔑';
+    settingsLabel.textContent = '登录';
+  }
+  tabbarUpdateThemeIcon();
+}
+
+function tabbarUpdateBadge(count) {
+  var btn = document.getElementById('tabbarChat');
+  var badge = document.getElementById('tabbarChatBadge');
+  if (!btn || !badge) return;
+  if (count && count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    btn.classList.remove('hidden-badge');
+  } else {
+    btn.classList.add('hidden-badge');
+  }
+}
+
+// 监听聊天未读数变化，同步到 TabBar
+var _origUpdateUnreadBadge = (typeof updateUnreadBadge === 'function') ? updateUnreadBadge : null;
+if (_origUpdateUnreadBadge) {
+  window.updateUnreadBadge = function() {
+    _origUpdateUnreadBadge();
+    // 从 chatState 读取未读总数同步到 TabBar
+    var total = 0;
+    if (typeof chatState !== 'undefined' && chatState.rooms) {
+      total = chatState.rooms.reduce(function(sum, r) { return sum + (r.unread || 0); }, 0);
+    }
+    tabbarUpdateBadge(total);
+  };
+}
+
+// 用 MutationObserver 作为后备：监听顶部徽章变化，确保初始状态也同步
+document.addEventListener('DOMContentLoaded', function() {
+  tabbarUpdateAuthState();
+  var navBadge = document.getElementById('chatUnreadBadge');
+  if (navBadge) {
+    var syncFromNav = function() {
+      var isHidden = navBadge.classList.contains('hidden');
+      tabbarUpdateBadge(isHidden ? 0 : (parseInt(navBadge.textContent, 10) || 0));
+    };
+    syncFromNav(); // 初始同步
+    new MutationObserver(syncFromNav).observe(navBadge, { childList: true, attributes: true, attributeFilter: ['class'] });
+  }
+});
+</script>
 </body>
 </html>
