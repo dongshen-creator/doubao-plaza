@@ -193,7 +193,7 @@
       <div class="chat-empty" id="chatEmpty">
         <div><div style="font-size:48px;margin-bottom:12px">💬</div><div>选择一个聊天或创建频道</div></div>
       </div>
-      <div class="chat-msgs hidden" id="chatMsgs"></div>
+      <div class="chat-msgs hidden" id="chatMsgs" role="log" aria-live="polite" aria-label="聊天消息"></div>
       <div id="chatStrangerWarn" class="chat-stranger-warn hidden"></div>
       <div id="chatReplyBar" class="chat-reply-bar hidden">
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
@@ -204,8 +204,8 @@
         <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
         <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频">🖼</button>
         <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件">📎</button>
-        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
-        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">📤</button>
+        <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
+        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
       </div>
     </div>
   </div>
