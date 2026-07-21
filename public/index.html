@@ -5789,6 +5789,10 @@ function setChannelGroup(roomId, groupName) {
 
 // Modify renderRoomList to show pinned + groups (split into channels and privates)
 renderRoomList = function() {
+  // 移除骨架屏
+  var skeleton = document.getElementById('chatChannelSkeleton');
+  if (skeleton) skeleton.remove();
+
   var rooms = chatState.rooms || [];
   var hiddenRooms = getHiddenChannels();
   rooms = rooms.filter(function(r) { return hiddenRooms.indexOf(r.id) < 0; });
