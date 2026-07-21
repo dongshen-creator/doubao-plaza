@@ -7,6 +7,15 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>逗包用户广场</title>
+  <meta name="description" content="逗包用户广场 - 连接豆包智能体用户的社交平台，支持实时聊天、好友系统、频道管理和自定义页面">
+  <meta name="theme-color" content="#FF6B35">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta property="og:title" content="逗包用户广场">
+  <meta property="og:description" content="连接豆包智能体用户的社交平台">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta name="twitter:card" content="summary">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
@@ -24,9 +33,11 @@
 </head>
 <body>
 
-<div class="toast-container" id="toasts"></div>
+<a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:var(--accent);color:#fff;padding:8px 16px;border-radius:0 0 8px 0;z-index:100;text-decoration:none;font-size:13px;transition:top .2s" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">跳转到主内容</a>
 
-<nav class="navbar">
+<div class="toast-container" id="toasts" role="status" aria-live="polite" aria-label="通知"></div>
+
+<nav class="navbar" aria-label="主导航">
   <div class="navbar-inner">
     <div class="logo">
       <div class="logo-icon">✨</div>
@@ -39,11 +50,11 @@
   </div>
 </nav>
 
-<div class="main" id="mainContent">
+<main class="main" id="mainContent" role="main">
   <!-- Content will be rendered by JS -->
-</div>
+</main>
 
-<div class="footer">逗包用户广场 · 连接豆包智能体用户</div>
+<footer class="footer">逗包用户广场 · 连接豆包智能体用户</footer>
 
 <!-- Announcement Modal -->
 <div class="modal-overlay" id="announcementModal" style="display:none">
@@ -173,7 +184,7 @@
 </div>
 
 <!-- Chat Panel -->
-<div class="chat-panel" id="chatPanel">
+<div class="chat-panel" id="chatPanel" role="dialog" aria-label="聊天面板">
   <div class="chat-header">
     <button class="nav-btn chat-show-list" onclick="toggleRoomList()" style="padding:6px 10px;display:none">☰</button>
     <button class="nav-btn" onclick="closeChat()" style="padding:6px 10px">← 返回</button>
