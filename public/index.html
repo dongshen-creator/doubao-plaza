@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -50,9 +50,29 @@
   </div>
 </nav>
 
-<main class="main" id="mainContent" role="main">
-  <!-- Content will be rendered by JS -->
-</main>
+<div class="app-layout" id="appLayout">
+  <!-- 活动栏（最左列） -->
+  <aside class="activity-bar" id="activityBar" aria-label="活动栏">
+    <button class="activity-item active" data-view="home" onclick="switchView('home')" title="广场" aria-label="广场"><span class="activity-icon">🏠</span></button>
+    <button class="activity-item" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span></button>
+    <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="聊天" aria-label="聊天"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
+    <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
+    <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
+    <div class="activity-spacer"></div>
+    <button class="activity-item" data-view="theme" onclick="toggleTheme()" title="切换主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span></button>
+    <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span></button>
+  </aside>
+
+  <!-- 侧边栏（中间列） -->
+  <aside class="app-sidebar" id="appSidebar" aria-label="侧边栏">
+    <!-- 侧边栏内容由 JS 渲染 -->
+  </aside>
+
+  <!-- 主内容区（右列） -->
+  <main class="app-main" id="mainContent" role="main">
+    <!-- 主内容由 JS 渲染 -->
+  </main>
+</div>
 
 <footer class="footer">逗包用户广场 · 连接豆包智能体用户</footer>
 
@@ -904,71 +924,244 @@ function doLogout() {
 }
 
 // ===== Render Content =====
+// ===== 视图切换系统 =====
+var _currentView = 'home';
+
+function switchView(view) {
+  _currentView = view;
+
+  // 更新活动栏激活状态
+  document.querySelectorAll('.activity-item').forEach(function(item) {
+    item.classList.toggle('active', item.dataset.view === view);
+  });
+
+  var sidebar = document.getElementById('appSidebar');
+  var main = document.getElementById('mainContent');
+
+  // 特殊视图：聊天和设置直接触发模态/面板
+  if (view === 'chat') {
+    openChat();
+    // 恢复到之前的视图
+    _currentView = _prevView || 'home';
+    document.querySelectorAll('.activity-item').forEach(function(item) {
+      item.classList.toggle('active', item.dataset.view === _currentView);
+    });
+    return;
+  }
+  if (view === 'settings') {
+    if (!currentUser) { showModal('login'); return; }
+    showModal('settings');
+    _currentView = _prevView || 'home';
+    document.querySelectorAll('.activity-item').forEach(function(item) {
+      item.classList.toggle('active', item.dataset.view === _currentView);
+    });
+    return;
+  }
+
+  _prevView = view;
+
+  // 渲染对应视图
+  if (view === 'home') renderHomeView(sidebar, main);
+  else if (view === 'friends') renderFriendsView(sidebar, main);
+  else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
+  else if (view === 'features') renderFeaturesView(sidebar, main);
+}
+
+var _prevView = 'home';
+
+// ── 广场视图 ──
+function renderHomeView(sidebar, main) {
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-header">搜索</div>
+      <div class="search-wrap" style="padding:0 4px">
+        <span class="search-icon">🔍</span>
+        <input class="input search-input" id="searchInput" placeholder="搜索用户..." oninput="debounceSearch()" style="font-size:13px">
+      </div>
+      <div style="display:flex;gap:4px;margin-top:8px;padding:0 4px">
+        <input class="input" id="searchDoubaoId" placeholder="豆包号" style="font-size:12px;flex:1">
+        <input class="input" id="searchInviteCode" placeholder="邀请码" style="font-size:12px;flex:1">
+      </div>
+      <button class="nav-btn" id="clearBtn" style="display:none;margin-top:8px" onclick="clearSearch()">✕ 清除</button>
+      <div class="search-count" id="searchCount" style="display:none;padding:0 4px"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">快捷导航</div>
+      <div class="sidebar-item" onclick="switchView('friends')"><span class="sidebar-item-icon">👥</span><span class="sidebar-item-text">我的好友</span></div>
+      <div class="sidebar-item" onclick="switchView('announcements')"><span class="sidebar-item-icon">📢</span><span class="sidebar-item-text">网站公告</span></div>
+      <div class="sidebar-item" onclick="switchView('features')"><span class="sidebar-item-icon">🔧</span><span class="sidebar-item-text">功能导航</span></div>
+      <div class="sidebar-item" onclick="switchView('chat')"><span class="sidebar-item-icon">💬</span><span class="sidebar-item-text">聊天</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header" id="friendRequestsHeader"></div>
+      <div id="friendRequests"></div>
+    </div>
+  `;
+
+  main.innerHTML = `
+    <div class="card welcome anim-up" style="margin-bottom:16px">
+      <div class="welcome-icon">✨</div>
+      <h2>欢迎来到逗包用户广场</h2>
+      <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
+    </div>
+    <div id="searchResults"></div>
+    <div id="featuresSection"></div>
+    <div id="announcementsSection"></div>
+  `;
+
+  loadFriendRequests();
+  loadFeatures();
+  loadAnnouncements();
+}
+
+// ── 好友视图 ──
+function renderFriendsView(sidebar, main) {
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-header">搜索好友</div>
+      <div class="search-wrap" style="padding:0 4px">
+        <span class="search-icon">🔍</span>
+        <input class="input search-input" id="searchInput" placeholder="搜索用户..." oninput="debounceSearch()" style="font-size:13px">
+      </div>
+      <div style="display:flex;gap:4px;margin-top:8px;padding:0 4px">
+        <input class="input" id="searchDoubaoId" placeholder="豆包号" style="font-size:12px;flex:1">
+        <input class="input" id="searchInviteCode" placeholder="邀请码" style="font-size:12px;flex:1">
+      </div>
+      <button class="nav-btn" id="clearBtn" style="display:none;margin-top:8px" onclick="clearSearch()">✕ 清除</button>
+      <div class="search-count" id="searchCount" style="display:none;padding:0 4px"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">好友列表</div>
+      <div id="myFriends"></div>
+    </div>
+  `;
+
+  main.innerHTML = `
+    <div class="anim-up" style="margin-bottom:16px">
+      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">👥 我的好友</h2>
+      <p style="font-size:13px;color:var(--text-faint);margin-top:4px">管理你的好友列表，点击好友开始聊天</p>
+    </div>
+    <div id="searchResults"></div>
+    <div id="friendRequests"></div>
+    <div id="featuresSection"></div>
+    <div id="announcementsSection"></div>
+  `;
+
+  loadFriendRequests();
+  loadMyFriends();
+}
+
+// ── 公告视图 ──
+function renderAnnouncementsView(sidebar, main) {
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-header">公告列表</div>
+      <div id="announcementsSidebarList" style="padding:0 4px">
+        <div style="color:var(--text-faint);font-size:12px;padding:8px">加载中...</div>
+      </div>
+    </div>
+  `;
+
+  main.innerHTML = `
+    <div class="anim-up" style="margin-bottom:16px">
+      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">📢 网站公告</h2>
+      <p style="font-size:13px;color:var(--text-faint);margin-top:4px">查看最新的网站公告和动态</p>
+    </div>
+    <div id="announcementsSection"></div>
+  `;
+
+  loadAnnouncements();
+  // 同时加载侧边栏公告列表
+  loadAnnouncementsSidebarList();
+}
+
+async function loadAnnouncementsSidebarList() {
+  try {
+    const res = await api('/api/announcements');
+    var el = document.getElementById('announcementsSidebarList');
+    if (!el) return;
+    if (!res.success || !res.data || res.data.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>';
+      return;
+    }
+    el.innerHTML = res.data.map(function(a) {
+      return '<div class="sidebar-item" onclick="scrollToAnnouncement(\'' + (a.id || '') + '\')"><span class="sidebar-item-icon">' + (a.is_system ? '📌' : '📢') + '</span><span class="sidebar-item-text">' + esc(a.title || '未命名') + '</span></div>';
+    }).join('');
+  } catch(e) {}
+}
+
+function scrollToAnnouncement(id) {
+  var card = document.getElementById('ann-card-' + id);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.style.transition = 'box-shadow .3s';
+    card.style.boxShadow = '0 0 0 2px var(--accent)';
+    setTimeout(function() { card.style.boxShadow = ''; }, 2000);
+  }
+}
+
+// ── 功能视图 ──
+function renderFeaturesView(sidebar, main) {
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-header">功能列表</div>
+      <div id="featuresSidebarList" style="padding:0 4px">
+        <div style="color:var(--text-faint);font-size:12px;padding:8px">加载中...</div>
+      </div>
+    </div>
+  `;
+
+  main.innerHTML = `
+    <div class="anim-up" style="margin-bottom:16px">
+      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">🔧 功能导航</h2>
+      <p style="font-size:13px;color:var(--text-faint);margin-top:4px">快捷访问各类功能</p>
+    </div>
+    <div id="featuresSection"></div>
+  `;
+
+  loadFeatures();
+  loadFeaturesSidebarList();
+}
+
+async function loadFeaturesSidebarList() {
+  try {
+    const res = await api('/api/features');
+    var el = document.getElementById('featuresSidebarList');
+    if (!el) return;
+    if (!res.success || !res.data || res.data.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无功能</div>';
+      return;
+    }
+    el.innerHTML = res.data.map(function(f) {
+      return '<a href="' + esc(f.link_url) + '" target="_blank" rel="noopener" class="sidebar-item" style="text-decoration:none"><span class="sidebar-item-icon">' + (f.icon_url ? '🖼️' : '🔗') + '</span><span class="sidebar-item-text">' + esc(f.title) + '</span></a>';
+    }).join('');
+  } catch(e) {}
+}
+
+// ===== 主渲染入口 =====
 async function renderContent() {
-  const el = document.getElementById('mainContent');
-  
   if (!currentUser) {
-    // Not logged in - show login required
-    el.innerHTML = `
-      <div class="login-required">
+    // 未登录 - 在主区域显示登录提示
+    document.getElementById('appSidebar').classList.remove('has-content');
+    document.getElementById('appSidebar').innerHTML = '';
+    document.getElementById('mainContent').innerHTML = `
+      <div class="login-required" style="text-align:center;padding:48px 24px">
         <div class="welcome-icon" style="margin-bottom:24px">🔒</div>
-        <h3>请先登录</h3>
-        <p>登录后即可搜索用户、添加好友、管理个人资料</p>
-        <button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px" onclick="showModal('login')">立即登录</button>
+        <h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3>
+        <p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可搜索用户、添加好友、管理个人资料</p>
+        <button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal('login')">立即登录</button>
         <p style="margin-top:16px;font-size:13px;color:var(--text-faint)">还没有账号？<a href="#" onclick="showModal('register');return false" style="color:var(--accent)">立即注册</a></p>
       </div>
     `;
     return;
   }
-  
-  // Logged in - show full interface
-  let html = `
-    <!-- Search -->
-    <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <div class="search-wrap" style="flex:1">
-          <span class="search-icon">🔍</span>
-          <input class="input search-input" id="searchInput" placeholder="搜索用户姓名或简介..." oninput="debounceSearch()">
-        </div>
-        <button class="nav-btn" id="clearBtn" style="display:none" onclick="clearSearch()">✕ 清除</button>
-      </div>
-      <div style="display:flex;gap:8px">
-        <input class="input" id="searchDoubaoId" placeholder="豆包号（白名单搜索用）" style="flex:1">
-        <input class="input" id="searchInviteCode" placeholder="邀请码" style="flex:1">
-      </div>
-      <div class="search-count" id="searchCount" style="display:none"></div>
-    </div>
-    
-    <!-- Search Results -->
-    <div id="searchResults"></div>
-    
-    <!-- Friend Requests (Pending) -->
-    <div id="friendRequests"></div>
-    
-    <!-- My Friends -->
-    <div id="myFriends"></div>
-    
-    <!-- Features Section -->
-    <div id="featuresSection"></div>
-    
-    <!-- Announcements Section -->
-    <div id="announcementsSection"></div>
-    
-    <!-- Welcome -->
-    <div class="card welcome anim-up">
-      <div class="welcome-icon">✨</div>
-      <h2>欢迎来到逗包用户广场</h2>
-      <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
-    </div>
-  `;
-  
-  el.innerHTML = html;
-  
-  // Load initial data
-  loadFriendRequests();
-  loadMyFriends();
-  loadFeatures();
-  loadAnnouncements();
+
+  // 默认渲染广场视图
+  switchView('home');
 }
 
 // ===== Load Features =====
@@ -5429,9 +5622,13 @@ function toggleTheme() {
 
 function updateThemeIcon() {
   const btn = document.getElementById('themeToggle');
-  if (!btn) return;
-  btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
-  btn.title = document.body.classList.contains('dark') ? '切换到亮色模式' : '切换到暗色模式';
+  if (btn) {
+    btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    btn.title = document.body.classList.contains('dark') ? '切换到亮色模式' : '切换到暗色模式';
+  }
+  // 同步活动栏主题图标
+  var actIcon = document.getElementById('actBarThemeIcon');
+  if (actIcon) actIcon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 }
 
 function loadTheme() {
@@ -5616,7 +5813,8 @@ init();
 function tabbarGoHome() {
   // 回到广场首页：关闭聊天面板，渲染主页
   if (typeof closeChat === 'function') closeChat();
-  if (typeof renderContent === 'function') renderContent();
+  if (typeof switchView === 'function') switchView('home');
+  else if (typeof renderContent === 'function') renderContent();
   tabbarSetActive('tabbarHome');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -5664,6 +5862,13 @@ function tabbarUpdateAuthState() {
     settingsLabel.textContent = '登录';
   }
   tabbarUpdateThemeIcon();
+  actBarUpdateThemeIcon();
+}
+
+// 活动栏主题图标同步
+function actBarUpdateThemeIcon() {
+  var icon = document.getElementById('actBarThemeIcon');
+  if (icon) icon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 }
 
 function tabbarUpdateBadge(count) {
@@ -5675,6 +5880,16 @@ function tabbarUpdateBadge(count) {
     btn.classList.remove('hidden-badge');
   } else {
     btn.classList.add('hidden-badge');
+  }
+  // 同步活动栏聊天徽章
+  var actBadge = document.getElementById('actBarChatBadge');
+  if (actBadge) {
+    if (count && count > 0) {
+      actBadge.textContent = count > 99 ? '99+' : String(count);
+      actBadge.style.display = 'flex';
+    } else {
+      actBadge.style.display = 'none';
+    }
   }
 }
 
