@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
@@ -53,9 +53,8 @@
 <div class="app-layout" id="appLayout">
   <!-- 活动栏（最左列） -->
   <aside class="activity-bar" id="activityBar" aria-label="活动栏">
-    <button class="activity-item active" data-view="home" onclick="switchView('home')" title="广场" aria-label="广场"><span class="activity-icon">🏠</span></button>
-    <button class="activity-item" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span></button>
-    <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="聊天" aria-label="聊天"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
+    <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span></button>
+    <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
     <div class="activity-spacer"></div>
@@ -770,7 +769,7 @@ function updateNavbar() {
         ${avatarHTML(currentUser, true, true)}
         <span class="nav-user-name">${esc(currentUser.name)}</span>
       </div>
-      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444" title="退出登录" aria-label="退出登录">🚪</button>
+      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444" title="退出登录" aria-label="退出登录">🚪 退出</button>
     `;
   } else {
     el.innerHTML = `
@@ -892,7 +891,8 @@ function doLogout() {
 
 // ===== Render Content =====
 // ===== 视图切换系统 =====
-var _currentView = 'home';
+var _currentView = 'friends';
+var _prevView = 'friends';
 
 function switchView(view) {
   // 特殊视图：设置直接触发模态框，不改变当前视图高亮
@@ -904,6 +904,11 @@ function switchView(view) {
   if (view === 'theme') {
     toggleTheme();
     return;
+  }
+
+  // 离开聊天视图时停止轮询
+  if (_currentView === 'chat' && view !== 'chat') {
+    stopMessagePolling();
   }
 
   _currentView = view;
@@ -918,17 +923,22 @@ function switchView(view) {
   var main = document.getElementById('mainContent');
 
   // 渲染对应视图
-  if (view === 'home') renderHomeView(sidebar, main);
-  else if (view === 'friends') renderFriendsView(sidebar, main);
+  if (view === 'friends') renderFriendsView(sidebar, main);
   else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
   else if (view === 'features') renderFeaturesView(sidebar, main);
   else if (view === 'chat') renderChatView(sidebar, main);
 }
 
-var _prevView = 'home';
+// ── 好友视图（合并搜索+好友列表+私聊界面） ──
+function renderFriendsView(sidebar, main) {
+  if (!currentUser) {
+    sidebar.classList.remove('has-content');
+    sidebar.innerHTML = '';
+    main.innerHTML = '<div class="login-required" style="text-align:center;padding:48px 24px"><div class="welcome-icon" style="margin-bottom:24px">🔒</div><h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3><p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可使用好友功能</p><button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal(\'login\')">立即登录</button></div>';
+    return;
+  }
 
-// ── 广场视图 ──
-function renderHomeView(sidebar, main) {
+  // 侧边栏：搜索 + 好友申请 + 好友列表
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
@@ -948,30 +958,130 @@ function renderHomeView(sidebar, main) {
       <div class="sidebar-header" id="friendRequestsHeader"></div>
       <div id="friendRequests"></div>
     </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">我的好友</div>
+      <div id="myFriends"></div>
+    </div>
   `;
 
+  // 主内容区：默认显示欢迎卡片+搜索结果，选中好友后显示私聊
   main.innerHTML = `
-    <div class="card welcome anim-up" style="margin-bottom:16px">
-      <div class="welcome-icon">✨</div>
-      <h2>欢迎来到逗包用户广场</h2>
-      <p>搜索并连接豆包智能体用户，发现更多有趣的智能体</p>
+    <div id="friendsMainContainer" style="height:100%;display:flex;flex-direction:column">
+      <div class="card welcome anim-up" style="margin-bottom:16px" id="friendsWelcomeCard">
+        <div class="welcome-icon">✨</div>
+        <h2>好友广场</h2>
+        <p>搜索并连接豆包智能体用户，点击好友开始私聊</p>
+      </div>
+      <div id="searchResults"></div>
+      <div id="privateChatArea" style="display:none;flex:1;min-height:0"></div>
     </div>
-    <div id="searchResults"></div>
   `;
 
   loadFriendRequests();
+  loadMyFriends();
 }
 
-// ── 聊天视图（复用三栏：侧边栏=会话列表，主内容区=消息区） ──
+// 在好友视图主栏中打开私聊
+async function openPrivateChatInFriends(friendId, friendName) {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
+  if (chatState._openingChat) return;
+  chatState._openingChat = true;
+
+  // 隐藏欢迎卡片和搜索结果
+  var welcome = document.getElementById('friendsWelcomeCard');
+  var searchR = document.getElementById('searchResults');
+  if (welcome) welcome.style.display = 'none';
+  if (searchR) searchR.style.display = 'none';
+
+  // 查找或创建私聊房间
+  var roomId;
+  const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
+  if (myMemberships?.length) {
+    const myRoomIds = myMemberships.map(m => m.room_id);
+    const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
+    if (privateRooms?.length) {
+      for (const pr of privateRooms) {
+        const { data: other } = await __SB.from('chat_room_members').select('user_id').eq('room_id', pr.id).neq('user_id', currentUser.id).maybeSingle();
+        if (other?.user_id === friendId) { roomId = pr.id; break; }
+      }
+    }
+  }
+  if (!roomId) {
+    const sortedIds = [currentUser.id, friendId].sort();
+    roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
+    await __SB.from('chat_rooms').insert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null });
+    await __SB.from('chat_room_members').insert([
+      { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id },
+      { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId }
+    ]);
+  }
+
+  // 在私聊区域渲染聊天界面
+  var area = document.getElementById('privateChatArea');
+  if (area) {
+    area.style.display = '';
+    area.innerHTML = `
+      <div class="chat-view-main" id="chatMainArea" style="height:100%">
+        <div class="chat-view-center">
+          <div class="chat-view-header" id="chatViewHeader">
+            <button class="chat-action-btn" onclick="closePrivateChatInFriends()" title="返回" aria-label="返回">←</button>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:700">${esc(friendName)}</div>
+              <div style="font-size:11px;color:var(--text-faint)">私聊</div>
+            </div>
+          </div>
+          <div class="chat-view-body" id="chatMsgs">
+            <div class="chat-empty-inline" id="chatEmpty">
+              <div style="font-size:36px;margin-bottom:8px">💬</div>
+              <div>开始与 ${esc(friendName)} 的对话</div>
+            </div>
+          </div>
+          <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">回复: <span id="chatReplyText"></span></span>
+            <button class="close-reply" onclick="cancelReply()">✕</button>
+          </div>
+          <div class="chat-view-input" id="chatViewInput" style="display:flex">
+            <input type="file" id="chatFileInput" accept="image/*,video/*,audio/*" style="display:none" onchange="uploadChatImage(this)">
+            <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
+            <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频" aria-label="上传图片或视频">🖼</button>
+            <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件" aria-label="上传文件">📎</button>
+            <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this)" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
+            <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  chatState.chatOpen = true;
+  chatState.currentRoomId = roomId;
+  await loadRoomList();
+  loadMessages(roomId);
+  subscribeToRoom(roomId);
+  startMessagePolling();
+  chatState._openingChat = false;
+}
+
+function closePrivateChatInFriends() {
+  var area = document.getElementById('privateChatArea');
+  if (area) { area.innerHTML = ''; area.style.display = 'none'; }
+  var welcome = document.getElementById('friendsWelcomeCard');
+  var searchR = document.getElementById('searchResults');
+  if (welcome) welcome.style.display = '';
+  if (searchR) searchR.style.display = '';
+  chatState.currentRoomId = null;
+  stopMessagePolling();
+}
+
+// ── 频道视图（只保留频道，私聊已移到好友视图） ──
 function renderChatView(sidebar, main) {
   if (!currentUser) {
     sidebar.classList.remove('has-content');
     sidebar.innerHTML = '';
-    main.innerHTML = '<div class="login-required" style="text-align:center;padding:48px 24px"><div class="welcome-icon" style="margin-bottom:24px">🔒</div><h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3><p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可使用聊天功能</p><button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal(\'login\')">立即登录</button></div>';
+    main.innerHTML = '<div class="login-required" style="text-align:center;padding:48px 24px"><div class="welcome-icon" style="margin-bottom:24px">🔒</div><h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3><p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可使用频道功能</p><button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal(\'login\')">立即登录</button></div>';
     return;
   }
 
-  // 侧边栏：拆分为频道和私聊两个区域
   sidebar.classList.add('has-content');
   sidebar.innerHTML = `
     <div class="sidebar-section">
@@ -984,24 +1094,19 @@ function renderChatView(sidebar, main) {
       <div class="sidebar-header">频道</div>
       <div id="chatChannelItems"></div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">私聊</div>
-      <div id="chatPrivateItems"></div>
-    </div>
   `;
 
-  // 主内容区：消息区域 + 右侧上下文面板
   main.innerHTML = `
     <div class="chat-view-main" id="chatMainArea">
       <div class="chat-view-center">
         <div class="chat-view-header" id="chatViewHeader">
-          <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 消息</div>
-          <div style="font-size:12px;color:var(--text-faint)">选择一个会话开始聊天</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 频道</div>
+          <div style="font-size:12px;color:var(--text-faint)">选择一个频道开始聊天</div>
         </div>
         <div class="chat-view-body" id="chatMsgs">
           <div class="chat-empty-inline" id="chatEmpty">
             <div style="font-size:48px;margin-bottom:12px">💬</div>
-            <div>选择一个聊天或创建频道</div>
+            <div>选择一个频道或创建新频道</div>
           </div>
         </div>
         <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
@@ -1017,46 +1122,16 @@ function renderChatView(sidebar, main) {
           <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
         </div>
       </div>
-      <aside class="chat-view-context" id="chatContextPanel" aria-label="上下文面板">
+      <aside class="chat-view-context" id="chatContextPanel" aria-label="频道设置面板">
         <div class="chat-context-empty">选中频道后显示设置</div>
       </aside>
     </div>
   `;
 
-  // 兼容旧引用：chatRoomItems 映射到频道列表区域
-  // 初始化聊天状态
   chatState.chatOpen = true;
   chatState.currentRoomId = null;
   loadRoomList().catch(function(e) { console.error('loadRoomList error:', e); });
   startMessagePolling();
-}
-
-// 好友视图
-function renderFriendsView(sidebar, main) {
-  sidebar.classList.add('has-content');
-  sidebar.innerHTML = `
-    <div class="sidebar-section">
-      <div class="sidebar-header">操作</div>
-      <div style="padding:0 4px">
-        <button class="btn btn-orange btn-full" style="font-size:13px" onclick="switchView('home')">🔍 去搜索用户</button>
-      </div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header" id="friendRequestsHeader"></div>
-      <div id="friendRequests"></div>
-    </div>
-  `;
-
-  main.innerHTML = `
-    <div class="anim-up" style="margin-bottom:16px">
-      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">👥 我的好友</h2>
-      <p style="font-size:13px;color:var(--text-faint);margin-top:4px">管理你的好友列表，点击好友开始聊天</p>
-    </div>
-    <div id="myFriends"></div>
-  `;
-
-  loadFriendRequests();
-  loadMyFriends();
 }
 
 // ── 公告视图 ──
@@ -1166,8 +1241,8 @@ async function renderContent() {
     return;
   }
 
-  // 默认渲染广场视图
-  switchView('home');
+  // 默认渲染好友视图
+  switchView('friends');
 }
 
 // ===== Load Features =====
@@ -2900,38 +2975,13 @@ function openChat() {
 
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
-  if (chatState._openingChat) return;
-  chatState._openingChat = true;
-  // 切换到聊天视图
-  switchView('chat');
-
-  if (friendId) {
-    let roomId;
-    const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
-    if (myMemberships?.length) {
-      const myRoomIds = myMemberships.map(m => m.room_id);
-      const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
-      if (privateRooms?.length) {
-        for (const pr of privateRooms) {
-          const { data: other } = await __SB.from('chat_room_members').select('user_id').eq('room_id', pr.id).neq('user_id', currentUser.id).maybeSingle();
-          if (other?.user_id === friendId) { roomId = pr.id; break; }
-        }
-      }
-    }
-    if (!roomId) {
-      const sortedIds = [currentUser.id, friendId].sort();
-      roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
-      await __SB.from('chat_rooms').insert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null });
-      await __SB.from('chat_room_members').insert([
-        { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id },
-        { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId }
-      ]);
-    }
-    await loadRoomList();
-    switchRoom(roomId);
+  // 如果当前不在好友视图，切换过去
+  if (_currentView !== 'friends') {
+    switchView('friends');
   }
-  chatState._openingChat = false;
-  startMessagePolling();
+  // 等待 DOM 渲染完成
+  await new Promise(function(r) { setTimeout(r, 100); });
+  openPrivateChatInFriends(friendId, friendName);
 }
 
 function closeChat() {
@@ -3161,12 +3211,13 @@ function toggleChatContext() {
 }
 
 // 渲染频道上下文面板（频道设置、成员、公告等）
-function renderChatContextPanel(room) {
+async function renderChatContextPanel(room) {
   var panel = document.getElementById('chatContextPanel');
   if (!panel) return;
   var isAdmin = room.is_admin;
   var isOwner = room.created_by === currentUser.id;
   var isDev = isDeveloper();
+  var canManage = isAdmin || isOwner || isDev;
 
   // 权限身份标签
   var roleTag = '';
@@ -3174,34 +3225,101 @@ function renderChatContextPanel(room) {
   else if (isDev) roleTag = '<span class="chat-role-tag role-dev">开发者</span>';
   else if (isAdmin) roleTag = '<span class="chat-role-tag role-admin">管理员</span>';
 
+  // 加载频道设置数据
+  var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
+  var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', room.id).maybeSingle();
+  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; }
+
   panel.innerHTML = `
     <div class="ctx-panel-header">
       <span style="font-size:14px;font-weight:700">频道设置</span>
       <button class="ctx-close-btn" onclick="toggleChatContext()" aria-label="关闭面板">✕</button>
     </div>
-    <div class="ctx-panel-body">
+    <div class="ctx-panel-body" style="overflow-y:auto;flex:1">
+      <!-- 频道信息 -->
       <div class="ctx-section">
         <div class="ctx-section-title">频道信息</div>
-        <div class="ctx-info-row"><span class="ctx-label">名称</span><span class="ctx-value">${esc(room.name)}</span></div>
         <div class="ctx-info-row"><span class="ctx-label">成员</span><span class="ctx-value">${room.member_count || 0} 人</span></div>
-        <div class="ctx-info-row"><span class="ctx-label">你的身份</span>${roleTag || '<span class="ctx-value">普通成员</span>'}</div>
+        <div class="ctx-info-row"><span class="ctx-label">身份</span>${roleTag || '<span class="ctx-value">普通成员</span>'}</div>
       </div>
-      ${isAdmin ? `
+
+      <!-- 基础编辑 -->
       <div class="ctx-section">
-        <div class="ctx-section-title">管理操作</div>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">频道详情设置</button>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showAnnouncementEditor(null)">编辑频道公告</button>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="showRoomSettings()">管理成员</button>
+        <div class="ctx-section-title">基础信息</div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道名称</div>
+          <div style="display:flex;gap:4px">
+            <input id="editRoomName" class="input" value="${esc(room.name || '')}" style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomName()">更新</button>' : ''}
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div>
+          <div style="display:flex;gap:4px">
+            <input id="editRoomAvatar" class="input" value="${esc(currentAvatar)}" placeholder="https://..." style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomAvatar()">更新</button>' : ''}
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道简介</div>
+          <div style="display:flex;gap:4px">
+            <input id="editRoomTopic" class="input" value="${esc(currentTopic)}" placeholder="频道简介" style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomTopic()">更新</button>' : ''}
+          </div>
+        </div>
+      </div>
+
+      ${canManage ? `
+      <!-- 准入模式 -->
+      <div class="ctx-section">
+        <div class="ctx-section-title">准入模式</div>
+        <select id="admissionModeSelect" class="input" onchange="updateAdmissionMode()" style="width:100%;font-size:12px;margin-bottom:4px">
+          <option value="open"${currentAdmission === 'open' ? ' selected' : ''}>公开 (任何人可加入)</option>
+          <option value="invite"${currentAdmission === 'invite' ? ' selected' : ''}>仅邀请</option>
+          <option value="approval"${currentAdmission === 'approval' ? ' selected' : ''}>需审核</option>
+          <option value="password"${currentAdmission === 'password' ? ' selected' : ''}>密码验证</option>
+          <option value="questionnaire"${currentAdmission === 'questionnaire' ? ' selected' : ''}>问卷测试</option>
+          <option value="custom_page"${currentAdmission === 'custom_page' ? ' selected' : ''}>自定义页面</option>
+          <option value="composite"${currentAdmission === 'composite' ? ' selected' : ''}>复合验证</option>
+        </select>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px" onclick="showAdmissionManagement()">⚙ 管理准入</button>
       </div>
       ` : ''}
+
+      <!-- 频道公告 -->
+      <div class="ctx-section">
+        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center">频道公告${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:10px;padding:2px 8px" onclick="showAnnouncementEditor(null)">+ 发布</button>' : ''}</div>
+        <div id="channelAnnouncementList" style="max-height:180px;overflow-y:auto"></div>
+      </div>
+
+      <!-- 频道工具 -->
+      <div class="ctx-section">
+        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center">🔧 频道工具${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:10px;padding:2px 8px" onclick="showToolEditor()">+ 添加</button>' : ''}</div>
+        <div id="channelToolList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+
+      ${canManage ? `
+      <!-- 成员管理 -->
+      <div class="ctx-section">
+        <div class="ctx-section-title">成员管理</div>
+        <div id="roomMemberList" style="max-height:200px;overflow-y:auto"></div>
+      </div>
+      ` : ''}
+
+      <!-- 通知与操作 -->
       <div class="ctx-section">
         <div class="ctx-section-title">个人设置</div>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="togglePinChannel('${room.id}');renderChatContextPanel(chatState.rooms.find(function(r){return r.id==='${room.id}'}))">${getPinnedChannels().indexOf(room.id) >= 0 ? '取消置顶' : '置顶会话'}</button>
-        <button class="btn btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="hideChannel('${room.id}')">隐藏会话</button>
-        ${!isOwner ? '<button class="btn btn-red btn-full" style="font-size:12px" onclick="leaveChannel(\'' + room.id + '\')">退出频道</button>' : ''}
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="togglePinChannel('${room.id}');var r=chatState.rooms.find(function(x){return x.id==='${room.id}'});if(r)renderChatContextPanel(r)">${getPinnedChannels().indexOf(room.id) >= 0 ? '取消置顶' : '📌 置顶会话'}</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="hideChannel('${room.id}')">🙈 隐藏会话</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="clearChatHistory('${room.id}')">🗑 清空记录</button>
+        ${!isOwner ? '<button class="btn btn-sm btn-red btn-full" style="font-size:11px" onclick="leaveChannel(\'' + room.id + '\')">📤 退出频道</button>' : (canManage ? '<button class="btn btn-sm btn-red btn-full" style="font-size:11px" onclick="deleteConversation(\'' + room.id + '\')">🗑 删除频道</button>' : '')}
       </div>
     </div>
   `;
+
+  // 异步加载成员、公告、工具
+  if (canManage) loadRoomMemberList(room.id);
+  if (room && room.type === 'channel') { loadChannelAnnouncements(room.id); loadChannelTools(room.id); }
 }
 
 async function loadMessages(roomId) {
@@ -5968,19 +6086,15 @@ init();
 <!-- 移动端底部 TabBar（渐进增强，复用现有函数） -->
 <nav class="mobile-tabbar" id="mobileTabbar" aria-label="移动端导航">
   <div class="mobile-tabbar-inner">
-    <button class="tabbar-btn active" id="tabbarHome" onclick="tabbarGoHome()" aria-label="广场首页">
-      <span class="tabbar-btn-icon">🏠</span>
-      <span>广场</span>
-    </button>
-    <button class="tabbar-btn" id="tabbarFriends" onclick="tabbarGoFriends()" aria-label="好友">
+    <button class="tabbar-btn active" id="tabbarFriends" onclick="tabbarGoFriends()" aria-label="好友">
       <span class="tabbar-btn-icon">👥</span>
       <span>好友</span>
     </button>
-    <button class="tabbar-btn hidden-badge" id="tabbarChat" onclick="tabbarGoChat()" aria-label="聊天">
+    <button class="tabbar-btn hidden-badge" id="tabbarChat" onclick="tabbarGoChat()" aria-label="频道">
       <span class="tabbar-btn-icon">💬
         <span class="tabbar-badge" id="tabbarChatBadge">0</span>
       </span>
-      <span>聊天</span>
+      <span>频道</span>
     </button>
     <button class="tabbar-btn" id="tabbarMore" onclick="tabbarShowMore()" aria-label="更多功能">
       <span class="tabbar-btn-icon">☰</span>
@@ -6009,11 +6123,11 @@ init();
 <script>
 // ===== 移动端 TabBar 同步逻辑 =====
 function tabbarGoHome() {
-  // 回到广场首页：关闭聊天面板，渲染主页
+  // 回到好友视图（合并后的主页）
   if (typeof closeChat === 'function') closeChat();
-  if (typeof switchView === 'function') switchView('home');
+  if (typeof switchView === 'function') switchView('friends');
   else if (typeof renderContent === 'function') renderContent();
-  tabbarSetActive('tabbarHome');
+  tabbarSetActive('tabbarFriends');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
