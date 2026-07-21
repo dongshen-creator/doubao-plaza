@@ -5566,7 +5566,7 @@ function uploadChatBg(file) {
         toast('聊天背景已应用', 'success');
       })
       .catch(function(err) {
-        console.log(svc.name + ' 失败:', err);
+        console.warn(svc.name + ' 失败:', err);
         tryNext(idx + 1);
       });
   };
