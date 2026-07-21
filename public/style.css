@@ -251,10 +251,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 /* ── 侧边栏内部组件 ── */
 .sidebar-section {
   margin-bottom: 16px;
+  padding: 8px 8px 4px;
 }
+.sidebar-section+.sidebar-section{border-top:1px solid var(--border-color);margin-top:4px;padding-top:12px}
 .sidebar-header {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -607,11 +609,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-header{background:var(--bg-secondary);border-bottom:1px solid var(--border-color);padding:10px 16px;display:flex;align-items:center;gap:10px;height:54px;z-index:2;transition:background .25s,border-color .25s}
 .chat-body{flex:1;display:flex;overflow:hidden;min-height:0}
 .chat-room-list{width:280px;background:var(--bg-secondary);border-right:1px solid var(--border-strong);flex-shrink:0;display:flex;flex-direction:column;transition:background .25s,border-color .25s}
-.chat-room-item{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--border-color)}
+.chat-room-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;transition:background .15s;border-radius:10px;margin:2px 4px}
 .chat-room-item:hover{background:var(--bg-hover)}
-.chat-room-item.active{background:var(--accent-bg);border-left:3px solid var(--accent)}
-.chat-room-avatar{width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;overflow:hidden}
+.chat-room-item.active{background:var(--accent-bg);border-left:3px solid var(--accent);padding-left:9px}
+.chat-room-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0;overflow:hidden}
 .chat-room-avatar img{width:100%;height:100%;object-fit:cover}
+/* 频道列表项：方形头像，标识频道 */
+#chatChannelItems .chat-room-avatar{border-radius:10px;background:var(--accent-bg);color:var(--accent);font-size:18px}
+/* 私聊列表项：圆形头像，标识个人 */
+#chatPrivateItems .chat-room-avatar{background:var(--bg-input);color:var(--text-secondary)}
 .chat-room-info{flex:1;min-width:0}
 .chat-room-name{font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-room-preview{font-size:11px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
@@ -741,7 +747,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 /* ═══════════════════════════════════════════════
    自定义页面渲染
    ═══════════════════════════════════════════════ */
-.custom-page-container{max-width:900px;margin:0 auto;padding:20px 16px}
+.custom-page-container{width:100%;padding:20px 16px}
 .custom-page-title{font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:16px}
 .custom-page-content{background:var(--bg-secondary);border-radius:16px;padding:24px;box-shadow:var(--shadow-sm);min-height:400px}
 .custom-page-content img{max-width:100%;border-radius:8px}
@@ -905,8 +911,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   align-items: stretch;
   justify-content: space-around;
   height: 56px;
-  max-width: 500px;
-  margin: 0 auto;
+  width: 100%;
 }
 .tabbar-btn {
   flex: 1;
@@ -937,6 +942,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .tabbar-btn:active {
   transform: scale(0.92);
 }
+
+/* 移动端"更多"抽屉 */
+.mobile-more-sheet{position:fixed;inset:0;z-index:100}
+.mobile-more-overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);animation:fadeIn .2s}
+.mobile-more-content{position:absolute;bottom:0;left:0;right:0;background:var(--bg-primary);border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0));box-shadow:0 -4px 24px rgba(0,0,0,.15);animation:mSlideUp .25s;max-height:60vh;overflow-y:auto}
+@keyframes mSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.mobile-more-header{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 16px;font-size:16px;font-weight:700;color:var(--text-primary)}
+.mobile-more-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-faint);padding:4px 8px}
+.mobile-more-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.mobile-more-item{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;background:var(--bg-input);border-radius:14px;border:none;cursor:pointer;transition:background .15s}
+.mobile-more-item:hover,.mobile-more-item:active{background:var(--bg-hover)}
+.mobile-more-icon{font-size:28px}
+.mobile-more-item>span:last-child{font-size:12px;color:var(--text-secondary);font-weight:500}
 .tabbar-badge {
   position: absolute;
   top: -4px;
@@ -979,11 +997,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 @media (min-width: 1024px) {
   .navbar-inner {
     max-width: 100%;
-    padding: 0 24px;
+    padding: 0 12px;
   }
   .main {
     max-width: 100%;
-    padding: 24px;
+    padding: 16px;
   }
 }
 
@@ -991,7 +1009,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 @media (min-width: 1440px) {
   .navbar-inner,
   .main {
-    max-width: 1200px;
+    max-width: 100%;
   }
 }
 

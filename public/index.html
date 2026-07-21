@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 
@@ -59,7 +59,6 @@
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
     <div class="activity-spacer"></div>
-    <button class="activity-item" data-view="theme" onclick="toggleTheme()" title="切换主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span></button>
     <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span></button>
   </aside>
 
@@ -760,21 +759,22 @@ async function triggerCleanup() {
 // ===== Navbar =====
 function updateNavbar() {
   const el = document.getElementById('navRight');
+  var themeIcon = document.body.classList.contains('dark') ? '☀️' : '🌙';
   if (currentUser) {
     el.innerHTML = `
       ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
-      <button class="nav-btn nav-mobile-only" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
-      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
-      <div class="nav-user" onclick="showModal('settings')">
+      <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
+      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
+      <div class="nav-user" onclick="showModal('settings')" title="设置">
         ${avatarHTML(currentUser, true, true)}
         <span class="nav-user-name">${esc(currentUser.name)}</span>
       </div>
-      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444">🚪</button>
+      <button class="nav-btn" onclick="doLogout()" style="color:#EF4444" title="退出登录" aria-label="退出登录">🚪</button>
     `;
   } else {
     el.innerHTML = `
-      <button class="nav-btn nav-mobile-only" id="themeToggle" onclick="toggleTheme()" title="切换主题">${document.body.classList.contains('dark') ? '☀️' : '🌙'}</button>
-      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
+      <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
+      <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <button class="nav-btn" onclick="showModal('login')">🔑 登录</button>
       <button class="nav-btn-primary" onclick="showModal('register')">✨ 注册</button>
     `;
@@ -5774,9 +5774,9 @@ function updateThemeIcon() {
     btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
     btn.title = document.body.classList.contains('dark') ? '切换到亮色模式' : '切换到暗色模式';
   }
-  // 同步活动栏主题图标
-  var actIcon = document.getElementById('actBarThemeIcon');
-  if (actIcon) actIcon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  // 同步顶栏主题图标
+  var navIcon = document.getElementById('themeToggle');
+  if (navIcon) navIcon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 }
 
 function loadTheme() {
@@ -5970,22 +5970,39 @@ init();
       <span class="tabbar-btn-icon">🏠</span>
       <span>广场</span>
     </button>
+    <button class="tabbar-btn" id="tabbarFriends" onclick="tabbarGoFriends()" aria-label="好友">
+      <span class="tabbar-btn-icon">👥</span>
+      <span>好友</span>
+    </button>
     <button class="tabbar-btn hidden-badge" id="tabbarChat" onclick="tabbarGoChat()" aria-label="聊天">
       <span class="tabbar-btn-icon">💬
         <span class="tabbar-badge" id="tabbarChatBadge">0</span>
       </span>
       <span>聊天</span>
     </button>
-    <button class="tabbar-btn" id="tabbarTheme" onclick="tabbarToggleTheme()" aria-label="切换主题">
-      <span class="tabbar-btn-icon" id="tabbarThemeIcon">🌙</span>
-      <span>主题</span>
-    </button>
-    <button class="tabbar-btn" id="tabbarSettings" onclick="tabbarGoSettings()" aria-label="设置或登录">
-      <span class="tabbar-btn-icon" id="tabbarSettingsIcon">⚙️</span>
-      <span id="tabbarSettingsLabel">登录</span>
+    <button class="tabbar-btn" id="tabbarMore" onclick="tabbarShowMore()" aria-label="更多功能">
+      <span class="tabbar-btn-icon">☰</span>
+      <span>更多</span>
     </button>
   </div>
 </nav>
+
+<!-- 移动端"更多"抽屉 -->
+<div class="mobile-more-sheet" id="mobileMoreSheet" style="display:none" aria-label="更多功能">
+  <div class="mobile-more-overlay" onclick="tabbarHideMore()"></div>
+  <div class="mobile-more-content">
+    <div class="mobile-more-header">
+      <span>更多功能</span>
+      <button class="mobile-more-close" onclick="tabbarHideMore()" aria-label="关闭">✕</button>
+    </div>
+    <div class="mobile-more-grid">
+      <button class="mobile-more-item" onclick="tabbarHideMore();switchView('announcements')"><span class="mobile-more-icon">📢</span><span>公告</span></button>
+      <button class="mobile-more-item" onclick="tabbarHideMore();switchView('features')"><span class="mobile-more-icon">🔧</span><span>功能</span></button>
+      <button class="mobile-more-item" onclick="tabbarHideMore();toggleTheme()"><span class="mobile-more-icon" id="tabbarThemeIcon">🌙</span><span>主题</span></button>
+      <button class="mobile-more-item" onclick="tabbarHideMore();tabbarGoSettings()"><span class="mobile-more-icon" id="tabbarSettingsIcon">⚙️</span><span id="tabbarSettingsLabel">登录</span></button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ===== 移动端 TabBar 同步逻辑 =====
@@ -5998,14 +6015,24 @@ function tabbarGoHome() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function tabbarGoFriends() {
+  if (typeof switchView === 'function') switchView('friends');
+  tabbarSetActive('tabbarFriends');
+}
+
 function tabbarGoChat() {
   if (typeof openChat === 'function') openChat();
   tabbarSetActive('tabbarChat');
 }
 
-function tabbarToggleTheme() {
-  if (typeof toggleTheme === 'function') toggleTheme();
-  tabbarUpdateThemeIcon();
+function tabbarShowMore() {
+  var sheet = document.getElementById('mobileMoreSheet');
+  if (sheet) sheet.style.display = 'block';
+}
+
+function tabbarHideMore() {
+  var sheet = document.getElementById('mobileMoreSheet');
+  if (sheet) sheet.style.display = 'none';
 }
 
 function tabbarGoSettings() {
@@ -6044,9 +6071,9 @@ function tabbarUpdateAuthState() {
   actBarUpdateThemeIcon();
 }
 
-// 活动栏主题图标同步
+// 顶栏主题图标同步
 function actBarUpdateThemeIcon() {
-  var icon = document.getElementById('actBarThemeIcon');
+  var icon = document.getElementById('themeToggle');
   if (icon) icon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 }
 
