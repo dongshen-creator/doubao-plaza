@@ -166,7 +166,8 @@ export async function onRequestDelete(context) {
       return Response.json({ success: false, error: '请先登录' }, { status: 403 });
     }
     const u = await env.DB.prepare('SELECT doubao_id, is_developer FROM users WHERE id=?').bind(authUserId).first();
-    if (!u || (u.is_developer !== 1 && !DEV_IDS.includes(u.doubao_id))) {
+    var isDev = u && (u.is_developer === 1 || u.is_developer === '1' || u.is_developer === true || DEV_IDS.includes(u.doubao_id));
+    if (!isDev) {
       return Response.json({ success: false, error: '仅开发者可删除页面' }, { status: 403 });
     }
 

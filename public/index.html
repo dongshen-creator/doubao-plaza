@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=33">
+  <link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 
@@ -260,8 +260,18 @@ async function api(path, options = {}) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`请求失败 (${res.status}): ${text || res.statusText}`);
+    var errMsg = '请求失败 (' + res.status + ')';
+    var text = await res.text().catch(function() { return ''; });
+    if (text) {
+      try {
+        var jsonErr = JSON.parse(text);
+        if (jsonErr.error) errMsg = jsonErr.error;
+        else errMsg = text;
+      } catch(e) {
+        errMsg = text;
+      }
+    }
+    throw new Error(errMsg);
   }
   return res.json();
 }
@@ -5713,17 +5723,27 @@ async function joinChannel(roomId) {
   if (!settings) { settings = {}; }
   // 开发者直接加入
   if (isDeveloper()) {
-    const { error } = await __SB.from('chat_room_members').insert({
+    // 先检查是否已是成员
+    var { data: existingDev } = await __SB.from('chat_room_members').select('id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+    if (existingDev) {
+      toast('你已是该频道成员', 'info');
+      document.getElementById('browseChannelsModal')?.remove();
+      switchRoom(roomId);
+      return;
+    }
+    const { error: devJoinErr } = await __SB.from('chat_room_members').insert({
       id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
       room_id: roomId,
       user_id: currentUser.id
     });
-    if (!error) {
-      toast('开发者身份已直接加入', 'success');
-      document.getElementById('browseChannelsModal')?.remove();
-      await loadRoomList();
-      switchRoom(roomId);
+    if (devJoinErr) {
+      toast('加入失败: ' + devJoinErr.message, 'error');
+      return;
     }
+    toast('开发者身份已直接加入', 'success');
+    document.getElementById('browseChannelsModal')?.remove();
+    await loadRoomList();
+    switchRoom(roomId);
     return;
   }
   var mode = settings.admission_mode || settings.admission || 'open';
@@ -5815,7 +5835,16 @@ async function joinChannel(roomId) {
 }
 
 async function doJoinChannel(roomId) {
-  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  // 先检查是否已是成员
+  var { data: existing } = await __SB.from('chat_room_members').select('id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+  if (existing) {
+    toast('你已是该频道成员', 'info');
+    document.getElementById('browseChannelsModal')?.remove();
+    switchRoom(roomId);
+    return;
+  }
+  var { error: joinErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  if (joinErr) { toast('加入失败: ' + joinErr.message, 'error'); return; }
   document.getElementById('browseChannelsModal')?.remove();
   await loadRoomList();
   toast('已加入频道', 'success');

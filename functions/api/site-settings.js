@@ -49,6 +49,16 @@ export async function onRequestGet(context) {
   }
 }
 
+// 检查用户是否为开发者（兼容 D1 返回的整数/字符串/布尔值）
+function checkIsDeveloper(user) {
+  if (!user) return false;
+  var val = user.is_developer;
+  if (val === 1 || val === '1' || val === true) return true;
+  // 也检查 doubao_id 白名单
+  if (user.doubao_id && ['470208447', 'East_pairs'].includes(user.doubao_id)) return true;
+  return false;
+}
+
 export async function onRequestPut(context) {
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
@@ -64,9 +74,9 @@ export async function onRequestPut(context) {
       return Response.json({ success: false, error: '请先登录' }, { status: 403 });
     }
     const user = await env.DB.prepare(
-      `SELECT is_developer FROM users WHERE id = ?`
+      `SELECT is_developer, doubao_id FROM users WHERE id = ?`
     ).bind(authUserId).first();
-    if (!user || user.is_developer !== 1) {
+    if (!checkIsDeveloper(user)) {
       return Response.json({ success: false, error: '无权操作，仅开发者可修改站点设置' }, { status: 403 });
     }
 
