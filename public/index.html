@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 
@@ -925,15 +925,12 @@ function switchView(view) {
 
   // 切换到频道视图时清除频道栏红点
   if (view === 'chat') {
-    // 清除所有频道消息的未读标记
-    var channelRooms = (chatState.rooms || []).filter(function(r) { return r.type === 'channel' && r.unread > 0; });
-    channelRooms.forEach(function(r) { markRead(r.id); });
+    batchMarkReadByType('channel');
     loadChannelJoinRequests().catch(function(){});
   }
   // 切换到好友视图时清除好友栏私聊红点
   if (view === 'friends') {
-    var privateRooms = (chatState.rooms || []).filter(function(r) { return r.type === 'private' && r.unread > 0; });
-    privateRooms.forEach(function(r) { markRead(r.id); });
+    batchMarkReadByType('private');
   }
 
   var sidebar = document.getElementById('appSidebar');
@@ -1137,6 +1134,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
 
   chatState.chatOpen = true;
   chatState.currentRoomId = roomId;
+  markRead(roomId);
   await loadRoomList();
   if (chatState._openingTarget !== friendId) return; // 被新点击中断
   await loadMessages(roomId);
@@ -1230,16 +1228,15 @@ function renderChatView(sidebar, main) {
 // ===== Load Channel Join Requests (sidebar) =====
 async function loadChannelJoinRequests() {
   if (!currentUser) return;
-  var sidebar = document.getElementById('chatChannelItems');
-  if (!sidebar) return;
 
   // 获取当前用户管理的所有频道
-  var managedRooms = chatState.rooms.filter(function(r) {
+  var managedRooms = (chatState.rooms || []).filter(function(r) {
     return r.type === 'channel' && (r.is_admin || r.created_by === currentUser.id || isDeveloper());
   });
   if (managedRooms.length === 0) {
-    var section = document.getElementById('joinRequestsSection');
-    if (section) section.style.display = 'none';
+    chatState.joinRequestCount = 0;
+    var emptySection = document.getElementById('joinRequestsSection');
+    if (emptySection) emptySection.style.display = 'none';
     updateActivityBadges();
     return;
   }
@@ -1251,8 +1248,16 @@ async function loadChannelJoinRequests() {
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
+  // 无论 DOM 是否存在，都存储申请数量
+  var reqCount = (requests && requests.length) ? requests.length : 0;
+  chatState.joinRequestCount = reqCount;
+
+  // 仅在聊天视图中渲染 DOM
   var section = document.getElementById('joinRequestsSection');
-  if (!section) return;
+  if (!section) {
+    updateActivityBadges();
+    return;
+  }
 
   if (!requests || requests.length === 0) {
     section.style.display = 'none';
@@ -1267,7 +1272,7 @@ async function loadChannelJoinRequests() {
   }
 
   var listEl = document.getElementById('channelJoinRequests');
-  if (!listEl) return;
+  if (!listEl) { updateActivityBadges(); return; }
 
   // 获取申请人信息
   var userIds = requests.map(function(r) { return r.user_id; });
@@ -3039,6 +3044,7 @@ let chatState = {
   reactionsMap: {},
   optimisticReactions: {},
   userChannelCount: 0,
+  joinRequestCount: 0,
   _openingChat: false
 };
 
@@ -3257,6 +3263,7 @@ async function loadRoomList() {
     chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
     renderRoomList();
     loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
+    subscribeToJoinRequests();
     var now2 = Date.now();
     rooms.forEach(r => {
       var ch = chatState.sbChannels[r.id];
@@ -3384,9 +3391,10 @@ async function switchRoom(roomId) {
   if (inputArea) inputArea.style.display = 'flex';
   applyChatBackground();
   renderRoomList();
+  // 立即清除该会话的未读红点
+  markRead(roomId);
   if (chatState.messages[roomId]?.length) {
     renderMessages(roomId);
-    markRead(roomId);
     subscribeToRoom(roomId);
     var input = document.getElementById('chatInput');
     if (input) input.focus();
@@ -3875,6 +3883,49 @@ function subscribeToRoom(roomId) {
   chatState.sbChannels[roomId] = channel;
 }
 
+// ── 入群申请实时订阅（管理员/创建者即时收到通知） ──
+var joinReqSubChannel = null;
+function subscribeToJoinRequests() {
+  if (joinReqSubChannel) {
+    try { joinReqSubChannel.unsubscribe(); } catch(e) {}
+  }
+  if (!currentUser) return;
+  // 检查是否有管理的频道
+  var managedRooms = (chatState.rooms || []).filter(function(r) {
+    return r.type === 'channel' && (r.is_admin || r.created_by === currentUser.id || isDeveloper());
+  });
+  if (managedRooms.length === 0) return;
+
+  joinReqSubChannel = __SB
+    .channel('join_requests_global')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'channel_join_requests' },
+      function(payload) {
+        var newReq = payload.new;
+        if (!newReq) return;
+        // 检查是否是自己管理的频道
+        var isManaged = (chatState.rooms || []).some(function(r) {
+          return r.id === newReq.room_id && (r.is_admin || r.created_by === currentUser.id || isDeveloper());
+        });
+        if (!isManaged) return;
+        // 刷新申请列表
+        loadChannelJoinRequests().catch(function(){});
+        // 如果不在聊天视图，显示 toast 通知
+        if (_currentView !== 'chat') {
+          toast('📩 有新的入群申请', 'info');
+        }
+      })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'channel_join_requests' },
+      function(payload) {
+        var updated = payload.new;
+        if (!updated) return;
+        // 申请状态变化时刷新列表
+        loadChannelJoinRequests().catch(function(){});
+      })
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') { /* subscribed */ }
+    });
+}
+
 function handleRealtimeMessage(roomId, msg) {
   var roomN = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isMuted = roomN && roomN.mute_notifications;
@@ -3970,6 +4021,26 @@ function handleKickedFromRoom(roomId) {
   updateUnreadBadge();
 }
 
+function batchMarkReadByType(roomType) {
+  if (!currentUser || !chatState.rooms) return;
+  var roomsToClear = chatState.rooms.filter(function(r) {
+    return r.type === roomType && r.unread > 0;
+  });
+  if (roomsToClear.length === 0) return;
+  // 批量更新 Supabase
+  roomsToClear.forEach(function(r) {
+    var msgs = chatState.messages[r.id] || [];
+    var last = msgs[msgs.length - 1];
+    var lastEventId = last ? (last.event_id || '') : '';
+    __SB.from('chat_unread').upsert({ room_id: r.id, user_id: currentUser.id, count: 0, last_event_id: lastEventId },
+      { onConflict: 'room_id,user_id' }).catch(function(e) { console.error('batchMarkRead error:', e); });
+    r.unread = 0;
+  });
+  // 只渲染一次
+  renderRoomList();
+  updateUnreadBadge();
+}
+
 function markRead(roomId) {
   const msgs = chatState.messages[roomId] || [];
   const last = msgs[msgs.length - 1];
@@ -4035,10 +4106,8 @@ function updateActivityBadges() {
   var reqEl = document.getElementById('friendRequests');
   if (reqEl && reqEl.children.length > 0) friendReqCount = reqEl.children.length;
 
-  // 入群申请数量
-  var joinReqCount = 0;
-  var joinEl = document.getElementById('channelJoinRequests');
-  if (joinEl && joinEl.children.length > 0) joinReqCount = joinEl.children.length;
+  // 入群申请数量（使用 chatState 中存储的值，不依赖 DOM）
+  var joinReqCount = chatState.joinRequestCount || 0;
 
   // 检查免打扰设置
   var privateMute = localStorage.getItem('dp_mute_private') === '1';
@@ -4397,14 +4466,12 @@ function startUnreadPolling() {
       else { badge.classList.add('hidden'); }
     }
     updateActivityBadges();
-    // 在聊天或好友视图定期刷新会话列表和入群申请
+    // 在聊天或好友视图定期刷新会话列表
     if ((_currentView === 'chat' || _currentView === 'friends') && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) {
       loadRoomList();
     }
-    // 定期刷新入群申请（每 10 秒）
-    if (_currentView === 'chat') {
-      loadChannelJoinRequests().catch(function(){});
-    }
+    // 定期刷新入群申请（所有视图，因为 chatState 存储了数量）
+    loadChannelJoinRequests().catch(function(){});
     unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000); });
 }
@@ -5555,8 +5622,12 @@ async function approveJoinRequest(reqId, roomId, userId) {
   var targetRoomId = roomId || chatState.currentRoomId;
   var { error: updateErr } = await __SB.from('channel_join_requests').update({ status: 'approved', reviewed_by: currentUser.id }).eq('id', reqId);
   if (updateErr) { toast('审批失败: ' + updateErr.message, 'error'); return; }
-  var { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: targetRoomId, user_id: userId });
-  if (memErr) { toast('添加成员失败: ' + memErr.message, 'error'); return; }
+  // 检查是否已是成员（避免 UNIQUE 约束冲突）
+  var { data: existingMember } = await __SB.from('chat_room_members').select('id').eq('room_id', targetRoomId).eq('user_id', userId).maybeSingle();
+  if (!existingMember) {
+    var { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: targetRoomId, user_id: userId });
+    if (memErr) { toast('添加成员失败: ' + memErr.message, 'error'); return; }
+  }
   toast('已通过', 'success');
   loadAuditRequests();
   await loadChannelJoinRequests();
@@ -5669,13 +5740,38 @@ async function joinChannel(roomId) {
     return;
   }
   if (mode === 'approval') {
-    var msg = prompt('申请理由 (可选):');
-    var reqId = 'req_' + Date.now().toString(36);
-    var { error: reqErr } = await __SB.from('channel_join_requests').insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg || '', status: 'pending' });
-    if (reqErr) { toast('申请发送失败: ' + reqErr.message, 'error'); return; }
+    // 检查是否已有申请记录（UNIQUE约束: room_id + user_id）
+    var { data: existingReq, error: checkErr } = await __SB.from('channel_join_requests')
+      .select('id, status')
+      .eq('room_id', roomId)
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (checkErr) { console.warn('check existing request:', checkErr); }
+
+    if (existingReq && existingReq.status === 'pending') {
+      toast('你已有待审核的加入申请，请耐心等待', 'info');
+      document.getElementById('browseChannelsModal')?.remove();
+      return;
+    }
+
+    var msg = prompt('请输入申请理由（可选）：');
+    if (msg === null) return; // 用户点击取消
+
+    var reqId = existingReq ? existingReq.id : ('req_' + Date.now().toString(36));
+    if (existingReq) {
+      // 已有记录（被拒绝过），更新为 pending
+      var { error: updErr } = await __SB.from('channel_join_requests')
+        .update({ status: 'pending', message: msg || '', reviewed_by: null, reviewed_at: null, created_at: new Date().toISOString() })
+        .eq('id', existingReq.id);
+      if (updErr) { toast('申请发送失败: ' + updErr.message, 'error'); return; }
+    } else {
+      // 新申请
+      var { error: reqErr } = await __SB.from('channel_join_requests')
+        .insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg || '', status: 'pending' });
+      if (reqErr) { toast('申请发送失败: ' + reqErr.message, 'error'); return; }
+    }
     document.getElementById('browseChannelsModal')?.remove();
     toast('已发送加入申请，等待管理员审批', 'success');
-    // 通知频道管理员/创建者刷新申请列表
     await loadRoomList();
     return;
   }

@@ -343,5 +343,17 @@ FOR DELETE USING (bucket_id = 'pages');
 CREATE POLICY "Auth update" ON storage.objects
 FOR UPDATE USING (bucket_id = 'pages');
 
+-- ===== 22. channel_join_requests RLS 策略 =====
+-- 确保入群申请表可正常读写（即使项目开启了 RLS）
+ALTER TABLE channel_join_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "任何人可插入入群申请" ON channel_join_requests
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "任何人可读取入群申请" ON channel_join_requests
+  FOR SELECT USING (true);
+CREATE POLICY "任何人可更新入群申请" ON channel_join_requests
+  FOR UPDATE USING (true);
+CREATE POLICY "任何人可删除入群申请" ON channel_join_requests
+  FOR DELETE USING (true);
+
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错
