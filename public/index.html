@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=30">
+  <link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
 
@@ -922,6 +922,19 @@ function switchView(view) {
   document.querySelectorAll('.activity-item').forEach(function(item) {
     item.classList.toggle('active', item.dataset.view === view);
   });
+
+  // 切换到频道视图时清除频道栏红点
+  if (view === 'chat') {
+    // 清除所有频道消息的未读标记
+    var channelRooms = (chatState.rooms || []).filter(function(r) { return r.type === 'channel' && r.unread > 0; });
+    channelRooms.forEach(function(r) { markRead(r.id); });
+    loadChannelJoinRequests().catch(function(){});
+  }
+  // 切换到好友视图时清除好友栏私聊红点
+  if (view === 'friends') {
+    var privateRooms = (chatState.rooms || []).filter(function(r) { return r.type === 'private' && r.unread > 0; });
+    privateRooms.forEach(function(r) { markRead(r.id); });
+  }
 
   var sidebar = document.getElementById('appSidebar');
   var main = document.getElementById('mainContent');
@@ -3960,10 +3973,10 @@ function handleKickedFromRoom(roomId) {
 function markRead(roomId) {
   const msgs = chatState.messages[roomId] || [];
   const last = msgs[msgs.length - 1];
-  if (!last) return;
+  var lastEventId = last ? (last.event_id || '') : '';
   (async function() {
     try {
-      await __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: last.event_id || '' },
+      await __SB.from('chat_unread').upsert({ room_id: roomId, user_id: currentUser.id, count: 0, last_event_id: lastEventId },
         { onConflict: 'room_id,user_id' });
     } catch(e) { console.error('markRead failed:', e); }
     const room = chatState.rooms.find(r => r.id === roomId);
@@ -4383,8 +4396,15 @@ function startUnreadPolling() {
       if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
       else { badge.classList.add('hidden'); }
     }
-    // 仅在聊天视图打开时才刷新会话列表
-    if (_currentView === 'chat' && chatState.chatOpen && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) { loadRoomList(); }
+    updateActivityBadges();
+    // 在聊天或好友视图定期刷新会话列表和入群申请
+    if ((_currentView === 'chat' || _currentView === 'friends') && (!chatState.lastRoomListRefresh || Date.now() - chatState.lastRoomListRefresh > 15000)) {
+      loadRoomList();
+    }
+    // 定期刷新入群申请（每 10 秒）
+    if (_currentView === 'chat') {
+      loadChannelJoinRequests().catch(function(){});
+    }
     unreadPollTimer = setTimeout(startUnreadPolling, 10000);
   }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000); });
 }
@@ -4829,6 +4849,8 @@ async function kickMember(roomId, targetUserId) {
   }).catch(function(){});
   loadRoomMemberList(roomId);
   toast('已踢出成员', 'success');
+  // 刷新侧边栏列表（成员数等）
+  loadRoomList().catch(function(){});
   var { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', roomId);
   if (count === 0) {
     await __SB.from('chat_unread').delete().eq('room_id', roomId);
@@ -4884,13 +4906,15 @@ async function executeMute(userId, minutes) {
   if (error) { toast('禁言失败: ' + error.message, 'error'); return; }
   toast('已禁言' + (minutes ? ' ' + minutes + ' 分钟' : ' 永久'), 'success');
   loadRoomMemberList(roomId);
+  loadRoomList().catch(function(){});
 }
 
 async function unmuteMember(roomId, targetUserId) {
-  const { error } = await __SB.from('chat_muted').delete().eq('room_id', roomId).eq('user_id', targetUserId);
-  if (error) { toast('解禁失败: ' + error.message, 'error'); return; }
-  loadRoomMemberList(roomId);
-  toast('已解除禁言', 'success');
+    const { error } = await __SB.from('chat_muted').delete().eq('room_id', roomId).eq('user_id', targetUserId);
+    if (error) { toast('解禁失败: ' + error.message, 'error'); return; }
+    loadRoomMemberList(roomId);
+    loadRoomList().catch(function(){});
+    toast('已解除禁言', 'success');
 }
 
 async function setChannelAdmin(targetUserId) {
@@ -5529,12 +5553,14 @@ async function selectCustomAdmissionPage(pageId) {
 
 async function approveJoinRequest(reqId, roomId, userId) {
   var targetRoomId = roomId || chatState.currentRoomId;
-  await __SB.from('channel_join_requests').update({ status: 'approved', reviewed_by: currentUser.id }).eq('id', reqId);
-  await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: targetRoomId, user_id: userId });
-  toast('已通过');
+  var { error: updateErr } = await __SB.from('channel_join_requests').update({ status: 'approved', reviewed_by: currentUser.id }).eq('id', reqId);
+  if (updateErr) { toast('审批失败: ' + updateErr.message, 'error'); return; }
+  var { error: memErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: targetRoomId, user_id: userId });
+  if (memErr) { toast('添加成员失败: ' + memErr.message, 'error'); return; }
+  toast('已通过', 'success');
   loadAuditRequests();
-  loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
-  loadRoomList().catch(function(e) { console.error('loadRoomList:', e); });
+  await loadChannelJoinRequests();
+  await loadRoomList();
 }
 
 async function rejectJoinRequest(reqId) {
@@ -5645,9 +5671,12 @@ async function joinChannel(roomId) {
   if (mode === 'approval') {
     var msg = prompt('申请理由 (可选):');
     var reqId = 'req_' + Date.now().toString(36);
-    await __SB.from('channel_join_requests').insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg || '', status: 'pending' });
+    var { error: reqErr } = await __SB.from('channel_join_requests').insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg || '', status: 'pending' });
+    if (reqErr) { toast('申请发送失败: ' + reqErr.message, 'error'); return; }
     document.getElementById('browseChannelsModal')?.remove();
     toast('已发送加入申请，等待管理员审批', 'success');
+    // 通知频道管理员/创建者刷新申请列表
+    await loadRoomList();
     return;
   }
   if (mode === 'password') {
