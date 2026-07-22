@@ -349,6 +349,9 @@ CREATE POLICY "Auth update" ON storage.objects
 FOR UPDATE USING (bucket_id = 'pages');
 
 -- ===== 22. 所有聊天表 RLS 策略 =====
+-- 修复 admission_mode DEFAULT 'open' 覆盖旧 admission 值的问题
+UPDATE chat_channel_settings SET admission_mode = admission WHERE admission_mode = 'open' AND admission IS NOT NULL AND admission != 'open';
+
 -- 本应用使用自定义鉴权（D1 + Cloudflare Functions），Supabase 仅作数据存储
 -- 因此所有表需要对 anon key 完全开放读写
 

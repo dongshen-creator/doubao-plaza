@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=34">
+  <link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 
@@ -3470,7 +3470,7 @@ async function renderChatContextPanel(room) {
   // 加载频道设置数据
   var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
   var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', room.id).maybeSingle();
-  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; room.guest_mode = sData.guest_mode || false; }
+  if (sData) { currentTopic = sData.topic || ''; currentAdmission = getAdmissionMode(sData); currentAvatar = sData.avatar_url || ''; room.guest_mode = sData.guest_mode || false; }
 
   panel.innerHTML = `
     <div class="ctx-panel-header">
@@ -4748,7 +4748,7 @@ async function showRoomSettings() {
   const canManage = await checkChannelPermission(chatState.currentRoomId);
   var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
   var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', chatState.currentRoomId).maybeSingle();
-  if (sData) { currentTopic = sData.topic || ''; currentAdmission = sData.admission_mode || sData.admission || 'open'; currentAvatar = sData.avatar_url || ''; }
+  if (sData) { currentTopic = sData.topic || ''; currentAdmission = getAdmissionMode(sData); currentAvatar = sData.avatar_url || ''; }
   let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">';
   html += '<div class="modal-header"><div class="modal-title">频道设置</div><button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道名称</div><div style="display:flex;gap:8px"><input id="editRoomName" class="input" value="' + esc(room.name || '') + '" style="flex:1"' + (canManage ? '' : ' disabled') + '><button class="btn btn-sm btn-orange" onclick="updateRoomName()">更新</button></div></div>';
@@ -5336,7 +5336,7 @@ async function loadAndShowAdmissionPanel(myLevel) {
   var roomId = chatState.currentRoomId;
   var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
   if (!settings) settings = {};
-  var currentMode = settings.admission_mode || settings.admission || 'open';
+  var currentMode = getAdmissionMode(settings);
   var currentPassword = settings.admission_password || '';
   var currentCustomPageId = settings.admission_custom_page_id || '';
   var questionnaire = [];
@@ -5680,7 +5680,7 @@ async function showBrowseChannels(query) {
   if (settingsRows) { settingsRows.forEach(function(s) { settingsMap[s.room_id] = s; }); }
   for (let i = 0; i < channels.length; i++) {
     var s = settingsMap[channels[i].id] || {};
-    channels[i].admission = s.admission_mode || s.admission || 'open';
+    channels[i].admission = getAdmissionMode(s);
     const { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', channels[i].id);
     channels[i].member_count = count || 0;
     if (currentUser) {
@@ -5717,121 +5717,186 @@ function debounceChannelSearch() {
   }, 300);
 }
 
+// 统一获取准入模式，防止 admission_mode DEFAULT 'open' 覆盖 admission 的真实值
+function getAdmissionMode(s) {
+  if (!s) return 'open';
+  var m = s.admission || s.admission_mode || 'open';
+  // 如果 admission 是 'open' 但 admission_mode 是其他值，取 admission_mode
+  if (m === 'open' && s.admission_mode && s.admission_mode !== 'open') {
+    m = s.admission_mode;
+  }
+  return m;
+}
+
 async function joinChannel(roomId) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
-  var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
-  if (!settings) { settings = {}; }
-  // 开发者直接加入
-  if (isDeveloper()) {
-    // 先检查是否已是成员
-    var { data: existingDev } = await __SB.from('chat_room_members').select('id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
-    if (existingDev) {
-      toast('你已是该频道成员', 'info');
+  toast('正在处理...', 'info');
+  try {
+    var { data: settings, error: setErr } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
+    if (setErr) { console.warn('load settings:', setErr); }
+    if (!settings) { settings = {}; }
+    // 优先使用 admission 字段，防止 admission_mode DEFAULT 'open' 覆盖
+    var mode = settings.admission || settings.admission_mode || 'open';
+    // 如果 admission_mode 和 admission 不一致，取非 'open' 的那个
+    if (mode === 'open' && settings.admission_mode && settings.admission_mode !== 'open') {
+      mode = settings.admission_mode;
+    }
+    console.log('joinChannel mode:', mode, 'settings:', settings);
+
+    // 开发者直接加入
+    if (isDeveloper()) {
+      var { data: existingDev } = await __SB.from('chat_room_members').select('id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+      if (existingDev) {
+        toast('你已是该频道成员', 'info');
+        document.getElementById('browseChannelsModal')?.remove();
+        switchRoom(roomId);
+        return;
+      }
+      const { error: devJoinErr } = await __SB.from('chat_room_members').insert({
+        id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        room_id: roomId,
+        user_id: currentUser.id
+      });
+      if (devJoinErr) { toast('加入失败: ' + devJoinErr.message, 'error'); return; }
+      toast('开发者身份已直接加入', 'success');
       document.getElementById('browseChannelsModal')?.remove();
+      await loadRoomList();
       switchRoom(roomId);
       return;
     }
-    const { error: devJoinErr } = await __SB.from('chat_room_members').insert({
-      id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-      room_id: roomId,
-      user_id: currentUser.id
-    });
-    if (devJoinErr) {
-      toast('加入失败: ' + devJoinErr.message, 'error');
+
+    if (mode === 'open') { await doJoinChannel(roomId); return; }
+    if (mode === 'invite') {
+      var code = prompt('请输入邀请码:');
+      if (!code) return;
+      var { data: invite } = await __SB.from('channel_invites').select('*').eq('invite_code', code).eq('room_id', roomId).maybeSingle();
+      if (!invite) { toast('邀请码无效', 'error'); return; }
+      if (invite.max_uses > 0 && invite.used_count >= invite.max_uses) { toast('邀请码已达使用上限', 'error'); return; }
+      await __SB.from('channel_invites').update({ used_count: (invite.used_count || 0) + 1 }).eq('id', invite.id);
+      await doJoinChannel(roomId);
       return;
     }
-    toast('开发者身份已直接加入', 'success');
-    document.getElementById('browseChannelsModal')?.remove();
-    await loadRoomList();
-    switchRoom(roomId);
-    return;
-  }
-  var mode = settings.admission_mode || settings.admission || 'open';
+    if (mode === 'approval') {
+      // 检查是否已有申请记录
+      var { data: existingReq, error: checkErr } = await __SB.from('channel_join_requests')
+        .select('id, status')
+        .eq('room_id', roomId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      if (checkErr) { console.warn('check existing request:', checkErr); }
 
-  if (mode === 'open') { await doJoinChannel(roomId); return; }
-  if (mode === 'invite') {
-    var code = prompt('请输入邀请码:');
-    if (!code) return;
-    var { data: invite } = await __SB.from('channel_invites').select('*').eq('invite_code', code).eq('room_id', roomId).maybeSingle();
-    if (!invite) { toast('邀请码无效', 'error'); return; }
-    if (invite.max_uses > 0 && invite.used_count >= invite.max_uses) { toast('邀请码已达使用上限', 'error'); return; }
-    await __SB.from('channel_invites').update({ used_count: (invite.used_count || 0) + 1 }).eq('id', invite.id);
-    await doJoinChannel(roomId);
-    return;
-  }
-  if (mode === 'approval') {
-    // 检查是否已有申请记录（UNIQUE约束: room_id + user_id）
-    var { data: existingReq, error: checkErr } = await __SB.from('channel_join_requests')
-      .select('id, status')
-      .eq('room_id', roomId)
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
-    if (checkErr) { console.warn('check existing request:', checkErr); }
+      if (existingReq && existingReq.status === 'pending') {
+        toast('你已有待审核的加入申请，请耐心等待', 'info');
+        document.getElementById('browseChannelsModal')?.remove();
+        return;
+      }
 
-    if (existingReq && existingReq.status === 'pending') {
-      toast('你已有待审核的加入申请，请耐心等待', 'info');
+      // 用 modal 替代 prompt，确保对话框一定显示
+      var msg = await showJoinRequestModal(existingReq ? existingReq.id : null);
+      if (msg === null) return; // 用户取消
+
+      if (existingReq) {
+        var { error: updErr } = await __SB.from('channel_join_requests')
+          .update({ status: 'pending', message: msg, reviewed_by: null, reviewed_at: null, created_at: new Date().toISOString() })
+          .eq('id', existingReq.id);
+        if (updErr) { toast('申请发送失败: ' + updErr.message, 'error'); return; }
+      } else {
+        var reqId = 'req_' + Date.now().toString(36);
+        var { error: reqErr } = await __SB.from('channel_join_requests')
+          .insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg, status: 'pending' });
+        if (reqErr) { toast('申请发送失败: ' + reqErr.message, 'error'); return; }
+      }
       document.getElementById('browseChannelsModal')?.remove();
+      toast('已发送加入申请，等待管理员审批', 'success');
+      await loadRoomList();
       return;
     }
-
-    var msg = prompt('请输入申请理由（可选）：');
-    if (msg === null) return; // 用户点击取消
-
-    var reqId = existingReq ? existingReq.id : ('req_' + Date.now().toString(36));
-    if (existingReq) {
-      // 已有记录（被拒绝过），更新为 pending
-      var { error: updErr } = await __SB.from('channel_join_requests')
-        .update({ status: 'pending', message: msg || '', reviewed_by: null, reviewed_at: null, created_at: new Date().toISOString() })
-        .eq('id', existingReq.id);
-      if (updErr) { toast('申请发送失败: ' + updErr.message, 'error'); return; }
-    } else {
-      // 新申请
-      var { error: reqErr } = await __SB.from('channel_join_requests')
-        .insert({ id: reqId, room_id: roomId, user_id: currentUser.id, message: msg || '', status: 'pending' });
-      if (reqErr) { toast('申请发送失败: ' + reqErr.message, 'error'); return; }
-    }
-    document.getElementById('browseChannelsModal')?.remove();
-    toast('已发送加入申请，等待管理员审批', 'success');
-    await loadRoomList();
-    return;
-  }
-  if (mode === 'password') {
-    var pwd = prompt('请输入入群密码:');
-    if (!pwd || pwd !== settings.admission_password) { toast('密码错误', 'error'); return; }
-    await doJoinChannel(roomId);
-    return;
-  }
-  if (mode === 'questionnaire') {
-    showQuestionnaireModal(roomId, settings);
-    return;
-  }
-  if (mode === 'custom_page') {
-    if (settings.admission_custom_page_id) {
-      window.open('/pages/' + settings.admission_custom_page_id, '_blank');
-    }
-    var pass = confirm('完成自定义页面后，点击确定加入频道');
-    if (!pass) return;
-    await doJoinChannel(roomId);
-    return;
-  }
-  if (mode === 'composite') {
-    if (settings.admission_questionnaire && settings.admission_questionnaire.length > 0) {
-      showQuestionnaireModal(roomId, settings, 'composite');
+    if (mode === 'password') {
+      var pwd = prompt('请输入入群密码:');
+      if (!pwd || pwd !== settings.admission_password) { toast('密码错误', 'error'); return; }
+      await doJoinChannel(roomId);
       return;
     }
-    if (settings.admission_password) {
-      var pwd2 = prompt('请输入入群密码:');
-      if (!pwd2 || pwd2 !== settings.admission_password) { toast('密码错误', 'error'); return; }
+    if (mode === 'questionnaire') {
+      showQuestionnaireModal(roomId, settings);
+      return;
     }
-    if (settings.admission_custom_page_id) {
-      window.open('/pages/' + settings.admission_custom_page_id, '_blank');
-      var pass2 = confirm('完成自定义页面后，点击确定加入频道');
-      if (!pass2) return;
+    if (mode === 'custom_page') {
+      if (settings.admission_custom_page_id) {
+        window.open('/pages/' + settings.admission_custom_page_id, '_blank');
+      }
+      var pass = confirm('完成自定义页面后，点击确定加入频道');
+      if (!pass) return;
+      await doJoinChannel(roomId);
+      return;
+    }
+    if (mode === 'composite') {
+      if (settings.admission_questionnaire && settings.admission_questionnaire.length > 0) {
+        showQuestionnaireModal(roomId, settings, 'composite');
+        return;
+      }
+      if (settings.admission_password) {
+        var pwd2 = prompt('请输入入群密码:');
+        if (!pwd2 || pwd2 !== settings.admission_password) { toast('密码错误', 'error'); return; }
+      }
+      if (settings.admission_custom_page_id) {
+        window.open('/pages/' + settings.admission_custom_page_id, '_blank');
+        var pass2 = confirm('完成自定义页面后，点击确定加入频道');
+        if (!pass2) return;
+      }
+      await doJoinChannel(roomId);
+      return;
     }
     await doJoinChannel(roomId);
-    return;
+  } catch(e) {
+    console.error('joinChannel error:', e);
+    toast('操作失败: ' + (e.message || e), 'error');
   }
-  await doJoinChannel(roomId);
+}
+
+// 申请理由 modal（替代 prompt，确保对话框一定显示）
+function showJoinRequestModal(existingId) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.id = 'joinRequestModalOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg-card,#fff);border-radius:12px;padding:24px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
+    modal.innerHTML =
+      '<h3 style="margin:0 0 12px;font-size:16px;color:var(--text-primary,#333);">申请加入频道</h3>' +
+      '<p style="margin:0 0 12px;font-size:13px;color:var(--text-secondary,#666);">请输入申请理由（可选）：</p>' +
+      '<textarea id="joinRequestInput" style="width:100%;min-height:80px;padding:10px;border:1px solid var(--border-color,#ddd);border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;background:var(--bg-input,#fff);color:var(--text-primary,#333);" placeholder="我想加入这个频道..."></textarea>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+        '<button id="joinRequestCancel" style="padding:8px 16px;border:none;border-radius:8px;background:var(--bg-hover,#f0f0f0);color:var(--text-primary,#333);cursor:pointer;font-size:14px;">取消</button>' +
+        '<button id="joinRequestSubmit" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent,#4f46e5);color:#fff;cursor:pointer;font-size:14px;">发送申请</button>' +
+      '</div>';
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    var input = document.getElementById('joinRequestInput');
+    input.focus();
+
+    document.getElementById('joinRequestSubmit').onclick = function() {
+      var val = input.value.trim();
+      overlay.remove();
+      resolve(val);
+    };
+    document.getElementById('joinRequestCancel').onclick = function() {
+      overlay.remove();
+      resolve(null);
+    };
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(null);
+      }
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        document.getElementById('joinRequestSubmit').click();
+      }
+    });
+  });
 }
 
 async function doJoinChannel(roomId) {
