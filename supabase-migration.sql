@@ -204,14 +204,15 @@ ALTER TABLE chat_channel_announcements ADD COLUMN IF NOT EXISTS visibility TEXT 
 
 -- ===== 17. 外键约束（幂等：先检查是否存在，先清理孤立数据） =====
 -- 先清理引用了已删除房间的孤立记录，否则外键会创建失败
-DELETE FROM chat_unread WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_room_members WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_messages WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_reactions WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_admins WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_muted WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_banned WHERE room_id NOT IN (SELECT id FROM chat_rooms);
-DELETE FROM chat_channel_settings WHERE room_id NOT IN (SELECT id FROM chat_rooms);
+-- 使用 NOT EXISTS 而非 NOT IN，防止空表导致全量删除
+DELETE FROM chat_unread WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_unread.room_id);
+DELETE FROM chat_room_members WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_room_members.room_id);
+DELETE FROM chat_messages WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_messages.room_id);
+DELETE FROM chat_reactions WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_reactions.room_id);
+DELETE FROM chat_admins WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_admins.room_id);
+DELETE FROM chat_muted WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_muted.room_id);
+DELETE FROM chat_banned WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_banned.room_id);
+DELETE FROM chat_channel_settings WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = chat_channel_settings.room_id);
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_crm_room') THEN
@@ -331,29 +332,181 @@ SELECT cron.schedule(
 );
 
 -- ===== 21. Storage 存储桶权限（需要先在 Storage 页面创建 pages 桶）=====
+DROP POLICY IF EXISTS "Public read" ON storage.objects;
 CREATE POLICY "Public read" ON storage.objects
 FOR SELECT USING (bucket_id = 'pages');
 
+DROP POLICY IF EXISTS "Auth upload" ON storage.objects;
 CREATE POLICY "Auth upload" ON storage.objects
 FOR INSERT WITH CHECK (bucket_id = 'pages');
 
+DROP POLICY IF EXISTS "Auth delete" ON storage.objects;
 CREATE POLICY "Auth delete" ON storage.objects
 FOR DELETE USING (bucket_id = 'pages');
 
+DROP POLICY IF EXISTS "Auth update" ON storage.objects;
 CREATE POLICY "Auth update" ON storage.objects
 FOR UPDATE USING (bucket_id = 'pages');
 
--- ===== 22. channel_join_requests RLS 策略 =====
--- 确保入群申请表可正常读写（即使项目开启了 RLS）
+-- ===== 22. 所有聊天表 RLS 策略 =====
+-- 本应用使用自定义鉴权（D1 + Cloudflare Functions），Supabase 仅作数据存储
+-- 因此所有表需要对 anon key 完全开放读写
+
+-- chat_rooms
+ALTER TABLE chat_rooms ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_rooms_read" ON chat_rooms;
+CREATE POLICY "chat_rooms_read" ON chat_rooms FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_rooms_insert" ON chat_rooms;
+CREATE POLICY "chat_rooms_insert" ON chat_rooms FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_rooms_update" ON chat_rooms;
+CREATE POLICY "chat_rooms_update" ON chat_rooms FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_rooms_delete" ON chat_rooms;
+CREATE POLICY "chat_rooms_delete" ON chat_rooms FOR DELETE USING (true);
+
+-- chat_room_members
+ALTER TABLE chat_room_members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_room_members_read" ON chat_room_members;
+CREATE POLICY "chat_room_members_read" ON chat_room_members FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_room_members_insert" ON chat_room_members;
+CREATE POLICY "chat_room_members_insert" ON chat_room_members FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_room_members_update" ON chat_room_members;
+CREATE POLICY "chat_room_members_update" ON chat_room_members FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_room_members_delete" ON chat_room_members;
+CREATE POLICY "chat_room_members_delete" ON chat_room_members FOR DELETE USING (true);
+
+-- chat_messages
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_messages_read" ON chat_messages;
+CREATE POLICY "chat_messages_read" ON chat_messages FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_messages_insert" ON chat_messages;
+CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_messages_update" ON chat_messages;
+CREATE POLICY "chat_messages_update" ON chat_messages FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_messages_delete" ON chat_messages;
+CREATE POLICY "chat_messages_delete" ON chat_messages FOR DELETE USING (true);
+
+-- chat_reactions
+ALTER TABLE chat_reactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_reactions_read" ON chat_reactions;
+CREATE POLICY "chat_reactions_read" ON chat_reactions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_reactions_insert" ON chat_reactions;
+CREATE POLICY "chat_reactions_insert" ON chat_reactions FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_reactions_delete" ON chat_reactions;
+CREATE POLICY "chat_reactions_delete" ON chat_reactions FOR DELETE USING (true);
+
+-- chat_admins
+ALTER TABLE chat_admins ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_admins_read" ON chat_admins;
+CREATE POLICY "chat_admins_read" ON chat_admins FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_admins_insert" ON chat_admins;
+CREATE POLICY "chat_admins_insert" ON chat_admins FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_admins_delete" ON chat_admins;
+CREATE POLICY "chat_admins_delete" ON chat_admins FOR DELETE USING (true);
+
+-- chat_muted
+ALTER TABLE chat_muted ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_muted_read" ON chat_muted;
+CREATE POLICY "chat_muted_read" ON chat_muted FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_muted_insert" ON chat_muted;
+CREATE POLICY "chat_muted_insert" ON chat_muted FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_muted_update" ON chat_muted;
+CREATE POLICY "chat_muted_update" ON chat_muted FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_muted_delete" ON chat_muted;
+CREATE POLICY "chat_muted_delete" ON chat_muted FOR DELETE USING (true);
+
+-- chat_banned
+ALTER TABLE chat_banned ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_banned_read" ON chat_banned;
+CREATE POLICY "chat_banned_read" ON chat_banned FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_banned_insert" ON chat_banned;
+CREATE POLICY "chat_banned_insert" ON chat_banned FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_banned_delete" ON chat_banned;
+CREATE POLICY "chat_banned_delete" ON chat_banned FOR DELETE USING (true);
+
+-- chat_unread
+ALTER TABLE chat_unread ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_unread_read" ON chat_unread;
+CREATE POLICY "chat_unread_read" ON chat_unread FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_unread_insert" ON chat_unread;
+CREATE POLICY "chat_unread_insert" ON chat_unread FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_unread_update" ON chat_unread;
+CREATE POLICY "chat_unread_update" ON chat_unread FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_unread_delete" ON chat_unread;
+CREATE POLICY "chat_unread_delete" ON chat_unread FOR DELETE USING (true);
+
+-- chat_channel_settings
+ALTER TABLE chat_channel_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_channel_settings_read" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_read" ON chat_channel_settings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_channel_settings_insert" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_insert" ON chat_channel_settings FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_channel_settings_update" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_update" ON chat_channel_settings FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_channel_settings_delete" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_delete" ON chat_channel_settings FOR DELETE USING (true);
+
+-- chat_channel_announcements
+ALTER TABLE chat_channel_announcements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_channel_announcements_read" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_read" ON chat_channel_announcements FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_channel_announcements_insert" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_insert" ON chat_channel_announcements FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_channel_announcements_update" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_update" ON chat_channel_announcements FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "chat_channel_announcements_delete" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_delete" ON chat_channel_announcements FOR DELETE USING (true);
+
+-- chat_channel_tools
+ALTER TABLE chat_channel_tools ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "chat_channel_tools_read" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_read" ON chat_channel_tools FOR SELECT USING (true);
+DROP POLICY IF EXISTS "chat_channel_tools_insert" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_insert" ON chat_channel_tools FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "chat_channel_tools_delete" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_delete" ON chat_channel_tools FOR DELETE USING (true);
+
+-- channel_join_requests
 ALTER TABLE channel_join_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "任何人可插入入群申请" ON channel_join_requests;
 CREATE POLICY "任何人可插入入群申请" ON channel_join_requests
   FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "任何人可读取入群申请" ON channel_join_requests;
 CREATE POLICY "任何人可读取入群申请" ON channel_join_requests
   FOR SELECT USING (true);
+DROP POLICY IF EXISTS "任何人可更新入群申请" ON channel_join_requests;
 CREATE POLICY "任何人可更新入群申请" ON channel_join_requests
   FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "任何人可删除入群申请" ON channel_join_requests;
 CREATE POLICY "任何人可删除入群申请" ON channel_join_requests
   FOR DELETE USING (true);
+
+-- channel_invites
+ALTER TABLE channel_invites ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "channel_invites_read" ON channel_invites;
+CREATE POLICY "channel_invites_read" ON channel_invites FOR SELECT USING (true);
+DROP POLICY IF EXISTS "channel_invites_insert" ON channel_invites;
+CREATE POLICY "channel_invites_insert" ON channel_invites FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "channel_invites_update" ON channel_invites;
+CREATE POLICY "channel_invites_update" ON channel_invites FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "channel_invites_delete" ON channel_invites;
+CREATE POLICY "channel_invites_delete" ON channel_invites FOR DELETE USING (true);
+
+-- questionnaire tables
+ALTER TABLE channel_questionnaires ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "channel_questionnaires_read" ON channel_questionnaires;
+CREATE POLICY "channel_questionnaires_read" ON channel_questionnaires FOR SELECT USING (true);
+DROP POLICY IF EXISTS "channel_questionnaires_insert" ON channel_questionnaires;
+CREATE POLICY "channel_questionnaires_insert" ON channel_questionnaires FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "channel_questionnaires_delete" ON channel_questionnaires;
+CREATE POLICY "channel_questionnaires_delete" ON channel_questionnaires FOR DELETE USING (true);
+
+ALTER TABLE channel_questionnaire_answers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "channel_questionnaire_answers_read" ON channel_questionnaire_answers;
+CREATE POLICY "channel_questionnaire_answers_read" ON channel_questionnaire_answers FOR SELECT USING (true);
+DROP POLICY IF EXISTS "channel_questionnaire_answers_insert" ON channel_questionnaire_answers;
+CREATE POLICY "channel_questionnaire_answers_insert" ON channel_questionnaire_answers FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "channel_questionnaire_answers_delete" ON channel_questionnaire_answers;
+CREATE POLICY "channel_questionnaire_answers_delete" ON channel_questionnaire_answers FOR DELETE USING (true);
 
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错
