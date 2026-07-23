@@ -312,6 +312,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 @media (min-width: 768px) {
   .activity-bar { display: flex; }
   .nav-mobile-only { display: none !important; }
+  /* 桌面端隐藏浮动按钮 */
+  .mobile-fab { display: none !important; }
+  .mobile-overlay-mask { display: none !important; }
 }
 
 @media (max-width: 767px) {
@@ -323,56 +326,180 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   .app-main { padding: 24px 32px; }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   移动端 (<768px)：底部TabBar + 侧边栏/右侧栏收起为抽屉
+   ═══════════════════════════════════════════════════════════ */
 @media (max-width: 767px) {
-  .app-layout { min-height: auto; flex-direction: column; }
-  .app-sidebar {
-    width: 100% !important;
-    max-height: 40vh;
+  /* 活动栏变成底部 TabBar */
+  .activity-bar {
+    display: flex !important;
+    flex-direction: row;
+    width: 100%;
+    height: 56px;
     border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 0;
+    justify-content: space-around;
+    align-items: center;
+    background: var(--nav-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
-  .app-main { padding: 12px 10px; flex: 1 1 auto; }
-  /* 移动端聊天视图：分层导航，会话列表和消息区交替全屏 */
-  .app-layout:has(.chat-view-main) {
-    flex-direction: column;
+  .activity-bar .activity-item {
+    width: auto;
+    height: 56px;
+    border-radius: 0;
     flex: 1;
+    justify-content: center;
+  }
+  .activity-bar .activity-item.active {
+    background: transparent;
+    border-left: none;
+    border-bottom: 2px solid var(--accent);
+    border-radius: 0;
+  }
+  .activity-bar .activity-spacer { display: none; }
+
+  /* app-layout 变为纵向，主区域占满 */
+  .app-layout {
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 56px; /* 给底部 TabBar 留空间 */
+  }
+
+  /* 侧边栏默认收起，作为左侧抽屉 */
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 56px;
+    width: 85% !important;
+    max-width: 320px;
+    max-height: none;
+    z-index: 90;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: 1px solid var(--border-color);
+    box-shadow: none;
+    background: var(--bg-secondary);
+  }
+  .app-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 2px 0 24px rgba(0,0,0,0.15);
+  }
+
+  /* 主区域全屏 */
+  .app-main {
+    flex: 1;
+    padding: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
     position: relative;
   }
-  .app-layout:has(.chat-view-main) .app-sidebar {
-    width: 100% !important;
-    max-height: none;
-    height: 100%;
-    flex: 1;
-    border-bottom: none;
-    z-index: 10;
+
+  /* 浮动按钮（打开侧边栏） */
+  .mobile-fab {
+    position: fixed;
+    z-index: 80;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .mobile-fab:active { transform: scale(0.9); }
+  .mobile-fab-sidebar {
+    bottom: 72px;
+    left: 12px;
+  }
+  .mobile-fab-context {
+    bottom: 72px;
+    right: 12px;
+  }
+  /* 有红点时浮动按钮闪烁 */
+  .mobile-fab.has-badge::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid var(--bg-secondary);
+  }
+
+  /* 遮罩层 */
+  .mobile-overlay-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 56px;
+    background: rgba(0,0,0,0.4);
+    z-index: 85;
+    display: none;
+  }
+  .mobile-overlay-mask.show { display: block; }
+
+  /* 聊天视图右侧上下文面板 → 右侧抽屉 */
+  .chat-view-context {
+    position: fixed !important;
+    top: 0;
+    right: 0;
+    bottom: 56px;
+    width: 85% !important;
+    max-width: 320px;
+    z-index: 90;
+    transform: translateX(100%);
     transition: transform 0.25s ease;
+  }
+  .chat-view-context.show,
+  .chat-view-context.mobile-open {
+    transform: translateX(0) !important;
+    width: 85% !important;
+  }
+
+  /* 聊天视图内部布局适配 */
+  .app-layout:has(.chat-view-main) {
+    flex-direction: column;
+  }
+  .app-layout:has(.chat-view-main) .app-sidebar {
+    position: fixed;
+    transform: translateX(-100%);
+  }
+  .app-layout:has(.chat-view-main) .app-sidebar.mobile-open {
+    transform: translateX(0);
   }
   .app-layout:has(.chat-view-main) .app-sidebar.hidden-mobile {
     transform: translateX(-100%);
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
   }
   .app-layout:has(.chat-view-main) .app-main {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 5;
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
+    position: relative;
+    transform: none;
+    z-index: auto;
     padding: 0;
   }
   .app-layout:has(.chat-view-main) .app-main.show-mobile {
-    transform: translateX(0);
-    z-index: 15;
+    transform: none;
+    z-index: auto;
   }
-  /* 聊天视图header中添加返回按钮 */
   .chat-back-btn { display: flex !important; }
-  /* 移动端上下文面板改为抽屉覆盖 */
-  .chat-view-context.show {
-    width: 100% !important;
-    position: absolute;
-    top: 0; right: 0; bottom: 0;
-    z-index: 30;
-  }
 }
 .chat-back-btn { display: none; }
 

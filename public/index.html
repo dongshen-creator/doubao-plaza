@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=36">
 </head>
 <body>
 
@@ -51,7 +51,7 @@
 </nav>
 
 <div class="app-layout" id="appLayout">
-  <!-- 活动栏（最左列） -->
+  <!-- 活动栏（最左列 / 移动端底部TabBar） -->
   <aside class="activity-bar" id="activityBar" aria-label="活动栏">
     <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span><span class="activity-badge" id="actBarFriendsBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
@@ -61,16 +61,21 @@
     <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span></button>
   </aside>
 
-  <!-- 侧边栏（中间列） -->
+  <!-- 侧边栏（中间列 / 移动端左侧抽屉） -->
   <aside class="app-sidebar" id="appSidebar" aria-label="侧边栏">
     <!-- 侧边栏内容由 JS 渲染 -->
   </aside>
 
-  <!-- 主内容区（右列） -->
+  <!-- 主内容区（右列 / 移动端全屏） -->
   <main class="app-main" id="mainContent" role="main">
     <!-- 主内容由 JS 渲染 -->
   </main>
 </div>
+
+<!-- 移动端浮动按钮 + 遮罩层 -->
+<button class="mobile-fab mobile-fab-sidebar" id="fabSidebar" onclick="toggleMobileSidebar()" aria-label="打开侧边栏" title="侧边栏">☰</button>
+<button class="mobile-fab mobile-fab-context" id="fabContext" onclick="toggleMobileContext()" aria-label="打开详情" title="详情" style="display:none">ℹ</button>
+<div class="mobile-overlay-mask" id="mobileOverlayMask" onclick="closeMobilePanels()"></div>
 
 <!-- Announcement Modal -->
 <div class="modal-overlay" id="announcementModal" style="display:none">
@@ -908,6 +913,54 @@ function doLogout() {
 var _currentView = 'friends';
 var _prevView = 'friends';
 
+// ===== 移动端面板控制 =====
+function toggleMobileSidebar() {
+  var sidebar = document.getElementById('appSidebar');
+  var mask = document.getElementById('mobileOverlayMask');
+  var ctx = document.querySelector('.chat-view-context');
+  if (ctx && ctx.classList.contains('mobile-open')) {
+    ctx.classList.remove('mobile-open');
+  }
+  sidebar.classList.toggle('mobile-open');
+  if (sidebar.classList.contains('mobile-open')) {
+    mask.classList.add('show');
+  } else {
+    mask.classList.remove('show');
+  }
+}
+
+function toggleMobileContext() {
+  var ctx = document.querySelector('.chat-view-context');
+  if (!ctx) return;
+  var sidebar = document.getElementById('appSidebar');
+  if (sidebar.classList.contains('mobile-open')) {
+    sidebar.classList.remove('mobile-open');
+  }
+  ctx.classList.toggle('mobile-open');
+  var mask = document.getElementById('mobileOverlayMask');
+  if (ctx.classList.contains('mobile-open')) {
+    mask.classList.add('show');
+  } else {
+    mask.classList.remove('show');
+  }
+}
+
+function closeMobilePanels() {
+  document.getElementById('appSidebar').classList.remove('mobile-open');
+  var ctx = document.querySelector('.chat-view-context');
+  if (ctx) ctx.classList.remove('mobile-open');
+  document.getElementById('mobileOverlayMask').classList.remove('show');
+}
+
+function isMobile() {
+  return window.innerWidth < 768;
+}
+
+function showMobileContextFab(show) {
+  var fab = document.getElementById('fabContext');
+  if (fab) fab.style.display = show ? 'flex' : 'none';
+}
+
 function switchView(view) {
   // 特殊视图：设置直接触发模态框，不改变当前视图高亮
   if (view === 'settings') {
@@ -928,6 +981,9 @@ function switchView(view) {
   _currentView = view;
   _prevView = view;
 
+  // 移动端切换视图时关闭所有抽屉
+  closeMobilePanels();
+
   // 更新活动栏激活状态
   document.querySelectorAll('.activity-item').forEach(function(item) {
     item.classList.toggle('active', item.dataset.view === view);
@@ -937,6 +993,10 @@ function switchView(view) {
   if (view === 'chat') {
     batchMarkReadByType('channel');
     loadChannelJoinRequests().catch(function(){});
+    // 移动端聊天视图显示详情FAB
+    showMobileContextFab(true);
+  } else {
+    showMobileContextFab(false);
   }
   // 切换到好友视图时清除好友栏私聊红点
   if (view === 'friends') {
@@ -1103,6 +1163,9 @@ async function openPrivateChatInFriends(friendId, friendName) {
 
   if (chatState._openingTarget !== friendId) return; // 被新点击中断
 
+  // 移动端关闭侧边栏抽屉
+  if (isMobile()) closeMobilePanels();
+
   // 在私聊区域渲染聊天界面
   var area = document.getElementById('privateChatArea');
   if (area) {
@@ -1162,6 +1225,8 @@ function closePrivateChatInFriends() {
   if (searchR) searchR.style.display = '';
   chatState.currentRoomId = null;
   stopMessagePolling();
+  // 移动端返回时打开侧边栏
+  if (isMobile()) toggleMobileSidebar();
 }
 
 // ── 频道视图（只保留频道，私聊已移到好友视图） ──
@@ -3360,11 +3425,10 @@ function renderRoomList() {
 
 async function switchRoom(roomId) {
   chatState.currentRoomId = roomId;
-  // 移动端：显示消息区，隐藏会话列表
-  var appMain = document.querySelector('.app-main');
-  var appSidebar = document.querySelector('.app-sidebar');
-  if (appMain) appMain.classList.add('show-mobile');
-  if (appSidebar) appSidebar.classList.add('hidden-mobile');
+  // 移动端：关闭侧边栏抽屉
+  if (isMobile()) {
+    closeMobilePanels();
+  }
   const room = chatState.rooms.find(r => r.id === roomId);
   // 更新聊天视图header（含移动端返回按钮）
   var header = document.getElementById('chatViewHeader');
@@ -3382,11 +3446,11 @@ async function switchRoom(roomId) {
     }
     header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
   }
-  // 频道选中时在右侧上下文面板显示频道信息
+  // 频道选中时在右侧上下文面板显示频道信息（仅桌面端自动展开）
   var ctxPanel = document.getElementById('chatContextPanel');
   if (ctxPanel) {
     if (room && room.type === 'channel') {
-      ctxPanel.classList.add('show');
+      if (!isMobile()) ctxPanel.classList.add('show');
       renderChatContextPanel(room);
     } else {
       ctxPanel.classList.remove('show');
@@ -3434,10 +3498,11 @@ async function checkMutedStatus(roomId) {
 }
 
 function backToRoomList() {
-  var appMain = document.querySelector('.app-main');
-  var appSidebar = document.querySelector('.app-sidebar');
-  if (appMain) appMain.classList.remove('show-mobile');
-  if (appSidebar) appSidebar.classList.remove('hidden-mobile');
+  // 移动端：打开侧边栏抽屉
+  if (isMobile()) {
+    toggleMobileSidebar();
+    return;
+  }
   chatState.currentRoomId = null;
 }
 
@@ -3445,6 +3510,15 @@ function backToRoomList() {
 function toggleChatContext() {
   var panel = document.getElementById('chatContextPanel');
   if (!panel) return;
+  // 移动端用专用抽屉逻辑
+  if (isMobile()) {
+    toggleMobileContext();
+    if (panel.classList.contains('mobile-open') || document.querySelector('.chat-view-context.mobile-open')) {
+      var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+      if (room) renderChatContextPanel(room);
+    }
+    return;
+  }
   panel.classList.toggle('show');
   if (panel.classList.contains('show')) {
     var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
