@@ -511,5 +511,21 @@ CREATE POLICY "channel_questionnaire_answers_insert" ON channel_questionnaire_an
 DROP POLICY IF EXISTS "channel_questionnaire_answers_delete" ON channel_questionnaire_answers;
 CREATE POLICY "channel_questionnaire_answers_delete" ON channel_questionnaire_answers FOR DELETE USING (true);
 
+-- ===== 23. 在线用户状态表 =====
+CREATE TABLE IF NOT EXISTS user_presence (
+  user_id TEXT PRIMARY KEY,
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'online'
+);
+ALTER TABLE user_presence ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "user_presence_read" ON user_presence;
+CREATE POLICY "user_presence_read" ON user_presence FOR SELECT USING (true);
+DROP POLICY IF EXISTS "user_presence_insert" ON user_presence;
+CREATE POLICY "user_presence_insert" ON user_presence FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "user_presence_update" ON user_presence;
+CREATE POLICY "user_presence_update" ON user_presence FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "user_presence_delete" ON user_presence;
+CREATE POLICY "user_presence_delete" ON user_presence FOR DELETE USING (true);
+
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错

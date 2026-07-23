@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
 
@@ -53,13 +53,13 @@
 <div class="app-layout" id="appLayout">
   <!-- 活动栏（最左列 / 移动端底部TabBar） -->
   <aside class="activity-bar" id="activityBar" aria-label="活动栏">
-    <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span><span class="activity-badge" id="actBarFriendsBadge" style="display:none">0</span></button>
-    <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
-    <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
-    <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
+    <button class="activity-item active" data-view="friends" onclick="switchView('friends')" title="好友" aria-label="好友"><span class="activity-icon">👥</span><span class="activity-label">好友</span><span class="activity-badge" id="actBarFriendsBadge" style="display:none">0</span></button>
+    <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-label">频道</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
+    <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span><span class="activity-label">公告</span></button>
+    <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🎯</span><span class="activity-label">功能</span></button>
     <div class="activity-spacer"></div>
-    <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span></button>
-    <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span></button>
+    <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span><span class="activity-label">主题</span></button>
+    <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span><span class="activity-label">设置</span></button>
   </aside>
 
   <!-- 侧边栏（中间列 / 移动端左侧抽屉） -->
@@ -75,7 +75,6 @@
 
 <!-- 移动端浮动按钮 + 遮罩层 -->
 <button class="mobile-fab mobile-fab-sidebar" id="fabSidebar" onclick="toggleMobileSidebar()" aria-label="打开侧边栏" title="侧边栏">☰</button>
-<button class="mobile-fab mobile-fab-context" id="fabContext" onclick="toggleMobileContext()" aria-label="打开详情" title="详情" style="display:none">ℹ</button>
 <div class="mobile-overlay-mask" id="mobileOverlayMask" onclick="closeMobilePanels()"></div>
 
 <!-- Announcement Modal -->
@@ -621,22 +620,10 @@ function escJS(s) { if (!s) return ''; return String(s).replace(/\\/g,'\\\\').re
 // 渲染富文本内容（支持HTML标签）
 function renderRichContent(content) {
   if (!content) return '';
-  content = content.replace(/\n/g, '<br>');
-  const allowed = new Set(['img','video','iframe','br','p','div','span','a','b','i','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','code','pre','table','tr','td','th','thead','tbody']);
-  const div = document.createElement('div');
-  div.innerHTML = content;
-  div.querySelectorAll('img').forEach(function(img) {
-    if (img.src && /^https?:\/\/raw\.githubusercontent\.com\//.test(img.src)) {
-      img.src = img.src.replace(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.*)/, 'https://cdn.jsdelivr.net/gh/$1/$2@$3/$4');
-    }
-  });
-  const all = div.querySelectorAll('*');
-  for (let i = all.length - 1; i >= 0; i--) {
-    if (!allowed.has(all[i].tagName.toLowerCase())) {
-      all[i].replaceWith(document.createTextNode(all[i].textContent));
-    }
-  }
-  return div.innerHTML;
+  // 统一使用 sanitizeHtml 进行安全净化
+  var sanitized = sanitizeHtml(content);
+  // 将 \n 替换为 <br>（仅对文本节点）
+  return sanitized.replace(/\n/g, '<br>');
 }
 
 function formatDate(str) {
@@ -727,8 +714,14 @@ async function init() {
   }
   applyStealthRestrictions();
   applyChatBackground();
+  startPresenceHeartbeat();
+  startOnlineCountUpdater();
   window.addEventListener('beforeunload', function() {
     Object.values(chatState.sbChannels).forEach(function(c) { try { c.unsubscribe(); } catch(e) {} });
+    // 退出时标记离线
+    if (currentUser && window.__SB) {
+      navigator.sendBeacon && sendBeaconPresence('offline');
+    }
   });
   setupChatViewportListeners();
   triggerCleanup();
@@ -926,7 +919,8 @@ function updateNavbar() {
   var themeIcon = document.body.classList.contains('dark') ? '☀️' : '🌙';
   if (currentUser) {
     el.innerHTML = `
-      ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🔧 开发者</button>' : ''}
+      <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:default;padding:6px 10px"></span>
+      ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🛠 开发者</button>' : ''}
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <div class="nav-user" onclick="showModal('settings')" title="设置">
@@ -1054,6 +1048,75 @@ function doLogout() {
 }
 
 // ===== Render Content =====
+// ===== 在线人数检测 =====
+var _presenceTimer = null;
+function startPresenceHeartbeat() {
+  if (!currentUser || !window.__SB) return;
+  // 立即发送一次心跳
+  sendPresenceHeartbeat();
+  // 每 30 秒发送一次
+  _presenceTimer = setInterval(sendPresenceHeartbeat, 30000);
+  // 页面可见性变化时也发送
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) sendPresenceHeartbeat();
+  });
+}
+
+async function sendPresenceHeartbeat() {
+  if (!currentUser || !window.__SB) return;
+  try {
+    var { error } = await __SB.from('user_presence')
+      .upsert({ user_id: currentUser.id, last_seen: new Date().toISOString(), status: 'online' });
+    if (error) console.warn('presence heartbeat error:', error);
+  } catch(e) {}
+}
+
+function sendBeaconPresence(status) {
+  if (!currentUser) return;
+  // 用 fetch 的 keepalive 模式发送（sendBeacon 不支持自定义 header）
+  try {
+    fetch('/api/presence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: currentUser.id, status: status }),
+      keepalive: true
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// 获取在线用户数（5分钟内有活动的用户）
+async function getOnlineUserCount() {
+  if (!window.__SB) return 0;
+  try {
+    var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    var { count, error } = await __SB.from('user_presence')
+      .select('*', { count: 'exact', head: true })
+      .gte('last_seen', fiveMinAgo);
+    if (error) { console.warn('getOnlineCount error:', error); return 0; }
+    return count || 0;
+  } catch(e) { return 0; }
+}
+
+// 在线人数 UI 更新（每分钟刷新）
+var _onlineCountTimer = null;
+function startOnlineCountUpdater() {
+  if (_onlineCountTimer) clearInterval(_onlineCountTimer);
+  updateOnlineCountDisplay();
+  _onlineCountTimer = setInterval(updateOnlineCountDisplay, 60000);
+}
+
+async function updateOnlineCountDisplay() {
+  var count = await getOnlineUserCount();
+  var el = document.getElementById('onlineCountBadge');
+  if (el) {
+    el.textContent = count > 0 ? (count + ' 人在线') : '';
+    el.style.display = count > 0 ? '' : 'none';
+  }
+  // 在频道上下文面板中显示在线成员
+  var ctxOnline = document.getElementById('ctxOnlineCount');
+  if (ctxOnline) ctxOnline.textContent = count;
+}
+
 // ===== 视图切换系统 =====
 var _currentView = 'friends';
 var _prevView = 'friends';
@@ -1138,10 +1201,6 @@ function switchView(view) {
   if (view === 'chat') {
     batchMarkReadByType('channel');
     loadChannelJoinRequests().catch(function(){});
-    // 移动端聊天视图显示详情FAB
-    showMobileContextFab(true);
-  } else {
-    showMobileContextFab(false);
   }
   // 切换到好友视图时清除好友栏私聊红点
   if (view === 'friends') {
@@ -1319,7 +1378,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
       <div class="chat-view-main" id="chatMainArea" style="height:100%">
         <div class="chat-view-center">
           <div class="chat-view-header" id="chatViewHeader" style="border-bottom:1px solid var(--border-color);padding:8px 16px;display:flex;align-items:center;gap:8px">
-            <button class="chat-action-btn" onclick="closePrivateChatInFriends()" title="返回" aria-label="返回" style="font-size:18px">←</button>
+            <button onclick="closePrivateChatInFriends()" title="返回" aria-label="返回" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">☰</button>
             <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:14px">👤</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(friendName)}</div>
@@ -1591,7 +1650,7 @@ function renderFeaturesView(sidebar, main) {
 
   main.innerHTML = `
     <div class="anim-up" style="margin-bottom:16px">
-      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">🔧 功能导航</h2>
+      <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">🎯 功能导航</h2>
       <p style="font-size:13px;color:var(--text-faint);margin-top:4px">快捷访问各类功能</p>
     </div>
     <div id="featuresSection"></div>
@@ -3589,7 +3648,7 @@ async function switchRoom(roomId) {
     } else {
       headerAvatar = '👤';
     }
-    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button onclick="toggleMobileSidebar()" aria-label="会话列表" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">☰</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
   }
   // 频道选中时在右侧上下文面板显示频道信息（仅桌面端自动展开）
   var ctxPanel = document.getElementById('chatContextPanel');
@@ -3657,10 +3716,13 @@ function toggleChatContext() {
   if (!panel) return;
   // 移动端用专用抽屉逻辑
   if (isMobile()) {
-    toggleMobileContext();
-    if (panel.classList.contains('mobile-open') || document.querySelector('.chat-view-context.mobile-open')) {
+    panel.classList.toggle('mobile-open');
+    if (panel.classList.contains('mobile-open')) {
+      document.getElementById('mobileOverlayMask').classList.add('show');
       var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
       if (room) renderChatContextPanel(room);
+    } else {
+      document.getElementById('mobileOverlayMask').classList.remove('show');
     }
     return;
   }
@@ -4420,10 +4482,22 @@ async function sendChatMsg() {
 // 核心函数：接收 File 对象，返回 {url, isVideo} 或抛错
 async function uploadImageFile(file) {
   var PROXY = '/api/proxy';
-  var picgoKey = localStorage.getItem('dp_picgo_key') || '';
   var url = null, uploaded = false;
+
+  // 0. 优先使用项目 R2 上传（最稳定）
+  if (!uploaded && currentUser) {
+    try {
+      var r2Form = new FormData();
+      r2Form.append('file', file);
+      r2Form.append('user_id', currentUser.id);
+      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(function(r) { return r.json(); });
+      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
+    } catch(e) { console.warn('R2 upload failed:', e); }
+  }
+
+  var picgoKey = localStorage.getItem('dp_picgo_key') || '';
   // 1. picgo.net（需 API Key）
-  if (picgoKey) {
+  if (!uploaded && picgoKey) {
     try {
       var pForm = new FormData();
       pForm.append('key', picgoKey);
@@ -4499,6 +4573,18 @@ async function uploadChatFile(input) {
   var url = null;
   var uploaded = false;
   var PROXY = '/api/proxy';
+
+  // 0. 优先使用项目 R2 上传
+  if (!uploaded && currentUser) {
+    try {
+      var r2Form = new FormData();
+      r2Form.append('file', file);
+      r2Form.append('user_id', currentUser.id);
+      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(function(r) { return r.json(); });
+      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
+    } catch(e) { console.warn('R2 upload failed:', e); }
+  }
+
   var picgoKey = localStorage.getItem('dp_picgo_key') || '';
   // 1. picgo.net（需 API Key）
   if (!uploaded && picgoKey) {
@@ -5088,9 +5174,14 @@ async function updateRoomName() {
   if (!name) { toast('请输入频道名称', 'error'); return; }
   const { error } = await __SB.from('chat_rooms').update({ name }).eq('id', chatState.currentRoomId);
   if (error) { toast('修改失败: ' + error.message, 'error'); return; }
-  const room = chatState.rooms.find(r => r.id === chatState.currentRoomId);
-  if (room) room.name = name;
   toast('名称已更新', 'success');
+  await loadRoomList();
+  renderRoomList();
+  var rid = chatState.currentRoomId;
+  chatState.currentRoomId = null;
+  await switchRoom(rid);
+  var room = chatState.rooms.find(function(r) { return r.id === rid; });
+  if (room) renderChatContextPanel(room);
 }
 
 async function updateRoomAvatar() {
@@ -5099,19 +5190,30 @@ async function updateRoomAvatar() {
   if (!canEdit) { toast('只有管理员及以上才能修改频道头像', 'error'); return; }
   const avatar = document.getElementById('editRoomAvatar')?.value?.trim() || '';
   try {
-    const { error } = await __SB.from('chat_channel_settings').upsert({
-      room_id: chatState.currentRoomId, created_by: currentUser.id, avatar_url: avatar
-    }, { onConflict: 'room_id' });
-    if (error) { toast('修改失败: ' + error.message, 'error'); return; }
+    // 先尝试 update，如果没有行则 insert
+    var { data: updData, error: updErr } = await __SB.from('chat_channel_settings')
+      .update({ avatar_url: avatar })
+      .eq('room_id', chatState.currentRoomId)
+      .select();
+    if (updErr) { toast('修改失败: ' + updErr.message, 'error'); return; }
+    // 如果没有更新到行，说明还没有 settings 记录，需要插入
+    if (!updData || updData.length === 0) {
+      var { error: insErr } = await __SB.from('chat_channel_settings')
+        .insert({ room_id: chatState.currentRoomId, created_by: currentUser.id, avatar_url: avatar });
+      if (insErr) { toast('修改失败: ' + insErr.message, 'error'); return; }
+    }
     toast('头像已更新', 'success');
+    // 重新加载会话列表（会重新拉取 avatar_url）
     await loadRoomList();
-    // 重新渲染会话列表和当前聊天视图（含 header 头像）
     renderRoomList();
+    // 强制重新渲染当前频道（含 header 头像和上下文面板）
     if (chatState.currentRoomId) {
-      // 切换回当前频道以刷新 header + 上下文面板
       var rid = chatState.currentRoomId;
-      chatState.currentRoomId = null; // 强制重新渲染
-      switchRoom(rid);
+      chatState.currentRoomId = null;
+      await switchRoom(rid);
+      // 重新渲染上下文面板
+      var room = chatState.rooms.find(function(r) { return r.id === rid; });
+      if (room) renderChatContextPanel(room);
     }
   } catch(e) {
     toast('修改失败: ' + e.message, 'error');

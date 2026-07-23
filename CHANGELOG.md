@@ -37,7 +37,31 @@
 
 ---
 
-## v3.5 — 2026-07-15
+## v3.7 — 2026-07-23
+
+### 聊天气泡 HTML 溢出修复 + 公告渲染统一 + 在线人数检测 + 图床 R2 优先
+
+#### 故障记录：聊天气泡 HTML 内容溢出
+
+**现象**：用户在聊天中发送包含 HTML 标签的消息（如 `<a href="...">测试</a>`）时，气泡内容溢出到气泡外部，显示为长串字符。
+
+**根因**：
+1. `.chat-msg-bubble` 和 `.chat-msg` 缺少 `overflow-wrap: anywhere`，长 URL 和 HTML 块级元素无法正确换行
+2. `renderRichContent`（公告渲染用）使用简易正则过滤，不移除 `on*` 事件属性和 `javascript:` 协议，存在安全风险
+3. 公告内容同样缺少 `overflow-wrap` 限制
+
+**修复**：
+1. 为 `.chat-msg-bubble`、`.chat-msg-content` 添加 `overflow-wrap: anywhere; word-break: break-word; max-width: 100%`
+2. 为 HTML 内容中的 `img`、`video`、`pre`、`table` 等元素添加 `max-width: 100%` 和滚动容器
+3. 统一 `renderRichContent` 使用 `sanitizeHtml()` 净化器（与聊天渲染一致），移除 `on*` 事件、`javascript:` 协议等危险内容
+4. 参考：飞书云文档的消息渲染也使用 `overflow-wrap: anywhere` + 白名单净化器，确保 HTML 内容严格限制在气泡内
+
+**经验教训**：
+- HTML 渲染必须同时做内容净化（XSS 防护）和布局限制（CSS overflow）
+- 公告和聊天应使用统一的净化器，避免两套逻辑不一致
+- 测试 HTML 渲染时，必须测试长 URL、嵌套标签、块级元素（table/pre）等边界情况
+
+---
 
 ### Tavern 大规模 SillyTavern 功能复刻 + Coze 站点深度集成
 

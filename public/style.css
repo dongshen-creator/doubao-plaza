@@ -186,12 +186,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   cursor: pointer;
   font-size: 20px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
   color: var(--text-muted);
   transition: all var(--transition);
   position: relative;
   flex-shrink: 0;
+}
+.activity-icon {
+  line-height: 1;
+  pointer-events: none;
+}
+.activity-label {
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+  display: none; /* 桌面端默认隐藏，移动端显示 */
 }
 .activity-item:hover {
   background: var(--bg-hover);
@@ -209,10 +221,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   width: 3px;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
-}
-.activity-icon {
-  line-height: 1;
-  pointer-events: none;
 }
 .activity-badge {
   position: absolute;
@@ -315,6 +323,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   /* 桌面端隐藏浮动按钮 */
   .mobile-fab { display: none !important; }
   .mobile-overlay-mask { display: none !important; }
+  /* 桌面端活动栏隐藏主题按钮（右上角已有） */
+  .activity-bar .activity-item[onclick*="toggleTheme"] { display: none !important; }
 }
 
 @media (max-width: 767px) {
@@ -356,6 +366,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
     border-radius: 0;
     flex: 1;
     justify-content: center;
+    gap: 2px;
+  }
+  .activity-bar .activity-item .activity-label {
+    display: block !important;
+    font-size: 10px;
   }
   .activity-bar .activity-item.active {
     background: transparent;
@@ -813,10 +828,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-room-unread{background:#EF4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
 .chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
-.chat-msg{max-width:75%;word-break:break-word;line-height:1.45;position:relative}
+.chat-msg{max-width:75%;word-break:break-word;line-height:1.45;position:relative;min-width:0}
 .chat-msg-left{align-self:flex-start}
 .chat-msg-right{align-self:flex-end}
-.chat-msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;position:relative;transition:box-shadow .2s,transform .2s}
+.chat-msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;position:relative;transition:box-shadow .2s,transform .2s;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
+.chat-msg-content{overflow-wrap:anywhere;word-break:break-word;max-width:100%;line-height:1.5}
+.chat-msg-content img{max-width:100%;height:auto;border-radius:8px;margin:4px 0}
+.chat-msg-content video{max-width:100%;border-radius:8px;margin:4px 0}
+.chat-msg-content a{word-break:break-all}
+.chat-msg-content pre{overflow-x:auto;max-width:100%}
+.chat-msg-content code{font-family:monospace;font-size:12px;background:var(--bg-hover);padding:1px 4px;border-radius:3px}
+.chat-msg-content pre code{display:block;padding:8px;white-space:pre-wrap}
+.chat-msg-content table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}
+.chat-msg-content td,.chat-msg-content th{border:1px solid var(--border-color);padding:4px 8px}
+.chat-msg-content blockquote{border-left:3px solid var(--accent);margin:4px 0;padding:4px 12px;opacity:.8}
 .chat-msg-bubble:hover{box-shadow:0 1px 4px rgba(0,0,0,0.06)}
 .chat-msg-left .chat-msg-bubble{background:var(--chat-recv-bubble);border:1px solid var(--chat-recv-border);border-bottom-left-radius:4px}
 .chat-msg-right .chat-msg-bubble{background:var(--accent-gradient);color:#fff;border-bottom-right-radius:4px}
