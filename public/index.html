@@ -4638,17 +4638,17 @@ async function safeJsonParse(response) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 图片上传（仅图片 → picgo.net 图床，失败回退 sm.ms）
+// 图片上传（仅图片 → picgo.net 图床）
 // 文件上传（非图片 → tmpfile.link 文件存储）
 // 两者完全分离，不混用，不使用 R2
 // ═══════════════════════════════════════════════════════
 
-// 图片上传：picgo.net 专用端点 → sm.ms 备选
+// 图片上传：picgo.net 专用端点
 async function uploadImageToPicgo(file) {
   var url = null, errors = [];
   var isVideo = file.type.startsWith('video/');
 
-  // 1. picgo.net（仅图片，通过专用 Cloudflare Function 服务端转发，无 CORS 问题）
+  // picgo.net（仅图片，通过专用 Cloudflare Function 服务端转发，无 CORS 问题）
   if (file.type.startsWith('image/')) {
     try {
       var pForm = new FormData();
@@ -4658,22 +4658,6 @@ async function uploadImageToPicgo(file) {
       else if (pRes && pRes.error) errors.push('picgo.net: ' + pRes.error);
       else errors.push('picgo.net: 响应异常');
     } catch(e) { errors.push('picgo.net: ' + e.message); console.warn('picgo.net upload failed:', e); }
-  }
-
-  // 2. sm.ms 备选（仅图片）
-  if (!url && file.type.startsWith('image/')) {
-    try {
-      var smForm = new FormData();
-      smForm.append('smfile', file);
-      var smRes = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' },
-        body: smForm
-      }).then(safeJsonParse);
-      if (smRes && smRes.success && smRes.data && smRes.data.url) { url = smRes.data.url; }
-      else if (smRes && smRes.data && smRes.data.url) { url = smRes.data.url; }
-      else if (smRes && smRes.error) errors.push('sm.ms: ' + smRes.error);
-    } catch(e) { errors.push('sm.ms: ' + e.message); }
   }
 
   if (!url) {
@@ -4721,7 +4705,7 @@ async function sendImageMessage(url, isVideo) {
   renderMessages(chatState.currentRoomId);
 }
 
-// 图片/视频上传（图床：picgo.net → sm.ms 备选）
+// 图片/视频上传（图床：picgo.net 专用端点）
 async function uploadChatImage(input) {
   var file = input.files[0];
   if (!file) return;
@@ -7190,45 +7174,28 @@ function uploadChatBg(file) {
     });
 }
 
-// 外部图床降级方案
+// 聊天背景上传降级：使用 tmpfile.link 服务端端点（不使用 sm.ms / img.remit.ee，避免 401/CORS）
 function uploadChatBgFallback(file, status) {
-  var PROXY = '/api/proxy';
-  var services = [
-    { url: 'https://sm.ms/api/v2/upload', fields: { smfile: file }, name: 'sm.ms' },
-    { url: 'https://img.remit.ee/api/upload', fields: { file: file }, name: 'img.remit.ee' }
-  ];
-  var tryNext = function(idx) {
-    if (idx >= services.length) {
-      if (status) status.textContent = '上传失败：picgo.net 和外部图床均不可用，可尝试手动输入URL';
-      toast('自动上传失败，请手动输入图片URL', 'error');
-      return;
-    }
-    var svc = services[idx];
-    if (status) status.textContent = '降级：通过 ' + svc.name + ' 上传...';
-    var fd = new FormData();
-    for (var k in svc.fields) fd.append(k, svc.fields[k]);
-    fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': svc.url }, body: fd })
-      .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
-      .then(function(data) {
-        var url = null;
-        if (data) {
-          if (data.image && data.image.url) url = data.image.url;
-          else if (typeof data.url === 'string') url = data.url;
-          else if (data.data && typeof data.data.url === 'string') url = data.data.url;
-          else if (data.data && data.data.links && data.data.links.image) url = data.data.links.image;
-        }
-        if (!url) throw new Error('未获取到图片URL');
-        localStorage.setItem('dp_chat_bg', url);
+  if (status) status.textContent = '降级：通过 tmpfile.link 上传...';
+  var fd = new FormData();
+  fd.append('file', file);
+  fetch('/api/upload/tmpfile', { method: 'POST', body: fd })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success && data.url) {
+        localStorage.setItem('dp_chat_bg', data.url);
         applyChatBackground();
-        if (status) status.textContent = '背景图已应用（外部图床）';
+        if (status) status.textContent = '背景图已应用（tmpfile.link）';
         toast('聊天背景已应用', 'success');
-      })
-      .catch(function(err) {
-        console.warn(svc.name + ' 失败:', err);
-        tryNext(idx + 1);
-      });
-  };
-  tryNext(0);
+      } else {
+        throw new Error(data.error || '上传失败');
+      }
+    })
+    .catch(function(err) {
+      console.warn('tmpfile.link 上传失败:', err);
+      if (status) status.textContent = '上传失败：picgo.net 和 tmpfile.link 均不可用，可尝试手动输入URL';
+      toast('自动上传失败，请手动输入图片URL', 'error');
+    });
 }
 
 // ===== Start =====

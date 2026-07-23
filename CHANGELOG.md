@@ -4,6 +4,42 @@
 
 ---
 
+## v4.2 — 2026-07-24
+
+### 修复 picgo.net 502 + 移除 sm.ms/img.remit.ee 降级
+
+#### 故障修复
+
+##### 1. picgo.net 上传 502 Bad Gateway
+
+**现象**：上传图片到 picgo.net 时，`/api/upload/picgo` 返回 502 Bad Gateway。
+
+**根因**：
+1. API key 使用了 `X-API-Key` header，但 Chevereto API 要求 key 通过 URL 参数传递（`?key=xxx`）
+2. 使用 base64 data URL 作为 `source` 字段，Cloudflare Workers 中 `btoa()` 对大文件编码不稳定
+
+**修复**：
+1. API key 改回 URL 参数传递：`PICGO_UPLOAD_URL + '?key=' + PICGO_API_KEY + '&format=json'`
+2. 上传方式从 base64 data URL 改为二进制 Blob：`new Blob([buffer], { type: contentType })`
+3. 增加对非 JSON 响应（如 Cloudflare 拦截页面）的 HTML title 提取
+4. 增加对 Chevereto 不同错误格式的兼容处理
+
+##### 2. /api/proxy 401 Unauthorized
+
+**现象**：聊天背景上传 picgo.net 失败后，降级方案通过 `/api/proxy` 请求 sm.ms，返回 401 Unauthorized。
+
+**根因**：sm.ms API v2 现在需要认证 token，匿名请求返回 401。`/api/proxy` 转发请求后，sm.ms 的 401 状态码被透传给客户端。
+
+**修复**：完全移除 sm.ms 和 img.remit.ee 降级方案，改用自有服务端端点 `/api/upload/tmpfile`（tmpfile.link）作为聊天背景上传的降级方案，避免 CORS 和认证问题。
+
+#### 修改文件
+
+- `functions/api/upload/picgo.js` — API key 改用 URL 参数，上传方式改为二进制 Blob，增强错误处理
+- `public/index.html` — `uploadChatBgFallback()` 改用 `/api/upload/tmpfile`，移除 sm.ms/img.remit.ee
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.1 — 2026-07-24
 
 ### 图床/文件上传完全分离 + 专用上传端点 + 修复 picgo.net 400

@@ -1,9 +1,11 @@
 // Cloudflare Pages Function - picgo.net 图床上传 API
-// POST /api/upload/picgo - 上传图片到 picgo.net (Chevereto API v1.1)
+// POST /api/upload/picgo - 上传图片到 picgo.net (Chevereto API v1)
 //
-// 鉴权：通过 X-API-Key header（官方推荐方式）
+// 鉴权：API key 通过 URL 参数传递（Chevereto 要求 ?key=xxx）
+// 上传方式：二进制 Blob（source 字段，Cloudflare Workers 兼容）
 // 上传目标：picgo.net (Chevereto API v1)
 // 限制：仅图片类型，最大 25MB
+// 文档：https://www.picgo.net/api-v1
 
 const PICGO_API_KEY = 'chv_kyCSl_10248ff7e66129adec1f4ce1d55192dbd1238271e943638de688e6262bdd6033_68d8a3764e5564c490c6ad9471ee875fddaeda2a5cb5e3a9d64473a9b5733835';
 const PICGO_UPLOAD_URL = 'https://www.picgo.net/api/1/upload';
@@ -56,44 +58,76 @@ export async function onRequestPost(context) {
       return json({ success: false, error: '图片大小超过 25MB 限制' }, 413);
     }
 
-    // 4. 构建发送到 picgo.net 的 FormData
-    // 根据官方 API 文档 (https://www.picgo.net/api-v1):
-    //   - source: binary file（直接使用 File 对象，不包装成 Blob）
-    //   - 认证: X-API-Key header（官方推荐）
-    //   - format: json（通过 URL 参数传递）
-    // 注意：Cloudflare Workers 中 new Blob() + FormData 会有兼容性问题
-    // 导致 source 字段为空（"Empty upload source"），必须用原始 File 对象
-    const picgoForm = new FormData();
-    picgoForm.append('source', file, file.name || 'image.png');
+    // 4. 从文件名推断扩展名
+    const fileName = file.name || 'image.png';
+    const ext = fileName.split('.').pop().toLowerCase() || 'png';
 
-    // 5. 发送请求到 picgo.net
-    // 使用 X-API-Key header 认证（官方推荐），format=json 通过 URL 传递
-    const response = await fetch(PICGO_UPLOAD_URL + '?format=json', {
+    // 5. 构建发送到 picgo.net 的 FormData
+    // Chevereto API 要求：
+    //   - key 通过 URL 参数传递（?key=xxx）
+    //   - source 字段为文件内容（multipart/form-data）
+    //   - format=json 通过 URL 参数传递
+    // 使用 Blob 代替 File 对象（Cloudflare Workers 兼容性更好）
+    const blob = new Blob([buffer], { type: contentType });
+    const picgoForm = new FormData();
+    picgoForm.append('source', blob, fileName);
+    picgoForm.append('type', 'file');
+
+    // 6. 发送请求到 picgo.net
+    // API key 在 URL 参数中传递（Chevereto 官方要求）
+    const uploadUrl = PICGO_UPLOAD_URL + '?key=' + PICGO_API_KEY + '&format=json';
+    const response = await fetch(uploadUrl, {
       method: 'POST',
-      headers: {
-        'X-API-Key': PICGO_API_KEY,
-      },
       body: picgoForm,
     });
 
-    // 6. 解析响应
+    // 7. 解析响应
     const respText = await response.text();
     let respData;
     try {
       respData = JSON.parse(respText);
     } catch (e) {
-      return json({ success: false, error: 'picgo.net 返回非 JSON 响应', status: response.status, body: respText.substring(0, 500) }, 502);
+      // 如果返回的是 HTML（如 Cloudflare 拦截页面），尝试提取错误信息
+      let htmlError = '';
+      try {
+        const titleMatch = respText.match(/<title>(.*?)<\/title>/i);
+        if (titleMatch) htmlError = titleMatch[1];
+      } catch(_) {}
+      return json({
+        success: false,
+        error: 'picgo.net 返回非 JSON 响应' + (htmlError ? '（' + htmlError + '）' : ''),
+        status: response.status,
+        body: respText.substring(0, 500)
+      }, 502);
     }
 
-    // 7. 检查上传结果
-    // 成功: { status_code: 200, success: {...}, image: { url: "..." } }
-    // 错误: { status_code: 400, error: { message: "...", code: ... } }
+    // 8. 检查上传结果
+    // 成功: { status_code: 200, image: { url: "...", ... } }
+    // 错误: { status_code: 4xx, error: { message: "...", code: ... } }
     if (respData.image && respData.image.url) {
       return json({ success: true, url: respData.image.url });
     } else if (respData.error && respData.error.message) {
-      return json({ success: false, error: 'picgo.net: ' + respData.error.message, code: respData.error.code || respData.status_code }, 502);
+      return json({
+        success: false,
+        error: 'picgo.net: ' + respData.error.message,
+        code: respData.error.code || respData.status_code
+      }, 502);
+    } else if (respData.status_code && respData.status_code >= 400) {
+      // 某些 Chevereto 版本的错误格式不同
+      const errMsg = respData.error && typeof respData.error === 'string'
+        ? respData.error
+        : (respData.message || '上传被拒绝');
+      return json({
+        success: false,
+        error: 'picgo.net: ' + errMsg,
+        status_code: respData.status_code
+      }, 502);
     } else {
-      return json({ success: false, error: 'picgo.net: 响应无 URL 字段', response: JSON.stringify(respData).substring(0, 300) }, 502);
+      return json({
+        success: false,
+        error: 'picgo.net: 响应无 URL 字段',
+        response: JSON.stringify(respData).substring(0, 300)
+      }, 502);
     }
   } catch (e) {
     return json({ success: false, error: '上传失败：' + (e.message || '未知错误') }, 500);
