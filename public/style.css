@@ -158,6 +158,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   overflow: hidden;
 }
 
+/* ── 视图顶部栏（含☰按钮） ── */
+.view-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  margin-bottom: 4px;
+}
+.sidebar-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px 6px;
+  line-height: 1;
+}
+.sidebar-toggle-btn:hover { color: var(--text-primary); }
+
 /* ── 活动栏 ── */
 .activity-bar {
   width: 48px;
@@ -320,8 +339,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 @media (min-width: 768px) {
   .activity-bar { display: flex; }
   .nav-mobile-only { display: none !important; }
-  /* 桌面端隐藏浮动按钮 */
-  .mobile-fab { display: none !important; }
+  /* 桌面端隐藏遮罩层 */
   .mobile-overlay-mask { display: none !important; }
   /* 桌面端活动栏隐藏主题按钮（右上角已有） */
   .activity-bar .activity-item[onclick*="toggleTheme"] { display: none !important; }
@@ -417,46 +435,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     position: relative;
-  }
-
-  /* 浮动按钮（打开侧边栏） */
-  .mobile-fab {
-    position: fixed;
-    z-index: 80;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: none;
-    background: var(--accent);
-    color: #fff;
-    font-size: 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-    transition: transform 0.2s, opacity 0.2s;
-  }
-  .mobile-fab:active { transform: scale(0.9); }
-  .mobile-fab-sidebar {
-    bottom: 72px;
-    left: 12px;
-  }
-  .mobile-fab-context {
-    bottom: 72px;
-    right: 12px;
-  }
-  /* 有红点时浮动按钮闪烁 */
-  .mobile-fab.has-badge::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #ef4444;
-    border: 2px solid var(--bg-secondary);
   }
 
   /* 遮罩层 */

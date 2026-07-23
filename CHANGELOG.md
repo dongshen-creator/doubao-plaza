@@ -157,6 +157,97 @@
 
 ---
 
+## v3.8 — 2026-07-23
+
+### 10 项综合修复：R2 上传 404 + 移动端 UI + 频道功能 + 性能优化
+
+#### 关键 Bug：R2 文件上传后 URL 返回 404
+
+**现象**：聊天中上传图片/文件到 R2 后，返回的 URL（如 `https://domain/cdn-assets/chat-assets/...`）访问时返回 404，文件上传"成功"但无法显示。
+
+**根因**：`public/_routes.json` 的 `include` 数组为 `["/api/*", "/pages/*", "/chat/*"]`，缺少 `/cdn-assets/*` 路径。Cloudflare Pages 根据 `_routes.json` 决定哪些路径触发 Functions，未列入 `include` 的路径会被当作静态文件处理。由于 `functions/cdn-assets/[[key]].js` 对应的 `/cdn-assets/*` 路径未被路由，R2 文件无法通过该 Function 读取，导致 404。
+
+**修复**：在 `include` 中添加 `"/cdn-assets/*"`，使 `/cdn-assets/` 路径正确路由到 R2 代理 Function。
+
+**经验教训**：
+- Cloudflare Pages 的 `_routes.json` 是路由控制的核心配置，遗漏路径会导致 Function 不可达
+- 添加新的 Pages Function 时，必须同步更新 `_routes.json` 的 `include` 数组
+- 测试上传功能时，不仅要验证上传 API 返回成功，还要验证返回的 URL 可访问
+
+---
+
+#### 移动端 UI 修复
+
+- **清理死 CSS**：删除 `style.css` 中已无 HTML 引用的 `.mobile-fab` 系列样式（浮动按钮已被 header 中的 ☰ 按钮取代）
+- **统一 ☰ 按钮样式**：聊天视图 header 的 ☰ 按钮从内联样式改为使用 `sidebar-toggle-btn` 类，与其他视图（好友/公告/功能）保持一致
+- **开发者按钮**：确认 `#actBarDeveloperBtn` 已在 activity bar 中正确显示，`updateNavbar()` 同步可见性
+
+---
+
+#### 频道功能增强
+
+##### 频道头像统一
+
+- `roomItemHTML` 函数中频道默认头像从 `📢` 改为 `channelAvatarHTML(r, 32)`，显示频道实际头像或 `💬` 默认图标
+- 浏览频道列表也添加了频道头像显示
+- `channelAvatarHTML()` 函数在头像加载失败时自动回退为 `💬` 图标
+
+##### 频道公告错误处理
+
+- `loadChannelAnnouncements` 增加 `error` 解构和错误日志
+- 表不存在时显示具体错误信息（如 "Could not find the table"），不再静默返回"暂无公告"
+
+##### 频道分组功能
+
+- `renderRoomList` 添加频道分组筛选标签（类似好友分组），点击分组名筛选该分组下的频道
+- 频道设置弹窗中添加"📁 频道分组管理"按钮，调用已有的 `showChannelGroupManager()` 管理分组
+- 分组数据存储在 `localStorage`（`chat_channel_groups`），无需数据库变更
+
+##### 入群申请改进
+
+- 在频道聊天视图顶部显示入群申请横幅（仅管理员可见），包含申请人头像、昵称和通过/拒绝按钮
+- 新增 `renderChannelJoinBanner(roomId)` 函数，在 `switchRoom` 中调用
+- 新增 `fetchUserInfo(uid)` 函数带缓存，避免重复 API 调用查询同一用户信息
+- `loadChannelJoinRequests` 改用缓存版本 `fetchUserInfo`，减少网络请求
+
+---
+
+#### 性能优化
+
+##### 浏览频道 N+1 查询修复
+
+**问题**：`showBrowseChannels` 函数对每个频道执行 2 次串行查询（成员数 + 当前用户是否已加入），N 个频道导致 2N 次 Supabase 查询。
+
+**修复**：改为 2 次批量查询：
+1. 一次 `.in('room_id', roomIds)` 查询获取所有频道的成员记录，前端聚合计算每频道的成员数
+2. 一次 `.eq('user_id', currentUser.id).in('room_id', roomIds)` 查询检查当前用户已加入的频道
+
+**效果**：查询次数从 2N 降为 2（常数级），浏览频道加载速度显著提升。
+
+---
+
+#### 其他修复
+
+##### user_presence 错误处理
+
+- `sendPresenceHeartbeat` 和 `getOnlineUserCount` 遇到 `PGRST205`（表不存在）错误时，设置 `__presenceTableMissing` 标志并停止后续重试，避免每 30 秒重复报错
+- 用户需在 Supabase SQL Editor 中执行 `supabase-migration.sql` 创建 `user_presence` 表
+
+##### HTML 渲染验证
+
+- 确认 `renderMsgHTML` 使用 `<div class="chat-msg-content">`（v3.7 修复），`sanitizeHtml` 清理 href 中的反引号
+- 问题根因是代码未部署到 Cloudflare Pages，非代码缺陷
+
+#### 修改文件
+
+- `public/_routes.json` — 添加 `/cdn-assets/*` 到 `include` 数组（关键修复）
+- `public/style.css` — 删除 `.mobile-fab` 死 CSS（约 35 行）
+- `public/index.html` — 统一 ☰ 按钮样式、频道头像替换、公告错误处理、N+1 优化、入群申请横幅、频道分组筛选、user_presence 错误处理
+- `README.md` — 更新技术架构（R2 存储）、部署教程（R2 绑定步骤）、功能清单
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v3.4 — 2026-07-15
 
 ### Tavern 角色扮演聊天工具（重大新增）

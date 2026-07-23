@@ -59,6 +59,7 @@
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🎯</span><span class="activity-label">功能</span></button>
     <div class="activity-spacer"></div>
     <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span><span class="activity-label">主题</span></button>
+    <button class="activity-item" id="actBarDeveloperBtn" onclick="showModal('developer')" title="开发者" aria-label="开发者" style="display:none"><span class="activity-icon">🛠</span><span class="activity-label">开发者</span></button>
     <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span><span class="activity-label">设置</span></button>
   </aside>
 
@@ -73,8 +74,7 @@
   </main>
 </div>
 
-<!-- 移动端浮动按钮 + 遮罩层 -->
-<button class="mobile-fab mobile-fab-sidebar" id="fabSidebar" onclick="toggleMobileSidebar()" aria-label="打开侧边栏" title="侧边栏">☰</button>
+<!-- 移动端遮罩层（浮动FAB已移除，☰按钮在各视图header中） -->
 <div class="mobile-overlay-mask" id="mobileOverlayMask" onclick="closeMobilePanels()"></div>
 
 <!-- Announcement Modal -->
@@ -561,8 +561,18 @@ function sanitizeHtml(html) {
           child.setAttribute('style', safe.join(';'));
         }
       }
-      // a 标签自动添加 target=_blank rel=noopener
+      // a 标签自动添加 target=_blank rel=noopener，清理 href 中的反引号
       if (tag === 'a') {
+        var href = child.getAttribute('href');
+        if (href) {
+          // 移除反引号、首尾空格、换行
+          href = href.replace(/`/g, '').trim();
+          if (href) {
+            child.setAttribute('href', href);
+          } else {
+            child.removeAttribute('href');
+          }
+        }
         child.setAttribute('target', '_blank');
         child.setAttribute('rel', 'noopener noreferrer');
       }
@@ -939,6 +949,9 @@ function updateNavbar() {
   }
   // 同步移动端 TabBar 状态
   if (typeof tabbarUpdateAuthState === 'function') tabbarUpdateAuthState();
+  // 同步活动栏开发者按钮
+  var devBtn = document.getElementById('actBarDeveloperBtn');
+  if (devBtn) devBtn.style.display = isDeveloper() ? '' : 'none';
 }
 
 function isDeveloper() {
@@ -1062,12 +1075,20 @@ function startPresenceHeartbeat() {
   });
 }
 
+var __presenceTableMissing = false;
 async function sendPresenceHeartbeat() {
-  if (!currentUser || !window.__SB) return;
+  if (!currentUser || !window.__SB || __presenceTableMissing) return;
   try {
     var { error } = await __SB.from('user_presence')
       .upsert({ user_id: currentUser.id, last_seen: new Date().toISOString(), status: 'online' });
-    if (error) console.warn('presence heartbeat error:', error);
+    if (error) {
+      if (error.code === 'PGRST205') {
+        console.warn('user_presence 表不存在，请在 Supabase SQL Editor 中执行 supabase-migration.sql 创建该表');
+        __presenceTableMissing = true;
+      } else {
+        console.warn('presence heartbeat error:', error);
+      }
+    }
   } catch(e) {}
 }
 
@@ -1086,13 +1107,16 @@ function sendBeaconPresence(status) {
 
 // 获取在线用户数（5分钟内有活动的用户）
 async function getOnlineUserCount() {
-  if (!window.__SB) return 0;
+  if (!window.__SB || __presenceTableMissing) return 0;
   try {
     var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     var { count, error } = await __SB.from('user_presence')
       .select('*', { count: 'exact', head: true })
       .gte('last_seen', fiveMinAgo);
-    if (error) { console.warn('getOnlineCount error:', error); return 0; }
+    if (error) {
+      if (error.code === 'PGRST205') { __presenceTableMissing = true; return 0; }
+      console.warn('getOnlineCount error:', error); return 0;
+    }
     return count || 0;
   } catch(e) { return 0; }
 }
@@ -1259,6 +1283,7 @@ function renderFriendsView(sidebar, main) {
   // 主内容区：渐变欢迎卡片 + 搜索结果 + 私聊
   main.innerHTML = `
     <div id="friendsMainContainer" style="height:100%;display:flex;flex-direction:column">
+      <div class="view-header-bar"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><span style="font-size:15px;font-weight:600;color:var(--text-primary)">好友</span></div>
       <div id="searchResults"></div>
       <div class="friends-hero anim-up" id="friendsWelcomeCard">
         <div class="friends-hero-icon">✨</div>
@@ -1469,7 +1494,7 @@ function renderChatView(sidebar, main) {
     <div class="chat-view-main" id="chatMainArea">
       <div class="chat-view-center">
         <div class="chat-view-header" id="chatViewHeader">
-          <div style="font-size:16px;font-weight:700;color:var(--text-primary)">💬 频道</div>
+          <div style="display:flex;align-items:center;gap:10px"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><div style="font-size:16px;font-weight:700;color:var(--text-primary)">频道</div></div>
           <div style="font-size:12px;color:var(--text-faint)">选择一个频道开始聊天</div>
         </div>
         <div class="chat-view-body" id="chatMsgs">
@@ -1553,15 +1578,12 @@ async function loadChannelJoinRequests() {
   var listEl = document.getElementById('channelJoinRequests');
   if (!listEl) { updateActivityBadges(); return; }
 
-  // 获取申请人信息
+  // 获取申请人信息（使用缓存避免重复 API 调用）
   var userIds = requests.map(function(r) { return r.user_id; });
   var userMap = {};
   await Promise.all(userIds.map(async function(uid) {
-    try {
-      var res = await fetch('/api/users/' + uid);
-      var data = await res.json();
-      if (data && data.user) userMap[uid] = data.user;
-    } catch(e) {}
+    var user = await fetchUserInfo(uid);
+    if (user) userMap[uid] = user;
   }));
 
   // 获取频道名
@@ -1586,6 +1608,53 @@ async function loadChannelJoinRequests() {
   updateActivityBadges();
 }
 
+// 用户信息缓存（避免重复 API 调用）
+var __userCache = {};
+async function fetchUserInfo(uid) {
+  if (!uid) return null;
+  if (__userCache[uid]) return __userCache[uid];
+  try {
+    var res = await fetch('/api/users/' + uid);
+    var data = await res.json();
+    if (data && data.user) { __userCache[uid] = data.user; return data.user; }
+  } catch(e) {}
+  return null;
+}
+
+// 在频道聊天视图顶部显示入群申请横幅
+async function renderChannelJoinBanner(roomId) {
+  var existing = document.getElementById('channelJoinBanner');
+  if (existing) existing.remove();
+  if (!roomId || !currentUser) return;
+  var room = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (!room || room.type !== 'channel') return;
+  var isAdmin = room.created_by === currentUser.id || room.is_admin || isDeveloper();
+  if (!isAdmin) return;
+  var { data: requests, error } = await __SB.from('channel_join_requests')
+    .select('*').eq('room_id', roomId).eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error || !requests || !requests.length) return;
+  var users = await Promise.all(requests.map(function(req) { return fetchUserInfo(req.user_id); }));
+  var banner = document.createElement('div');
+  banner.id = 'channelJoinBanner';
+  banner.style.cssText = 'background:var(--accent-shadow);border-bottom:2px solid var(--accent);padding:8px 12px;max-height:240px;overflow-y:auto;flex-shrink:0';
+  var inner = '<div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px">📩 ' + requests.length + ' 个待处理入群申请</div>';
+  requests.forEach(function(req, i) {
+    var user = users[i] || {};
+    var name = user.name || req.user_id.substring(0, 8);
+    var avatar = user.avatar ? '<img src="' + esc(user.avatar) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px">' + esc(name.charAt(0) || '?') + '</div>';
+    inner += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">' +
+      avatar +
+      '<span style="font-size:12px;flex:1;color:var(--text-primary)">' + esc(name) + '</span>' +
+      '<button class="btn btn-green btn-sm" style="font-size:10px;padding:2px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过">✅</button>' +
+      '<button class="btn btn-gray btn-sm" style="font-size:10px;padding:2px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝">❌</button>' +
+    '</div>';
+  });
+  banner.innerHTML = inner;
+  var header = document.getElementById('chatViewHeader');
+  if (header) header.insertAdjacentElement('afterend', banner);
+}
+
 // ── 公告视图 ──
 function renderAnnouncementsView(sidebar, main) {
   sidebar.classList.add('has-content');
@@ -1599,6 +1668,7 @@ function renderAnnouncementsView(sidebar, main) {
   `;
 
   main.innerHTML = `
+    <div class="view-header-bar"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><span style="font-size:15px;font-weight:600;color:var(--text-primary)">公告</span></div>
     <div class="anim-up" style="margin-bottom:16px">
       <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">📢 网站公告</h2>
       <p style="font-size:13px;color:var(--text-faint);margin-top:4px">查看最新的网站公告和动态</p>
@@ -1649,6 +1719,7 @@ function renderFeaturesView(sidebar, main) {
   `;
 
   main.innerHTML = `
+    <div class="view-header-bar"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><span style="font-size:15px;font-weight:600;color:var(--text-primary)">功能</span></div>
     <div class="anim-up" style="margin-bottom:16px">
       <h2 style="font-size:20px;font-weight:700;color:var(--text-primary)">🎯 功能导航</h2>
       <p style="font-size:13px;color:var(--text-faint);margin-top:4px">快捷访问各类功能</p>
@@ -3574,7 +3645,7 @@ function renderRoomList() {
     } else {
       channelEl.innerHTML = channels.map(function(r) {
         var active = r.id === chatState.currentRoomId;
-        var avatar = (r.avatar_url) ? '<img src="' + esc(r.avatar_url) + '" onerror="this.style.display=\'none\';this.parentElement.textContent=\'📢\'">' : '📢';
+        var avatar = channelAvatarHTML(r, 36);
         var name = esc(r.name);
         // 频道权限身份标签
         var roleTag = '';
@@ -3642,13 +3713,13 @@ async function switchRoom(roomId) {
     var settingsBtn = isChannel ? '<button class="chat-toolbar-btn" onclick="toggleChatContext()" title="频道设置" aria-label="频道设置">⚙️</button>' : '';
     var headerAvatar = '';
     if (room && room.type === 'channel') {
-      headerAvatar = room.avatar_url ? '<img src="' + esc(room.avatar_url) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '📢';
+      headerAvatar = channelAvatarHTML(room, 28);
     } else if (room && room.other && room.other.avatar) {
       headerAvatar = '<img src="' + esc(room.other.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
     } else {
       headerAvatar = '👤';
     }
-    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button onclick="toggleMobileSidebar()" aria-label="会话列表" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">☰</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
+    header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
   }
   // 频道选中时在右侧上下文面板显示频道信息（仅桌面端自动展开）
   var ctxPanel = document.getElementById('chatContextPanel');
@@ -3669,6 +3740,8 @@ async function switchRoom(roomId) {
   if (inputArea) inputArea.style.display = 'flex';
   applyChatBackground();
   renderRoomList();
+  // 在频道顶部显示入群申请横幅（仅管理员可见）
+  renderChannelJoinBanner(roomId);
   // 立即清除该会话的未读红点
   markRead(roomId);
   if (chatState.messages[roomId]?.length) {
@@ -3779,7 +3852,7 @@ async function renderChatContextPanel(room) {
         <div style="margin-bottom:8px">
           <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像预览</div>
           <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1px solid var(--border-color)">
-            ${currentAvatar ? '<img src="' + esc(currentAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'📢\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">📢</div>'}
+            ${currentAvatar ? '<img src="' + esc(currentAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">💬</div>'}
           </div>
         </div>
         <div style="margin-bottom:8px">
@@ -4084,7 +4157,7 @@ function renderMsgHTML(m, roomId) {
     '<div class="chat-msg-bubble">' +
     (!isMine ? '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + escJS(m.sender_id || '') + '\',\'' + escJS(m.sender) + '\',\'' + escJS(m.sender_avatar || '') + '\',\'' + escJS(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' : '') +
     replyHtml +
-    '<div>' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
+    '<div class="chat-msg-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
     '</div>' +
     reactionsHtml +
@@ -4483,8 +4556,22 @@ async function sendChatMsg() {
 async function uploadImageFile(file) {
   var PROXY = '/api/proxy';
   var url = null, uploaded = false;
+  var isImage = file.type.startsWith('image/');
 
-  // 0. 优先使用项目 R2 上传（最稳定）
+  // 图片优先 img.remit.ee，文件优先 R2
+  if (!uploaded && isImage) {
+    // 1. img.remit.ee（图片首选）
+    try {
+      var rForm = new FormData();
+      rForm.append('file', file);
+      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
+      if (rRes && rRes.url) { url = rRes.url; uploaded = true; }
+      else if (rRes && rRes.data && rRes.data.url) { url = rRes.data.url; uploaded = true; }
+      else if (rRes && rRes.data && rRes.data.link) { url = rRes.data.link; uploaded = true; }
+    } catch(e) { console.warn('img.remit.ee upload failed:', e); }
+  }
+
+  // 2. R2（文件首选，图片备选）
   if (!uploaded && currentUser) {
     try {
       var r2Form = new FormData();
@@ -4495,29 +4582,18 @@ async function uploadImageFile(file) {
     } catch(e) { console.warn('R2 upload failed:', e); }
   }
 
+  // 3. picgo.net（需 API Key）
   var picgoKey = localStorage.getItem('dp_picgo_key') || '';
-  // 1. picgo.net（需 API Key）
   if (!uploaded && picgoKey) {
     try {
       var pForm = new FormData();
       pForm.append('key', picgoKey);
       pForm.append('source', file);
-      var pRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload' }, body: pForm }).then(r => r.json());
-      if (pRes?.image?.url) { url = pRes.image.url; uploaded = true; }
+      var pRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload' }, body: pForm }).then(function(r) { return r.json(); });
+      if (pRes && pRes.image && pRes.image.url) { url = pRes.image.url; uploaded = true; }
     } catch(e) {}
   }
-  // 2. img.remit.ee
-  if (!uploaded) {
-    try {
-      var rForm = new FormData();
-      rForm.append('file', file);
-      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(r => r.json());
-      if (rRes?.url) { url = rRes.url; uploaded = true; }
-      else if (rRes?.data?.url) { url = rRes.data.url; uploaded = true; }
-      else if (rRes?.data?.link) { url = rRes.data.link; uploaded = true; }
-    } catch(e) {}
-  }
-  // 3. sm.ms
+  // 4. sm.ms
   if (!uploaded) {
     try {
       var smForm = new FormData();
@@ -4574,7 +4650,7 @@ async function uploadChatFile(input) {
   var uploaded = false;
   var PROXY = '/api/proxy';
 
-  // 0. 优先使用项目 R2 上传
+  // 1. 优先使用 R2（文件首选，支持所有类型）
   if (!uploaded && currentUser) {
     try {
       var r2Form = new FormData();
@@ -4585,35 +4661,25 @@ async function uploadChatFile(input) {
     } catch(e) { console.warn('R2 upload failed:', e); }
   }
 
-  var picgoKey = localStorage.getItem('dp_picgo_key') || '';
-  // 1. picgo.net（需 API Key）
-  if (!uploaded && picgoKey) {
-    try {
-      var pForm = new FormData();
-      pForm.append('key', picgoKey);
-      pForm.append('source', file);
-      var pRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload' }, body: pForm }).then(r => r.json());
-      if (pRes?.image?.url) { url = pRes.image.url; uploaded = true; }
-    } catch(e) {}
-  }
   // 2. img.remit.ee（也支持非图片文件）
   if (!uploaded) {
     try {
       var rForm = new FormData();
       rForm.append('file', file);
-      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(r => r.json());
-      if (rRes?.url) { url = rRes.url; uploaded = true; }
-      else if (rRes?.data?.url) { url = rRes.data.url; uploaded = true; }
-      else if (rRes?.data?.link) { url = rRes.data.link; uploaded = true; }
+      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
+      if (rRes && rRes.url) { url = rRes.url; uploaded = true; }
+      else if (rRes && rRes.data && rRes.data.url) { url = rRes.data.url; uploaded = true; }
+      else if (rRes && rRes.data && rRes.data.link) { url = rRes.data.link; uploaded = true; }
     } catch(e) {}
   }
+
   // 3. sm.ms
   if (!uploaded) {
     try {
       var smForm = new FormData();
       smForm.append('smfile', file);
-      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(r => r.json());
-      if (smRes?.success && smRes.data?.url) { url = smRes.data.url; uploaded = true; }
+      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(function(r) { return r.json(); });
+      if (smRes && smRes.success && smRes.data && smRes.data.url) { url = smRes.data.url; uploaded = true; }
     } catch(e) {}
   }
   input.value = '';
@@ -5076,6 +5142,8 @@ async function showRoomSettings() {
   }
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="channelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🔧 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:11px">+ 添加</button>' : '') + '</div><div id="channelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
+  // 频道分组管理
+  html += '<div style="margin-top:12px"><button class="btn btn-sm btn-gray" style="width:100%" onclick="showChannelGroupManager()">📁 频道分组管理</button></div>';
   if (canManage) {
     html += '<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">成员管理</div><div id="roomMemberList" style="max-height:240px;overflow-y:auto"></div></div>';
   }
@@ -5352,7 +5420,8 @@ async function updateRoomTopic() {
 async function loadChannelAnnouncements(roomId) {
   var el = document.getElementById('channelAnnouncementList');
   if (!el) return;
-  var { data } = await __SB.from('chat_channel_announcements').select('*').eq('room_id', roomId).order('pinned', { ascending: false }).order('created_at', { ascending: false });
+  var { data, error } = await __SB.from('chat_channel_announcements').select('*').eq('room_id', roomId).order('pinned', { ascending: false }).order('created_at', { ascending: false });
+  if (error) { console.warn('loadChannelAnnouncements error:', error); el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">加载失败: ' + esc(error.message || '未知错误') + '</div>'; return; }
   if (!data?.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>'; return; }
   var room = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isAdmin = room && (room.created_by === currentUser.id || isDeveloper());
@@ -5951,6 +6020,7 @@ async function approveJoinRequest(reqId, roomId, userId) {
   loadAuditRequests();
   await loadChannelJoinRequests();
   await loadRoomList();
+  renderChannelJoinBanner(targetRoomId);
 }
 
 async function rejectJoinRequest(reqId) {
@@ -5958,6 +6028,7 @@ async function rejectJoinRequest(reqId) {
   toast('已拒绝');
   loadAuditRequests();
   loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
+  renderChannelJoinBanner(chatState.currentRoomId);
 }
 
 async function showBrowseChannels(query) {
@@ -5984,19 +6055,28 @@ async function showBrowseChannels(query) {
   if (error) { toast('加载失败', 'error'); content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint)">加载失败</div>'; return; }
   if (!channels) channels = [];
   var roomIds = channels.map(function(c) { return c.id; });
-  var { data: settingsRows } = await __SB.from('chat_channel_settings').select('room_id, admission, admission_mode').in('room_id', roomIds);
+  var { data: settingsRows } = await __SB.from('chat_channel_settings').select('room_id, admission, admission_mode, avatar_url').in('room_id', roomIds);
   var settingsMap = {};
   if (settingsRows) { settingsRows.forEach(function(s) { settingsMap[s.room_id] = s; }); }
-  for (let i = 0; i < channels.length; i++) {
-    var s = settingsMap[channels[i].id] || {};
-    channels[i].admission = getAdmissionMode(s);
-    const { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', channels[i].id);
-    channels[i].member_count = count || 0;
-    if (currentUser) {
-      const { data: joinedData } = await __SB.from('chat_room_members').select('id').eq('room_id', channels[i].id).eq('user_id', currentUser.id).maybeSingle();
-      channels[i].joined = !!joinedData;
-    } else { channels[i].joined = false; }
+  // 批量获取成员数（避免 N+1 查询）
+  var countMap = {};
+  var joinedSet = {};
+  if (roomIds.length > 0) {
+    var { data: allMembers } = await __SB.from('chat_room_members').select('room_id, user_id').in('room_id', roomIds);
+    if (allMembers) {
+      allMembers.forEach(function(m) {
+        countMap[m.room_id] = (countMap[m.room_id] || 0) + 1;
+        if (currentUser && m.user_id === currentUser.id) joinedSet[m.room_id] = true;
+      });
+    }
   }
+  channels.forEach(function(c) {
+    var s = settingsMap[c.id] || {};
+    c.admission = getAdmissionMode(s);
+    c.avatar_url = s.avatar_url;
+    c.member_count = countMap[c.id] || 0;
+    c.joined = !!joinedSet[c.id];
+  });
   const unjoined = channels.filter(function(c) { return !c.joined; });
   // 加载完成后替换内容
   if (channels.length === 0) {
@@ -6004,8 +6084,10 @@ async function showBrowseChannels(query) {
   } else {
     var listHtml = '';
     channels.forEach(function(c) {
-      listHtml += '<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:default">';
-      listHtml += '<div><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:var(--text-faint)">' + (c.member_count || 0) + ' 位成员</div></div>';
+      var avatarHTML = c.avatar_url ? '<img src="' + esc(c.avatar_url) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💬</div>';
+      listHtml += '<div class="list-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:default">';
+      listHtml += avatarHTML;
+      listHtml += '<div style="flex:1"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:var(--text-faint)">' + (c.member_count || 0) + ' 位成员</div></div>';
       if (c.joined) {
         listHtml += '<button class="btn btn-sm btn-green" onclick="switchRoom(\'' + c.id + '\');document.getElementById(\'browseChannelsModal\').remove()">已加入</button>';
       } else {
@@ -6035,6 +6117,15 @@ function getAdmissionMode(s) {
     m = s.admission_mode;
   }
   return m;
+}
+
+// 统一获取频道头像 HTML
+function channelAvatarHTML(room, size) {
+  size = size || 32;
+  if (room && room.avatar_url) {
+    return '<img src="' + esc(room.avatar_url) + '" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'💬\'">';
+  }
+  return '💬';
 }
 
 async function joinChannel(roomId) {
@@ -6342,7 +6433,24 @@ renderRoomList = function() {
     } else {
       var pinnedChannels = channels.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
       var unpinnedChannels = channels.filter(function(r) { return pinned.indexOf(r.id) < 0; });
+      var channelGroups = getChannelGroups();
+      var channelGroupNames = Object.keys(channelGroups);
+      var channelFilterGroup = chatState.channelFilterGroup || '';
+      // 频道分组筛选
+      if (channelFilterGroup && channelGroups[channelFilterGroup]) {
+        var groupChannelIds = channelGroups[channelFilterGroup] || [];
+        unpinnedChannels = unpinnedChannels.filter(function(r) { return groupChannelIds.indexOf(r.id) >= 0; });
+      }
       var channelHtml = '';
+      // 频道分组筛选标签
+      if (channelGroupNames.length) {
+        channelHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
+          '<button class="btn btn-sm ' + (!channelFilterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
+          channelGroupNames.map(function(n) {
+            return '<button class="btn btn-sm ' + (channelFilterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+          }).join('') +
+          '</div>';
+      }
       if (pinnedChannels.length) {
         channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)">📌 置顶</div>';
         channelHtml += pinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
@@ -6416,7 +6524,7 @@ renderRoomList = function() {
 
 function roomItemHTML(r) {
   var active = r.id === chatState.currentRoomId;
-  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : '📢';
+  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
   var name = r.other ? esc(r.other.name) : esc(r.name);
   var isPinned = getPinnedChannels().indexOf(r.id) >= 0;
   var canDelete = r.type !== 'channel' || r.created_by === currentUser.id || r.is_admin || isDeveloper();

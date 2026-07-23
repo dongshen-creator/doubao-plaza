@@ -1,19 +1,32 @@
-// Cloudflare Pages Function - 聊天图片上传 API
-// POST /api/upload/image - 上传图片到 R2，供聊天/频道等场景使用
+// Cloudflare Pages Function - 聊天文件/图片上传 API
+// POST /api/upload/image - 上传文件到 R2，供聊天/频道等场景使用
 //
 // 鉴权：任意已登录用户（需 user_id 参数，会校验用户是否存在）
 // 存储：R2 (env.PAGES_BUCKET)，路径 chat-assets/{userId}/{timestamp}-{filename}
-// 限制：单文件 5MB，仅 image/png image/jpeg image/gif image/webp
+// 限制：单文件 20MB，支持所有文件类型
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-// MIME 缺失时按扩展名回退推断
-const ALLOWED_EXT = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
+const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+// 图片类型用于推断 contentType
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/x-icon'];
+// 常见文件类型扩展名映射
+const EXT_MIME = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+  pdf: 'application/pdf', zip: 'application/zip', rar: 'application/x-rar-compressed',
+  '7z': 'application/x-7z-compressed', tar: 'application/x-tar', gz: 'application/gzip',
+  mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg',
+  mp4: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+  mov: 'video/quicktime',
+  txt: 'text/plain', md: 'text/markdown', json: 'application/json', xml: 'application/xml',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', java: 'text/x-java',
+  c: 'text/x-c', cpp: 'text/x-c++', h: 'text/x-c', hpp: 'text/x-c++',
+  cs: 'text/x-csharp', go: 'text/x-go', rs: 'text/x-rust', rb: 'text/x-ruby',
+  html: 'text/html', css: 'text/css', sql: 'application/sql',
+  apk: 'application/vnd.android.package-archive', exe: 'application/x-msdownload',
+  dmg: 'application/x-apple-diskimage', deb: 'application/x-debian-package',
 };
 
 // 统一的 CORS 响应头
@@ -34,13 +47,14 @@ function json(data, status = 200) {
   });
 }
 
-// 解析并校验文件类型：优先 MIME，缺失时按扩展名回退
+// 解析并推断文件类型
 function resolveContentType(file) {
   const ct = (file.type || '').toLowerCase();
-  if (ct && ALLOWED_TYPES.includes(ct)) return ct;
+  if (ct) return ct;
+  // MIME 缺失时按扩展名推断
   const ext = (file.name || '').split('.').pop()?.toLowerCase();
-  if (ext && ALLOWED_EXT[ext]) return ALLOWED_EXT[ext];
-  return ct; // 返回原始类型（可能为空），交由外层校验拒绝
+  if (ext && EXT_MIME[ext]) return EXT_MIME[ext];
+  return 'application/octet-stream'; // 默认类型
 }
 
 // 从文件名中提取安全文件名（去除目录部分，防止路径穿越）
@@ -101,11 +115,8 @@ export async function onRequestPost(context) {
       return json({ success: false, error: '用户不存在或未登录，请先登录' }, 401);
     }
 
-    // 5. 校验文件类型
+    // 5. 推断文件类型（不再限制类型）
     const contentType = resolveContentType(file);
-    if (!ALLOWED_TYPES.includes(contentType)) {
-      return json({ success: false, error: '不支持的文件类型，仅允许 PNG/JPEG/GIF/WebP 图片' }, 400);
-    }
 
     // 6. 读取并校验文件大小
     const buffer = await file.arrayBuffer();
@@ -113,17 +124,16 @@ export async function onRequestPost(context) {
       return json({ success: false, error: '文件为空' }, 400);
     }
     if (buffer.byteLength > MAX_SIZE) {
-      return json({ success: false, error: '文件大小超过 5MB 限制' }, 413);
+      return json({ success: false, error: '文件大小超过 20MB 限制' }, 413);
     }
 
     // 7. 生成 R2 存储键：chat-assets/{userId}/{timestamp}-{filename}
     const timestamp = Date.now();
     const filename = safeFilename(file.name);
     const ext = (file.name || '').split('.').pop()?.toLowerCase();
-    // 若安全过滤后丢失扩展名，则按 MIME 类型补回
     const finalName = ext && filename.includes('.')
       ? filename
-      : `${filename}.${ALLOWED_TYPES.includes(contentType) ? contentType.split('/')[1] : 'bin'}`;
+      : `${filename}.bin`;
     const key = `chat-assets/${userId}/${timestamp}-${finalName}`;
 
     // 8. 上传到 R2
