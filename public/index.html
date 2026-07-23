@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=36">
+  <link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 
@@ -471,6 +471,150 @@ async function patUser(targetUserId, targetUserName, targetSuffix) {
 
 
 function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── 安全 HTML 净化器 ──
+// 允许的标签白名单
+var SAFE_HTML_TAGS = {
+  'a': ['href','title','target','rel','style','class'],
+  'b': ['style','class'], 'strong': ['style','class'],
+  'i': ['style','class'], 'em': ['style','class'],
+  'u': ['style','class'], 's': ['style','class'], 'del': ['style','class'],
+  'br': ['style','class'], 'p': ['style','class'],
+  'span': ['style','class'], 'div': ['style','class','align'],
+  'img': ['src','alt','title','style','class','loading','width','height'],
+  'video': ['src','controls','style','class','width','height','preload'],
+  'audio': ['src','controls','style','class'],
+  'ul': ['style','class'], 'ol': ['style','class','start'], 'li': ['style','class'],
+  'code': ['style','class'], 'pre': ['style','class'],
+  'blockquote': ['style','class','cite'],
+  'h1': ['style','class'], 'h2': ['style','class'], 'h3': ['style','class'],
+  'h4': ['style','class'], 'h5': ['style','class'], 'h6': ['style','class'],
+  'hr': ['style','class'],
+  'table': ['style','class','border','cellpadding','cellspacing'],
+  'tr': ['style','class'], 'td': ['style','class','colspan','rowspan'],
+  'th': ['style','class','colspan','rowspan'],
+  'sub': ['style','class'], 'sup': ['style','class'],
+  'font': ['color','size','face','style','class'],
+  'mark': ['style','class'],
+  'abbr': ['title','style','class']
+};
+var SAFE_HTML_STYLE = /^(color|background|background-color|font-size|font-weight|font-style|text-decoration|text-align|margin|padding|border|border-radius|display|width|max-width|height|max-height|border-radius|line-height|letter-spacing|vertical-align|opacity|float|clear|list-style|white-space|word-break|overflow|text-overflow|cursor)(-[^:]+)?:/i;
+
+function sanitizeHtml(html) {
+  if (!html) return '';
+  // 用 DOMParser 解析，比正则更可靠
+  var parser = new DOMParser();
+  var doc = parser.parseFromString('<div id="__root">' + html + '</div>', 'text/html');
+  var root = doc.getElementById('__root');
+  if (!root) return esc(html);
+
+  function cleanNode(node) {
+    var children = Array.prototype.slice.call(node.childNodes);
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.nodeType === 3) continue; // 文本节点保留
+      if (child.nodeType !== 1) { node.removeChild(child); continue; } // 非元素节点移除
+      var tag = child.tagName.toLowerCase();
+      // 不在白名单中的标签：检查是否需要提取内容
+      if (!SAFE_HTML_TAGS[tag]) {
+        // script/style/iframe 等直接删除（含内容）
+        if (['script','style','iframe','object','embed','form','input','textarea','button','select','option','link','meta','base','noscript'].indexOf(tag) >= 0) {
+          node.removeChild(child);
+          continue;
+        }
+        // 其他未知标签：提取子元素保留内容
+        while (child.firstChild) node.insertBefore(child.firstChild, child);
+        node.removeChild(child);
+        continue;
+      }
+      // 清理属性
+      var attrs = Array.prototype.slice.call(child.attributes);
+      for (var j = 0; j < attrs.length; j++) {
+        var attrName = attrs[j].name.toLowerCase();
+        var attrVal = attrs[j].value;
+        var allowed = SAFE_HTML_TAGS[tag];
+        if (allowed.indexOf(attrName) < 0) {
+          child.removeAttribute(attrName);
+          continue;
+        }
+        // 移除 on* 事件属性
+        if (attrName.startsWith('on')) {
+          child.removeAttribute(attrName);
+          continue;
+        }
+        // href/src 不能是 javascript:
+        if ((attrName === 'href' || attrName === 'src') && /^\s*javascript:/i.test(attrVal)) {
+          child.removeAttribute(attrName);
+          continue;
+        }
+        // style 属性逐条检查
+        if (attrName === 'style') {
+          var decls = attrVal.split(';');
+          var safe = [];
+          for (var k = 0; k < decls.length; k++) {
+            var decl = decls[k].trim();
+            if (decl && SAFE_HTML_STYLE.test(decl + ':')) {
+              // 排除 expression()
+              if (!/expression\s*\(/i.test(decl)) safe.push(decl);
+            }
+          }
+          child.setAttribute('style', safe.join(';'));
+        }
+      }
+      // a 标签自动添加 target=_blank rel=noopener
+      if (tag === 'a') {
+        child.setAttribute('target', '_blank');
+        child.setAttribute('rel', 'noopener noreferrer');
+      }
+      // 递归清理子节点
+      cleanNode(child);
+    }
+  }
+  cleanNode(root);
+  return root.innerHTML;
+}
+
+// 将纯文本中的 HTML 标签检测出来，对纯文本部分做 esc，对 HTML 标签部分做净化
+function renderRichText(text) {
+  if (!text) return '';
+  // 检测是否包含 HTML 标签
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    // 包含 HTML，先净化
+    var sanitized = sanitizeHtml(text);
+    // 在净化后的 HTML 上，只对文本节点做 linkify（避免破坏标签属性中的 URL）
+    return linkifyTextNodes(sanitized);
+  }
+  // 纯文本，走原来的 esc + linkify
+  return linkify(esc(text));
+}
+
+// 只对 HTML 中的文本节点做 linkify，不碰标签属性
+function linkifyTextNodes(html) {
+  var parser = new DOMParser();
+  var doc = parser.parseFromString('<div id="__ln">' + html + '</div>', 'text/html');
+  var root = doc.getElementById('__ln');
+  if (!root) return html;
+
+  function processTextNodes(node) {
+    var children = Array.prototype.slice.call(node.childNodes);
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (child.nodeType === 3) {
+        // 文本节点：对纯 URL 做 linkify
+        var text = child.textContent;
+        if (/https?:\/\//.test(text)) {
+          var span = doc.createElement('span');
+          span.innerHTML = linkify(esc(text));
+          node.replaceChild(span, child);
+        }
+      } else if (child.nodeType === 1) {
+        processTextNodes(child);
+      }
+    }
+  }
+  processTextNodes(root);
+  return root.innerHTML;
+}
 function escJS(s) { if (!s) return ''; return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
 
 // 渲染富文本内容（支持HTML标签）
@@ -3848,13 +3992,13 @@ function renderMsgHTML(m, roomId) {
     const furl = lc > 0 ? fc.substring(lc + 1) : fc;
     contentHtml = '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary)">📎 ' + esc(fname || '文件') + '</a>';
   } else {
-    var displayText = esc(text);
-    // @提及高亮
+    var displayText = renderRichText(text);
+    // @提及高亮（在已渲染的 HTML 上操作）
     displayText = displayText.replace(/@(\S+)/g, function(match, name) {
       var isMe = currentUser && name === currentUser.name;
       return '<span class="at-mention" style="' + (isMe ? 'background:var(--accent-bg);color:var(--accent);' : 'background:#e8f4fd;color:#1a73e8;') + 'border-radius:4px;padding:1px 4px;font-weight:500;cursor:pointer" onclick="event.stopPropagation();showAtUserInfo(\'' + escJS(name) + '\')">@' + esc(name) + '</span>';
     });
-    contentHtml = linkify(displayText);
+    contentHtml = displayText;
   }
   const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escJS(m.event_id || '') + '\',\'' + escJS(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
   const replyBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReplyTo(\'' + escJS(m.event_id || '') + '\',\'' + escJS(text.slice(0,50)) + '\')" style="color:var(--text-muted);font-size:10px">引用</button>' : '';
@@ -3898,7 +4042,7 @@ function renderReplyBlock(eventId, roomId) {
     const fc = t.slice(5); const lc = fc.lastIndexOf(':');
     preview = '📎 ' + esc(lc > 0 ? fc.substring(0, lc) : fc || '文件');
   } else {
-    preview = linkify(esc(t.length > 80 ? t.slice(0,80) + '…' : t));
+    preview = renderRichText(t.length > 80 ? t.slice(0,80) + '…' : t);
   }
   return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=&quot;\'' + esc(eventId) + '&quot;]\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
 }
