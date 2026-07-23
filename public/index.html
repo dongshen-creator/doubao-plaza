@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 
@@ -58,6 +58,7 @@
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🔧</span></button>
     <div class="activity-spacer"></div>
+    <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span></button>
     <button class="activity-item" data-view="settings" onclick="switchView('settings')" title="设置" aria-label="设置"><span class="activity-icon">⚙️</span></button>
   </aside>
 
@@ -5104,25 +5105,13 @@ async function updateRoomAvatar() {
     if (error) { toast('修改失败: ' + error.message, 'error'); return; }
     toast('头像已更新', 'success');
     await loadRoomList();
-    var room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
-    if (room) {
-      // 更新 header 中的头像
-      var header = document.getElementById('chatViewHeader');
-      if (header) {
-        var roomName = room.name || (room.other && room.other.name) || '聊天';
-        var isChannel = room.type === 'channel';
-        var headerAvatar = '';
-        if (isChannel) {
-          headerAvatar = room.avatar_url ? '<img src="' + esc(room.avatar_url) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '📢';
-        } else if (room.other && room.other.avatar) {
-          headerAvatar = '<img src="' + esc(room.other.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
-        } else {
-          headerAvatar = '👤';
-        }
-        var settingsBtn = isChannel ? '<button class="chat-toolbar-btn" onclick="toggleChatContext()" title="频道设置" aria-label="频道设置">⚙️</button>' : '';
-        header.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><button class="chat-back-btn" onclick="backToRoomList()" aria-label="返回会话列表" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-primary);padding:4px 8px">←</button>' + headerAvatar + '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">' + esc(roomName) + '</div>' + settingsBtn + '</div><div style="font-size:12px;color:var(--text-faint)">' + (isChannel ? '频道聊天' : '私聊') + '</div>';
-      }
-      renderChatContextPanel(room);
+    // 重新渲染会话列表和当前聊天视图（含 header 头像）
+    renderRoomList();
+    if (chatState.currentRoomId) {
+      // 切换回当前频道以刷新 header + 上下文面板
+      var rid = chatState.currentRoomId;
+      chatState.currentRoomId = null; // 强制重新渲染
+      switchRoom(rid);
     }
   } catch(e) {
     toast('修改失败: ' + e.message, 'error');
@@ -6693,9 +6682,9 @@ function updateThemeIcon() {
     btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
     btn.title = document.body.classList.contains('dark') ? '切换到亮色模式' : '切换到暗色模式';
   }
-  // 同步顶栏主题图标
-  var navIcon = document.getElementById('themeToggle');
-  if (navIcon) navIcon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  // 同步活动栏主题图标
+  var actIcon = document.getElementById('actBarThemeIcon');
+  if (actIcon) actIcon.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 }
 
 function loadTheme() {
@@ -6882,42 +6871,8 @@ init();
   <button style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="closeMediaViewer()">✕</button>
 </div>
 
-<!-- 移动端底部 TabBar（渐进增强，复用现有函数） -->
-<nav class="mobile-tabbar" id="mobileTabbar" aria-label="移动端导航">
-  <div class="mobile-tabbar-inner">
-    <button class="tabbar-btn active" id="tabbarFriends" onclick="tabbarGoFriends()" aria-label="好友">
-      <span class="tabbar-btn-icon">👥</span>
-      <span>好友</span>
-    </button>
-    <button class="tabbar-btn hidden-badge" id="tabbarChat" onclick="tabbarGoChat()" aria-label="频道">
-      <span class="tabbar-btn-icon">💬
-        <span class="tabbar-badge" id="tabbarChatBadge">0</span>
-      </span>
-      <span>频道</span>
-    </button>
-    <button class="tabbar-btn" id="tabbarMore" onclick="tabbarShowMore()" aria-label="更多功能">
-      <span class="tabbar-btn-icon">☰</span>
-      <span>更多</span>
-    </button>
-  </div>
-</nav>
-
-<!-- 移动端"更多"抽屉 -->
-<div class="mobile-more-sheet" id="mobileMoreSheet" style="display:none" aria-label="更多功能">
-  <div class="mobile-more-overlay" onclick="tabbarHideMore()"></div>
-  <div class="mobile-more-content">
-    <div class="mobile-more-header">
-      <span>更多功能</span>
-      <button class="mobile-more-close" onclick="tabbarHideMore()" aria-label="关闭">✕</button>
-    </div>
-    <div class="mobile-more-grid">
-      <button class="mobile-more-item" onclick="tabbarHideMore();switchView('announcements')"><span class="mobile-more-icon">📢</span><span>公告</span></button>
-      <button class="mobile-more-item" onclick="tabbarHideMore();switchView('features')"><span class="mobile-more-icon">🔧</span><span>功能</span></button>
-      <button class="mobile-more-item" onclick="tabbarHideMore();toggleTheme()"><span class="mobile-more-icon" id="tabbarThemeIcon">🌙</span><span>主题</span></button>
-      <button class="mobile-more-item" onclick="tabbarHideMore();tabbarGoSettings()"><span class="mobile-more-icon" id="tabbarSettingsIcon">⚙️</span><span id="tabbarSettingsLabel">登录</span></button>
-    </div>
-  </div>
-</div>
+<!-- 旧移动端 TabBar 已移除，改用 activity-bar 作为底部导航 -->
+<!-- 旧"更多"抽屉已移除，公告和功能已直接放入底部导航栏 -->
 
 <script>
 // ===== 移动端 TabBar 同步逻辑 =====

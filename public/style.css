@@ -1165,10 +1165,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   display: none;
 }
 
+/* ── 移动端：旧 mobile-tabbar 已废弃，改用 activity-bar ── */
+/* 保留 CSS 防止 JS 引用报错，但不显示 */
+.mobile-tabbar { display: none !important; }
+
 /* ── 移动端：隐藏顶部导航栏部分按钮，避免重复 ── */
 @media (max-width: 767px) {
-  .mobile-tabbar { display: block; }
-  body { padding-bottom: 56px; }
   .nav-btn#themeToggle,
   .nav-btn[onclick*="openChat()"],
   .nav-btn[onclick*="showModal('settings')"] {

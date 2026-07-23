@@ -4,6 +4,39 @@
 
 ---
 
+## v3.6 — 2026-07-23
+
+### 移动端 UI 重构 + 频道申请加入修复 + 聊天 HTML 渲染 + Supabase 安全加固
+
+#### 重大故障记录：Supabase 数据险些全量丢失
+
+**时间**：2026-07-22
+
+**事件经过**：
+
+在排查频道申请加入功能无反应的问题时，执行了 `supabase-migration.sql` 迁移脚本。该脚本第 17 节"外键约束"中包含 8 条 `DELETE FROM ... WHERE room_id NOT IN (SELECT id FROM chat_rooms)` 语句，用于清理引用了已删除房间的孤立记录。
+
+**根因**：`NOT IN` 语句在子查询返回空结果集时行为危险。如果 `SELECT id FROM chat_rooms` 因 RLS 策略或权限问题返回空集，`NOT IN (空集)` 对所有行都为 true，导致 **全表 DELETE**——即删除所有 `chat_unread`、`chat_room_members`、`chat_messages`、`chat_reactions`、`chat_admins`、`chat_muted`、`chat_banned`、`chat_channel_settings` 表中的全部数据。
+
+**实际影响**：由于 Supabase SQL Editor 以 `postgres` 超级用户身份执行（绕过 RLS），`SELECT id FROM chat_rooms` 返回了完整数据，因此 DELETE 语句未误删有效数据。但如果在客户端代码中执行同样的查询（anon key 受 RLS 限制返回空集），后果将是灾难性的。
+
+**修复措施**：
+
+1. **`NOT IN` 改为 `NOT EXISTS`**：`DELETE FROM ... WHERE NOT EXISTS (SELECT 1 FROM chat_rooms WHERE chat_rooms.id = t.room_id)`，即使子查询返回空集也不会删除任何数据（`NOT EXISTS` 对空集返回 false）
+2. **所有聊天表添加 RLS 策略**：为 13 张表添加完整的 SELECT/INSERT/UPDATE/DELETE POLICY，确保 anon key 能正常读写
+3. **`DROP POLICY IF EXISTS` 幂等化**：所有 `CREATE POLICY` 前加 `DROP POLICY IF EXISTS`，防止重复执行报错
+4. **`admission_mode` 数据同步**：`UPDATE chat_channel_settings SET admission_mode = admission WHERE admission_mode = 'open' AND admission IS NOT NULL AND admission != 'open'`，修复 `DEFAULT 'open'` 覆盖旧字段值的问题
+
+**经验教训**：
+
+- **永远不要在迁移脚本中使用 `NOT IN` + DELETE**，改用 `NOT EXISTS` 或 `LEFT JOIN ... WHERE t.id IS NULL`
+- **迁移脚本必须幂等**：所有 DDL 和 DML 语句都应能安全重复执行
+- **Supabase RLS 策略必须显式声明**：即使表没有开启 RLS，也应添加策略，防止未来开启 RLS 后前端突然无法读写
+- **执行迁移前先备份数据**：或至少先执行 `SELECT count(*)` 确认数据量，执行后再验证
+- **测试迁移脚本时用低权限用户**：模拟前端实际权限，确保 RLS 策略正确
+
+---
+
 ## v3.5 — 2026-07-15
 
 ### Tavern 大规模 SillyTavern 功能复刻 + Coze 站点深度集成
