@@ -4565,9 +4565,16 @@ async function uploadImageFile(file) {
       var rForm = new FormData();
       rForm.append('file', file);
       var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
-      if (rRes && rRes.url) { url = rRes.url; uploaded = true; }
-      else if (rRes && rRes.data && rRes.data.url) { url = rRes.data.url; uploaded = true; }
-      else if (rRes && rRes.data && rRes.data.link) { url = rRes.data.link; uploaded = true; }
+      // img.remit.ee 返回相对路径（如 /api/file/xxx.png），需拼接域名
+      var rUrl = null;
+      if (rRes && rRes.success && rRes.url) rUrl = rRes.url;
+      else if (rRes && rRes.directUrl) rUrl = rRes.directUrl;
+      else if (rRes && rRes.data && rRes.data.url) rUrl = rRes.data.url;
+      else if (rRes && rRes.data && rRes.data.link) rUrl = rRes.data.link;
+      if (rUrl) {
+        if (rUrl.charAt(0) === '/') rUrl = 'https://img.remit.ee' + rUrl;
+        url = rUrl; uploaded = true;
+      }
     } catch(e) { console.warn('img.remit.ee upload failed:', e); }
   }
 
@@ -4667,9 +4674,16 @@ async function uploadChatFile(input) {
       var rForm = new FormData();
       rForm.append('file', file);
       var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
-      if (rRes && rRes.url) { url = rRes.url; uploaded = true; }
-      else if (rRes && rRes.data && rRes.data.url) { url = rRes.data.url; uploaded = true; }
-      else if (rRes && rRes.data && rRes.data.link) { url = rRes.data.link; uploaded = true; }
+      // img.remit.ee 返回相对路径（如 /api/file/xxx.png），需拼接域名
+      var rUrl = null;
+      if (rRes && rRes.success && rRes.url) rUrl = rRes.url;
+      else if (rRes && rRes.directUrl) rUrl = rRes.directUrl;
+      else if (rRes && rRes.data && rRes.data.url) rUrl = rRes.data.url;
+      else if (rRes && rRes.data && rRes.data.link) rUrl = rRes.data.link;
+      if (rUrl) {
+        if (rUrl.charAt(0) === '/') rUrl = 'https://img.remit.ee' + rUrl;
+        url = rUrl; uploaded = true;
+      }
     } catch(e) {}
   }
 
