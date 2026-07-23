@@ -38,7 +38,9 @@ doubao-plaza/
 │   │   ├── features.js            # 功能图标
 │   │   ├── custom-pages.js        # 自定义页面 CRUD
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
-│   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储）
+│   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
+│   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
+│   │   ├── upload/tmpfile.js      # tmpfile.link 文件上传 API（文件专用，服务端转发）
 │   │   └── presence.js            # 在线状态心跳 API
 │   ├── cdn-assets/
 │   │   └── [[key]].js             # R2 文件代理（通过 /cdn-assets/ 路径访问 R2 对象）

@@ -4,6 +4,50 @@
 
 ---
 
+## v4.1 — 2026-07-24
+
+### 图床/文件上传完全分离 + 专用上传端点 + 修复 picgo.net 400
+
+#### 核心变更：图床与文件上传分离
+
+**用户反馈**：「文件是文件，图床是图床，不能混在一起的」
+
+**原问题**：旧代码中 `uploadImageFile()` 同时处理图片和文件上传，所有类型的文件都会先尝试 picgo.net 图床（仅支持图片），导致非图片文件上传失败。同时通过 CORS 代理转发 multipart/form-data 时，picgo.net 返回 400 Bad Request。
+
+**修复方案**：
+
+1. **新建 `functions/api/upload/picgo.js`** — 专用图片上传 Cloudflare Function
+   - 服务端直接请求 picgo.net API（无 CORS 问题，无代理转发问题）
+   - 接收前端 FormData → 读取文件 → 构建新的 FormData（`source` 字段）→ 发送到 picgo.net
+   - API Key 在 URL 参数中传递（Chevereto 要求）
+   - 仅接受图片类型，最大 25MB
+
+2. **新建 `functions/api/upload/tmpfile.js`** — 专用文件上传 Cloudflare Function
+   - 服务端直接请求 tmpfile.link API
+   - 接收前端 FormData → 读取文件 → 构建新的 FormData（`file` 字段）→ 发送到 tmpfile.link
+   - 支持所有文件类型，最大 100MB
+   - 匿名上传，文件 7 天后自动删除
+
+3. **前端函数完全分离**：
+   - `uploadImageToPicgo(file)` — 图片上传：picgo.net → R2 兜底 → sm.ms 最后备选
+   - `uploadFileToTmpfile(file)` — 文件上传：tmpfile.link → R2 兜底
+   - `uploadChatImage(input)` 调用 `uploadImageToPicgo`
+   - `uploadChatFile(input)` 调用 `uploadFileToTmpfile`
+   - 频道头像上传和批量图片上传也改用 `uploadImageToPicgo`
+
+**根因分析**：通过 CORS 代理转发 multipart/form-data 时，代理使用 `arrayBuffer()` 读取请求体再转发，虽然保留了 Content-Type 头（含 boundary），但 Cloudflare Workers 的 `fetch()` 对重新发送 ArrayBuffer + 自定义 Content-Type 的 multipart/form-data 处理存在问题。专用 Function 在服务端构建全新的 FormData 对象，避免了此问题。
+
+---
+
+#### 修改文件
+
+- `functions/api/upload/picgo.js` — 新建：picgo.net 专用图片上传端点
+- `functions/api/upload/tmpfile.js` — 新建：tmpfile.link 专用文件上传端点
+- `public/index.html` — 分离图片/文件上传逻辑，更新所有调用点
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.0 — 2026-07-24
 
 ### 图床迁移 picgo.net + tmpfile.link 文件上传 + 频道头像修复 + escAttr 转义修复

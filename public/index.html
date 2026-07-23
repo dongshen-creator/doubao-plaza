@@ -4637,85 +4637,92 @@ async function safeJsonParse(response) {
   }
 }
 
-async function uploadImageFile(file) {
-  var PROXY = '/api/proxy';
-  var url = null, uploaded = false;
-  var isImage = file.type.startsWith('image/');
-  var isVideo = file.type.startsWith('video/');
-  var errors = [];
+// ═══════════════════════════════════════════════════════
+// 图片上传（仅图片 → picgo.net 图床，失败回退 R2）
+// 文件上传（非图片 → tmpfile.link 文件存储，失败回退 R2）
+// 两者完全分离，不混用
+// ═══════════════════════════════════════════════════════
 
-  // 1. picgo.net（Chevereto 图床，优先）
-  var PICGO_KEY = 'chv_kyCSl_10248ff7e66129adec1f4ce1d55192dbd1238271e943638de688e6262bdd6033_68d8a3764e5564c490c6ad9471ee875fddaeda2a5cb5e3a9d64473a9b5733835';
-  if (!uploaded && isImage) {
+// 图片上传：picgo.net 专用端点 → R2 兜底
+async function uploadImageToPicgo(file) {
+  var url = null, errors = [];
+  var isVideo = file.type.startsWith('video/');
+
+  // 1. picgo.net（仅图片，通过专用 Cloudflare Function 服务端转发，无 CORS 问题）
+  if (file.type.startsWith('image/')) {
     try {
       var pForm = new FormData();
-      pForm.append('source', file);
-      pForm.append('format', 'json');
-      // key 通过 URL 传递（Chevereto 要求），source 通过 form body 传递
-      var pRes = await fetch(PROXY, { 
-        method: 'POST', 
-        headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload?key=' + PICGO_KEY + '&format=json' }, 
-        body: pForm 
-      }).then(safeJsonParse);
-      var pUrl = null;
-      if (pRes) {
-        // Chevereto API 响应格式：{ image: { url: "..." } }
-        if (pRes.image && pRes.image.url) pUrl = pRes.image.url;
-        else if (pRes.image && pRes.image.url_short) pUrl = pRes.image.url_short;
-        else if (pRes.status_code === 200 && pRes.image && pRes.image.url) pUrl = pRes.image.url;
-        // 错误响应格式：{ error: { message: "...", code: ... } }
-        else if (pRes.error && pRes.error.message) errors.push('picgo.net: ' + pRes.error.message);
-        else errors.push('picgo.net: 响应无URL字段 ' + JSON.stringify(pRes).substring(0, 200));
-      } else errors.push('picgo.net: 无JSON响应');
-      if (pUrl) { url = pUrl; uploaded = true; }
+      pForm.append('file', file);
+      var pRes = await fetch('/api/upload/picgo', { method: 'POST', body: pForm }).then(safeJsonParse);
+      if (pRes && pRes.success && pRes.url) { url = pRes.url; }
+      else if (pRes && pRes.error) errors.push('picgo.net: ' + pRes.error);
+      else errors.push('picgo.net: 响应异常');
     } catch(e) { errors.push('picgo.net: ' + e.message); console.warn('picgo.net upload failed:', e); }
   }
 
-  // 2. tmpfile.link（图片和视频均可，匿名上传）
-  if (!uploaded) {
-    try {
-      var tfForm = new FormData();
-      tfForm.append('file', file);
-      var tfRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://tmpfile.link/api/upload' }, body: tfForm }).then(safeJsonParse);
-      var tfUrl = null;
-      if (tfRes) {
-        if (tfRes.downloadLink) tfUrl = tfRes.downloadLink;
-        else if (tfRes.downloadLinkEncoded) tfUrl = tfRes.downloadLinkEncoded;
-        else if (tfRes.data && tfRes.data.downloadLink) tfUrl = tfRes.data.downloadLink;
-      }
-      if (tfUrl) { url = tfUrl; uploaded = true; }
-      else if (tfRes) errors.push('tmpfile.link: 响应无downloadLink字段');
-    } catch(e) { errors.push('tmpfile.link: ' + e.message); console.warn('tmpfile.link upload failed:', e); }
-  }
-
-  // 3. R2（Cloudflare 自建存储，兜底）
-  if (!uploaded && currentUser) {
+  // 2. R2 兜底（图片和视频均可）
+  if (!url && currentUser) {
     try {
       var r2Form = new FormData();
       r2Form.append('file', file);
       r2Form.append('user_id', currentUser.id);
       var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(safeJsonParse);
-      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
+      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; }
       else if (r2Res && r2Res.error) errors.push('R2: ' + r2Res.error);
     } catch(e) { errors.push('R2: ' + e.message); console.warn('R2 upload failed:', e); }
   }
 
-  // 4. sm.ms（最后备选）
-  if (!uploaded && isImage) {
+  // 3. sm.ms 最后备选（仅图片）
+  if (!url && file.type.startsWith('image/')) {
     try {
       var smForm = new FormData();
       smForm.append('smfile', file);
-      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(safeJsonParse);
-      if (smRes?.success && smRes.data?.url) { url = smRes.data.url; uploaded = true; }
-      else if (smRes?.data?.url) { url = smRes.data.url; uploaded = true; } // sm.ms 有时返回已存在的图片
+      var smRes = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' },
+        body: smForm
+      }).then(safeJsonParse);
+      if (smRes && smRes.success && smRes.data && smRes.data.url) { url = smRes.data.url; }
+      else if (smRes && smRes.data && smRes.data.url) { url = smRes.data.url; }
     } catch(e) { errors.push('sm.ms: ' + e.message); }
   }
 
-  if (!uploaded) {
-    console.warn('所有图床上传失败:', errors.join('; '));
-    throw new Error('所有图床均不可用: ' + errors.join('; '));
+  if (!url) {
+    throw new Error('图片上传失败: ' + errors.join('; '));
   }
   return { url: url, isVideo: isVideo };
+}
+
+// 文件上传：tmpfile.link 专用端点 → R2 兜底
+async function uploadFileToTmpfile(file) {
+  var url = null, errors = [];
+
+  // 1. tmpfile.link（通过专用 Cloudflare Function 服务端转发）
+  try {
+    var tfForm = new FormData();
+    tfForm.append('file', file);
+    var tfRes = await fetch('/api/upload/tmpfile', { method: 'POST', body: tfForm }).then(safeJsonParse);
+    if (tfRes && tfRes.success && tfRes.url) { url = tfRes.url; }
+    else if (tfRes && tfRes.error) errors.push('tmpfile.link: ' + tfRes.error);
+    else errors.push('tmpfile.link: 响应异常');
+  } catch(e) { errors.push('tmpfile.link: ' + e.message); console.warn('tmpfile.link upload failed:', e); }
+
+  // 2. R2 兜底
+  if (!url && currentUser) {
+    try {
+      var r2Form = new FormData();
+      r2Form.append('file', file);
+      r2Form.append('user_id', currentUser.id);
+      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(safeJsonParse);
+      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; }
+      else if (r2Res && r2Res.error) errors.push('R2: ' + r2Res.error);
+    } catch(e) { errors.push('R2: ' + e.message); console.warn('R2 upload failed:', e); }
+  }
+
+  if (!url) {
+    throw new Error('文件上传失败: ' + errors.join('; '));
+  }
+  return { url: url };
 }
 
 // 发送一条 img:/video: 消息
@@ -4737,14 +4744,14 @@ async function sendImageMessage(url, isVideo) {
   renderMessages(chatState.currentRoomId);
 }
 
-// 原 uploadChatImage 改为薄封装（保持 <input onchange> 调用不变）
+// 图片/视频上传（图床：picgo.net → R2 兜底）
 async function uploadChatImage(input) {
   var file = input.files[0];
   if (!file) return;
   if (!chatState.currentRoomId) { toast('请先选择聊天', 'error'); return; }
   toast('上传中...', 'info');
   try {
-    var r = await uploadImageFile(file);
+    var r = await uploadImageToPicgo(file);
     await sendImageMessage(r.url, r.isVideo);
     toast(r.isVideo ? '视频已发送' : '图片已发送', 'success');
   } catch (e) {
@@ -4753,14 +4760,14 @@ async function uploadChatImage(input) {
   input.value = '';
 }
 
+// 文件上传（文件存储：tmpfile.link → R2 兜底）
 async function uploadChatFile(input) {
   const file = input.files[0];
   if (!file) return;
   if (!chatState.currentRoomId) { toast('请先选择聊天', 'error'); return; }
   toast('上传中...', 'info');
-  // 复用统一的 uploadImageFile 函数（已包含 R2 首选 + 多图床备选 + safeJsonParse）
   try {
-    var r = await uploadImageFile(file);
+    var r = await uploadFileToTmpfile(file);
     var url = r.url;
   } catch(e) {
     input.value = '';
@@ -4974,7 +4981,7 @@ async function handleChatPaste(e) {
   var progressToast = showProgressToast('上传中 0/' + total + '...');
   for (var j = 0; j < images.length; j++) {
     try {
-      var r = await uploadImageFile(images[j]);
+      var r = await uploadImageToPicgo(images[j]);
       await sendImageMessage(r.url, r.isVideo);
       done++;
     } catch (err) {
@@ -5377,14 +5384,14 @@ async function updateRoomAvatar() {
   }
 }
 
-// 上传频道头像文件（复用 uploadImageFile）
+// 上传频道头像文件（使用图片上传函数）
 async function uploadRoomAvatarFile(input) {
   var file = input.files[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) { toast('请选择图片文件', 'error'); return; }
   toast('上传头像中...', 'info');
   try {
-    var r = await uploadImageFile(file);
+    var r = await uploadImageToPicgo(file);
     // 将上传后的 URL 填入输入框
     var avatarInput = document.getElementById('editRoomAvatar') || document.getElementById('editRoomAvatarCtx');
     if (avatarInput) avatarInput.value = r.url;
