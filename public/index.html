@@ -4638,18 +4638,30 @@ async function safeJsonParse(response) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 图片上传（仅图片 → picgo.net 图床）
+// 图片上传（img.scdn.io 直连 → picgo.net 备选 → tmpfile.link 兜底）
 // 文件上传（非图片 → tmpfile.link 文件存储）
-// 两者完全分离，不混用，不使用 R2
 // ═══════════════════════════════════════════════════════
 
-// 图片上传：picgo.net 专用端点
+// 图片上传：img.scdn.io 直连（project2.0 验证可用）→ picgo.net Function → tmpfile.link
 async function uploadImageToPicgo(file) {
   var url = null, errors = [];
   var isVideo = file.type.startsWith('video/');
 
-  // picgo.net（仅图片，通过专用 Cloudflare Function 服务端转发，无 CORS 问题）
+  // 1. img.scdn.io（前端直连，无需 API Key，支持 CORS）
+  //    project2.0 一直使用此图床，稳定可用
   if (file.type.startsWith('image/')) {
+    try {
+      var sForm = new FormData();
+      sForm.append('image', file);
+      var sRes = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: sForm }).then(safeJsonParse);
+      if (sRes && sRes.success && sRes.url) { url = sRes.url; }
+      else if (sRes && sRes.error) errors.push('img.scdn.io: ' + sRes.error);
+      else errors.push('img.scdn.io: 响应异常');
+    } catch(e) { errors.push('img.scdn.io: ' + e.message); console.warn('img.scdn.io upload failed:', e); }
+  }
+
+  // 2. picgo.net 备选（通过 Cloudflare Function 服务端转发）
+  if (!url && file.type.startsWith('image/')) {
     try {
       var pForm = new FormData();
       pForm.append('file', file);
@@ -4658,6 +4670,18 @@ async function uploadImageToPicgo(file) {
       else if (pRes && pRes.error) errors.push('picgo.net: ' + pRes.error);
       else errors.push('picgo.net: 响应异常');
     } catch(e) { errors.push('picgo.net: ' + e.message); console.warn('picgo.net upload failed:', e); }
+  }
+
+  // 3. tmpfile.link 最终兜底（通过 Cloudflare Function 服务端转发）
+  if (!url) {
+    try {
+      var tfForm = new FormData();
+      tfForm.append('file', file);
+      var tfRes = await fetch('/api/upload/tmpfile', { method: 'POST', body: tfForm }).then(safeJsonParse);
+      if (tfRes && tfRes.success && tfRes.url) { url = tfRes.url; }
+      else if (tfRes && tfRes.error) errors.push('tmpfile.link: ' + tfRes.error);
+      else errors.push('tmpfile.link: 响应异常');
+    } catch(e) { errors.push('tmpfile.link: ' + e.message); console.warn('tmpfile.link upload failed:', e); }
   }
 
   if (!url) {
@@ -7152,10 +7176,10 @@ function uploadChatBg(file) {
     return;
   }
 
-  // 使用 picgo.net 图床上传
+  // 使用 img.scdn.io 图床直连上传（project2.0 验证可用）
   var fd = new FormData();
-  fd.append('file', file);
-  fetch('/api/upload/picgo', { method: 'POST', body: fd })
+  fd.append('image', file);
+  fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: fd })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.success && data.url) {
@@ -7168,8 +7192,7 @@ function uploadChatBg(file) {
       }
     })
     .catch(function(err) {
-      console.warn('picgo.net 上传失败，尝试外部图床降级:', err.message);
-      // 降级：尝试外部图床
+      console.warn('img.scdn.io 上传失败，尝试降级:', err.message);
       uploadChatBgFallback(file, status);
     });
 }

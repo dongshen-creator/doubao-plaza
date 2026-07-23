@@ -4,6 +4,35 @@
 
 ---
 
+## v4.3 — 2026-07-24
+
+### 回归 img.scdn.io 直连图床（参照 project2.0）+ 三级降级链
+
+#### 核心变更
+
+**用户反馈**：「project2.0 里这个图床上传功能还是正常的」
+
+**发现**：通过研究 project2.0 代码，发现它使用 `img.scdn.io` 图床 API（`https://img.scdn.io/api/v1.php`），**直接从前端 fetch**，不走 Cloudflare Function 中转。该图床仍在线运行，已托管 853,700 张图片，支持 CORS 直连、无需 API Key。
+
+**对比 project3.0 的问题**：
+- v4.0~v4.2 一直尝试 picgo.net（Chevereto API）通过 Cloudflare Function 中转上传，但遇到 502/400 等各种问题
+- API key 传递方式、FormData 转发、base64 编码等问题反复出现
+
+**修复方案**：回归 project2.0 的 `img.scdn.io` 直连方案，同时保留 picgo.net Function 和 tmpfile.link 作为多级降级：
+
+1. **首选 img.scdn.io**（前端直连，无需 API Key，字段名 `image`）
+2. **备选 picgo.net**（通过 `/api/upload/picgo` Cloudflare Function 服务端转发）
+3. **兜底 tmpfile.link**（通过 `/api/upload/tmpfile` Cloudflare Function 服务端转发）
+
+聊天背景上传也同步改为 img.scdn.io 直连，降级走 tmpfile.link。
+
+#### 修改文件
+
+- `public/index.html` — `uploadImageToPicgo()` 改为三级降级链；`uploadChatBg()` 改用 img.scdn.io 直连
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.2 — 2026-07-24
 
 ### 修复 picgo.net 502 + 移除 sm.ms/img.remit.ee 降级
