@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS chat_channel_settings (
   admission_mode TEXT DEFAULT 'open',
   topic TEXT DEFAULT '',
   avatar_url TEXT,
+  guest_mode BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -198,6 +199,7 @@ ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS admission_custom_page
 ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS admission_questionnaire JSON;
 ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS admission_mode TEXT DEFAULT 'open';
 ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS guest_mode BOOLEAN DEFAULT false;
 
 -- ===== 16.1 公告可见性字段（幂等） =====
 ALTER TABLE chat_channel_announcements ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'all';

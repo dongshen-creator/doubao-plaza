@@ -4,6 +4,84 @@
 
 ---
 
+## v4.0 — 2026-07-24
+
+### 图床迁移 picgo.net + tmpfile.link 文件上传 + 频道头像修复 + escAttr 转义修复
+
+#### 故障修复
+
+##### 1. 图床上传失败（迁移至 picgo.net）
+
+**现象**：聊天中上传图片持续失败，之前使用的 img.api.aa1.cn 和 img.remit.ee 均不稳定。
+
+**根因**：免费图床服务频繁变更 API 或下线，旧代码未适配新接口格式。
+
+**修复**：
+1. 将 picgo.net（Chevereto API）设为首选图床，API Key 通过 URL 参数传递（Chevereto 要求），`source` 通过 FormData body 传递
+2. 新增 tmpfile.link 作为第二优先级上传方式（支持图片和视频，匿名上传）
+3. Cloudflare R2 保留为第三优先级兜底
+4. 解析 Chevereto API 响应格式 `{ image: { url: "..." } }` 和错误格式 `{ error: { message: "..." } }`
+5. 解析 tmpfile.link 响应格式 `{ downloadLink: "..." }`
+
+**经验教训**：Chevereto API 的 key 必须通过 URL 参数传递（`?key=xxx`），而非 Header 或 FormData 字段；多图床应优先级链式降级，确保至少一个可用。
+
+---
+
+##### 2. 频道头像更新 400 Bad Request
+
+**现象**：频道头像不显示，控制台报错 `GET chat_channel_settings?select=room_id,avatar_url,guest_mode&room_id=in.(...) 400 (Bad Request)`。
+
+**根因**：
+1. `chat_channel_settings` 表缺少 `guest_mode` 列（Supabase 未执行最新迁移脚本）
+2. `loadRoomList()` 查询包含所有房间 ID（包括私聊），URL 过长导致 400 错误
+3. Supabase `in()` 过滤器对超长 URL 返回 400
+
+**修复**：
+1. 在 `supabase-migration.sql` 中添加 `guest_mode BOOLEAN DEFAULT false` 列定义和幂等 ALTER TABLE
+2. `loadRoomList()` 改为只查询频道类型房间（`roomMap[rid].type === 'channel'`），排除私聊房间
+3. 分批查询（每批最多 10 个 room_id），避免 URL 长度超限
+
+**用户需操作**：在 Supabase SQL Editor 中重新执行 `supabase-migration.sql`，添加 `guest_mode` 列。
+
+---
+
+##### 3. 文件渲染 SyntaxError: Invalid or unexpected token
+
+**现象**：聊天中点击文件/图片相关按钮时报错 `Uncaught SyntaxError: Invalid or unexpected token`。
+
+**根因**：`escJS()` 函数将双引号 `"` 转义为 `\"`，但在 HTML 双引号属性（`onclick="..."`）中，`\"` 会被 HTML 解析器视为属性结束，导致后续 JS 代码被截断并产生语法错误。
+
+**修复**：
+1. 新增 `escAttr()` 函数，专门用于 HTML onclick 属性中的 JS 字符串参数转义
+2. `escAttr()` 先做 JS 字符串转义（单引号字符串），再做 HTML 属性编码（`"` → `&quot;`）
+3. 将所有 `onclick` 属性中的 `escJS()` 调用替换为 `escAttr()`
+4. 删除行 5600 处重复的旧版 `escAttr()` 定义（仅做 HTML 实体编码，未处理 JS 字符串转义）
+
+**经验教训**：HTML 属性值中的 JS 字符串需要双重转义——先 JS 转义（防注入），再 HTML 编码（防属性截断）。不能只用单一转义函数。
+
+---
+
+##### 4. 文件上传 iframe 预览嵌入
+
+**新增功能**：tmpfile.link 上传的文件在聊天中渲染为 iframe 预览，而非简单下载链接。
+
+**实现**：
+1. `renderMsgHTML()` 中检测文件 URL 是否来自 tmpfile.link
+2. 如果是，渲染 `<iframe>` 预览（200px 高度，sandbox 安全沙箱）+ 底部下载链接
+3. 其他来源文件保持原有的简单链接渲染
+4. iframe 配置 `sandbox="allow-same-origin allow-scripts allow-popups allow-forms"` 确保安全性
+
+---
+
+#### 修改文件
+
+- `public/index.html` — 图床迁移至 picgo.net、tmpfile.link 集成、escAttr 转义修复、频道头像批量查询、文件 iframe 预览
+- `supabase-migration.sql` — 添加 `guest_mode` 列定义和幂等 ALTER TABLE
+- `CHANGELOG.md` — 本条目
+- `README.md` — 更新图床架构说明
+
+---
+
 ## v3.9 — 2026-07-23
 
 ### 频道管理界面 + 图床迁移 + HTML 渲染修复 + 禁言/刷新 Bug 修复
