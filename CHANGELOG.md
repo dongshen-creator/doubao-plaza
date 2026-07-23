@@ -4,6 +4,124 @@
 
 ---
 
+## v3.9 — 2026-07-23
+
+### 频道管理界面 + 图床迁移 + HTML 渲染修复 + 禁言/刷新 Bug 修复
+
+#### 新增功能
+
+##### 个人设置新增「频道」管理界面
+
+- 在个人设置模态框中新增「💬 频道」标签页，与「👥 好友」标签页并列
+- 支持频道分组管理（创建/编辑/删除分组），数据存储在 `localStorage`（`chat_channel_groups`）
+- 参照好友分组界面的交互模式，用户可在设置中查看和管理所有已加入频道的分组归属
+
+---
+
+#### 故障修复
+
+##### 1. 聊天气泡 HTML 渲染失效
+
+**现象**：聊天中发送包含 HTML 标签的消息（如 `<a href="...">测试</a>`），消息内容显示为纯文本或标签被破坏。
+
+**根因**：`renderMsgHTML()` 函数在 `renderRichText()` 输出的 HTML 上执行 `@mention` 正则替换，正则会匹配到 HTML 标签属性中的 `@` 字符，在属性值内插入 `<span>` 元素，导致 HTML 结构被破坏。
+
+**修复**：
+1. 新增 `applyMentionHighlight()` 函数，在文本节点层面处理 `@提及`，而非在已渲染的 HTML 字符串上操作
+2. `renderMsgHTML()` 移除原有的全局正则替换，改为调用 `applyMentionHighlight()`
+3. 确保 HTML 标签属性值不受 `@mention` 处理影响
+
+**经验教训**：文本处理（正则替换）必须在 HTML 渲染之前完成，或在文本节点层面进行，绝不能在已渲染的 HTML 字符串上执行正则替换——这会破坏标签结构。
+
+---
+
+##### 2. 图床上传失败（img.remit.ee 不支持 API 上传）
+
+**现象**：聊天中上传图片持续失败，用户反馈已无法使用。
+
+**根因**：
+1. 原图床 `img.remit.ee` 的上传 API 返回相对路径（如 `/api/file/xxx.png`），旧代码直接拼接后域名不匹配导致 404
+2. 进一步调查发现 `img.remit.ee` 并未官方提供 API 上传接口，响应内容为 HTML 页面而非 JSON，`response.json()` 解析静默失败
+3. 代码缺少对非 JSON 响应的容错处理
+
+**修复**：
+1. 根据用户要求，将 `img.api.aa1.cn` 设为首选图床（免费、无需 API Key）
+2. Cloudflare R2 保留为第二优先级上传方式
+3. 新增 `safeJsonParse()` 函数处理非 JSON 响应，避免静默失败
+4. 支持多种响应格式解析（`code+data.url`、`initialPreview` 中的 `<img src>` 等）
+5. 相对路径自动拼接完整域名（`https://img.api.aa1.cn`）
+
+**经验教训**：第三方 API 集成必须处理非预期响应格式；`.json()` 调用应有 try-catch 保护；上传失败时应返回具体错误信息而非静默失败。
+
+---
+
+##### 3. 频道头像更新后不刷新
+
+**现象**：在频道设置中修改头像后，侧边栏和聊天头部的频道图标仍然显示旧头像。
+
+**根因**：
+1. 上下文面板和设置弹窗中存在重复的 `id="editRoomAvatar"`，导致 `getElementById` 只能获取到第一个元素
+2. `channelAvatarHTML()` 的 `onerror` 回调使用 `this.parentElement.textContent = '💬'`，会清空整个父元素的子节点（包括其他头像图片）
+3. `updateRoomAvatar()` 更新数据库后未立即更新本地 `chatState.rooms` 状态
+
+**修复**：
+1. 上下文面板的输入框 ID 改为 `editRoomAvatarCtx`，消除重复
+2. `channelAvatarHTML()` 改用包装 div + 备用 div 结构，`onerror` 仅隐藏 `<img>` 并显示备用 `💬` 图标，不破坏父元素
+3. `updateRoomAvatar()` 在数据库更新成功后立即更新 `chatState.rooms` 中对应频道的 `avatar_url`，再调用 `renderRoomList()` + `switchRoom(currentRoomId)` 全量刷新
+
+---
+
+##### 4. 其他界面收到频道新消息后无法切换到频道
+
+**现象**：用户在好友/公告/功能等界面时，频道收到新消息后，点击底部导航的「频道」按钮无反应，无法进入聊天界面。
+
+**根因**：
+1. `switchView()` 离开聊天视图时未将 `chatState.chatOpen` 设为 `false`，导致 `handleRealtimeMessage()` 误判当前仍在聊天视图中，不正确地调用了不存在的 DOM 元素方法
+2. `handleKickedFromRoom()` 在非聊天视图下直接访问 `document.getElementById('chatEmpty')` 等 DOM 元素，返回 null 后调用 `.classList` 导致异常
+3. `handleRealtimeMessage()` 和 `switchView()` 缺少 try-catch，异常导致后续代码不执行
+
+**修复**：
+1. `switchView()` 离开聊天视图时显式设置 `chatState.chatOpen = false` 并调用 `stopMessagePolling()`
+2. `handleKickedFromRoom()` 对所有 DOM 元素访问添加空指针检查
+3. `handleRealtimeMessage()` 整体包裹 try-catch，异常时仅记录日志不中断
+4. `switchView()` 视图渲染添加 try-catch，渲染失败时显示错误提示并提供刷新按钮
+
+---
+
+##### 5. 频道禁言失败：null value in column "id"
+
+**现象**：管理员在频道中对用户执行禁言操作时报错 `null value in column "id" of relation "chat_muted" violates not-null constraint`。
+
+**根因**：`executeMute()` 调用 `__SB.from('chat_muted').upsert()` 时未提供 `id` 字段，而 `chat_muted` 表的 `id` 列定义为 `NOT NULL`，Supabase 不会自动生成 UUID（需客户端提供或数据库层有默认值）。
+
+**修复**：在 `upsert` 操作中添加 `id` 字段，使用 `'mute_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)` 生成唯一 ID。
+
+**经验教训**：Supabase 的 `upsert` 操作不会自动填充主键字段——除非表中定义了 `DEFAULT gen_random_uuid()`。调用方必须显式提供所有 NOT NULL 字段的值。
+
+---
+
+##### 6. 频道和私聊消息无法自动刷新
+
+**现象**：切换到某个频道/私聊后，对方发送的新消息不会自动出现在聊天界面，需要手动切换房间才能看到。
+
+**根因**：`switchRoom()` 中，当 `chatState.messages[roomId]` 已有缓存消息时，代码渲染消息并订阅 Realtime，但未调用 `startMessagePolling()` 启动轮询兜底。当 Realtime 连接不稳定或断开时，没有轮询机制补充，导致新消息无法显示。
+
+**修复**：在 `switchRoom()` 的两个分支（有缓存 / 无缓存）中均添加 `startMessagePolling()` 调用：
+- 有缓存分支：`renderMessages()` + `subscribeToRoom()` + `startMessagePolling()`
+- 无缓存分支：`stopMessagePolling()` → `loadMessages()` → `subscribeToRoom()` → `startMessagePolling()`
+
+`pollNewMessages()` 函数末尾已正确通过 `setTimeout(pollNewMessages, 5000)` 自动重启轮询，确保持续运行。
+
+---
+
+#### 修改文件
+
+- `public/index.html` — 频道管理界面、图床迁移至 img.api.aa1.cn、HTML 渲染修复（@mention 处理层移至文本节点）、频道头像刷新、视图切换状态管理、禁言 ID 生成、消息轮询启动
+- `CHANGELOG.md` — 本条目
+- `README.md` — 更新功能清单和 FAQ
+
+---
+
 ## v3.6 — 2026-07-23
 
 ### 移动端 UI 重构 + 频道申请加入修复 + 聊天 HTML 渲染 + Supabase 安全加固

@@ -165,6 +165,7 @@
     <div class="tabs">
       <button class="tab active" onclick="switchSettingsTab('account',this)">⚙️ 账号</button>
       <button class="tab" onclick="switchSettingsTab('friends',this)">👥 好友 <span class="tab-badge" id="friendsBadge" style="display:none">0</span></button>
+      <button class="tab" onclick="switchSettingsTab('channels',this)">💬 频道 <span class="tab-badge" id="settingsChannelsBadge" style="display:none">0</span></button>
       <button class="tab" onclick="switchSettingsTab('blocks',this)">🚫 黑名单 <span class="tab-badge" id="blocksBadge" style="display:none">0</span></button>
     </div>
     <div id="settingsContent" style="max-height:400px;overflow-y:auto"></div>
@@ -585,21 +586,38 @@ function sanitizeHtml(html) {
 }
 
 // 将纯文本中的 HTML 标签检测出来，对纯文本部分做 esc，对 HTML 标签部分做净化
+// 对已 escape 的纯文本做 @提及高亮（仅处理文本内容，不碰HTML标签属性）
+function applyMentionHighlight(escapedText) {
+  return escapedText.replace(/@([^\s<&]+)/g, function(match, name) {
+    var isMe = currentUser && name === currentUser.name;
+    var style = isMe ? 'background:var(--accent-bg);color:var(--accent);' : 'background:#e8f4fd;color:#1a73e8;';
+    return '<span class="at-mention" style="' + style + 'border-radius:4px;padding:1px 4px;font-weight:500;cursor:pointer" onclick="event.stopPropagation();showAtUserInfo(\'' + escJS(name) + '\')">@' + name + '</span>';
+  });
+}
+
+// 处理纯文本：escape → @提及高亮 → linkify
+function processPlainText(text) {
+  if (!text) return '';
+  var escaped = esc(text);
+  var mentioned = applyMentionHighlight(escaped);
+  return linkify(mentioned).replace(/\n/g, '<br>');
+}
+
 function renderRichText(text) {
   if (!text) return '';
   // 检测是否包含 HTML 标签
   if (/<[a-z][\s\S]*>/i.test(text)) {
     // 包含 HTML，先净化
     var sanitized = sanitizeHtml(text);
-    // 在净化后的 HTML 上，只对文本节点做 linkify（避免破坏标签属性中的 URL）
-    return linkifyTextNodes(sanitized);
+    // 在净化后的 HTML 上，只对文本节点做 linkify 和 @提及（避免破坏标签属性）
+    return processHtmlTextNodes(sanitized);
   }
-  // 纯文本，走原来的 esc + linkify
-  return linkify(esc(text));
+  // 纯文本，走 esc + @提及 + linkify
+  return processPlainText(text);
 }
 
-// 只对 HTML 中的文本节点做 linkify，不碰标签属性
-function linkifyTextNodes(html) {
+// 对 HTML 中的文本节点做 linkify 和 @提及，不碰标签属性
+function processHtmlTextNodes(html) {
   var parser = new DOMParser();
   var doc = parser.parseFromString('<div id="__ln">' + html + '</div>', 'text/html');
   var root = doc.getElementById('__ln');
@@ -610,15 +628,21 @@ function linkifyTextNodes(html) {
     for (var i = 0; i < children.length; i++) {
       var child = children[i];
       if (child.nodeType === 3) {
-        // 文本节点：对纯 URL 做 linkify
-        var text = child.textContent;
-        if (/https?:\/\//.test(text)) {
+        // 文本节点：对 URL 做 linkify，对 @name 做提及高亮
+        var rawText = child.textContent;
+        if (rawText && (rawText.indexOf('@') >= 0 || /https?:\/\//.test(rawText) || rawText.indexOf('\n') >= 0)) {
           var span = doc.createElement('span');
-          span.innerHTML = linkify(esc(text));
+          // 先 escape，再 @提及，再 linkify
+          var processed = linkify(applyMentionHighlight(esc(rawText))).replace(/\n/g, '<br>');
+          span.innerHTML = processed;
           node.replaceChild(span, child);
         }
       } else if (child.nodeType === 1) {
-        processTextNodes(child);
+        // 跳过 <a> 标签内部的文本（避免对链接文本做二次处理）
+        var tag = child.tagName.toLowerCase();
+        if (tag !== 'a' && tag !== 'code' && tag !== 'pre') {
+          processTextNodes(child);
+        }
       }
     }
   }
@@ -1205,9 +1229,10 @@ function switchView(view) {
     return;
   }
 
-  // 离开聊天视图时停止轮询
+  // 离开聊天视图时停止轮询并标记为非聊天状态
   if (_currentView === 'chat' && view !== 'chat') {
     stopMessagePolling();
+    chatState.chatOpen = false;
   }
 
   _currentView = view;
@@ -1223,22 +1248,28 @@ function switchView(view) {
 
   // 切换到频道视图时清除频道栏红点
   if (view === 'chat') {
-    batchMarkReadByType('channel');
+    try { batchMarkReadByType('channel'); } catch(e) { console.warn('batchMarkRead error:', e); }
     loadChannelJoinRequests().catch(function(){});
   }
   // 切换到好友视图时清除好友栏私聊红点
   if (view === 'friends') {
-    batchMarkReadByType('private');
+    try { batchMarkReadByType('private'); } catch(e) { console.warn('batchMarkRead error:', e); }
   }
 
   var sidebar = document.getElementById('appSidebar');
   var main = document.getElementById('mainContent');
 
-  // 渲染对应视图
-  if (view === 'friends') renderFriendsView(sidebar, main);
-  else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
-  else if (view === 'features') renderFeaturesView(sidebar, main);
-  else if (view === 'chat') renderChatView(sidebar, main);
+  // 渲染对应视图（添加 try-catch 确保视图始终能渲染）
+  try {
+    if (view === 'friends') renderFriendsView(sidebar, main);
+    else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
+    else if (view === 'features') renderFeaturesView(sidebar, main);
+    else if (view === 'chat') renderChatView(sidebar, main);
+  } catch(e) {
+    console.error('switchView render error:', e);
+    // 渲染失败时显示错误信息
+    if (main) main.innerHTML = '<div style="padding:48px 24px;text-align:center"><div style="font-size:36px;margin-bottom:12px">⚠️</div><div style="color:var(--text-faint)">视图加载失败: ' + esc(e.message) + '</div><button class="btn btn-orange" style="margin-top:16px" onclick="location.reload()">刷新页面</button></div>';
+  }
 }
 
 // ── 好友视图（合并搜索+好友列表+私聊界面） ──
@@ -2252,7 +2283,11 @@ async function switchSettingsTab(tab, btnEl) {
   settingsTab = tab;
   document.querySelectorAll('#settingsModal .tab').forEach(t => t.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
-  else document.querySelectorAll('#settingsModal .tab')[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2].classList.add('active');
+  else {
+    var _idxMap = { account: 0, friends: 1, channels: 2, blocks: 3 };
+    var _els = document.querySelectorAll('#settingsModal .tab');
+    if (_els[_idxMap[tab] !== undefined ? _idxMap[tab] : 0]) _els[_idxMap[tab] !== undefined ? _idxMap[tab] : 0].classList.add('active');
+  }
 
   const el = document.getElementById('settingsContent');
 
@@ -2392,6 +2427,8 @@ async function switchSettingsTab(tab, btnEl) {
     } catch (e) {
       el.innerHTML = `<div class="empty"><div class="empty-text">加载失败</div></div>`;
     }
+  } else if (tab === 'channels') {
+    loadChannelsWithGroups(el);
   } else if (tab === 'blocks') {
     try {
       const res = await api(`/api/blocked?user_id=${currentUser.id}`);
@@ -3747,6 +3784,7 @@ async function switchRoom(roomId) {
   if (chatState.messages[roomId]?.length) {
     renderMessages(roomId);
     subscribeToRoom(roomId);
+    startMessagePolling();
     var input = document.getElementById('chatInput');
     if (input) input.focus();
     if (input && !input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
@@ -3754,6 +3792,7 @@ async function switchRoom(roomId) {
     stopMessagePolling();
     await loadMessages(roomId);
     subscribeToRoom(roomId);
+    startMessagePolling();
   }
   checkMutedStatus(roomId);
 }
@@ -3858,7 +3897,7 @@ async function renderChatContextPanel(room) {
         <div style="margin-bottom:8px">
           <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div>
           <div style="display:flex;gap:4px">
-            <input id="editRoomAvatar" class="input" value="${esc(currentAvatar)}" placeholder="https://..." style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
+            <input id="editRoomAvatarCtx" class="input" value="${esc(currentAvatar)}" placeholder="https://..." style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
             ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomAvatar()">更新</button>' : ''}
           </div>
         </div>
@@ -4128,13 +4167,8 @@ function renderMsgHTML(m, roomId) {
     const furl = lc > 0 ? fc.substring(lc + 1) : fc;
     contentHtml = '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary)">📎 ' + esc(fname || '文件') + '</a>';
   } else {
-    var displayText = renderRichText(text);
-    // @提及高亮（在已渲染的 HTML 上操作）
-    displayText = displayText.replace(/@(\S+)/g, function(match, name) {
-      var isMe = currentUser && name === currentUser.name;
-      return '<span class="at-mention" style="' + (isMe ? 'background:var(--accent-bg);color:var(--accent);' : 'background:#e8f4fd;color:#1a73e8;') + 'border-radius:4px;padding:1px 4px;font-weight:500;cursor:pointer" onclick="event.stopPropagation();showAtUserInfo(\'' + escJS(name) + '\')">@' + esc(name) + '</span>';
-    });
-    contentHtml = displayText;
+    // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
+    contentHtml = renderRichText(text);
   }
   const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escJS(m.event_id || '') + '\',\'' + escJS(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
   const replyBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReplyTo(\'' + escJS(m.event_id || '') + '\',\'' + escJS(text.slice(0,50)) + '\')" style="color:var(--text-muted);font-size:10px">引用</button>' : '';
@@ -4291,6 +4325,7 @@ function subscribeToJoinRequests() {
 }
 
 function handleRealtimeMessage(roomId, msg) {
+  try {
   var roomN = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isMuted = roomN && roomN.mute_notifications;
   // Dedup check
@@ -4345,6 +4380,7 @@ function handleRealtimeMessage(roomId, msg) {
       if (!isMuted) { renderRoomList(); updateUnreadBadge(); }
     }
   }
+  } catch(e) { console.error('handleRealtimeMessage error:', e); }
 }
 
 function debugChat() {
@@ -4378,8 +4414,11 @@ function handleKickedFromRoom(roomId) {
   chatState.rooms = chatState.rooms.filter(function(r) { return r.id !== roomId; });
   if (chatState.currentRoomId === roomId) {
     chatState.currentRoomId = null;
-    document.getElementById('chatEmpty').classList.remove('hidden');
-    document.getElementById('chatMsgs').classList.add('hidden');
+    // 添加空指针保护，避免在其他视图时访问不存在的 DOM 元素
+    var emptyEl = document.getElementById('chatEmpty');
+    var msgsEl = document.getElementById('chatMsgs');
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    if (msgsEl) msgsEl.classList.add('hidden');
   }
   renderRoomList();
   updateUnreadBadge();
@@ -4438,10 +4477,12 @@ async function markAllRead() {
 }
 
 function updateUnreadBadge() {
-  const badge = document.getElementById('chatUnreadBadge');
-  const total = chatState.rooms.reduce((sum, r) => sum + (r.unread || 0), 0);
-  if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
-  else { badge.classList.add('hidden'); }
+  var badge = document.getElementById('chatUnreadBadge');
+  var total = chatState.rooms.reduce((sum, r) => sum + (r.unread || 0), 0);
+  if (badge) {
+    if (total > 0 && notifEnabled) { badge.textContent = total > 99 ? '99+' : total; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+  }
   updateActivityBadges();
 }
 
@@ -4553,19 +4594,73 @@ async function sendChatMsg() {
 }
 
 // 核心函数：接收 File 对象，返回 {url, isVideo} 或抛错
+// 安全解析 JSON 响应，非 JSON 时返回 null 而非抛错
+async function safeJsonParse(response) {
+  try {
+    var ct = response.headers.get('Content-Type') || '';
+    if (ct.indexOf('json') >= 0) return await response.json();
+    // 非 JSON 响应（可能是 HTML 错误页），读取前 200 字符用于调试
+    var text = await response.text();
+    console.warn('Non-JSON response (Content-Type:', ct + '):', text.substring(0, 200));
+    return null;
+  } catch(e) {
+    console.warn('JSON parse failed:', e);
+    return null;
+  }
+}
+
 async function uploadImageFile(file) {
   var PROXY = '/api/proxy';
   var url = null, uploaded = false;
   var isImage = file.type.startsWith('image/');
+  var errors = []; // 记录各图床的错误信息
 
-  // 图片优先 img.remit.ee，文件优先 R2
+  // 1. img.api.aa1.cn（免费图床，无需 API Key，首选）
   if (!uploaded && isImage) {
-    // 1. img.remit.ee（图片首选）
+    try {
+      var aa1Form = new FormData();
+      aa1Form.append('image', file);
+      var aa1Res = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.api.aa1.cn/upload/upload.html' }, body: aa1Form }).then(safeJsonParse);
+      var aa1Url = null;
+      if (aa1Res) {
+        // 尝试多种响应格式
+        if (aa1Res.code === 200 && aa1Res.data && aa1Res.data.url) aa1Url = aa1Res.data.url;
+        else if (aa1Res.code === true && aa1Res.data && aa1Res.data.url) aa1Url = aa1Res.data.url;
+        else if (aa1Res.code === 1 && aa1Res.data && aa1Res.data.url) aa1Url = aa1Res.data.url;
+        else if (aa1Res.url) aa1Url = aa1Res.url;
+        else if (aa1Res.data && aa1Res.data.url) aa1Url = aa1Res.data.url;
+        else if (aa1Res.data && aa1Res.data.path) aa1Url = aa1Res.data.path;
+        else if (aa1Res.initialPreview && aa1Res.initialPreview[0]) {
+          // bootstrap-fileinput 格式：initialPreview 包含 <img src="...">
+          var match = String(aa1Res.initialPreview[0]).match(/src="([^"]+)"/);
+          if (match) aa1Url = match[1];
+        }
+      }
+      if (aa1Url) {
+        if (aa1Url.charAt(0) === '/') aa1Url = 'https://img.api.aa1.cn' + aa1Url;
+        url = aa1Url; uploaded = true;
+      } else if (aa1Res) errors.push('img.api.aa1.cn: 响应无URL字段');
+    } catch(e) { errors.push('img.api.aa1.cn: ' + e.message); console.warn('img.api.aa1.cn upload failed:', e); }
+  }
+
+  // 2. R2（Cloudflare 自建存储，备选）
+  if (!uploaded && currentUser) {
+    try {
+      var r2Form = new FormData();
+      r2Form.append('file', file);
+      r2Form.append('user_id', currentUser.id);
+      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(safeJsonParse);
+      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
+      else if (r2Res && r2Res.error) errors.push('R2: ' + r2Res.error);
+    } catch(e) { errors.push('R2: ' + e.message); console.warn('R2 upload failed:', e); }
+  }
+
+  // 3. img.remit.ee（图片备选）
+  if (!uploaded && isImage) {
     try {
       var rForm = new FormData();
       rForm.append('file', file);
-      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
-      // img.remit.ee 返回相对路径（如 /api/file/xxx.png），需拼接域名
+      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(safeJsonParse);
       var rUrl = null;
       if (rRes && rRes.success && rRes.url) rUrl = rRes.url;
       else if (rRes && rRes.directUrl) rUrl = rRes.directUrl;
@@ -4574,42 +4669,34 @@ async function uploadImageFile(file) {
       if (rUrl) {
         if (rUrl.charAt(0) === '/') rUrl = 'https://img.remit.ee' + rUrl;
         url = rUrl; uploaded = true;
-      }
-    } catch(e) { console.warn('img.remit.ee upload failed:', e); }
+      } else if (rRes) errors.push('img.remit.ee: 响应无URL字段');
+    } catch(e) { errors.push('img.remit.ee: ' + e.message); console.warn('img.remit.ee upload failed:', e); }
   }
 
-  // 2. R2（文件首选，图片备选）
-  if (!uploaded && currentUser) {
-    try {
-      var r2Form = new FormData();
-      r2Form.append('file', file);
-      r2Form.append('user_id', currentUser.id);
-      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(function(r) { return r.json(); });
-      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
-    } catch(e) { console.warn('R2 upload failed:', e); }
-  }
-
-  // 3. picgo.net（需 API Key）
+  // 4. picgo.net（需 API Key）
   var picgoKey = localStorage.getItem('dp_picgo_key') || '';
   if (!uploaded && picgoKey) {
     try {
       var pForm = new FormData();
       pForm.append('key', picgoKey);
       pForm.append('source', file);
-      var pRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload' }, body: pForm }).then(function(r) { return r.json(); });
+      var pRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://www.picgo.net/api/1/upload' }, body: pForm }).then(safeJsonParse);
       if (pRes && pRes.image && pRes.image.url) { url = pRes.image.url; uploaded = true; }
-    } catch(e) {}
+    } catch(e) { errors.push('picgo: ' + e.message); }
   }
-  // 4. sm.ms
+  // 5. sm.ms
   if (!uploaded) {
     try {
       var smForm = new FormData();
       smForm.append('smfile', file);
-      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(r => r.json());
+      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(safeJsonParse);
       if (smRes?.success && smRes.data?.url) { url = smRes.data.url; uploaded = true; }
-    } catch(e) {}
+    } catch(e) { errors.push('sm.ms: ' + e.message); }
   }
-  if (!uploaded) throw new Error('all hosts failed');
+  if (!uploaded) {
+    console.warn('所有图床上传失败:', errors.join('; '));
+    throw new Error('所有图床均不可用: ' + errors.join('; '));
+  }
   return { url: url, isVideo: file.type.startsWith('video/') };
 }
 
@@ -4643,7 +4730,7 @@ async function uploadChatImage(input) {
     await sendImageMessage(r.url, r.isVideo);
     toast(r.isVideo ? '视频已发送' : '图片已发送', 'success');
   } catch (e) {
-    toast('图片上传失败，所有图床均不可用', 'error');
+    toast('图片上传失败: ' + e.message, 'error');
   }
   input.value = '';
 }
@@ -4653,51 +4740,16 @@ async function uploadChatFile(input) {
   if (!file) return;
   if (!chatState.currentRoomId) { toast('请先选择聊天', 'error'); return; }
   toast('上传中...', 'info');
-  var url = null;
-  var uploaded = false;
-  var PROXY = '/api/proxy';
-
-  // 1. 优先使用 R2（文件首选，支持所有类型）
-  if (!uploaded && currentUser) {
-    try {
-      var r2Form = new FormData();
-      r2Form.append('file', file);
-      r2Form.append('user_id', currentUser.id);
-      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(function(r) { return r.json(); });
-      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; uploaded = true; }
-    } catch(e) { console.warn('R2 upload failed:', e); }
-  }
-
-  // 2. img.remit.ee（也支持非图片文件）
-  if (!uploaded) {
-    try {
-      var rForm = new FormData();
-      rForm.append('file', file);
-      var rRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://img.remit.ee/api/upload' }, body: rForm }).then(function(r) { return r.json(); });
-      // img.remit.ee 返回相对路径（如 /api/file/xxx.png），需拼接域名
-      var rUrl = null;
-      if (rRes && rRes.success && rRes.url) rUrl = rRes.url;
-      else if (rRes && rRes.directUrl) rUrl = rRes.directUrl;
-      else if (rRes && rRes.data && rRes.data.url) rUrl = rRes.data.url;
-      else if (rRes && rRes.data && rRes.data.link) rUrl = rRes.data.link;
-      if (rUrl) {
-        if (rUrl.charAt(0) === '/') rUrl = 'https://img.remit.ee' + rUrl;
-        url = rUrl; uploaded = true;
-      }
-    } catch(e) {}
-  }
-
-  // 3. sm.ms
-  if (!uploaded) {
-    try {
-      var smForm = new FormData();
-      smForm.append('smfile', file);
-      var smRes = await fetch(PROXY, { method: 'POST', headers: { 'X-Target-URL': 'https://sm.ms/api/v2/upload' }, body: smForm }).then(function(r) { return r.json(); });
-      if (smRes && smRes.success && smRes.data && smRes.data.url) { url = smRes.data.url; uploaded = true; }
-    } catch(e) {}
+  // 复用统一的 uploadImageFile 函数（已包含 R2 首选 + 多图床备选 + safeJsonParse）
+  try {
+    var r = await uploadImageFile(file);
+    var url = r.url;
+  } catch(e) {
+    input.value = '';
+    toast('文件上传失败: ' + e.message, 'error');
+    return;
   }
   input.value = '';
-  if (!uploaded) { toast('文件上传失败，所有图床均不可用', 'error'); return; }
   const eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
@@ -5137,7 +5189,7 @@ async function showRoomSettings() {
   let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">';
   html += '<div class="modal-header"><div class="modal-title">频道设置</div><button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道名称</div><div style="display:flex;gap:8px"><input id="editRoomName" class="input" value="' + esc(room.name || '') + '" style="flex:1"' + (canManage ? '' : ' disabled') + '><button class="btn btn-sm btn-orange" onclick="updateRoomName()">更新</button></div></div>';
-  html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div><div style="display:flex;gap:8px"><input id="editRoomAvatar" class="input" value="' + esc(currentAvatar || '') + '" placeholder="https://... 输入图片链接" style="flex:1"' + (canManage ? '' : ' disabled') + '><button class="btn btn-sm btn-orange" onclick="updateRoomAvatar()">更新</button></div></div>';
+  html += '<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div><div style="display:flex;gap:8px"><input id="editRoomAvatar" class="input" value="' + esc(currentAvatar || '') + '" placeholder="https://... 输入图片链接" style="flex:1"' + (canManage ? '' : ' disabled') + '>' + (canManage ? '<button class="btn btn-sm btn-secondary" onclick="document.getElementById(\'roomAvatarFileInput\').click()">📁上传</button><input type="file" id="roomAvatarFileInput" accept="image/*" style="display:none" onchange="uploadRoomAvatarFile(this)"><button class="btn btn-sm btn-orange" onclick="updateRoomAvatar()">更新</button>' : '') + '</div></div>';
   html += '<div style="margin-top:12px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道简介 (Topic)</div><div style="display:flex;gap:8px"><input id="editRoomTopic" class="input" value="' + esc(currentTopic || '') + '" style="flex:1"' + (canManage ? '' : ' disabled') + '>';
   if (canManage) html += '<button class="btn btn-sm btn-orange" onclick="updateRoomTopic()">更新</button>';
   html += '</div></div>';
@@ -5270,7 +5322,9 @@ async function updateRoomAvatar() {
   if (!chatState.currentRoomId) return;
   var canEdit = await checkChannelPermission(chatState.currentRoomId);
   if (!canEdit) { toast('只有管理员及以上才能修改频道头像', 'error'); return; }
-  const avatar = document.getElementById('editRoomAvatar')?.value?.trim() || '';
+  // 兼容两个输入框：弹窗(editRoomAvatar) 和 上下文面板(editRoomAvatarCtx)
+  var avatarInput = document.getElementById('editRoomAvatar') || document.getElementById('editRoomAvatarCtx');
+  const avatar = avatarInput?.value?.trim() || '';
   try {
     // 先尝试 update，如果没有行则 insert
     var { data: updData, error: updErr } = await __SB.from('chat_channel_settings')
@@ -5285,6 +5339,9 @@ async function updateRoomAvatar() {
       if (insErr) { toast('修改失败: ' + insErr.message, 'error'); return; }
     }
     toast('头像已更新', 'success');
+    // 立即更新本地 room 对象的 avatar_url，避免等待 loadRoomList
+    var room0 = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
+    if (room0) room0.avatar_url = avatar;
     // 重新加载会话列表（会重新拉取 avatar_url）
     await loadRoomList();
     renderRoomList();
@@ -5300,6 +5357,24 @@ async function updateRoomAvatar() {
   } catch(e) {
     toast('修改失败: ' + e.message, 'error');
   }
+}
+
+// 上传频道头像文件（复用 uploadImageFile）
+async function uploadRoomAvatarFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('请选择图片文件', 'error'); return; }
+  toast('上传头像中...', 'info');
+  try {
+    var r = await uploadImageFile(file);
+    // 将上传后的 URL 填入输入框
+    var avatarInput = document.getElementById('editRoomAvatar') || document.getElementById('editRoomAvatarCtx');
+    if (avatarInput) avatarInput.value = r.url;
+    toast('头像上传成功，点击"更新"保存', 'success');
+  } catch(e) {
+    toast('头像上传失败: ' + e.message, 'error');
+  }
+  input.value = '';
 }
 
 async function kickMember(roomId, targetUserId) {
@@ -5363,7 +5438,9 @@ function muteUserInChannel(userId, userName) {
 async function executeMute(userId, minutes) {
   var roomId = chatState.currentRoomId;
   var mutedUntil = minutes ? new Date(Date.now() + minutes * 60000).toISOString() : null;
+  var muteId = 'mute_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   var { error } = await __SB.from('chat_muted').upsert({
+    id: muteId,
     room_id: roomId,
     user_id: userId,
     muted_until: mutedUntil,
@@ -6136,8 +6213,14 @@ function getAdmissionMode(s) {
 // 统一获取频道头像 HTML
 function channelAvatarHTML(room, size) {
   size = size || 32;
+  var fontSize = Math.floor(size * 0.5);
   if (room && room.avatar_url) {
-    return '<img src="' + esc(room.avatar_url) + '" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'💬\'">';
+    // 使用 wrapper div + 备用 emoji，onerror 不再销毁父元素
+    return '<div style="width:' + size + 'px;height:' + size + 'px;position:relative;flex-shrink:0">' +
+      '<img src="' + esc(room.avatar_url) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block" ' +
+      'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<div style="display:none;width:100%;height:100%;border-radius:50%;align-items:center;justify-content:center;background:var(--accent-bg);font-size:' + fontSize + 'px;position:absolute;top:0;left:0">💬</div>' +
+      '</div>';
   }
   return '💬';
 }
@@ -6521,7 +6604,7 @@ renderRoomList = function() {
       if (chatState._showHidden) {
         hiddenRoomsData.forEach(function(r) {
           var name = r.other ? esc(r.other.name) : esc(r.name);
-          var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : '📢';
+          var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
           hideHtml += '<div class="chat-room-item" onclick="unhideChannel(\'' + r.id + '\');switchRoom(\'' + r.id + '\')">' +
             '<div class="chat-room-avatar">' + avatar + '</div>' +
             '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
@@ -6680,7 +6763,9 @@ switchSettingsTab = function(tab, btnEl) {
   if (btnEl) btnEl.classList.add('active');
   else {
     var els = document.querySelectorAll('#settingsModal .tab');
-    if (els[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2]) els[tab === 'account' ? 0 : tab === 'friends' ? 1 : 2].classList.add('active');
+    var idxMap = { account: 0, friends: 1, channels: 2, blocks: 3 };
+    var idx = idxMap[tab] !== undefined ? idxMap[tab] : 0;
+    if (els[idx]) els[idx].classList.add('active');
   }
   var el = document.getElementById('settingsContent');
   if (tab === 'account') {
@@ -6689,6 +6774,8 @@ switchSettingsTab = function(tab, btnEl) {
     loadFeatureToggles();
   } else if (tab === 'friends') {
     loadFriendsWithGroups(el);
+  } else if (tab === 'channels') {
+    loadChannelsWithGroups(el);
   } else if (tab === 'blocks') {
     loadBlocksTab(el);
   }
@@ -6859,6 +6946,72 @@ var _filterGroup = '';
 function filterFriendGroup(name) {
   _filterGroup = name;
   switchSettingsTab('friends');
+}
+
+var _filterChannelGroup = '';
+function filterChannelGroupInSettings(name) {
+  _filterChannelGroup = name;
+  switchSettingsTab('channels');
+}
+
+async function loadChannelsWithGroups(el) {
+  try {
+    // 如果房间列表为空，先加载
+    if (!chatState.rooms.length) {
+      await loadRoomList();
+    }
+    var channels = chatState.rooms.filter(function(r) { return r.type === 'channel'; });
+    var badge = document.getElementById('settingsChannelsBadge');
+    if (badge) { badge.textContent = channels.length; badge.style.display = channels.length > 0 ? 'flex' : 'none'; }
+    if (!channels.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><div class="empty-text">暂无频道</div><div style="margin-top:12px;font-size:12px;color:var(--text-faint)">在频道页浏览并加入频道</div></div>';
+      return;
+    }
+    var groups = getChannelGroups();
+    var groupNames = Object.keys(groups);
+    var html = '<div style="margin-bottom:12px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<div class="section-label" style="margin-bottom:0">💬 频道分组</div>' +
+      '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:11px">管理</button></div></div>';
+    if (groupNames.length) {
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
+        '<span class="tag ' + (_filterChannelGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
+        groupNames.map(function(n) {
+          return '<span class="tag ' + (_filterChannelGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'' + esc(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+        }).join('') + '</div>';
+    }
+    var filteredChannels = _filterChannelGroup ? channels.filter(function(c) {
+      for (var k in groups) { if (groups[k].indexOf(c.id) >= 0) return k === _filterChannelGroup; }
+      return false;
+    }) : channels;
+    html += '<div class="section-label">💬 ' + (_filterChannelGroup ? '分组: ' + _filterChannelGroup : '全部频道') + ' (' + filteredChannels.length + ')</div>';
+    html += filteredChannels.map(function(c) {
+      var g = '';
+      for (var k in groups) { if (groups[k].indexOf(c.id) >= 0) { g = k; break; } }
+      var isOwner = c.created_by === currentUser.id;
+      var roleTag = isOwner ? '<span class="chat-role-tag role-owner">创建者</span>' : (c.is_admin ? '<span class="chat-role-tag role-admin">管理员</span>' : '');
+      return '<div class="list-item">' +
+        '<div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center">' + channelAvatarHTML(c, 32) + '</div>' +
+        '<div class="list-item-info"><div class="list-item-name">' + esc(c.name) + roleTag + '</div>' +
+        '<div class="list-item-email">' + (c.member_count || 0) + ' 人' + (c.unread ? ' · ' + c.unread + ' 未读' : '') + '</div></div>' +
+        '<select class="input" style="width:auto;font-size:11px;padding:4px 8px" onchange="setChannelGroupInSettings(\'' + c.id + '\',this.value)">' +
+        '<option value="">(无分组)</option>' +
+        groupNames.map(function(n) { return '<option value="' + esc(n) + '" ' + (g === n ? 'selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+        '</select>' +
+        '<button class="btn btn-sm btn-orange" onclick="switchRoom(\'' + c.id + '\');closeModal(\'settings\')">进入</button></div>';
+    }).join('');
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">加载失败: ' + esc(e.message || '') + '</div></div>';
+  }
+}
+
+function setChannelGroupInSettings(roomId, groupName) {
+  var g = getChannelGroups();
+  for (var k in g) { var idx = g[k].indexOf(roomId); if (idx >= 0) g[k].splice(idx, 1); if (!g[k].length) delete g[k]; }
+  if (groupName) { if (!g[groupName]) g[groupName] = []; g[groupName].push(roomId); }
+  saveChannelGroups(g);
+  toast(groupName ? '已分组到 ' + groupName : '已取消分组', 'info');
 }
 
 async function loadBlocksTab(el) {
