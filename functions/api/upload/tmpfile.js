@@ -4,7 +4,7 @@
 // 鉴权：无（匿名上传，文件 7 天后自动删除）
 // 上传目标：tmpfile.link
 // 限制：最大 100MB，支持所有文件类型
-// 特性：安全文件(图片/文档/音视频)从 d.tmpfile.link 提供，其他从 d1-d10.tfdl.net 提供
+// 文档：https://tmpfile.link（API Documentation 部分）
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -50,10 +50,12 @@ export async function onRequestPost(context) {
     }
 
     // 3. 构建发送到 tmpfile.link 的 FormData
-    // tmpfile.link API: POST https://tmpfile.link/api/upload
-    // FormData 字段: file=文件
+    // 根据官方 API 文档 (https://tmpfile.link):
+    //   POST https://tmpfile.link/api/upload
+    //   FormData 字段: file=文件（直接使用 File 对象）
+    // 注意：直接用原始 File 对象，不包装成 Blob（兼容性更好）
     const tmpForm = new FormData();
-    tmpForm.append('file', new Blob([buffer], { type: file.type || 'application/octet-stream' }), file.name || 'file');
+    tmpForm.append('file', file, file.name || 'file');
 
     // 4. 发送请求到 tmpfile.link（服务端请求，无 CORS 问题）
     const response = await fetch('https://tmpfile.link/api/upload', {
@@ -71,7 +73,7 @@ export async function onRequestPost(context) {
     }
 
     // 6. 检查上传结果
-    // tmpfile.link 响应: { fileName, downloadLink, downloadLinkEncoded, size, type, uploadedTo }
+    // 响应: { fileName, downloadLink, downloadLinkEncoded, size, type, uploadedTo }
     if (respData.downloadLink) {
       return json({
         success: true,

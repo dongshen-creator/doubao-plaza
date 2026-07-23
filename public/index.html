@@ -4638,12 +4638,12 @@ async function safeJsonParse(response) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 图片上传（仅图片 → picgo.net 图床，失败回退 R2）
-// 文件上传（非图片 → tmpfile.link 文件存储，失败回退 R2）
-// 两者完全分离，不混用
+// 图片上传（仅图片 → picgo.net 图床，失败回退 sm.ms）
+// 文件上传（非图片 → tmpfile.link 文件存储）
+// 两者完全分离，不混用，不使用 R2
 // ═══════════════════════════════════════════════════════
 
-// 图片上传：picgo.net 专用端点 → R2 兜底
+// 图片上传：picgo.net 专用端点 → sm.ms 备选
 async function uploadImageToPicgo(file) {
   var url = null, errors = [];
   var isVideo = file.type.startsWith('video/');
@@ -4660,19 +4660,7 @@ async function uploadImageToPicgo(file) {
     } catch(e) { errors.push('picgo.net: ' + e.message); console.warn('picgo.net upload failed:', e); }
   }
 
-  // 2. R2 兜底（图片和视频均可）
-  if (!url && currentUser) {
-    try {
-      var r2Form = new FormData();
-      r2Form.append('file', file);
-      r2Form.append('user_id', currentUser.id);
-      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(safeJsonParse);
-      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; }
-      else if (r2Res && r2Res.error) errors.push('R2: ' + r2Res.error);
-    } catch(e) { errors.push('R2: ' + e.message); console.warn('R2 upload failed:', e); }
-  }
-
-  // 3. sm.ms 最后备选（仅图片）
+  // 2. sm.ms 备选（仅图片）
   if (!url && file.type.startsWith('image/')) {
     try {
       var smForm = new FormData();
@@ -4684,6 +4672,7 @@ async function uploadImageToPicgo(file) {
       }).then(safeJsonParse);
       if (smRes && smRes.success && smRes.data && smRes.data.url) { url = smRes.data.url; }
       else if (smRes && smRes.data && smRes.data.url) { url = smRes.data.url; }
+      else if (smRes && smRes.error) errors.push('sm.ms: ' + smRes.error);
     } catch(e) { errors.push('sm.ms: ' + e.message); }
   }
 
@@ -4693,7 +4682,7 @@ async function uploadImageToPicgo(file) {
   return { url: url, isVideo: isVideo };
 }
 
-// 文件上传：tmpfile.link 专用端点 → R2 兜底
+// 文件上传：tmpfile.link 专用端点
 async function uploadFileToTmpfile(file) {
   var url = null, errors = [];
 
@@ -4706,18 +4695,6 @@ async function uploadFileToTmpfile(file) {
     else if (tfRes && tfRes.error) errors.push('tmpfile.link: ' + tfRes.error);
     else errors.push('tmpfile.link: 响应异常');
   } catch(e) { errors.push('tmpfile.link: ' + e.message); console.warn('tmpfile.link upload failed:', e); }
-
-  // 2. R2 兜底
-  if (!url && currentUser) {
-    try {
-      var r2Form = new FormData();
-      r2Form.append('file', file);
-      r2Form.append('user_id', currentUser.id);
-      var r2Res = await fetch('/api/upload/image', { method: 'POST', body: r2Form }).then(safeJsonParse);
-      if (r2Res && r2Res.success && r2Res.url) { url = r2Res.url; }
-      else if (r2Res && r2Res.error) errors.push('R2: ' + r2Res.error);
-    } catch(e) { errors.push('R2: ' + e.message); console.warn('R2 upload failed:', e); }
-  }
 
   if (!url) {
     throw new Error('文件上传失败: ' + errors.join('; '));
@@ -4744,7 +4721,7 @@ async function sendImageMessage(url, isVideo) {
   renderMessages(chatState.currentRoomId);
 }
 
-// 图片/视频上传（图床：picgo.net → R2 兜底）
+// 图片/视频上传（图床：picgo.net → sm.ms 备选）
 async function uploadChatImage(input) {
   var file = input.files[0];
   if (!file) return;
@@ -4760,7 +4737,7 @@ async function uploadChatImage(input) {
   input.value = '';
 }
 
-// 文件上传（文件存储：tmpfile.link → R2 兜底）
+// 文件上传（文件存储：tmpfile.link）
 async function uploadChatFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -7191,11 +7168,10 @@ function uploadChatBg(file) {
     return;
   }
 
-  // 优先使用项目自带 R2 上传 API
+  // 使用 picgo.net 图床上传
   var fd = new FormData();
   fd.append('file', file);
-  fd.append('user_id', currentUser.id);
-  fetch('/api/upload/image', { method: 'POST', body: fd })
+  fetch('/api/upload/picgo', { method: 'POST', body: fd })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.success && data.url) {
@@ -7208,7 +7184,7 @@ function uploadChatBg(file) {
       }
     })
     .catch(function(err) {
-      console.warn('R2 上传失败，尝试外部图床降级:', err.message);
+      console.warn('picgo.net 上传失败，尝试外部图床降级:', err.message);
       // 降级：尝试外部图床
       uploadChatBgFallback(file, status);
     });
@@ -7223,7 +7199,7 @@ function uploadChatBgFallback(file, status) {
   ];
   var tryNext = function(idx) {
     if (idx >= services.length) {
-      if (status) status.textContent = '上传失败：R2 和外部图床均不可用，可尝试手动输入URL';
+      if (status) status.textContent = '上传失败：picgo.net 和外部图床均不可用，可尝试手动输入URL';
       toast('自动上传失败，请手动输入图片URL', 'error');
       return;
     }

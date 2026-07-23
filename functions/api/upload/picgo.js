@@ -1,14 +1,13 @@
 // Cloudflare Pages Function - picgo.net 图床上传 API
-// POST /api/upload/picgo - 上传图片到 picgo.net (Chevereto API)
+// POST /api/upload/picgo - 上传图片到 picgo.net (Chevereto API v1.1)
 //
-// 鉴权：任意已登录用户（需 user_id 参数）
+// 鉴权：通过 X-API-Key header（官方推荐方式）
 // 上传目标：picgo.net (Chevereto API v1)
-// 限制：仅图片类型，最大 25MB（picgo.net 限制）
+// 限制：仅图片类型，最大 25MB
 
 const PICGO_API_KEY = 'chv_kyCSl_10248ff7e66129adec1f4ce1d55192dbd1238271e943638de688e6262bdd6033_68d8a3764e5564c490c6ad9471ee875fddaeda2a5cb5e3a9d64473a9b5733835';
 const PICGO_UPLOAD_URL = 'https://www.picgo.net/api/1/upload';
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB (picgo.net 限制)
-const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
+const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
 function corsHeaders() {
   return {
@@ -58,16 +57,22 @@ export async function onRequestPost(context) {
     }
 
     // 4. 构建发送到 picgo.net 的 FormData
-    // Chevereto API: POST /api/1/upload?key=xxx&format=json
-    // FormData 字段: source=图片文件
+    // 根据官方 API 文档 (https://www.picgo.net/api-v1):
+    //   - source: binary file（直接使用 File 对象，不包装成 Blob）
+    //   - 认证: X-API-Key header（官方推荐）
+    //   - format: json（通过 URL 参数传递）
+    // 注意：Cloudflare Workers 中 new Blob() + FormData 会有兼容性问题
+    // 导致 source 字段为空（"Empty upload source"），必须用原始 File 对象
     const picgoForm = new FormData();
-    picgoForm.append('source', new Blob([buffer], { type: contentType }), file.name || 'image.png');
-    picgoForm.append('format', 'json');
+    picgoForm.append('source', file, file.name || 'image.png');
 
-    // 5. 发送请求到 picgo.net（服务端请求，无 CORS 问题）
-    const uploadUrl = PICGO_UPLOAD_URL + '?key=' + PICGO_API_KEY + '&format=json';
-    const response = await fetch(uploadUrl, {
+    // 5. 发送请求到 picgo.net
+    // 使用 X-API-Key header 认证（官方推荐），format=json 通过 URL 传递
+    const response = await fetch(PICGO_UPLOAD_URL + '?format=json', {
       method: 'POST',
+      headers: {
+        'X-API-Key': PICGO_API_KEY,
+      },
       body: picgoForm,
     });
 
@@ -81,13 +86,10 @@ export async function onRequestPost(context) {
     }
 
     // 7. 检查上传结果
-    // Chevereto 成功响应: { image: { url: "...", ... }, success: { message: "..." } }
-    // Chevereto 错误响应: { error: { message: "...", code: ... }, status_code: 400 }
+    // 成功: { status_code: 200, success: {...}, image: { url: "..." } }
+    // 错误: { status_code: 400, error: { message: "...", code: ... } }
     if (respData.image && respData.image.url) {
       return json({ success: true, url: respData.image.url });
-    } else if (respData.image && respData.image.image && respData.image.image.url) {
-      // 某些版本的嵌套格式
-      return json({ success: true, url: respData.image.image.url });
     } else if (respData.error && respData.error.message) {
       return json({ success: false, error: 'picgo.net: ' + respData.error.message, code: respData.error.code || respData.status_code }, 502);
     } else {
