@@ -123,6 +123,40 @@
       <button type="submit" class="btn btn-orange btn-full">登录</button>
       </form>
       <p style="text-align:center;font-size:13px;color:var(--text-faint);margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:var(--accent);font-weight:600">立即注册</a></p>
+      <p style="text-align:center;font-size:12px;margin-top:8px"><a href="#" onclick="closeModal('login');showModal('recover');return false" style="color:var(--text-muted)">忘记账号？通过密保找回</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- Recover Modal -->
+<div class="modal-overlay" id="recoverModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#F59E0B,#FBBF24);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">🔐</div>
+      <div class="modal-title">找回账号</div>
+      <button class="modal-close" onclick="closeModal('recover')">✕</button>
+    </div>
+    <div id="recoverError"></div>
+    <div id="recoverStep1">
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">选择本设备登录过的账号：</div>
+      <div id="recoverAccountList" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+    <div id="recoverStep2" style="display:none">
+      <div id="recoverUserInfo" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-input);border-radius:10px;margin-bottom:12px"></div>
+      <div class="form-group">
+        <label class="form-label">密保问题</label>
+        <div id="recoverQuestion" style="font-size:14px;font-weight:600;color:var(--text-primary);padding:8px 0"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">密保答案</label>
+        <input class="input" id="recoverAnswer" placeholder="输入密保答案" maxlength="50">
+      </div>
+      <div class="form-group">
+        <label class="form-label">新密码</label>
+        <input class="input" id="recoverNewPwd" type="password" placeholder="设置新密码（6-32位）" maxlength="32">
+      </div>
+      <button class="btn btn-orange btn-full" onclick="submitRecovery()">重置密码并登录</button>
+      <button class="btn btn-gray btn-full" style="margin-top:8px" onclick="recoverBack()">返回选择账号</button>
     </div>
   </div>
 </div>
@@ -707,6 +741,7 @@ async function init() {
         currentUser = res.data;
         sessionToken = res.token;
         localStorage.setItem('dp_token', sessionToken);
+        saveDeviceLogin(currentUser);
       } else {
         localStorage.removeItem('dp_token');
         sessionToken = null;
@@ -1006,6 +1041,39 @@ function canRecallMessage(roomId, msg) {
   return false;
 }
 
+// ===== 设备登录记录（用于密保找回） =====
+function saveDeviceLogin(user) {
+  try {
+    var list = JSON.parse(localStorage.getItem('dp_device_logins') || '[]');
+    // 去重：已存在则更新
+    list = list.filter(function(u) { return u.id !== user.id; });
+    list.unshift({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar || '',
+      doubao_id: user.doubao_id || '',
+      ts: Date.now()
+    });
+    // 最多保留 10 条
+    if (list.length > 10) list = list.slice(0, 10);
+    localStorage.setItem('dp_device_logins', JSON.stringify(list));
+  } catch(e) { console.warn('saveDeviceLogin error:', e); }
+}
+
+function getDeviceLogins() {
+  try {
+    return JSON.parse(localStorage.getItem('dp_device_logins') || '[]');
+  } catch(e) { return []; }
+}
+
+function removeDeviceLogin(userId) {
+  try {
+    var list = JSON.parse(localStorage.getItem('dp_device_logins') || '[]');
+    list = list.filter(function(u) { return u.id !== userId; });
+    localStorage.setItem('dp_device_logins', JSON.stringify(list));
+  } catch(e) {}
+}
+
 // ===== Login =====
   async function doLogin() {
     const identifier = document.getElementById('loginId').value.trim();
@@ -1024,6 +1092,7 @@ function canRecallMessage(roomId, msg) {
         currentUser = res.data;
         sessionToken = res.token;
         localStorage.setItem('dp_token', sessionToken);
+        saveDeviceLogin(currentUser);
         closeModal('login');
         updateNavbar();
         if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1067,6 +1136,7 @@ async function doRegister() {
       currentUser = res.data;
       sessionToken = res.token;
       localStorage.setItem('dp_token', sessionToken);
+      saveDeviceLogin(currentUser);
       closeModal('register');
       updateNavbar();
       if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1438,9 +1508,10 @@ async function openPrivateChatInFriends(friendId, friendName) {
   // 在私聊区域渲染聊天界面
   var area = document.getElementById('privateChatArea');
   if (area) {
-    area.style.display = '';
+    area.style.display = 'flex';
+    area.style.flexDirection = 'column';
     area.innerHTML = `
-      <div class="chat-view-main" id="chatMainArea" style="height:100%">
+      <div class="chat-view-main" id="chatMainArea" style="height:100%;min-height:0">
         <div class="chat-view-center">
           <div class="chat-view-header" id="chatViewHeader" style="border-bottom:1px solid var(--border-color);padding:8px 16px;display:flex;align-items:center;gap:8px">
             <button onclick="closePrivateChatInFriends()" title="返回" aria-label="返回" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">☰</button>
@@ -2333,12 +2404,46 @@ async function switchSettingsTab(tab, btnEl) {
             <button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button>
           </div>
         </div>
+        <div class="form-group"><label class="form-label">修改昵称</label>
+          <div style="display:flex;gap:8px">
+            <input class="input" id="newName" placeholder="输入新昵称" value="${esc(currentUser.name || '')}" maxlength="20" style="flex:1">
+            <button class="btn btn-orange btn-sm" onclick="updateProfile('name')">保存</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，修改后即时生效</div>
+        </div>
+        <div class="form-group"><label class="form-label">个人公告</label>
+          <textarea class="input" id="newBio" placeholder="编辑你的个人公告（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">${esc(currentUser.bio || '')}</textarea>
+          <button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile('bio')">保存公告</button>
+        </div>
       </div>
       <div class="form-group"><label class="form-label">修改密码</label>
         <div style="display:flex;gap:8px">
           <input class="input" id="newPwd" type="password" placeholder="新密码（6-32位）" maxlength="32" style="flex:1">
           <button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button>
         </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
+        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">🔐 密保问题</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label" style="font-size:12px">选择密保问题</label>
+          <select class="input" id="securityQuestion" style="width:100%">
+            <option value="">-- 请选择 --</option>
+            <option value="你的宠物名字叫什么？">你的宠物名字叫什么？</option>
+            <option value="你最喜欢的电影是什么？">你最喜欢的电影是什么？</option>
+            <option value="你小学就读的学校叫什么？">你小学就读的学校叫什么？</option>
+            <option value="你父亲的名字叫什么？">你父亲的名字叫什么？</option>
+            <option value="你母亲的名字叫什么？">你母亲的名字叫什么？</option>
+            <option value="你出生的城市叫什么？">你出生的城市叫什么？</option>
+            <option value="你最喜欢的食物是什么？">你最喜欢的食物是什么？</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label" style="font-size:12px">密保答案</label>
+          <input class="input" id="securityAnswer" type="password" placeholder="输入密保答案" maxlength="50" style="width:100%">
+        </div>
+        <button class="btn btn-orange btn-sm btn-full" onclick="saveSecurityQuestion()" id="saveSecQBtn">设置密保</button>
+        <div id="securityQuestionStatus" style="font-size:11px;color:var(--text-faint);margin-top:6px"></div>
       </div>
       <div class="form-group"><label class="form-label">白名单邀请码</label>
         <div style="display:flex;gap:8px">
@@ -2411,6 +2516,7 @@ async function switchSettingsTab(tab, btnEl) {
       </div>
     `;
     loadFeatureToggles();
+    loadSecurityQuestion();
   } else if (tab === 'friends') {
     try {
       const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
@@ -2509,6 +2615,81 @@ async function updateAvatar() {
     }
   } catch (e) {
     toast(e.message, 'error');
+  }
+}
+
+async function updateProfile(field) {
+  var payload = { action: 'update_profile' };
+  if (field === 'name') {
+    var name = document.getElementById('newName').value.trim();
+    if (!name || name.length > 20) { toast('昵称长度必须为1-20位', 'error'); return; }
+    payload.name = name;
+  } else if (field === 'bio') {
+    var bio = document.getElementById('newBio').value.trim();
+    if (bio.length > 200) { toast('公告内容不能超过200字', 'error'); return; }
+    payload.bio = bio;
+  }
+  try {
+    var res = await api('/api/users/' + currentUser.id + '/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    if (res.success) {
+      if (field === 'name') { currentUser.name = payload.name; updateNavbar(); }
+      if (field === 'bio') currentUser.bio = payload.bio;
+      toast(res.message || '更新成功');
+      saveDeviceLogin(currentUser);
+      switchSettingsTab('account');
+    } else {
+      toast(res.error || '更新失败', 'error');
+    }
+  } catch(e) {
+    toast('更新失败: ' + e.message, 'error');
+  }
+}
+
+async function saveSecurityQuestion() {
+  var question = document.getElementById('securityQuestion').value;
+  var answer = document.getElementById('securityAnswer').value.trim();
+  if (!question) { toast('请选择密保问题', 'error'); return; }
+  if (!answer) { toast('请输入密保答案', 'error'); return; }
+  if (answer.length > 50) { toast('密保答案不能超过50字', 'error'); return; }
+  try {
+    var res = await api('/api/users/' + currentUser.id + '/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'set_security_question', security_question: question, security_answer: answer })
+    });
+    if (res.success) {
+      toast(res.message || '密保设置成功');
+      document.getElementById('securityAnswer').value = '';
+      loadSecurityQuestion();
+    } else {
+      toast(res.error || '设置失败', 'error');
+    }
+  } catch(e) {
+    toast('设置失败: ' + e.message, 'error');
+  }
+}
+
+async function loadSecurityQuestion() {
+  try {
+    var res = await api('/api/users/' + currentUser.id + '/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'get_security_question' })
+    });
+    var statusEl = document.getElementById('securityQuestionStatus');
+    var btnEl = document.getElementById('saveSecQBtn');
+    var qEl = document.getElementById('securityQuestion');
+    if (res && res.success && res.data && res.data.security_question) {
+      if (statusEl) statusEl.innerHTML = '✅ 已设置密保问题：<strong>' + esc(res.data.security_question) + '</strong>';
+      if (btnEl) btnEl.textContent = '更新密保';
+      if (qEl) qEl.value = res.data.security_question;
+    } else {
+      if (statusEl) statusEl.innerHTML = '⚠️ 尚未设置密保问题，建议设置以启用密码找回';
+      if (btnEl) btnEl.textContent = '设置密保';
+    }
+  } catch(e) {
+    console.warn('loadSecurityQuestion error:', e);
   }
 }
 
@@ -2682,6 +2863,7 @@ async function showModal(name) {
           currentUser = auto.data;
           sessionToken = auto.token || existingToken;
           localStorage.setItem('dp_token', sessionToken);
+          saveDeviceLogin(currentUser);
           updateNavbar();
           renderContent();
           toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
@@ -2694,6 +2876,96 @@ async function showModal(name) {
 
   document.getElementById(name + 'Modal').style.display = 'flex';
   if (name === 'settings') loadSettings();
+  if (name === 'recover') showRecoveryAccounts();
+}
+
+// ===== 密保找回流程 =====
+var _recoverUserId = null;
+
+function showRecoveryAccounts() {
+  var list = getDeviceLogins();
+  var listEl = document.getElementById('recoverAccountList');
+  var errEl = document.getElementById('recoverError');
+  if (errEl) errEl.innerHTML = '';
+  document.getElementById('recoverStep1').style.display = '';
+  document.getElementById('recoverStep2').style.display = 'none';
+  if (!list || list.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-faint);font-size:13px">本设备没有登录过的账号记录<br>密保找回仅适用于曾在本设备登录成功的账号</div>';
+    return;
+  }
+  listEl.innerHTML = list.map(function(u) {
+    var avatar = u.avatar
+      ? '<img src="' + esc(u.avatar) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
+      : '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">' + esc((u.name || '?').charAt(0)) + '</div>';
+    return '<div class="chat-room-item" onclick="selectRecoveryAccount(\'' + escAttr(u.id) + '\')" style="cursor:pointer">' +
+      '<div class="chat-room-avatar">' + avatar + '</div>' +
+      '<div class="chat-room-info"><div class="chat-room-name">' + esc(u.name) + '</div>' +
+      '<div class="chat-room-preview">' + (u.doubao_id ? '@' + esc(u.doubao_id) : '点击找回密码') + '</div></div></div>';
+  }).join('');
+}
+
+async function selectRecoveryAccount(userId) {
+  var errEl = document.getElementById('recoverError');
+  if (errEl) errEl.innerHTML = '';
+  _recoverUserId = userId;
+  try {
+    var res = await api('/api/users/recover?user_id=' + encodeURIComponent(userId), {});
+    if (!res || !res.success) {
+      if (errEl) errEl.innerHTML = '<div class="form-error">' + esc(res?.error || '获取密保问题失败') + '</div>';
+      return;
+    }
+    var data = res.data;
+    // 显示用户信息
+    var userInfoEl = document.getElementById('recoverUserInfo');
+    var avatar = data.avatar
+      ? '<img src="' + esc(data.avatar) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
+      : '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">' + esc((data.name || '?').charAt(0)) + '</div>';
+    userInfoEl.innerHTML = avatar + '<div><div style="font-weight:600;font-size:14px">' + esc(data.name) + '</div>' + (data.doubao_id ? '<div style="font-size:12px;color:var(--text-faint)">@' + esc(data.doubao_id) + '</div>' : '') + '</div>';
+    // 显示密保问题
+    document.getElementById('recoverQuestion').textContent = data.security_question;
+    // 切换到步骤2
+    document.getElementById('recoverStep1').style.display = 'none';
+    document.getElementById('recoverStep2').style.display = '';
+    document.getElementById('recoverAnswer').value = '';
+    document.getElementById('recoverNewPwd').value = '';
+  } catch(e) {
+    if (errEl) errEl.innerHTML = '<div class="form-error">网络错误：' + esc(e.message) + '</div>';
+  }
+}
+
+async function submitRecovery() {
+  var errEl = document.getElementById('recoverError');
+  if (errEl) errEl.innerHTML = '';
+  var answer = document.getElementById('recoverAnswer').value.trim();
+  var newPwd = document.getElementById('recoverNewPwd').value;
+  if (!answer) { if (errEl) errEl.innerHTML = '<div class="form-error">请输入密保答案</div>'; return; }
+  if (!newPwd || newPwd.length < 6 || newPwd.length > 32) { if (errEl) errEl.innerHTML = '<div class="form-error">新密码长度必须为6-32位</div>'; return; }
+  try {
+    var res = await api('/api/users/recover', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: _recoverUserId, security_answer: answer, new_password: newPwd })
+    });
+    if (res && res.success) {
+      currentUser = res.data;
+      sessionToken = res.token;
+      localStorage.setItem('dp_token', sessionToken);
+      saveDeviceLogin(currentUser);
+      closeModal('recover');
+      updateNavbar();
+      renderContent();
+      toast(res.message || '密码重置成功，已自动登录');
+    } else {
+      if (errEl) errEl.innerHTML = '<div class="form-error">' + esc(res?.error || '找回失败') + '</div>';
+    }
+  } catch(e) {
+    if (errEl) errEl.innerHTML = '<div class="form-error">网络错误：' + esc(e.message) + '</div>';
+  }
+}
+
+function recoverBack() {
+  document.getElementById('recoverStep1').style.display = '';
+  document.getElementById('recoverStep2').style.display = 'none';
+  _recoverUserId = null;
 }
 
 async function loadDeveloperContent() {
@@ -3711,10 +3983,23 @@ function renderRoomList() {
           else if (isDeveloper()) roleTag = '<span class="chat-role-tag role-dev">开发者</span>';
           else roleTag = '<span class="chat-role-tag role-admin">管理员</span>';
         }
+        // 生成最后消息预览
+        var preview = '频道 · ' + (r.member_count || 0) + ' 人';
+        var roomMsgs = chatState.messages[r.id];
+        if (roomMsgs && roomMsgs.length > 0) {
+          var lastMsg = roomMsgs[roomMsgs.length - 1];
+          var lastSender = lastMsg.sender_id === currentUser.id ? '我' : (lastMsg.sender || '用户');
+          var lastContent = lastMsg.content || '';
+          if (lastMsg.recalled) lastContent = '(已撤回)';
+          else if (lastContent.startsWith('img:')) lastContent = '[图片]';
+          else if (lastContent.startsWith('video:')) lastContent = '[视频]';
+          else if (lastContent.startsWith('file:')) lastContent = '[文件]';
+          preview = lastSender + ': ' + lastContent;
+        }
         return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
           '<div class="chat-room-avatar">' + avatar + '</div>' +
           '<div class="chat-room-info"><div class="chat-room-name">' + name + roleTag + '</div>' +
-          '<div class="chat-room-preview">频道 · ' + (r.member_count || 0) + ' 人</div></div>' +
+          '<div class="chat-room-preview">' + esc(preview) + '</div></div>' +
           (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
         '</div>';
       }).join('');
@@ -3731,10 +4016,23 @@ function renderRoomList() {
         var active = r.id === chatState.currentRoomId;
         var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : '💬';
         var name = r.other ? esc(r.other.name) : esc(r.name);
+        // 生成最后消息预览
+        var preview = '私聊';
+        var roomMsgs = chatState.messages[r.id];
+        if (roomMsgs && roomMsgs.length > 0) {
+          var lastMsg = roomMsgs[roomMsgs.length - 1];
+          var lastSender = lastMsg.sender_id === currentUser.id ? '我' : (lastMsg.sender || (r.other ? r.other.name : '对方'));
+          var lastContent = lastMsg.content || '';
+          if (lastMsg.recalled) lastContent = '(已撤回)';
+          else if (lastContent.startsWith('img:')) lastContent = '[图片]';
+          else if (lastContent.startsWith('video:')) lastContent = '[视频]';
+          else if (lastContent.startsWith('file:')) lastContent = '[文件]';
+          preview = lastSender + ': ' + lastContent;
+        }
         return '<div class="chat-room-item ' + (active ? 'active' : '') + '" onclick="switchRoom(\'' + r.id + '\')">' +
           '<div class="chat-room-avatar">' + avatar + '</div>' +
           '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
-          '<div class="chat-room-preview">私聊</div></div>' +
+          '<div class="chat-room-preview">' + esc(preview) + '</div></div>' +
           (r.unread ? '<div class="chat-room-unread">' + (r.unread > 99 ? '99+' : r.unread) + '</div>' : '') +
         '</div>';
       }).join('');
@@ -4158,6 +4456,15 @@ function formatDateLabel(d) {
 function renderMsgHTML(m, roomId) {
   const isMine = m.sender_id === currentUser.id;
   const side = isMine ? 'chat-msg-right' : 'chat-msg-left';
+  // 发送者名称回退：如果 sender 缺失或为"未知用户"，尝试从房间信息中获取
+  var senderName = m.sender || '未知用户';
+  if (!isMine && (senderName === '未知用户' || !senderName)) {
+    var room = chatState.rooms.find(function(r) { return r.id === roomId; });
+    if (room && room.other && room.other.name) {
+      senderName = room.other.name;
+    }
+  }
+  m.sender = senderName;
   var time = '';
   if (m.ts) {
     var td = new Date(m.ts);
@@ -4839,12 +5146,12 @@ async function pollNewMessages() {
   if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
   if (!currentUser || !chatState.currentRoomId || !chatState.chatOpen) { return; }
   var roomId = chatState.currentRoomId;
-  var didRender = false;
   var msgs = chatState.messages[roomId] || [];
   var lastTs = 0;
   for (var i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i].ts && !msgs[i].recalled) { lastTs = msgs[i].ts; break; }
   }
+  var gotNew = false;
   if (lastTs) {
     try {
       var { data, error } = await __SB.from('chat_messages')
@@ -4875,35 +5182,19 @@ async function pollNewMessages() {
         }
         if (newMsgs.length > 0) {
           chatState.messages[roomId] = existingMsgs.concat(newMsgs).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
-          if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); didRender = true; }
+          if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
           if (!chatState._openingChat) { loadRoomList(); }
+          gotNew = true;
         }
       }
     } catch(e) { console.warn('[CHAT-POLL] pollNewMessages error:', e); }
   }
-  try {
-    var { data: reactData } = await __SB.from('chat_reactions')
-      .select('event_id,reaction,sender_id').eq('room_id', roomId);
-    if (reactData && reactData.length >= 0) {
-      var roomMsgs = chatState.messages[roomId] || [];
-      var roomEventIds = {};
-      for (var ri = 0; ri < roomMsgs.length; ri++) { roomEventIds[roomMsgs[ri].event_id] = true; }
-      for (var ei in roomEventIds) {
-        if (chatState.optimisticReactions[ei]) { delete chatState.optimisticReactions[ei]; continue; }
-        chatState.reactionsMap[ei] = {};
-      }
-      for (var rj = 0; rj < reactData.length; rj++) {
-        var rx = reactData[rj];
-        if (!chatState.reactionsMap[rx.event_id]) chatState.reactionsMap[rx.event_id] = {};
-        if (!chatState.reactionsMap[rx.event_id][rx.reaction]) chatState.reactionsMap[rx.event_id][rx.reaction] = [];
-        if (!chatState.reactionsMap[rx.event_id][rx.reaction].includes(rx.sender_id)) {
-          chatState.reactionsMap[rx.event_id][rx.reaction].push(rx.sender_id);
-        }
-      }
-      if (!didRender) renderMessages(roomId);
-    }
-  } catch(e) {}
-  messagePollTimer = setTimeout(pollNewMessages, 5000);
+  // 自适应轮询：有新消息时 5s 后再查；连续 3 次无新消息则放慢到 12s
+  // Realtime 是主要推送通道，轮询仅作兜底
+  if (gotNew) { chatState._pollIdleCount = 0; }
+  else { chatState._pollIdleCount = (chatState._pollIdleCount || 0) + 1; }
+  var nextInterval = chatState._pollIdleCount >= 3 ? 12000 : 5000;
+  messagePollTimer = setTimeout(pollNewMessages, nextInterval);
 }
 
 function startMessagePolling() {

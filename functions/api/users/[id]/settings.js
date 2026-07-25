@@ -101,7 +101,36 @@ export async function onRequestPut(context) {
     }
 
     const body = await context.request.json().catch(() => ({}));
-    const { action, password, invite_code, privacy_setting, avatar } = body;
+    const { action, password, invite_code, privacy_setting, avatar, name, bio } = body;
+
+    if (action === 'update_profile') {
+      // 更新昵称和公告（bio）
+      const updates = [];
+      const binds = [];
+      if (name !== undefined) {
+        const trimmedName = String(name).trim();
+        if (trimmedName.length === 0 || trimmedName.length > 20) {
+          return Response.json({ success: false, error: '昵称长度必须为1-20位' });
+        }
+        updates.push('name = ?');
+        binds.push(trimmedName);
+      }
+      if (bio !== undefined) {
+        const trimmedBio = String(bio).trim();
+        if (trimmedBio.length > 200) {
+          return Response.json({ success: false, error: '公告内容不能超过200字' });
+        }
+        updates.push('bio = ?');
+        binds.push(trimmedBio || null);
+      }
+      if (updates.length === 0) {
+        return Response.json({ success: false, error: '没有需要更新的内容' });
+      }
+      updates.push("updated_at = datetime('now')");
+      binds.push(userId);
+      await env.DB.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run();
+      return Response.json({ success: true, message: '资料更新成功' });
+    }
 
     if (action === 'update_avatar') {
       await env.DB.prepare(`UPDATE users SET avatar = ?, updated_at = datetime('now') WHERE id = ?`)
@@ -129,6 +158,29 @@ export async function onRequestPut(context) {
       const { pat_suffix } = body;
       await env.DB.prepare("UPDATE users SET pat_suffix = ?, updated_at = datetime('now') WHERE id = ?").bind((pat_suffix || '').slice(0, 10), userId).run();
       return Response.json({ success: true });
+    }
+
+    if (action === 'set_security_question') {
+      const { security_question, security_answer } = body;
+      if (!security_question || !security_question.trim()) {
+        return Response.json({ success: false, error: '请选择密保问题' });
+      }
+      if (!security_answer || security_answer.trim().length < 1 || security_answer.trim().length > 50) {
+        return Response.json({ success: false, error: '密保答案长度必须为1-50位' });
+      }
+      // 对密保答案进行哈希处理（与密码相同的安全级别）
+      const hashedAnswer = await hashPassword(security_answer.trim().toLowerCase());
+      await env.DB.prepare(
+        `UPDATE users SET security_question = ?, security_answer = ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(security_question.trim(), hashedAnswer, userId).run();
+      return Response.json({ success: true, message: '密保问题设置成功' });
+    }
+
+    if (action === 'get_security_question') {
+      const user = await env.DB.prepare(
+        `SELECT security_question FROM users WHERE id = ?`
+      ).bind(userId).first();
+      return Response.json({ success: true, data: { security_question: user?.security_question || '' } });
     }
 
     if (action === 'set_privacy') {
