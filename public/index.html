@@ -4381,7 +4381,7 @@ async function loadMessages(roomId) {
   renderMessages(roomId);
   var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
   if (loadRoom && loadRoom.type === 'channel') {
-    var { data: pinned } = await __SB.from('chat_channel_announcements').select('title, content').eq('room_id', roomId).eq('pinned', 1).order('created_at', { ascending: false }).limit(2);
+    var { data: pinned } = await __SB.from('chat_channel_announcements').select('id, title, content, created_at').eq('room_id', roomId).eq('pinned', 1).order('created_at', { ascending: false }).limit(5);
     if (pinned?.length) {
       var banner = document.getElementById('channelAnnouncementBanner');
       if (!banner) {
@@ -4390,8 +4390,8 @@ async function loadMessages(roomId) {
         banner.style.cssText = 'background:var(--accent-bg);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;cursor:pointer';
         msgsEl.insertBefore(banner, msgsEl.firstChild);
       }
-      banner.innerHTML = '📌 ' + pinned.map(function(a) { return esc(a.title); }).join(' ｜ ') + ' <span style="color:var(--accent)">查看</span>';
-      banner.onclick = function() { showRoomSettings(); };
+      banner.innerHTML = '📌 ' + pinned.map(function(a) { return esc(a.title); }).join(' ｜ ') + ' <span style="color:var(--accent)">点击阅读</span>';
+      banner.onclick = function() { showPinnedAnnouncements(pinned); };
     }
   }
   markRead(roomId);
@@ -5849,6 +5849,36 @@ async function updateRoomTopic() {
   toast('简介已更新', 'success');
 }
 
+// 弹出小窗口显示置顶公告内容
+function showPinnedAnnouncements(announcements) {
+  // 移除已有弹窗
+  var existing = document.getElementById('pinnedAnnModal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'pinnedAnnModal';
+  overlay.style.display = 'flex';
+  var inner = announcements.map(function(a, i) {
+    return '<div class="card" style="margin-bottom:12px;padding:14px' + (i === 0 ? '' : '') + '">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">' +
+      '<span style="font-size:16px">📌</span>' +
+      '<div style="font-weight:700;font-size:14px;color:var(--text-primary);flex:1">' + esc(a.title) + '</div>' +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;overflow-wrap:anywhere;word-break:break-word">' + renderRichContent(a.content) + '</div>' +
+      '<div style="font-size:10px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
+      '</div>';
+  }).join('');
+  overlay.innerHTML = '<div class="modal" style="max-width:520px;width:90vw;max-height:80vh">' +
+    '<div class="modal-header">' +
+    '<div class="modal-title">📌 频道公告</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'pinnedAnnModal\').remove()" aria-label="关闭">✕</button>' +
+    '</div>' +
+    '<div style="overflow-y:auto;max-height:calc(80vh - 60px);padding:0 4px">' + inner + '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+}
+
 async function loadChannelAnnouncements(roomId) {
   var el = document.getElementById('channelAnnouncementList');
   if (!el) return;
@@ -5856,7 +5886,8 @@ async function loadChannelAnnouncements(roomId) {
   if (error) { console.warn('loadChannelAnnouncements error:', error); el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">加载失败: ' + esc(error.message || '未知错误') + '</div>'; return; }
   if (!data?.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>'; return; }
   var room = chatState.rooms.find(function(r) { return r.id === roomId; });
-  var isAdmin = room && (room.created_by === currentUser.id || isDeveloper());
+  var myLevel = await getPermissionLevel(roomId, currentUser.id);
+  var isAdmin = myLevel >= 1; // 管理员(1)、创建者(2)、开发者(3)均可管理公告
   // 非管理员过滤掉仅管理员可见的公告
   if (!isAdmin) {
     data = data.filter(function(a) { return a.visibility !== 'admin'; });
@@ -5877,7 +5908,7 @@ async function loadChannelAnnouncements(roomId) {
 
 async function showAnnouncementEditor(announcementId) {
   var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
-  if (myLevel < 2) { toast('只有频道创建者及以上才能管理公告', 'error'); return; }
+  if (myLevel < 1) { toast('只有管理员及以上才能管理公告', 'error'); return; }
   var isEdit = !!announcementId;
   var resp = isEdit ? await __SB.from('chat_channel_announcements').select('*').eq('id', announcementId).maybeSingle() : null;
   var existing = resp?.data;
@@ -5967,7 +5998,7 @@ async function saveAnnouncement(announcementId) {
 
 async function deleteChannelAnnouncement(announcementId, roomId) {
   var myLevel = await getPermissionLevel(roomId, currentUser.id);
-  if (myLevel < 2) { toast('只有频道创建者及以上才能删除公告', 'error'); return; }
+  if (myLevel < 1) { toast('只有管理员及以上才能删除公告', 'error'); return; }
   if (!confirm('确定删除这条公告？')) return;
   await __SB.from('chat_channel_announcements').delete().eq('id', announcementId);
   loadChannelAnnouncements(roomId);

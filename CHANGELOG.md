@@ -4,6 +4,158 @@
 
 ---
 
+## v4.5 — 2026-07-25
+
+### 频道公告弹窗阅读 + 公告权限修复 + 设置页新内容不可见修复
+
+#### 故障修复
+
+##### 1. 置顶公告点击跳转到设置页面（应弹出阅读窗口）
+
+**现象**：频道聊天界面顶部的置顶公告横幅，点击后直接打开频道设置弹窗，而非显示公告内容供阅读。
+
+**根因**：`banner.onclick` 绑定为 `showRoomSettings()`，打开整个频道设置面板，而非专门展示公告内容。
+
+**修复**：
+1. 新增 `showPinnedAnnouncements(announcements)` 函数，创建独立弹窗展示置顶公告内容（标题 + 富文本内容 + 时间）
+2. 横幅查询从 `limit(2)` 改为 `limit(5)`，支持显示更多置顶公告
+3. 横幅文案从"查看"改为"点击阅读"
+4. `banner.onclick` 改为调用 `showPinnedAnnouncements(pinned)`，直接传入已查询的公告数据
+5. 弹窗支持点击遮罩关闭、滚动浏览多条公告
+
+---
+
+##### 2. 只有创建者能发公告，管理员和开发者不行
+
+**现象**：频道公告的发布/编辑/删除操作仅限频道创建者（permission level 2），管理员（level 1）被阻止。
+
+**根因**：
+1. `showAnnouncementEditor` 和 `deleteChannelAnnouncement` 中权限检查为 `myLevel < 2`，阻止了管理员（level 1）
+2. `loadChannelAnnouncements` 中 `isAdmin` 判断为 `room.created_by === currentUser.id || isDeveloper()`，未包含频道管理员（chat_admins 表），导致管理员看不到编辑/删除按钮
+
+**修复**：
+1. `showAnnouncementEditor`：`myLevel < 2` → `myLevel < 1`，允许管理员及以上发布/编辑公告
+2. `deleteChannelAnnouncement`：`myLevel < 2` → `myLevel < 1`，允许管理员及以上删除公告
+3. `loadChannelAnnouncements`：`isAdmin` 改为使用 `getPermissionLevel(roomId, currentUser.id) >= 1`，准确包含频道管理员
+
+**权限体系**：开发者(3) > 创建者(2) > 管理员(1) > 普通成员(0)，管理员及以上均可管理公告。
+
+---
+
+##### 3. 个人设置界面新内容不可见（修改昵称/自我介绍/密保问题）
+
+**现象**：设置页账号标签页中看不到新增的"修改昵称"、"自我介绍"、"密保问题"区块。
+
+**根因**：`index.html` 中存在两个 `switchSettingsTab` 函数定义——第一个（ES6 async 语法）包含新内容，但被第二个（传统 function 赋值语法）覆盖。实际运行的是第二个定义，它调用 `settingsAccountHTML()` 渲染账号设置页，但该函数不包含新增区块。
+
+**修复**：
+1. 在 `settingsAccountHTML()` 中添加"修改昵称"区块（含30天冷却提示）
+2. 在 `settingsAccountHTML()` 中添加"自我介绍"区块（含30天冷却提示）
+3. 在 `settingsAccountHTML()` 中添加"密保问题"区块（7个预设问题，含30天冷却）
+4. 在 `switchSettingsTab` 中添加 `loadSecurityQuestion()` 和 `loadProfileCooldown()` 调用
+5. 修复 `updateProfile` 提示文字："公告内容" → "自我介绍"
+
+---
+
+#### 修改文件
+
+- `public/index.html` — 置顶公告弹窗函数、公告权限检查修复、设置页新内容补充
+- `CHANGELOG.md` — 本条目
+
+---
+
+## v4.4 — 2026-07-25
+
+### 资料修改冷却机制 + 密保问题找回密码 + Supabase 延迟优化 + 好友消息发送者显示修复 + 设置页好友/频道数显示改版
+
+#### 新增功能
+
+##### 1. 资料修改冷却机制（30天）
+
+**需求**：修改昵称、自我介绍、密保问题各需一个月冷却时间。
+
+**实现**：
+1. D1 `users` 表新增字段：`name_changed_at`、`bio_changed_at`、`security_question_changed_at`（TEXT 类型，记录上次修改时间）
+2. `settings.js` 后端 `update_profile` action 添加冷却检查逻辑：
+   - 昵称修改：查询 `name_changed_at`，若距今不足30天则返回剩余天数
+   - 自我介绍修改：查询 `bio_changed_at`，同上
+   - 密保问题修改：查询 `security_question_changed_at`，仅对已有密保问题的用户生效；首次设置不限制
+3. 新增 `get_profile_cooldown` action，返回昵称和自我介绍的冷却状态
+4. `set_security_question` action 添加冷却检查
+5. 前端设置页显示冷却提示和剩余天数
+
+##### 2. 密保问题找回密码
+
+**需求**：在之前登录过的设备上，通过密保问题找回密码。
+
+**实现**：
+1. 7个预设密保问题（宠物名/电影/小学/父亲名/母亲名/出生城市/食物）
+2. 密保答案使用 PBKDF2-SHA256 哈希存储（与密码相同安全级别），答案统一转小写后哈希
+3. 登录页新增"忘记账号"入口
+4. 找回流程：选择本设备已登录过的账号（localStorage 存储，最多10个）→ 回答密保问题 → 重置密码 → 自动登录
+5. 新增 `/api/users/recover` 端点，支持验证密保答案和重置密码
+6. `get_security_question` action 返回密保问题和冷却状态
+
+---
+
+#### 故障修复
+
+##### 1. Supabase 高延迟
+
+**现象**：聊天界面消息加载缓慢，Supabase 查询响应时间长。
+
+**根因**：每次消息轮询都附带 reactions（表情反应）查询，导致额外的数据库往返；固定轮询间隔（5秒）在无新消息时造成不必要的请求。
+
+**修复**：
+1. 移除冗余的 reactions 轮询查询
+2. 实现自适应轮询间隔：有新消息时 5 秒轮询，连续 3 次无新消息后延长至 12 秒
+
+---
+
+##### 2. 好友消息不显示发送者
+
+**现象**：私聊中对方发送的消息不显示发送者名称。
+
+**根因**：`sender_name` 字段在某些情况下为空，前端未做回退处理；发送者名称字号过小（10px）且字重不足，难以辨认。
+
+**修复**：
+1. 发送者名称字号从 10px 增至 12px，字重设为 700
+2. 当 `sender_name` 缺失时，回退到房间 `other` 用户信息获取名称
+
+---
+
+##### 3. 聊天布局分列异常
+
+**现象**：私聊区域布局异常，内容分成两列显示。
+
+**根因**：`privateChatArea` 的 `display` 属性设为 `block`，未启用 flex 布局。
+
+**修复**：`privateChatArea` 的 `display` 从 `block` 改为 `flex`
+
+---
+
+##### 4. 设置页好友/频道数用红点显示
+
+**现象**：个人设置界面的好友数和频道数使用红点 badge 展示，不够直观。
+
+**修复**：
+1. 新增 `.tab-count` CSS 类，使用常规数字样式（灰色背景、圆角、小字号）
+2. 将好友/频道/黑名单 tab 的 badge 从 `.tab-badge`（红点）改为 `.tab-count`（常规数字）
+3. 数字始终显示（即使为0），不再条件隐藏
+
+---
+
+#### 修改文件
+
+- `schema.sql` — 新增 `name_changed_at`、`bio_changed_at`、`security_question_changed_at` 字段
+- `functions/api/users/[id]/settings.js` — 冷却检查逻辑、`get_profile_cooldown` action、密保问题冷却
+- `functions/api/users/recover.js` — 密保问题找回密码端点（新建）
+- `public/index.html` — 设置页新内容、冷却提示、好友消息发送者显示、布局修复、badge 改版
+- `public/style.css` — `.tab-count` 样式
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.3 — 2026-07-24
 
 ### 回归 img.scdn.io 直连图床（参照 project2.0）+ 三级降级链
