@@ -2626,7 +2626,7 @@ async function updateProfile(field) {
     payload.name = name;
   } else if (field === 'bio') {
     var bio = document.getElementById('newBio').value.trim();
-    if (bio.length > 200) { toast('公告内容不能超过200字', 'error'); return; }
+    if (bio.length > 200) { toast('自我介绍不能超过200字', 'error'); return; }
     payload.bio = bio;
   }
   try {
@@ -7109,6 +7109,8 @@ switchSettingsTab = function(tab, btnEl) {
     // ... keep existing account tab code
     el.innerHTML = settingsAccountHTML();
     loadFeatureToggles();
+    loadSecurityQuestion();
+    loadProfileCooldown();
   } else if (tab === 'friends') {
     loadFriendsWithGroups(el);
   } else if (tab === 'channels') {
@@ -7128,8 +7130,11 @@ function settingsAccountHTML() {
     '<div style="font-size:13px;color:var(--text-faint)">' + (currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')) + '</div>' +
     (currentUser.bio ? renderBio(currentUser.bio) : '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">暂无简介</div>') + '</div></div></div>' +
     '<div class="form-group"><label class="form-label">更换头像</label><div style="display:flex;gap:8px"><input class="input" id="newAvatarUrl" placeholder="输入图片链接" value="' + esc(currentUser.avatar || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button></div></div></div>' +
+    '<div class="form-group"><label class="form-label">修改昵称</label><div style="display:flex;gap:8px"><input class="input" id="newName" placeholder="输入新昵称" value="' + esc(currentUser.name || '') + '" maxlength="20" style="flex:1"><button class="btn btn-orange btn-sm" onclick="updateProfile(\'name\')" id="saveNameBtn">保存</button></div><div id="nameCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div></div>' +
+    '<div class="form-group"><label class="form-label">自我介绍</label><textarea class="input" id="newBio" placeholder="编辑你的自我介绍（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">' + esc(currentUser.bio || '') + '</textarea><button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile(\'bio\')" id="saveBioBtn">保存自我介绍</button><div id="bioCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div></div>' +
     '<div class="form-group"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">拍一拍后缀（≤10字，留空为"👋"）</div><div style="display:flex;gap:8px"><input id="patSuffixInput" class="input" value="' + esc(currentUser.pat_suffix || '') + '" maxlength="10" style="flex:1"><button class="btn btn-sm btn-orange" onclick="updatePatSuffix()">保存</button></div></div>' +
     '<div class="form-group"><label class="form-label">修改密码</label><div style="display:flex;gap:8px"><input class="input" id="newPwd" type="password" placeholder="新密码（6-32位）" maxlength="32" style="flex:1"><button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button></div></div>' +
+    '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">🔐 密保问题</div><div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">选择密保问题</label><select class="input" id="securityQuestion" style="width:100%"><option value="">-- 请选择 --</option><option value="你的宠物名字叫什么？">你的宠物名字叫什么？</option><option value="你最喜欢的电影是什么？">你最喜欢的电影是什么？</option><option value="你小学就读的学校叫什么？">你小学就读的学校叫什么？</option><option value="你父亲的名字叫什么？">你父亲的名字叫什么？</option><option value="你母亲的名字叫什么？">你母亲的名字叫什么？</option><option value="你出生的城市叫什么？">你出生的城市叫什么？</option><option value="你最喜欢的食物是什么？">你最喜欢的食物是什么？</option></select></div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">密保答案</label><input class="input" id="securityAnswer" type="password" placeholder="输入密保答案" maxlength="50" style="width:100%"></div><button class="btn btn-orange btn-sm btn-full" onclick="saveSecurityQuestion()" id="saveSecQBtn">设置密保</button><div id="securityQuestionStatus" style="font-size:11px;color:var(--text-faint);margin-top:6px"></div></div>' +
     '<div class="form-group"><label class="form-label">白名单邀请码</label><div style="display:flex;gap:8px"><input class="input" id="whitelistCode" placeholder="设置白名单模式的邀请码" value="' + esc(currentUser.invite_code || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="setWhitelistCode()">保存</button></div>' +
     '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div></div>' +
     '<div class="form-group"><label class="form-label">隐私模式</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">' +
