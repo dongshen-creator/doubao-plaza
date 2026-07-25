@@ -104,7 +104,16 @@ export async function onRequestPut(context) {
     const { action, password, invite_code, privacy_setting, avatar, name, bio } = body;
 
     if (action === 'update_profile') {
-      // 更新昵称和公告（bio）
+      // 更新昵称和自我介绍（bio），各自有30天冷却时间
+      // 先查询当前冷却状态
+      const curUser = await env.DB.prepare(
+        `SELECT name, bio, name_changed_at, bio_changed_at FROM users WHERE id = ?`
+      ).bind(userId).first();
+      if (!curUser) return Response.json({ success: false, error: '用户不存在' });
+
+      const now = new Date();
+      const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30天
+
       const updates = [];
       const binds = [];
       if (name !== undefined) {
@@ -112,16 +121,42 @@ export async function onRequestPut(context) {
         if (trimmedName.length === 0 || trimmedName.length > 20) {
           return Response.json({ success: false, error: '昵称长度必须为1-20位' });
         }
+        if (trimmedName === curUser.name) {
+          return Response.json({ success: false, error: '新昵称与当前昵称相同' });
+        }
+        // 检查冷却
+        if (curUser.name_changed_at) {
+          const lastChange = new Date(curUser.name_changed_at + 'Z');
+          const elapsed = now - lastChange;
+          if (elapsed < COOLDOWN_MS) {
+            const remainingDays = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+            return Response.json({ success: false, error: `昵称修改冷却中，还需 ${remainingDays} 天` });
+          }
+        }
         updates.push('name = ?');
         binds.push(trimmedName);
+        updates.push("name_changed_at = datetime('now')");
       }
       if (bio !== undefined) {
         const trimmedBio = String(bio).trim();
         if (trimmedBio.length > 200) {
-          return Response.json({ success: false, error: '公告内容不能超过200字' });
+          return Response.json({ success: false, error: '自我介绍不能超过200字' });
+        }
+        if (trimmedBio === (curUser.bio || '')) {
+          return Response.json({ success: false, error: '新自我介绍与当前内容相同' });
+        }
+        // 检查冷却
+        if (curUser.bio_changed_at) {
+          const lastChange = new Date(curUser.bio_changed_at + 'Z');
+          const elapsed = now - lastChange;
+          if (elapsed < COOLDOWN_MS) {
+            const remainingDays = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+            return Response.json({ success: false, error: `自我介绍修改冷却中，还需 ${remainingDays} 天` });
+          }
         }
         updates.push('bio = ?');
         binds.push(trimmedBio || null);
+        updates.push("bio_changed_at = datetime('now')");
       }
       if (updates.length === 0) {
         return Response.json({ success: false, error: '没有需要更新的内容' });
@@ -168,19 +203,72 @@ export async function onRequestPut(context) {
       if (!security_answer || security_answer.trim().length < 1 || security_answer.trim().length > 50) {
         return Response.json({ success: false, error: '密保答案长度必须为1-50位' });
       }
+      // 检查冷却时间（30天），仅对已有密保问题的用户生效；首次设置不限制
+      const secUser = await env.DB.prepare(
+        `SELECT security_question_changed_at, security_question FROM users WHERE id = ?`
+      ).bind(userId).first();
+      if (secUser && secUser.security_question) {
+        const now = new Date();
+        const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+        if (secUser.security_question_changed_at) {
+          const lastChange = new Date(secUser.security_question_changed_at + 'Z');
+          const elapsed = now - lastChange;
+          if (elapsed < COOLDOWN_MS) {
+            const remainingDays = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+            return Response.json({ success: false, error: `密保问题修改冷却中，还需 ${remainingDays} 天` });
+          }
+        }
+      }
       // 对密保答案进行哈希处理（与密码相同的安全级别）
       const hashedAnswer = await hashPassword(security_answer.trim().toLowerCase());
       await env.DB.prepare(
-        `UPDATE users SET security_question = ?, security_answer = ?, updated_at = datetime('now') WHERE id = ?`
+        `UPDATE users SET security_question = ?, security_answer = ?, security_question_changed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
       ).bind(security_question.trim(), hashedAnswer, userId).run();
       return Response.json({ success: true, message: '密保问题设置成功' });
     }
 
     if (action === 'get_security_question') {
       const user = await env.DB.prepare(
-        `SELECT security_question FROM users WHERE id = ?`
+        `SELECT security_question, security_question_changed_at FROM users WHERE id = ?`
       ).bind(userId).first();
-      return Response.json({ success: true, data: { security_question: user?.security_question || '' } });
+      const now = new Date();
+      const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+      let cooldownRemaining = 0;
+      if (user?.security_question && user?.security_question_changed_at) {
+        const lastChange = new Date(user.security_question_changed_at + 'Z');
+        const elapsed = now - lastChange;
+        if (elapsed < COOLDOWN_MS) {
+          cooldownRemaining = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+        }
+      }
+      return Response.json({ success: true, data: {
+        security_question: user?.security_question || '',
+        cooldown_remaining_days: cooldownRemaining
+      } });
+    }
+
+    if (action === 'get_profile_cooldown') {
+      // 返回昵称和自我介绍的冷却状态
+      const user = await env.DB.prepare(
+        `SELECT name_changed_at, bio_changed_at FROM users WHERE id = ?`
+      ).bind(userId).first();
+      const now = new Date();
+      const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+      let nameCooldown = 0, bioCooldown = 0;
+      if (user?.name_changed_at) {
+        const lastChange = new Date(user.name_changed_at + 'Z');
+        const elapsed = now - lastChange;
+        if (elapsed < COOLDOWN_MS) nameCooldown = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+      }
+      if (user?.bio_changed_at) {
+        const lastChange = new Date(user.bio_changed_at + 'Z');
+        const elapsed = now - lastChange;
+        if (elapsed < COOLDOWN_MS) bioCooldown = Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+      }
+      return Response.json({ success: true, data: {
+        name_cooldown_days: nameCooldown,
+        bio_cooldown_days: bioCooldown
+      } });
     }
 
     if (action === 'set_privacy') {

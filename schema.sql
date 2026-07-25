@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS users (
   registered_ip TEXT,
   homepage_migrated INTEGER DEFAULT 0,
   security_question TEXT,
-  security_answer TEXT
+  security_answer TEXT,
+  name_changed_at TEXT,
+  bio_changed_at TEXT,
+  security_question_changed_at TEXT
 );
 
 -- 好友关系表
@@ -219,6 +222,9 @@ ALTER TABLE users ADD COLUMN last_login_ua TEXT;
 ALTER TABLE users ADD COLUMN registered_ip TEXT;
 ALTER TABLE users ADD COLUMN security_question TEXT;
 ALTER TABLE users ADD COLUMN security_answer TEXT;
+ALTER TABLE users ADD COLUMN name_changed_at TEXT;
+ALTER TABLE users ADD COLUMN bio_changed_at TEXT;
+ALTER TABLE users ADD COLUMN security_question_changed_at TEXT;
 
 -- 站点设置表（维护模式 / 迁移模式）
 CREATE TABLE IF NOT EXISTS site_settings (

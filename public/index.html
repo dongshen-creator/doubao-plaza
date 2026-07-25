@@ -2407,13 +2407,14 @@ async function switchSettingsTab(tab, btnEl) {
         <div class="form-group"><label class="form-label">修改昵称</label>
           <div style="display:flex;gap:8px">
             <input class="input" id="newName" placeholder="输入新昵称" value="${esc(currentUser.name || '')}" maxlength="20" style="flex:1">
-            <button class="btn btn-orange btn-sm" onclick="updateProfile('name')">保存</button>
+            <button class="btn btn-orange btn-sm" onclick="updateProfile('name')" id="saveNameBtn">保存</button>
           </div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，修改后即时生效</div>
+          <div id="nameCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div>
         </div>
-        <div class="form-group"><label class="form-label">个人公告</label>
-          <textarea class="input" id="newBio" placeholder="编辑你的个人公告（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">${esc(currentUser.bio || '')}</textarea>
-          <button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile('bio')">保存公告</button>
+        <div class="form-group"><label class="form-label">自我介绍</label>
+          <textarea class="input" id="newBio" placeholder="编辑你的自我介绍（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">${esc(currentUser.bio || '')}</textarea>
+          <button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile('bio')" id="saveBioBtn">保存自我介绍</button>
+          <div id="bioCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div>
         </div>
       </div>
       <div class="form-group"><label class="form-label">修改密码</label>
@@ -2424,7 +2425,7 @@ async function switchSettingsTab(tab, btnEl) {
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">🔐 密保问题</div>
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div>
         <div class="form-group" style="margin-bottom:8px">
           <label class="form-label" style="font-size:12px">选择密保问题</label>
           <select class="input" id="securityQuestion" style="width:100%">
@@ -2517,6 +2518,7 @@ async function switchSettingsTab(tab, btnEl) {
     `;
     loadFeatureToggles();
     loadSecurityQuestion();
+    loadProfileCooldown();
   } else if (tab === 'friends') {
     try {
       const res = await api(`/api/friends?user_id=${currentUser.id}&status=accepted`);
@@ -2681,15 +2683,55 @@ async function loadSecurityQuestion() {
     var btnEl = document.getElementById('saveSecQBtn');
     var qEl = document.getElementById('securityQuestion');
     if (res && res.success && res.data && res.data.security_question) {
-      if (statusEl) statusEl.innerHTML = '✅ 已设置密保问题：<strong>' + esc(res.data.security_question) + '</strong>';
+      var cooldownDays = res.data.cooldown_remaining_days || 0;
+      var statusHtml = '✅ 已设置密保问题：<strong>' + esc(res.data.security_question) + '</strong>';
+      if (cooldownDays > 0) {
+        statusHtml += '<br>⏳ 修改冷却中，还需 ' + cooldownDays + ' 天';
+        if (btnEl) { btnEl.disabled = true; btnEl.style.opacity = '0.5'; btnEl.style.cursor = 'not-allowed'; }
+      } else {
+        if (btnEl) { btnEl.disabled = false; btnEl.style.opacity = ''; btnEl.style.cursor = ''; }
+      }
+      if (statusEl) statusEl.innerHTML = statusHtml;
       if (btnEl) btnEl.textContent = '更新密保';
       if (qEl) qEl.value = res.data.security_question;
     } else {
       if (statusEl) statusEl.innerHTML = '⚠️ 尚未设置密保问题，建议设置以启用密码找回';
-      if (btnEl) btnEl.textContent = '设置密保';
+      if (btnEl) { btnEl.textContent = '设置密保'; btnEl.disabled = false; btnEl.style.opacity = ''; btnEl.style.cursor = ''; }
     }
   } catch(e) {
     console.warn('loadSecurityQuestion error:', e);
+  }
+}
+
+async function loadProfileCooldown() {
+  try {
+    var res = await api('/api/users/' + currentUser.id + '/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ action: 'get_profile_cooldown' })
+    });
+    if (!res || !res.success || !res.data) return;
+    var nameDays = res.data.name_cooldown_days || 0;
+    var bioDays = res.data.bio_cooldown_days || 0;
+    var nameHint = document.getElementById('nameCooldownHint');
+    var bioHint = document.getElementById('bioCooldownHint');
+    var nameBtn = document.getElementById('saveNameBtn');
+    var bioBtn = document.getElementById('saveBioBtn');
+    if (nameDays > 0) {
+      if (nameHint) nameHint.innerHTML = '⏳ 昵称修改冷却中，还需 <strong>' + nameDays + ' 天</strong>';
+      if (nameBtn) { nameBtn.disabled = true; nameBtn.style.opacity = '0.5'; nameBtn.style.cursor = 'not-allowed'; }
+    } else {
+      if (nameHint) nameHint.innerHTML = '昵称长度1-20位，每30天可修改一次';
+      if (nameBtn) { nameBtn.disabled = false; nameBtn.style.opacity = ''; nameBtn.style.cursor = ''; }
+    }
+    if (bioDays > 0) {
+      if (bioHint) bioHint.innerHTML = '⏳ 自我介绍修改冷却中，还需 <strong>' + bioDays + ' 天</strong>';
+      if (bioBtn) { bioBtn.disabled = true; bioBtn.style.opacity = '0.5'; bioBtn.style.cursor = 'not-allowed'; }
+    } else {
+      if (bioHint) bioHint.innerHTML = '每30天可修改一次';
+      if (bioBtn) { bioBtn.disabled = false; bioBtn.style.opacity = ''; bioBtn.style.cursor = ''; }
+    }
+  } catch(e) {
+    console.warn('loadProfileCooldown error:', e);
   }
 }
 
