@@ -533,7 +533,26 @@ var SAFE_HTML_TAGS = {
   'mark': ['style','class'],
   'abbr': ['title','style','class']
 };
-var SAFE_HTML_STYLE = /^(color|background|background-color|font-size|font-weight|font-style|text-decoration|text-align|margin|padding|border|border-radius|display|width|max-width|height|max-height|border-radius|line-height|letter-spacing|vertical-align|opacity|float|clear|list-style|white-space|word-break|overflow|text-overflow|cursor)(-[^:]+)?:/i;
+var SAFE_HTML_STYLE = /^(color|background|background-color|background-image|background-clip|font-size|font-weight|font-style|font-family|text-decoration|text-align|text-shadow|text-indent|text-transform|margin|margin-top|margin-bottom|margin-left|margin-right|padding|padding-top|padding-bottom|padding-left|padding-right|border|border-radius|border-color|border-style|border-width|border-top|border-bottom|border-left|border-right|display|width|max-width|min-width|height|max-height|min-height|line-height|letter-spacing|vertical-align|opacity|float|clear|list-style|white-space|word-break|word-wrap|overflow|overflow-x|overflow-y|text-overflow|cursor|animation|animation-name|animation-duration|animation-timing-function|animation-delay|animation-iteration-count|animation-direction|animation-fill-mode|transform|transform-origin|transform-style|transition|transition-property|transition-duration|transition-timing-function|transition-delay|box-shadow|filter|backdrop-filter|gap|flex|flex-direction|flex-wrap|flex-grow|flex-shrink|flex-basis|justify-content|align-items|align-content|align-self|grid|grid-template|grid-template-columns|grid-template-rows|grid-column|grid-row|grid-gap|position|top|left|right|bottom|z-index|object-fit|outline|outline-offset|resize|visibility|pointer-events|content|will-change|perspective|perspective-origin|backface-visibility|-webkit-background-clip|-webkit-text-fill-color|-webkit-text-stroke|-webkit-line-clamp|-webkit-box-orient|-webkit-box|-moz-background-clip|-moz-text-fill-color)(-[^:]+)?:/i;
+
+// 净化 CSS 文本：过滤危险内容，保留 @keyframes、动画、渐变等安全 CSS
+function sanitizeCss(css) {
+  if (!css) return '';
+  // 1. 移除 expression()
+  css = css.replace(/expression\s*\([^)]*\)/gi, '/* removed */');
+  // 2. 移除 url(javascript:...) 和 url(vbscript:...)
+  css = css.replace(/url\s*\(\s*['"]?\s*(javascript|vbscript|data)\s*:/gi, '/* removed */');
+  // 3. 移除 @import
+  css = css.replace(/@import\s+[^;]+;/gi, '/* removed */');
+  // 4. 移除 position:fixed（防止覆盖整个页面进行点击劫持）
+  //    但允许 position:relative/absolute（在受限容器内安全）
+  css = css.replace(/position\s*:\s*fixed/gi, 'position:relative');
+  // 5. 移除 -moz-binding（XBL 绑定攻击，Firefox 专属）
+  css = css.replace(/-moz-binding\s*:[^;]+;?/gi, '/* removed */');
+  // 6. 移除 behavior（IE 专属，可执行脚本）
+  css = css.replace(/behavior\s*:[^;]+;?/gi, '/* removed */');
+  return css;
+}
 
 function sanitizeHtml(html) {
   if (!html) return '';
@@ -552,8 +571,21 @@ function sanitizeHtml(html) {
       var tag = child.tagName.toLowerCase();
       // 不在白名单中的标签：检查是否需要提取内容
       if (!SAFE_HTML_TAGS[tag]) {
-        // script/style/iframe 等直接删除（含内容）
-        if (['script','style','iframe','object','embed','form','input','textarea','button','select','option','link','meta','base','noscript'].indexOf(tag) >= 0) {
+        // style 标签：净化 CSS 内容后保留（支持 @keyframes 动画等）
+        if (tag === 'style') {
+          var cssText = child.textContent || '';
+          var safeCss = sanitizeCss(cssText);
+          if (safeCss.trim()) {
+            child.textContent = safeCss;
+          } else {
+            node.removeChild(child);
+            continue;
+          }
+          // style 标签不需要清理属性，继续处理兄弟节点
+          continue;
+        }
+        // script/iframe 等直接删除（含内容）
+        if (['script','iframe','object','embed','form','input','textarea','button','select','option','link','meta','base','noscript'].indexOf(tag) >= 0) {
           node.removeChild(child);
           continue;
         }
@@ -673,8 +705,9 @@ function processHtmlTextNodes(html) {
         }
       } else if (child.nodeType === 1) {
         // 跳过 <a> 标签内部的文本（避免对链接文本做二次处理）
+        // 跳过 <style> 标签（CSS 代码不应被 linkify 或 @提及处理）
         var tag = child.tagName.toLowerCase();
-        if (tag !== 'a' && tag !== 'code' && tag !== 'pre') {
+        if (tag !== 'a' && tag !== 'code' && tag !== 'pre' && tag !== 'style') {
           processTextNodes(child);
         }
       }
@@ -694,13 +727,13 @@ function escAttr(s) {
   return js.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 渲染富文本内容（支持HTML标签）
+// 渲染富文本内容（支持HTML标签，包括 <style> 动画）
 function renderRichContent(content) {
   if (!content) return '';
   // 统一使用 sanitizeHtml 进行安全净化
   var sanitized = sanitizeHtml(content);
-  // 将 \n 替换为 <br>（仅对文本节点）
-  return sanitized.replace(/\n/g, '<br>');
+  // 使用 processHtmlTextNodes 处理文本节点的换行和链接（跳过 <style> 标签）
+  return processHtmlTextNodes(sanitized);
 }
 
 function formatDate(str) {
