@@ -109,7 +109,7 @@ pages（与网站项目无关）/
    > 只需要创建 `pages` 一个桶。聊天图片上传优先使用 picgo.net 图床，tmpfile.link 作为第二选择，R2 作为兜底，不需要额外存储桶。
 
 **验证**：
-- SQL Editor 中执行 `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`，应看到 `chat_rooms`、`chat_messages` 等约 14 张表
+- SQL Editor 中执行 `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`，应看到 `chat_rooms`、`chat_messages`、`public_channels` 等约 15 张表
 - Storage 页面应看到 `pages` 桶
 
 ---
@@ -227,7 +227,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 > **备选方式**：也可以在 `functions/api/custom-pages.js`、`functions/api/announcements.js` 等文件顶部的 `DEV_IDS` 数组中添加你的 `doubao_id`，然后重新部署。
 
-**验证**：登录后能看到开发者面板，可以管理公告、创建自定义页面。
+**验证**：登录后能看到开发者面板，可以管理公告、创建自定义页面、管理公开频道。
 
 ---
 
@@ -251,6 +251,8 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | 暗色模式 | 点击右上角主题切换按钮 | 全站切换为暗色，包括聊天界面 |
 | 开发者-公告 | 开发者面板→公告管理 | 可创建/编辑/删除公告 |
 | 开发者-自定义页面 | 开发者面板→页面管理 | 可创建 HTML 页面并上传文件 |
+| 开发者-公开频道 | 开发者面板→公开频道 | 勾选频道设为公开，设置分组，用户端自动显示 |
+| 公开频道（用户端） | 聊天侧边栏频道列表 | 未加入的公开频道显示在「📡 公开频道」区块，点击加入 |
 | 自定义页面访问 | 访问 `/pages/{页面ID}` | 页面正常渲染，带登录墙 |
 
 ---
@@ -304,6 +306,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - 频道分组管理（个人设置「频道」标签页 + 侧边栏分组筛选，localStorage 存储）
 - 频道公告（富文本 HTML + 置顶 + 可见性控制 + 弹窗阅读 + 管理员及以上可发布）
 - 频道工具（快捷链接管理）
+- 公开频道（开发者选取特定频道设为公开，所有用户默认可见，支持公开频道分组，一键加入）
 - 入群申请审核（频道顶部横幅 + 实时推送通知）
 - 消息自动清理（7天保留策略，pg_cron 定时执行）
 
@@ -312,6 +315,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - 功能图标管理
 - 自定义页面（HTML 托管 + Supabase Storage 文件上传）
 - 文件管理（Supabase Storage `pages` 桶）
+- 公开频道管理（选取频道设为公开 + 独立分组管理 + 所有用户默认可见）
 
 ### 主题
 - 亮色/暗色模式无缝切换
@@ -390,7 +394,7 @@ Tavern 依赖 `functions/api/proxy.js` 作为 CORS 代理，用于转发不支�
 
 ### 数据库分工
 - **D1 (SQLite)**：账户体系、好友关系、黑名单、举报、公告、频道元数据
-- **Supabase (PostgreSQL)**：聊天消息、表情反应、未读计数、实时推送、在线状态（user_presence）、频道公告
+- **Supabase (PostgreSQL)**：聊天消息、表情反应、未读计数、实时推送、在线状态（user_presence）、频道公告、公开频道
 - **picgo.net**：聊天图片上传首选图床（Chevereto API，需 API Key）
 - **tmpfile.link**：聊天图片/视频/文件上传第二选择（匿名上传，支持 iframe 预览嵌入）
 - **Cloudflare R2**：聊天图片/文件上传兜底存储（picgo.net 和 tmpfile.link 均失败时回退使用，通过 `/cdn-assets/` 路径访问）

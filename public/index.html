@@ -234,6 +234,7 @@
       <button class="tab" onclick="switchDevTab('features',this)">🔧 功能管理</button>
       <button class="tab" onclick="switchDevTab('pages',this)">📄 本地页面</button>
       <button class="tab" onclick="switchDevTab('tempmode',this)">⚡ 临时模式</button>
+      <button class="tab" onclick="switchDevTab('publicchannels',this)">📡 公开频道</button>
     </div>
     <div id="developerContent" style="max-height:500px;overflow-y:auto"></div>
   </div>
@@ -364,11 +365,9 @@ function avatarHTML(user, small = false, clickable = false) {
 
 async function checkChannelPermission(roomId) {
   if (!roomId || !currentUser) return false;
-  if (isDeveloper()) return true;
-  const room = chatState.rooms.find(r => r.id === roomId);
-  if (room && room.created_by === currentUser.id) return true;
-  const { data } = await __SB.from('chat_room_members').select('user_id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
-  return !!data;
+  // 统一使用 getPermissionLevel 进行权限判断，确保开发者(3)、创建者(2)、管理员(1)均可管理
+  var level = await getPermissionLevel(roomId, currentUser.id);
+  return level >= 1;
 }
 
 async function showAtUserInfo(name) {
@@ -3176,6 +3175,8 @@ async function loadDeveloperContent() {
     await loadFeaturesManager();
   } else if (devTab === 'tempmode') {
     await loadTempModeManager();
+  } else if (devTab === 'publicchannels') {
+    await loadPublicChannelsManager();
   } else {
     await loadPagesManager();
   }
@@ -3186,11 +3187,147 @@ async function switchDevTab(tab, btnEl) {
   document.querySelectorAll('#developerModal .tab').forEach(t => t.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
   else {
-    const tabMap = { announcements: 0, features: 1, pages: 2, tempmode: 3 };
+    const tabMap = { announcements: 0, features: 1, pages: 2, tempmode: 3, publicchannels: 4 };
     const tabIndex = tabMap[tab] ?? 0;
-    document.querySelectorAll('#developerModal .tab')[tabIndex].classList.add('active');
+    document.querySelectorAll('#developerModal .tab')[tabIndex]?.classList.add('active');
   }
   await loadDeveloperContent();
+}
+
+// ===== 公开频道管理 =====
+// 缓存公开频道数据
+var publicChannelsCache = null;
+var publicChannelGroupsCache = null;
+
+async function fetchPublicChannels() {
+  try {
+    var { data, error } = await __SB.from('public_channels').select('*').order('group_name', { ascending: true }).order('sort_order', { ascending: true });
+    if (error) { console.warn('fetchPublicChannels error:', error); return []; }
+    return data || [];
+  } catch(e) { console.warn('fetchPublicChannels exception:', e); return []; }
+}
+
+async function loadPublicChannelsManager() {
+  const el = document.getElementById('developerContent');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint)">加载中…</div>';
+
+  // 获取所有频道
+  var { data: allRooms, error: roomErr } = await __SB.from('chat_rooms').select('id, name, type, created_by').eq('type', 'channel').order('name');
+  if (roomErr || !allRooms) { el.innerHTML = '<div style="padding:16px;color:var(--text-faint)">加载频道失败</div>'; return; }
+
+  // 获取当前公开频道
+  var publicChs = await fetchPublicChannels();
+  var publicRoomIds = publicChs.map(function(p) { return p.room_id; });
+  var publicGroups = {};
+  publicChs.forEach(function(p) {
+    var g = p.group_name || '默认分组';
+    if (!publicGroups[g]) publicGroups[g] = [];
+    publicGroups[g].push(p.room_id);
+  });
+
+  var html = '<div style="padding:12px">';
+  html += '<div style="margin-bottom:12px;padding:10px;background:var(--accent-bg);border-radius:8px;font-size:12px;color:var(--text-secondary)">';
+  html += '📡 <b>公开频道管理</b>：选中的频道将默认显示在所有用户的频道列表中，无需用户手动加入。可为公开频道设置分组，用户端会按分组展示。';
+  html += '</div>';
+
+  // 公开频道分组管理
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">📁 公开频道分组';
+  html += '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="addPublicChannelGroupPrompt()">+ 新建分组</button></div>';
+  var groupNames = Object.keys(publicGroups);
+  if (groupNames.length) {
+    html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">';
+    groupNames.forEach(function(g) {
+      html += '<span class="tag tag-gray" style="display:inline-flex;align-items:center;gap:4px">' + esc(g) + ' (' + publicGroups[g].length + ') <button onclick="deletePublicChannelGroup(\'' + escAttr(g) + '\')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;padding:0;line-height:1">×</button></span>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:11px;color:var(--text-faint);margin-bottom:8px">暂无分组，公开频道将归入"默认分组"</div>';
+  }
+  html += '</div>';
+
+  // 频道列表
+  html += '<div style="font-weight:600;font-size:13px;margin-bottom:8px">频道列表（勾选设为公开）</div>';
+  if (!allRooms.length) {
+    html += '<div style="padding:12px;text-align:center;color:var(--text-faint)">暂无频道</div>';
+  } else {
+    html += allRooms.map(function(r) {
+      var isPublic = publicRoomIds.indexOf(r.id) >= 0;
+      var pubInfo = publicChs.find(function(p) { return p.room_id === r.id; });
+      var currentGroup = pubInfo ? (pubInfo.group_name || '默认分组') : '';
+      var groupOpts = '<option value="">默认分组</option>' + groupNames.filter(function(g) { return g !== '默认分组'; }).map(function(g) {
+        return '<option value="' + escAttr(g) + '"' + (g === currentGroup ? ' selected' : '') + '>' + esc(g) + '</option>';
+      }).join('');
+      return '<div class="list-item" style="flex-wrap:wrap">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px">' +
+        '<input type="checkbox" ' + (isPublic ? 'checked' : '') + ' onchange="togglePublicChannel(\'' + r.id + '\', this.checked)" style="cursor:pointer">' +
+        '<div class="list-item-info"><div class="list-item-name">' + esc(r.name || '未命名频道') + '</div>' +
+        '<div class="list-item-email">' + r.id.substring(0, 20) + '…' + (isPublic ? ' · 📡 已公开' : '') + '</div></div>' +
+        '</div>' +
+        (isPublic ? '<select class="input" style="width:auto;max-width:150px;font-size:11px;padding:2px 6px" onchange="setPublicChannelGroup(\'' + r.id + '\', this.value)">' + groupOpts + '</select>' : '') +
+        '</div>';
+    }).join('');
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+async function togglePublicChannel(roomId, isPublic) {
+  if (isPublic) {
+    var id = 'pubch_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await __SB.from('public_channels').insert({ id: id, room_id: roomId, group_name: '', sort_order: 0 });
+    toast('已设为公开频道');
+  } else {
+    await __SB.from('public_channels').delete().eq('room_id', roomId);
+    toast('已取消公开');
+  }
+  // 刷新缓存
+  publicChannelsCache = null;
+  loadPublicChannelsManager();
+}
+
+async function setPublicChannelGroup(roomId, groupName) {
+  await __SB.from('public_channels').update({ group_name: groupName }).eq('room_id', roomId);
+  publicChannelsCache = null;
+  toast('已更新分组');
+  loadPublicChannelsManager();
+}
+
+async function addPublicChannelGroupPrompt() {
+  var html = '<div class="modal-overlay" id="pubChGroupModal" style="display:flex"><div class="modal" style="max-width:320px">' +
+    '<div class="modal-header"><div class="modal-title">新建公开频道分组</div>' +
+    '<button class="modal-close" onclick="document.getElementById(\'pubChGroupModal\').remove()">✕</button></div>' +
+    '<div class="form-group"><label class="form-label">分组名称</label>' +
+    '<input class="input" id="pubChGroupName" placeholder="输入分组名称" onkeydown="if(event.key===\'Enter\'){confirmAddPublicChannelGroup()}"></div>' +
+    '<button class="btn btn-orange btn-full" onclick="confirmAddPublicChannelGroup()">创建</button>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(function() { document.getElementById('pubChGroupName')?.focus(); }, 50);
+}
+
+async function confirmAddPublicChannelGroup() {
+  var name = document.getElementById('pubChGroupName').value.trim();
+  if (!name) { toast('请输入分组名称', 'error'); return; }
+  document.getElementById('pubChGroupModal')?.remove();
+  // 分组由频道设置时自动创建，这里仅刷新界面
+  toast('分组 "' + name + '" 已创建，请在频道列表中为公开频道选择此分组');
+  loadPublicChannelsManager();
+}
+
+async function deletePublicChannelGroup(groupName) {
+  if (!confirm('确定删除分组 "' + groupName + '"？该分组下的公开频道将归入"默认分组"。')) return;
+  await __SB.from('public_channels').update({ group_name: '' }).eq('group_name', groupName);
+  publicChannelsCache = null;
+  toast('分组已删除');
+  loadPublicChannelsManager();
+}
+
+// 获取公开频道列表（供 renderRoomList 使用）
+async function getPublicChannelsForUser() {
+  if (publicChannelsCache) return publicChannelsCache;
+  publicChannelsCache = await fetchPublicChannels();
+  return publicChannelsCache;
 }
 
 // ===== Insert Media Helpers =====
@@ -3913,15 +4050,16 @@ let chatState = {
   optimisticReactions: {},
   userChannelCount: 0,
   joinRequestCount: 0,
-  _openingChat: false
+  _openingChat: false,
+  publicChannels: []
 };
 
 async function getPermissionLevel(roomId, userId) {
   if (!roomId || !userId) return 0;
   if (userId === currentUser?.id && isDeveloper()) return 3;
   var room = chatState.rooms.find(function(r) { return r.id === roomId; });
-  if (!room) return 0;
-  if (room.created_by === userId) return 2;
+  if (room && room.created_by === userId) return 2;
+  // 即使 room 不在 chatState.rooms 中（如刚加入的频道），也要检查 chat_admins 表
   var { data } = await __SB.from('chat_admins').select('id').eq('room_id', roomId).eq('user_id', userId).maybeSingle();
   if (data) return 1;
   return 0;
@@ -4071,8 +4209,37 @@ async function loadRoomList() {
       .select('room_id, joined_at, mute_notifications')
       .eq('user_id', currentUser.id)
       .order('joined_at', { ascending: false });
-    if (error) { console.error('loadRoomList error:', error); chatState.rooms = []; renderRoomList(); return; }
-    if (!memberships?.length) { chatState.rooms = []; renderRoomList(); return; }
+    if (error) { console.error('loadRoomList error:', error); chatState.rooms = []; chatState.publicChannels = []; renderRoomList(); return; }
+    if (!memberships?.length) {
+      chatState.rooms = [];
+      // 即使没有加入任何频道，也加载公开频道
+      try {
+        var pubChs0 = await fetchPublicChannels();
+        var pubRoomIds0 = pubChs0.map(function(p) { return p.room_id; });
+        var pubRoomsData0 = [];
+        if (pubRoomIds0.length) {
+          var { data: pubRoomsRaw0 } = await __SB.from('chat_rooms').select('*').in('id', pubRoomIds0);
+          if (pubRoomsRaw0) {
+            var pubSettingsMap0 = {};
+            var { data: pubSettings0 } = await __SB.from('chat_channel_settings').select('room_id, avatar_url').in('room_id', pubRoomIds0);
+            if (pubSettings0) pubSettings0.forEach(function(s) { pubSettingsMap0[s.room_id] = s; });
+            pubRoomsData0 = pubRoomsRaw0.map(function(r) {
+              var pubInfo0 = pubChs0.find(function(p) { return p.room_id === r.id; });
+              return {
+                id: r.id, type: r.type, name: r.name, created_by: r.created_by,
+                created_at: r.created_at, unread: 0, member_count: 0, other: null,
+                is_admin: false, creator_name: '', mute_notifications: false,
+                avatar_url: pubSettingsMap0[r.id] ? (pubSettingsMap0[r.id].avatar_url || '') : '',
+                guest_mode: pubSettingsMap0[r.id] ? (pubSettingsMap0[r.id].guest_mode || false) : false,
+                is_public: true, public_group: pubInfo0 ? (pubInfo0.group_name || '') : ''
+              };
+            });
+          }
+        }
+        chatState.publicChannels = pubRoomsData0;
+      } catch(e) { chatState.publicChannels = []; }
+      renderRoomList(); return;
+    }
     const roomIds = memberships.map(m => m.room_id);
     const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
     const roomMap = {};
@@ -4140,6 +4307,35 @@ async function loadRoomList() {
     chatState.rooms = rooms;
     chatState.lastRoomListRefresh = Date.now();
     chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
+    // 获取公开频道（所有用户可见，无需加入）
+    try {
+      var pubChs = await fetchPublicChannels();
+      var joinedRoomIds = rooms.map(function(r) { return r.id; });
+      var pubRoomIds = pubChs.map(function(p) { return p.room_id; }).filter(function(rid) { return joinedRoomIds.indexOf(rid) < 0; });
+      var pubRoomsData = [];
+      if (pubRoomIds.length) {
+        var { data: pubRoomsRaw } = await __SB.from('chat_rooms').select('*').in('id', pubRoomIds);
+        if (pubRoomsRaw) {
+          // 获取公开频道的设置（头像等）
+          var pubSettingsMap = {};
+          var { data: pubSettings } = await __SB.from('chat_channel_settings').select('room_id, avatar_url, topic').in('room_id', pubRoomIds);
+          if (pubSettings) pubSettings.forEach(function(s) { pubSettingsMap[s.room_id] = s; });
+          pubRoomsData = pubRoomsRaw.map(function(r) {
+            var pubInfo = pubChs.find(function(p) { return p.room_id === r.id; });
+            return {
+              id: r.id, type: r.type, name: r.name, created_by: r.created_by,
+              created_at: r.created_at, unread: 0, member_count: 0, other: null,
+              is_admin: false, creator_name: '', mute_notifications: false,
+              avatar_url: pubSettingsMap[r.id] ? (pubSettingsMap[r.id].avatar_url || '') : '',
+              guest_mode: pubSettingsMap[r.id] ? (pubSettingsMap[r.id].guest_mode || false) : false,
+              is_public: true,
+              public_group: pubInfo ? (pubInfo.group_name || '') : ''
+            };
+          });
+        }
+      }
+      chatState.publicChannels = pubRoomsData;
+    } catch(e) { console.warn('loadRoomList publicChannels error:', e); chatState.publicChannels = []; }
     renderRoomList();
     loadChannelJoinRequests().catch(function(e) { console.error('loadChannelJoinRequests:', e); });
     subscribeToJoinRequests();
@@ -5707,8 +5903,8 @@ async function showRoomSettings() {
     html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:11px">⚙ 准入设置</button>';
     html += '</div>';
   }
-  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="channelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
-  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🔧 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:11px">+ 添加</button>' : '') + '</div><div id="channelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
+  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="settingsChannelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
+  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🔧 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:11px">+ 添加</button>' : '') + '</div><div id="settingsChannelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
   // 频道分组管理
   html += '<div style="margin-top:12px"><button class="btn btn-sm btn-gray" style="width:100%" onclick="showChannelGroupManager()">📁 频道分组管理</button></div>';
   if (canManage) {
@@ -5723,7 +5919,7 @@ async function showRoomSettings() {
   html += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
   if (canManage) loadRoomMemberList(chatState.currentRoomId);
-  if (room && room.type === 'channel') { loadChannelAnnouncements(room.id); loadChannelTools(room.id); }
+  if (room && room.type === 'channel') { loadChannelAnnouncements(room.id, 'settingsChannelAnnouncementList'); loadChannelTools(room.id, 'settingsChannelToolList'); }
 }
 
 async function toggleMuteNotifications(roomId) {
@@ -6039,8 +6235,8 @@ function showPinnedAnnouncements(announcements) {
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 }
 
-async function loadChannelAnnouncements(roomId) {
-  var el = document.getElementById('channelAnnouncementList');
+async function loadChannelAnnouncements(roomId, containerId) {
+  var el = document.getElementById(containerId || 'channelAnnouncementList');
   if (!el) return;
   var { data, error } = await __SB.from('chat_channel_announcements').select('*').eq('room_id', roomId).order('pinned', { ascending: false }).order('created_at', { ascending: false });
   if (error) { console.warn('loadChannelAnnouncements error:', error); el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">加载失败: ' + esc(error.message || '未知错误') + '</div>'; return; }
@@ -6136,6 +6332,7 @@ async function saveAnnouncement(announcementId) {
       await __SB.from('chat_channel_announcements').insert({ id: aId, room_id: chatState.currentRoomId, title: newTitle, content: newContent, pinned: newPinned, visibility: newVisibility, created_by: currentUser.id });
     }
     loadChannelAnnouncements(chatState.currentRoomId);
+    loadChannelAnnouncements(chatState.currentRoomId, 'settingsChannelAnnouncementList');
     toast(announcementId ? '公告已更新' : '公告已发布', 'success');
   } catch(e) {
     console.error('saveAnnouncement error:', e);
@@ -6148,6 +6345,7 @@ async function saveAnnouncement(announcementId) {
         await __SB.from('chat_channel_announcements').insert({ id: aId2, room_id: chatState.currentRoomId, title: newTitle, content: newContent, pinned: newPinned, created_by: currentUser.id });
       }
       loadChannelAnnouncements(chatState.currentRoomId);
+      loadChannelAnnouncements(chatState.currentRoomId, 'settingsChannelAnnouncementList');
       toast(announcementId ? '公告已更新（可见性字段未生效，请运行迁移脚本）' : '公告已发布（可见性字段未生效，请运行迁移脚本）', 'warning');
     } catch(e2) {
       console.error('saveAnnouncement retry error:', e2);
@@ -6162,11 +6360,12 @@ async function deleteChannelAnnouncement(announcementId, roomId) {
   if (!confirm('确定删除这条公告？')) return;
   await __SB.from('chat_channel_announcements').delete().eq('id', announcementId);
   loadChannelAnnouncements(roomId);
+  loadChannelAnnouncements(roomId, 'settingsChannelAnnouncementList');
   toast('公告已删除');
 }
 
-async function loadChannelTools(roomId) {
-  var el = document.getElementById('channelToolList');
+async function loadChannelTools(roomId, containerId) {
+  var el = document.getElementById(containerId || 'channelToolList');
   if (!el) return;
   var { data } = await __SB.from('chat_channel_tools').select('*').eq('room_id', roomId).order('sort_order');
   if (!data?.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px;width:100%">暂无工具</div>'; return; }
@@ -7053,7 +7252,8 @@ renderRoomList = function() {
   // ── 渲染频道列表 ──
   var channelEl = document.getElementById('chatChannelItems');
   if (channelEl) {
-    if (!channels.length) {
+    var publicChs = chatState.publicChannels || [];
+    if (!channels.length && !publicChs.length) {
       channelEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 4px">暂无频道，点击右上角创建</div>';
     } else {
       var pinnedChannels = channels.filter(function(r) { return pinned.indexOf(r.id) >= 0; });
@@ -7083,6 +7283,26 @@ renderRoomList = function() {
       if (unpinnedChannels.length) {
         channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)">频道</div>';
         channelHtml += unpinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
+      }
+      // ── 公开频道（未加入的） ──
+      if (publicChs.length && !channelFilterGroup) {
+        // 按公开频道分组归类
+        var pubGroupMap = {};
+        publicChs.forEach(function(r) {
+          var g = r.public_group || '默认分组';
+          if (!pubGroupMap[g]) pubGroupMap[g] = [];
+          pubGroupMap[g].push(r);
+        });
+        var pubGroupNames = Object.keys(pubGroupMap).sort();
+        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint);margin-top:4px">📡 公开频道</div>';
+        pubGroupNames.forEach(function(g) {
+          if (pubGroupNames.length > 1 || g !== '默认分组') {
+            channelHtml += '<div style="padding:2px 12px;font-size:9px;font-weight:600;color:var(--text-faint)">📁 ' + esc(g) + '</div>';
+          }
+          pubGroupMap[g].forEach(function(r) {
+            channelHtml += publicChannelItemHTML(r);
+          });
+        });
       }
       channelEl.innerHTML = channelHtml;
     }
@@ -7174,6 +7394,36 @@ function roomItemHTML(r) {
     '<button class="chat-room-act" onclick="event.stopPropagation();hideChannel(\'' + r.id + '\')" title="隐藏会话" aria-label="隐藏会话">🙈</button>' +
     '</div>' +
     '</div>';
+}
+
+function publicChannelItemHTML(r) {
+  var avatar = channelAvatarHTML(r, 32);
+  var name = esc(r.name || '未命名频道');
+  return '<div class="chat-room-item" onclick="joinPublicChannel(\'' + r.id + '\')">' +
+    '<div class="chat-room-avatar">' + avatar + '</div>' +
+    '<div class="chat-room-info">' +
+    '<div class="chat-room-name">' + name + ' <span class="chat-role-tag role-dev" style="font-size:9px">公开</span></div>' +
+    '<div class="chat-room-preview">点击加入频道</div>' +
+    '</div>' +
+    '<div class="chat-room-actions">' +
+    '<button class="chat-room-act" onclick="event.stopPropagation();joinPublicChannel(\'' + r.id + '\')" title="加入" aria-label="加入频道" style="color:var(--accent)">➕</button>' +
+    '</div>' +
+    '</div>';
+}
+
+async function joinPublicChannel(roomId) {
+  if (!currentUser) { toast('请先登录', 'warning'); return; }
+  // 检查是否已是成员
+  var { data: existing } = await __SB.from('chat_room_members').select('id').eq('room_id', roomId).eq('user_id', currentUser.id).maybeSingle();
+  if (existing) {
+    switchRoom(roomId);
+    return;
+  }
+  var { error: joinErr } = await __SB.from('chat_room_members').insert({ id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id });
+  if (joinErr) { toast('加入失败: ' + joinErr.message, 'error'); return; }
+  toast('已加入频道', 'success');
+  await loadRoomList();
+  switchRoom(roomId);
 }
 
 function showChannelGroupManager() {

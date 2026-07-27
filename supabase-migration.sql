@@ -204,6 +204,28 @@ ALTER TABLE chat_channel_settings ADD COLUMN IF NOT EXISTS guest_mode BOOLEAN DE
 -- ===== 16.1 公告可见性字段（幂等） =====
 ALTER TABLE chat_channel_announcements ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'all';
 
+-- ===== 16.2 公开频道表（开发者管理的全局公开频道） =====
+CREATE TABLE IF NOT EXISTS public_channels (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL UNIQUE,
+  group_name TEXT DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pubch_room ON public_channels(room_id);
+CREATE INDEX IF NOT EXISTS idx_pubch_group ON public_channels(group_name);
+
+-- ===== 16.3 公开频道 RLS 策略（所有人可读，仅开发者可写） =====
+ALTER TABLE public_channels ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "public_channels_read" ON public_channels;
+CREATE POLICY "public_channels_read" ON public_channels FOR SELECT USING (true);
+DROP POLICY IF EXISTS "public_channels_insert" ON public_channels;
+CREATE POLICY "public_channels_insert" ON public_channels FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "public_channels_update" ON public_channels;
+CREATE POLICY "public_channels_update" ON public_channels FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "public_channels_delete" ON public_channels;
+CREATE POLICY "public_channels_delete" ON public_channels FOR DELETE USING (true);
+
 -- ===== 17. 外键约束（幂等：先检查是否存在，先清理孤立数据） =====
 -- 先清理引用了已删除房间的孤立记录，否则外键会创建失败
 -- 使用 NOT EXISTS 而非 NOT IN，防止空表导致全量删除

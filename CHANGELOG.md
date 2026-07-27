@@ -4,6 +4,61 @@
 
 ---
 
+## v4.6 — 2026-07-28
+
+### 公开频道管理 + 频道公告权限深度修复 + 开发者界面新增标签
+
+#### 新增功能
+
+##### 1. 公开频道管理（开发者后台）
+
+**需求**：开发者可以从现有频道中选取特定频道作为"公开频道"，无需用户手动加入即默认显示在所有用户的频道列表中，并支持独立的公开频道分组管理。
+
+**实现**：
+1. Supabase 新增 `public_channels` 表（`id`, `room_id`, `group_name`, `sort_order`, `created_at`），含索引和 RLS 策略（所有人可读，开发者可写）
+2. 开发者界面新增「📡 公开频道」标签页（第5个标签）
+3. 管理界面展示所有频道列表，可通过勾选框将频道设为/取消公开
+4. 公开频道支持分组管理：新建分组、为公开频道选择分组、删除分组（删除后频道归入"默认分组"）
+5. `loadRoomList` 中获取公开频道数据，过滤掉用户已加入的频道后存入 `chatState.publicChannels`
+6. `renderRoomList` 中新增「📡 公开频道」区块，按分组归类展示，点击可一键加入频道
+7. 新增 `publicChannelItemHTML`、`joinPublicChannel` 函数
+8. 未加入任何频道的用户也能看到公开频道列表
+
+**数据流**：`public_channels` 表 → `loadRoomList` 获取 → `chatState.publicChannels` → `renderRoomList` 按分组渲染 → 用户点击加入
+
+---
+
+#### 故障修复
+
+##### 2. 频道公告：开发者和管理员创建的公告不可见（深度老bug）
+
+**现象**：频道内只有创建者的公告能被看见并置顶，开发者和管理者创建的公告看不见。
+
+**根因**（三重）：
+1. `checkChannelPermission` 函数检查 `chat_room_members` 表而非 `chat_admins` 表来判断管理员权限，导致权限判断不一致——该函数用于控制频道设置弹窗中的"+ 发布"按钮显示，以及用户弹窗中的管理操作
+2. `getPermissionLevel` 函数在 `chatState.rooms` 中找不到房间时直接返回 0，跳过了 `chat_admins` 表检查——当房间数据未及时加载时，管理员权限被错误地判定为 0
+3. 频道上下文面板（右侧栏）和频道设置弹窗均使用 `channelAnnouncementList` 作为元素 ID，当两者同时存在于 DOM 中时，`getElementById` 返回第一个匹配元素，导致公告内容加载到错误的容器中
+
+**修复**：
+1. `checkChannelPermission`：改为统一调用 `getPermissionLevel(roomId, currentUser.id) >= 1`，确保开发者(3)、创建者(2)、管理员(1)均通过权限检查
+2. `getPermissionLevel`：移除 `if (!room) return 0` 的提前返回，改为 `if (room && room.created_by === userId) return 2`——即使房间不在 `chatState.rooms` 中，仍会继续检查 `chat_admins` 表
+3. 频道设置弹窗中的公告列表和工具列表改用独立元素 ID（`settingsChannelAnnouncementList`、`settingsChannelToolList`）
+4. `loadChannelAnnouncements` 和 `loadChannelTools` 新增 `containerId` 可选参数，支持指定目标容器
+5. `saveAnnouncement` 和 `deleteChannelAnnouncement` 操作后同时刷新上下文面板和设置弹窗的公告列表
+
+**权限体系**：开发者(3) > 创建者(2) > 管理员(1) > 普通成员(0)，管理员及以上均可管理公告。
+
+---
+
+#### 修改文件
+
+- `public/index.html` — 公开频道管理界面及函数、公告权限三重修复、元素 ID 去重
+- `supabase-migration.sql` — 新增 `public_channels` 表及 RLS 策略
+- `README.md` — 功能清单新增公开频道
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.5 — 2026-07-25
 
 ### 频道公告弹窗阅读 + 公告权限修复 + 设置页新内容不可见修复
