@@ -85,7 +85,7 @@
       <div><div class="modal-title">使用须知</div><div style="font-size:11px;color:var(--text-faint)">首次使用前请阅读</div></div>
       <button class="modal-close" onclick="closeModal('announcement')">✕</button>
     </div>
-    <div id="announcementContent">
+    <div id="announcementContent" class="dp-rich-content">
     <div class="rule"><div class="rule-num">1</div><div class="rule-text">此规则防君子不防小人；</div></div>
     <div class="rule"><div class="rule-num">2</div><div class="rule-text">如果目的是挂人、网络暴力、冲某人主页、开盒（人肉搜索）、就近约会等违背道德、法律的情况，无论动机是否正当，请不要使用此网站；</div></div>
     <div class="rule"><div class="rule-num">3</div><div class="rule-text">第一次使用的，请尽快注册账号并设置密码。请不要泄露你的密码。如果你完全不想被搜索到，可开启"全网隐身"，同时你也将无法搜索别人；如果你想让少数的网友访问，请开启白名单模式并设置邀请码；</div></div>
@@ -551,7 +551,83 @@ function sanitizeCss(css) {
   css = css.replace(/-moz-binding\s*:[^;]+;?/gi, '/* removed */');
   // 6. 移除 behavior（IE 专属，可执行脚本）
   css = css.replace(/behavior\s*:[^;]+;?/gi, '/* removed */');
+  // 7. 作用域化：将所有 CSS 选择器限定在 .dp-rich-content 内部
+  //    防止 <style> 标签中的 CSS 影响全局布局
+  css = scopeCssSelectors(css, '.dp-rich-content');
   return css;
+}
+
+// CSS 选择器作用域化：将所有选择器限定在指定作用域类名内
+// 防止富文本中的 <style> 标签影响全局布局
+function scopeCssSelectors(css, scopeClass) {
+  if (!css) return '';
+  var result = '';
+  var i = 0;
+  while (i < css.length) {
+    // 跳过空白
+    while (i < css.length && /\s/.test(css[i])) { result += css[i]; i++; }
+    if (i >= css.length) break;
+    // 处理 @ 规则
+    if (css[i] === '@') {
+      // @keyframes / @-webkit-keyframes: 保留整个规则（含嵌套大括号）
+      var kfMatch = /^@(-webkit-|-moz-)?keyframes\s+[\w-]+\s*\{/i.exec(css.substring(i));
+      if (kfMatch) {
+        var bc = 1, j = i + kfMatch[0].length;
+        while (j < css.length && bc > 0) { if (css[j] === '{') bc++; else if (css[j] === '}') bc--; j++; }
+        result += css.substring(i, j); i = j; continue;
+      }
+      // @media: 递归处理内部规则
+      var mediaMatch = /^@media\s+[^{]+\{/i.exec(css.substring(i));
+      if (mediaMatch) {
+        var bc2 = 1, j2 = i + mediaMatch[0].length, mediaStart = j2;
+        while (j2 < css.length && bc2 > 0) { if (css[j2] === '{') bc2++; else if (css[j2] === '}') bc2--; j2++; }
+        result += mediaMatch[0] + scopeCssSelectors(css.substring(mediaStart, j2 - 1), scopeClass) + '}';
+        i = j2; continue;
+      }
+      // @font-face / @supports 等：保留整个规则
+      var atBrace = css.indexOf('{', i);
+      if (atBrace >= 0) {
+        var bc3 = 1, j3 = atBrace + 1;
+        while (j3 < css.length && bc3 > 0) { if (css[j3] === '{') bc3++; else if (css[j3] === '}') bc3--; j3++; }
+        result += css.substring(i, j3); i = j3; continue;
+      }
+    }
+    // 普通规则：选择器 { 声明块 }
+    var braceStart = css.indexOf('{', i);
+    if (braceStart < 0) { result += css.substring(i); break; }
+    var braceEnd = css.indexOf('}', braceStart);
+    if (braceEnd < 0) { result += css.substring(i); break; }
+    var selector = css.substring(i, braceStart).trim();
+    var declaration = css.substring(braceStart, braceEnd + 1);
+    var scopedSelector = scopeOneSelector(selector, scopeClass);
+    if (scopedSelector) result += scopedSelector + ' ' + declaration;
+    i = braceEnd + 1;
+  }
+  return result;
+}
+
+// 对单个选择器（可含逗号）进行作用域化
+function scopeOneSelector(selector, scopeClass) {
+  if (!selector) return '';
+  var parts = selector.split(',');
+  var scoped = [];
+  for (var i = 0; i < parts.length; i++) {
+    var s = parts[i].trim();
+    if (!s) continue;
+    // 替换全局元素选择器: body, html, :root → scopeClass
+    s = s.replace(/\b(body|html|:root)\b/gi, scopeClass);
+    // 通配符 * → scopeClass *（仅独立或后代选择器位置）
+    s = s.replace(/(^|[\s>~+])\*(?=[\s>~+,{]|$)/g, '$1' + scopeClass + ' *');
+    if (s.trim() === '*') s = scopeClass + ' *';
+    // 移除 ID 选择器规则（#xxx 全局唯一，不安全）
+    if (/#[a-zA-Z_]/.test(s)) continue;
+    // 移除全局类选择器（.app-xxx, .activity-xxx 等）
+    if (/\.(app-layout|app-sidebar|app-main|activity-bar|activity-item|activity-label|activity-icon|activity-badge|activity-dot|sidebar-section|sidebar-header|sidebar-item|sidebar-toggle|nav-|modal|chat-view-|view-header|ctx-panel|friends-hero|login-required|mobile-overlay)/i.test(s)) continue;
+    // 如果选择器不以 scopeClass 开头，添加前缀
+    if (s.indexOf(scopeClass) !== 0) s = scopeClass + ' ' + s;
+    scoped.push(s);
+  }
+  return scoped.join(', ');
 }
 
 function sanitizeHtml(html) {
@@ -749,7 +825,7 @@ function loadUsageNotice() {
   var saved = localStorage.getItem('dp_usage_notice');
   if (saved) {
     var el = document.getElementById('announcementContent');
-    if (el) el.innerHTML = renderRichContent(saved);
+    if (el) { el.className = 'dp-rich-content'; el.innerHTML = renderRichContent(saved); }
   }
 }
 
@@ -2027,7 +2103,7 @@ async function loadAnnouncements() {
                 '<span class="ann-toggle-icon" style="font-size:12px;color:var(--text-faint);transition:transform .2s">' + (expanded ? '▼' : '▶') + '</span>' +
               '</div>' +
               '<div class="ann-body" style="' + (expanded ? '' : 'display:none') + '">' +
-                '<div style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-top:8px">' + renderRichContent(a.content) + '</div>' +
+                '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-top:8px">' + renderRichContent(a.content) + '</div>' +
                 '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
               '</div>' +
             '</div>';
@@ -2078,7 +2154,7 @@ async function showFirstLoginAnnouncements() {
           allAnns.map(function(a) {
             return '<div class="card" style="margin-bottom:12px">' +
               '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">' + (a.is_system ? '📌 ' : '') + esc(a.title) + '</div>' +
-              '<div style="font-size:13px;color:var(--text-secondary);word-break:break-all">' + renderRichContent(a.content) + '</div>' +
+              '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all">' + renderRichContent(a.content) + '</div>' +
               '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
               '</div>';
           }).join('') +
@@ -3215,7 +3291,7 @@ async function loadAnnouncementsManager() {
             <span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">初始公告</span>
             <span style="font-size:14px;font-weight:600;color:var(--text-primary)">${esc(sysAnn.title)}</span>
           </div>
-          <div style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
+          <div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:var(--text-faint)">${formatDate(sysAnn.created_at)}</div>
             <div style="display:flex;gap:6px">
@@ -3254,7 +3330,7 @@ async function loadAnnouncementsManager() {
       ${regularAnn.length === 0 ? '<div class="empty"><div class="empty-text">暂无公告</div></div>' : regularAnn.map(a => `
         <div class="card" style="margin-bottom:12px">
           <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">${esc(a.title)}</div>
-          <div style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
+          <div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;color:var(--text-faint)">${formatDate(a.created_at)}</div>
             <div style="display:flex;gap:6px">
@@ -3308,7 +3384,7 @@ function devEditUsageNotice() {
   var newContent = prompt('编辑使用须知（支持HTML）：', current.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
   if (newContent === null) return;
   localStorage.setItem('dp_usage_notice', newContent);
-  if (el) el.innerHTML = renderRichContent(newContent);
+  if (el) { el.className = 'dp-rich-content'; el.innerHTML = renderRichContent(newContent); }
   toast('使用须知已更新');
 }
 
@@ -4657,7 +4733,7 @@ function renderMsgHTML(m, roomId) {
     '<div class="chat-msg-bubble">' +
     (!isMine ? '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' : '') +
     replyHtml +
-    '<div class="chat-msg-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
+    '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
     '</div>' +
     reactionsHtml +
@@ -5955,7 +6031,7 @@ function showPinnedAnnouncements(announcements) {
       '<span style="font-size:16px">📌</span>' +
       '<div style="font-weight:700;font-size:14px;color:var(--text-primary);flex:1">' + esc(a.title) + '</div>' +
       '</div>' +
-      '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;overflow-wrap:anywhere;word-break:break-word">' + renderRichContent(a.content) + '</div>' +
+      '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);line-height:1.7;overflow-wrap:anywhere;word-break:break-word">' + renderRichContent(a.content) + '</div>' +
       '<div style="font-size:10px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
       '</div>';
   }).join('');
@@ -5991,7 +6067,7 @@ async function loadChannelAnnouncements(roomId) {
       '<div style="font-weight:600;font-size:13px">' + (a.pinned ? '📌 ' : '') + esc(a.title) + visBadge + '</div>' +
       (isAdmin ? '<div style="display:flex;gap:4px"><button class="btn btn-sm btn-gray" style="padding:2px 6px;font-size:11px" onclick="showAnnouncementEditor(\'' + a.id + '\')">编辑</button><button class="btn btn-sm btn-red" style="padding:2px 6px;font-size:11px" onclick="deleteChannelAnnouncement(\'' + a.id + '\',\'' + roomId + '\')">删除</button></div>' : '') +
       '</div>' +
-      '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">' + renderRichContent(a.content) + '</div>' +
+      '<div class="dp-rich-content" style="font-size:12px;color:var(--text-secondary);margin-top:4px">' + renderRichContent(a.content) + '</div>' +
       '<div style="font-size:10px;color:var(--text-faint);margin-top:4px">' + formatDate(a.created_at) + '</div>' +
       '</div>';
   }).join('');
