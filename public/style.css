@@ -257,6 +257,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   justify-content: center;
   padding: 0 4px;
 }
+.activity-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #EF4444;
+  border: 2px solid var(--bg-primary);
+  box-sizing: content-box;
+}
 .activity-spacer {
   flex: 1;
 }
@@ -333,6 +344,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sidebar-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #EF4444;
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 /* ── 响应式：移动端隐藏活动栏和侧边栏 ── */

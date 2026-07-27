@@ -48,6 +48,11 @@ export async function onRequestGet(context) {
 
   try {
     const { env } = context;
+    // 迁移：确保 security_question / security_answer 列存在
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_answer TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question_changed_at TEXT").run().catch(() => {});
+
     const url = new URL(context.request.url);
     const userId = url.searchParams.get('user_id');
 
@@ -89,6 +94,11 @@ export async function onRequestPost(context) {
 
   try {
     const { env } = context;
+    // 迁移：确保 security_question / security_answer 列存在
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_answer TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question_changed_at TEXT").run().catch(() => {});
+
     const body = await context.request.json().catch(() => ({}));
     const { user_id, security_answer, new_password } = body;
 
@@ -112,8 +122,8 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '该账号未设置密保问题' });
     }
 
-    // 验证密保答案（不区分大小写）
-    const answerValid = await verifyPassword(security_answer.trim().toLowerCase(), user.security_answer);
+    // 验证密保答案（不使用 toLowerCase，兼容中文答案）
+    const answerValid = await verifyPassword(security_answer.trim(), user.security_answer);
     if (!answerValid) {
       return Response.json({ success: false, error: '密保答案错误' });
     }

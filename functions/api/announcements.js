@@ -21,6 +21,7 @@ export async function onRequestGet(context) {
     const data = (results.results || []).map(r => ({
       ...r,
       created_at: r.created_at ? r.created_at.replace(' ', 'T') + 'Z' : null,
+      updated_at: r.updated_at ? r.updated_at.replace(' ', 'T') + 'Z' : null,
       is_system: (r.is_system === 1 || r.is_system === '1' || r.created_by === 'system') ? true : false
     }));
 
@@ -32,7 +33,8 @@ export async function onRequestGet(context) {
         title: '📜 必读公告',
         content: '<p>欢迎来到逗包用户广场！本平台采用"防君子不防小人"的原则运营。</p><p>请遵守以下基本规则：</p><ul><li>尊重他人，友善交流</li><li>不发布违法或不当内容</li><li>不滥用平台功能</li></ul><p>祝您使用愉快！</p>',
         created_by: 'system',
-        created_at: new Date().toISOString(),
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
         is_system: true
       });
     }

@@ -100,6 +100,13 @@ export async function onRequestPut(context) {
       return Response.json({ success: false, error: '无权操作，请先登录' }, { status: 403 });
     }
 
+    // 迁移：确保 security_question / security_answer / security_question_changed_at 列存在
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_answer TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question_changed_at TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN name_changed_at TEXT").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN bio_changed_at TEXT").run().catch(() => {});
+
     const body = await context.request.json().catch(() => ({}));
     const { action, password, invite_code, privacy_setting, avatar, name, bio } = body;
 
@@ -220,7 +227,8 @@ export async function onRequestPut(context) {
         }
       }
       // 对密保答案进行哈希处理（与密码相同的安全级别）
-      const hashedAnswer = await hashPassword(security_answer.trim().toLowerCase());
+      // 注意：不使用 toLowerCase()，因为中文没有大小写概念，且可能导致某些特殊字符处理异常
+      const hashedAnswer = await hashPassword(security_answer.trim());
       await env.DB.prepare(
         `UPDATE users SET security_question = ?, security_answer = ?, security_question_changed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
       ).bind(security_question.trim(), hashedAnswer, userId).run();

@@ -26,6 +26,11 @@ async function ensureTables(env) {
   }
   await env.DB.prepare("ALTER TABLE chat_channel_settings ADD COLUMN avatar_url TEXT").run().catch(function() {});
   await env.DB.prepare("ALTER TABLE users ADD COLUMN pat_suffix TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN security_answer TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question_changed_at TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN name_changed_at TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE users ADD COLUMN bio_changed_at TEXT").run().catch(function() {});
 }
 
 async function isAdminOrCreator(env, room_id, user_id) {
