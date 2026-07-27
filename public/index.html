@@ -562,7 +562,7 @@ function sanitizeCss(css) {
 function filterDangerousSelectors(css) {
   if (!css) return '';
   // 已知的应用级类名前缀，出现在选择器中时移除该规则
-  var appClassPattern = /\.(app-layout|app-sidebar|app-main|activity-bar|activity-item|activity-label|activity-icon|activity-badge|activity-dot|activity-spacer|sidebar-section|sidebar-header|sidebar-item|sidebar-item-icon|sidebar-item-text|sidebar-item-dot|sidebar-toggle|sidebar-toggle-btn|nav-bar|nav-user|nav-brand|modal-overlay|modal-title|modal-close|modal-header|chat-view-main|chat-view-center|chat-view-header|chat-view-body|chat-view-input|chat-view-context|view-header-bar|ctx-panel|ctx-panel-header|ctx-panel-body|friends-hero|login-required|mobile-overlay|activity-bar)\b/i;
+  var appClassPattern = /\.(app-layout|app-sidebar|app-main|activity-bar|activity-item|activity-label|activity-icon|activity-badge|activity-dot|activity-spacer|sidebar-section|sidebar-header|sidebar-item|sidebar-item-icon|sidebar-item-text|sidebar-item-dot|sidebar-toggle|sidebar-toggle-btn|nav-bar|nav-user|nav-brand|modal-overlay|modal-title|modal-close|modal-header|chat-view-main|chat-view-center|chat-view-header|chat-view-body|chat-view-input|chat-view-context|view-header-bar|ctx-panel|ctx-panel-header|ctx-panel-body|friends-hero|login-required|mobile-overlay|activity-bar|chat-msg|chat-msg-bubble|chat-msg-content|chat-msg-sender|chat-msg-time|chat-msg-left|chat-msg-right|chat-msg-inner|chat-msg-avatar|chat-msg-reply|chat-msgs|chat-reply-bar|chat-muted-banner|chat-input|chat-send-btn|chat-action-btn|chat-empty-inline|chat-date-separator|chat-reactions|chat-reaction-badge|chat-recall-btn|chat-room-item|chat-room-avatar|chat-room-list|chat-toolbar-btn|chat-context-empty|chat-back-btn|dp-rich-content)\b/i;
   
   var result = '';
   var i = 0;
@@ -741,6 +741,9 @@ function renderRichText(text) {
   if (/<[a-z][\s\S]*>/i.test(text)) {
     // 包含 HTML，先净化
     var sanitized = sanitizeHtml(text);
+    // 聊天消息中移除 <style> 标签，防止 CSS 影响全局布局和其他消息的气泡样式
+    // 用户仍可使用内联 style="..." 属性进行样式控制
+    sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
     // 在净化后的 HTML 上，只对文本节点做 linkify 和 @提及（避免破坏标签属性）
     return processHtmlTextNodes(sanitized);
   }
