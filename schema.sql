@@ -242,3 +242,50 @@ CREATE TABLE IF NOT EXISTS site_settings (
 -- 插入站点设置默认值（首次部署）：
 -- INSERT OR IGNORE INTO site_settings (key, value) VALUES ('maintenance_mode', 'off');
 -- INSERT OR IGNORE INTO site_settings (key, value) VALUES ('migration_mode', 'off');
+
+-- ===== 工具包整合迁移 =====
+-- features 表扩展：支持工具类型功能
+ALTER TABLE features ADD COLUMN tool_type TEXT;
+ALTER TABLE features ADD COLUMN tool_config TEXT;
+
+-- ===== 小肥羊讲堂（博客系统）=====
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  summary TEXT DEFAULT '',
+  cover_image TEXT,
+  tags TEXT DEFAULT '[]',
+  author_id TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  author_avatar TEXT,
+  author_doubao_id TEXT,
+  status TEXT DEFAULT 'published',
+  views INTEGER DEFAULT 0,
+  matrix_event_id TEXT,
+  matrix_room_url TEXT DEFAULT 'https://chat.freserafim.com/zh-CN/rooms/b9d7d6e7-191f-408b-b308-b210dbe1a764',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS blog_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  user_avatar TEXT,
+  content TEXT NOT NULL,
+  parent_id INTEGER DEFAULT 0,
+  pinned INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_blog_comments_post ON blog_comments(post_id);
+
+CREATE TABLE IF NOT EXISTS blog_announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  content TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_by_name TEXT NOT NULL,
+  pinned INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);

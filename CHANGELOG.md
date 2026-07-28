@@ -4,6 +4,183 @@
 
 ---
 
+## v4.8 — 2026-07-29
+
+### 小肥羊讲堂（博客系统）+ 工具框架升级 + IP注册限制
+
+#### 新增功能
+
+##### 1. 同IP注册数量上限限制
+- 在原有的「同IP每小时5次」频率限制基础上，新增「同IP最多10个账号」总数限制
+- 修改文件：`functions/api/users.js`
+
+##### 2. 小肥羊讲堂（博客系统）
+- **博客列表页**：知乎风格卡片布局，支持搜索、封面图、标签、阅读量显示
+- **博客阅读页**：文章正文（HTML渲染）+ 作者信息 + 标签 + Matrix房间链接 + 评论区
+- **博客编辑器**：标题、封面图URL、摘要、正文（支持HTML）、标签（逗号分隔最多5个）
+- **评论系统**：任何已登录用户可评论，评论作者/博客作者/开发者可删除
+- **公告系统**：开发者可发布/删除公告，公告在博客列表页顶部以横幅展示
+- **权限模型**：开发者=全权管理，博客作者=管理自己的文章和评论，普通用户=阅读和评论
+- **Matrix集成**：博客发布时自动通过 Matrix Client-Server API 发送到指定房间（需配置 `MATRIX_ACCESS_TOKEN` 环境变量，未配置时静默跳过）
+
+##### 3. 工具框架升级 — 新增 `page` 类型工具
+- 新增 `api_type: 'page'` 工具类型，支持独立子页面工具
+- `openToolPanel()` 函数新增 page 类型分发逻辑：检测 `page_handler` 字段并调用对应前端渲染函数
+- 博客系统作为首个 page 类型工具注册（id: `xfy_blog`，page_handler: `renderBlogPage`）
+
+##### 4. 可扩展工具框架文档
+- 新增 `TOOL_FRAMEWORK_GUIDE.md` — 完整的工具框架扩展教程
+- 涵盖5种工具类型（ai_chat/ai_image/proxy_get/direct_url/page）的添加方法
+- 包含工具定义字段说明、input_fields类型、result_type渲染类型
+
+#### 数据库变更
+- 新增 `blog_posts` 表：博客文章（标题、内容、摘要、封面图、标签、作者信息、浏览量、Matrix事件ID）
+- 新增 `blog_comments` 表：评论（支持嵌套回复、置顶）
+- 新增 `blog_announcements` 表：公告（开发者发布、置顶）
+- 需在 D1 Console 中执行 `schema.sql` 中新增的建表语句
+
+#### 新增文件
+- `functions/api/blog.js` — 博客列表查询 + 创建（含Matrix发布）
+- `functions/api/blog/[id].js` — 单篇博客 CRUD
+- `functions/api/blog/comments.js` — 评论管理
+- `functions/api/blog/announce.js` — 公告管理（仅开发者）
+- `functions/api/blog/publish.js` — 重新发布到Matrix
+- `TOOL_FRAMEWORK_GUIDE.md` — 工具框架扩展教程
+
+#### 修改文件
+- `schema.sql` — 新增 blog_posts/blog_comments/blog_announcements 建表语句
+- `functions/api/tools/registry.js` — 新增 xfy_blog 工具定义（page类型）
+- `public/index.html` — 新增 openToolPanel page类型支持 + 完整博客前端UI
+- `README.md` — 更新项目结构和功能清单
+
+---
+
+## v4.7 — 2026-07-28
+
+### 网站工具包系统（AI工具 + 免费API工具）
+
+#### 新增功能
+
+##### 1. 工具注册表（Tool Registry）
+
+**实现**：`functions/api/tools/registry.js` 统一管理所有工具定义，包含 12 个工具：
+- AI 类（4个）：AI对话、AI翻译、AI总结、AI画图（基于 Cloudflare Workers AI）
+- 免费 API 类（8个）：天气查询、二维码生成、IP查询、汇率查询、随机笑话、每日名言、头像生成、数学计算
+
+##### 2. AI 工具端点（`functions/api/tools/ai.js`）
+
+- 统一处理 AI 文本对话（SSE 流式输出）和图片生成
+- 基于 Cloudflare Workers AI 绑定（`env.AI`），支持 `@cf/zai-org/glm-4.7-flash`、`@cf/meta/llama-3.2-1b-instruct`、`@cf/black-forest-labs/flux-1-schnell` 等模型
+- 速率限制：每用户每小时 30 次（基于 `site_settings` 表）
+- Bearer Token 鉴权
+
+##### 3. 代理转发端点（`functions/api/tools/proxy.js`）
+
+- 转发免费公共 API 请求，避免前端 CORS 限制
+- 支持模板 URL（`{param}` 占位符）和查询参数两种模式
+- 天气工具内置地理编码前处理（城市名 → 经纬度）
+- 带超时控制（10秒）
+
+##### 4. 开发者界面第三种创建方法：网站工具
+
+- 功能管理界面新增「网站工具」链接类型
+- 开发者可从工具注册表中选择工具，创建为功能卡片
+- `features` 表扩展 `tool_type`、`tool_config` 列
+- 功能卡片显示工具图标 + "工具" 标签
+
+##### 5. 工具面板系统（前端）
+
+- 点击工具类功能卡片 → `openToolPanel()` 打开交互式面板
+- 动态渲染输入表单（文本框、下拉框、文本域）
+- AI 文本工具：SSE 流式输出，逐字显示，带光标动画
+- AI 图片工具：生成后显示图片 + 下载按钮
+- 天气工具：渲染天气卡片（当前天气 + 3天预报）
+- 汇率工具：渲染表格
+- 支持 6 种结果类型：`streaming_text`、`image`、`weather_card`、`json_card`、`table`、`text`
+
+##### 6. AI 对话历史本地缓存
+
+- AI 对话历史存储在浏览器 `localStorage`（`dp_ai_history_{toolId}`），不占用 D1 数据库空间
+- 保留最近 10 轮对话（20条消息），支持清空
+- 仅 `supports_history: true` 的工具启用多轮上下文
+
+#### 数据库变更
+
+- `features` 表新增 `tool_type TEXT`、`tool_config TEXT` 列
+- 移除 `ai_conversations` 表（改为 localStorage 存储）
+
+#### 文件变更
+
+- 新增：`functions/api/tools/registry.js`、`functions/api/tools/ai.js`、`functions/api/tools/proxy.js`
+- 删除：`functions/api/tools/ai-history.js`
+- 修改：`public/index.html`（工具面板系统、功能卡片支持工具类型、本地AI历史）
+- 修改：`public/style.css`（AI消息样式、工具面板样式）
+- 修改：`schema.sql`（移除 ai_conversations 表）
+- 修改：`functions/api/chat/index.js`（移除 ai_conversations 迁移）
+- 修改：`functions/api/features.js`（支持 tool_type/tool_config）
+
+#### 部署要求
+
+1. 在 Cloudflare Dashboard → Settings → Functions → AI bindings 中配置 AI 绑定（变量名 `AI`）
+2. 执行 `schema.sql` 中的工具包迁移语句（如已有数据库）
+
+---
+
+## v4.6 — 2026-07-28
+
+### 公开频道管理 + 频道公告权限深度修复 + 开发者界面新增标签
+
+#### 新增功能
+
+##### 1. 公开频道管理（开发者后台）
+
+**需求**：开发者可以从现有频道中选取特定频道作为"公开频道"，无需用户手动加入即默认显示在所有用户的频道列表中，并支持独立的公开频道分组管理。
+
+**实现**：
+1. Supabase 新增 `public_channels` 表（`id`, `room_id`, `group_name`, `sort_order`, `created_at`），含索引和 RLS 策略（所有人可读，开发者可写）
+2. 开发者界面新增「📡 公开频道」标签页（第5个标签）
+3. 管理界面展示所有频道列表，可通过勾选框将频道设为/取消公开
+4. 公开频道支持分组管理：新建分组、为公开频道选择分组、删除分组（删除后频道归入"默认分组"）
+5. `loadRoomList` 中获取公开频道数据，过滤掉用户已加入的频道后存入 `chatState.publicChannels`
+6. `renderRoomList` 中新增「📡 公开频道」区块，按分组归类展示，点击可一键加入频道
+7. 新增 `publicChannelItemHTML`、`joinPublicChannel` 函数
+8. 未加入任何频道的用户也能看到公开频道列表
+
+**数据流**：`public_channels` 表 → `loadRoomList` 获取 → `chatState.publicChannels` → `renderRoomList` 按分组渲染 → 用户点击加入
+
+---
+
+#### 故障修复
+
+##### 2. 频道公告：开发者和管理员创建的公告不可见（深度老bug）
+
+**现象**：频道内只有创建者的公告能被看见并置顶，开发者和管理者创建的公告看不见。
+
+**根因**（三重）：
+1. `checkChannelPermission` 函数检查 `chat_room_members` 表而非 `chat_admins` 表来判断管理员权限，导致权限判断不一致——该函数用于控制频道设置弹窗中的"+ 发布"按钮显示，以及用户弹窗中的管理操作
+2. `getPermissionLevel` 函数在 `chatState.rooms` 中找不到房间时直接返回 0，跳过了 `chat_admins` 表检查——当房间数据未及时加载时，管理员权限被错误地判定为 0
+3. 频道上下文面板（右侧栏）和频道设置弹窗均使用 `channelAnnouncementList` 作为元素 ID，当两者同时存在于 DOM 中时，`getElementById` 返回第一个匹配元素，导致公告内容加载到错误的容器中
+
+**修复**：
+1. `checkChannelPermission`：改为统一调用 `getPermissionLevel(roomId, currentUser.id) >= 1`，确保开发者(3)、创建者(2)、管理员(1)均通过权限检查
+2. `getPermissionLevel`：移除 `if (!room) return 0` 的提前返回，改为 `if (room && room.created_by === userId) return 2`——即使房间不在 `chatState.rooms` 中，仍会继续检查 `chat_admins` 表
+3. 频道设置弹窗中的公告列表和工具列表改用独立元素 ID（`settingsChannelAnnouncementList`、`settingsChannelToolList`）
+4. `loadChannelAnnouncements` 和 `loadChannelTools` 新增 `containerId` 可选参数，支持指定目标容器
+5. `saveAnnouncement` 和 `deleteChannelAnnouncement` 操作后同时刷新上下文面板和设置弹窗的公告列表
+
+**权限体系**：开发者(3) > 创建者(2) > 管理员(1) > 普通成员(0)，管理员及以上均可管理公告。
+
+---
+
+#### 修改文件
+
+- `public/index.html` — 公开频道管理界面及函数、公告权限三重修复、元素 ID 去重
+- `supabase-migration.sql` — 新增 `public_channels` 表及 RLS 策略
+- `README.md` — 功能清单新增公开频道
+- `CHANGELOG.md` — 本条目
+
+---
+
 ## v4.5 — 2026-07-25
 
 ### 频道公告弹窗阅读 + 公告权限修复 + 设置页新内容不可见修复

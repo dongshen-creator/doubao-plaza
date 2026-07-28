@@ -35,8 +35,16 @@ doubao-plaza/
 │   │   ├── blocked.js             # 黑名单
 │   │   ├── reports.js             # 举报
 │   │   ├── announcements.js       # 公告
-│   │   ├── features.js            # 功能图标
+│   │   ├── features.js            # 功能图标（支持外部链接/本地页面/网站工具）
 │   │   ├── custom-pages.js        # 自定义页面 CRUD
+│   │   ├── blog.js                # 小肥羊讲堂 - 博客列表/创建
+│   │   ├── blog/[id].js           # 博客单篇 CRUD
+│   │   ├── blog/comments.js       # 博客评论管理
+│   │   ├── blog/announce.js       # 博客公告管理（仅开发者）
+│   │   ├── blog/publish.js        # 博客重新发布到 Matrix
+│   │   ├── tools/registry.js      # 工具注册表（所有工具定义，含 page 类型）
+│   │   ├── tools/ai.js            # AI 工具端点（对话/翻译/总结/画图）
+│   │   ├── tools/proxy.js         # 免费 API 代理转发
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
 │   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
 │   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
@@ -49,6 +57,7 @@ doubao-plaza/
 ├── schema.sql                     # D1 数据库初始化脚本
 ├── supabase-migration.sql         # Supabase 数据库迁移脚本（唯一文件，幂等可重复执行）
 ├── d1-cleanup.sql                 # D1 过期记录清理脚本
+├── TOOL_FRAMEWORK_GUIDE.md        # 网站工具框架扩展教程
 ├── README.md                      # 本文件
 └── CHANGELOG.md                   # 更新说明
 
@@ -109,7 +118,7 @@ pages（与网站项目无关）/
    > 只需要创建 `pages` 一个桶。聊天图片上传优先使用 picgo.net 图床，tmpfile.link 作为第二选择，R2 作为兜底，不需要额外存储桶。
 
 **验证**：
-- SQL Editor 中执行 `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`，应看到 `chat_rooms`、`chat_messages` 等约 14 张表
+- SQL Editor 中执行 `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`，应看到 `chat_rooms`、`chat_messages`、`public_channels` 等约 15 张表
 - Storage 页面应看到 `pages` 桶
 
 ---
@@ -198,6 +207,19 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 ---
 
+### 第六步之三：绑定 Workers AI（可选，启用网站工具包的 AI 功能）
+
+网站工具包系统中的 AI 工具（AI对话、AI翻译、AI总结、AI画图）依赖 Cloudflare Workers AI：
+
+1. 进入 Cloudflare Dashboard → 你的 Pages 项目 → **Settings** → **Functions**
+2. 找到 **AI bindings**，点击 **Add binding**
+3. **Variable name** 填 `AI`，选择你的 Workers AI
+4. 点击 **Save**
+
+> 未绑定 AI 时，非 AI 工具（天气查询、二维码生成等）仍可正常使用，AI 类工具会返回 503 错误提示。
+
+---
+
 ### 第七步：重新部署
 
 1. 进入 **Deployments** 标签，找到最新的部署，点击 **Retry deployment**（或推送任意 commit 到 GitHub 触发重新部署）
@@ -227,7 +249,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 > **备选方式**：也可以在 `functions/api/custom-pages.js`、`functions/api/announcements.js` 等文件顶部的 `DEV_IDS` 数组中添加你的 `doubao_id`，然后重新部署。
 
-**验证**：登录后能看到开发者面板，可以管理公告、创建自定义页面。
+**验证**：登录后能看到开发者面板，可以管理公告、创建自定义页面、管理公开频道。
 
 ---
 
@@ -251,7 +273,12 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | 暗色模式 | 点击右上角主题切换按钮 | 全站切换为暗色，包括聊天界面 |
 | 开发者-公告 | 开发者面板→公告管理 | 可创建/编辑/删除公告 |
 | 开发者-自定义页面 | 开发者面板→页面管理 | 可创建 HTML 页面并上传文件 |
+| 开发者-公开频道 | 开发者面板→公开频道 | 勾选频道设为公开，设置分组，用户端自动显示 |
+| 公开频道（用户端） | 聊天侧边栏频道列表 | 未加入的公开频道显示在「📡 公开频道」区块，点击加入 |
 | 自定义页面访问 | 访问 `/pages/{页面ID}` | 页面正常渲染，带登录墙 |
+| 小肥羊讲堂 | 功能界面→小肥羊讲堂 | 显示博客列表，可发布/阅读/评论 |
+| 博客公告 | 开发者在讲堂中点击「管理公告」 | 可发布/删除公告，公告在列表页横幅展示 |
+| IP注册限制 | 同IP注册超过10个 | 返回「该网络的注册账号数量已达上限」 |
 
 ---
 
@@ -263,6 +290,8 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | `SUPABASE_ANON_KEY` | `public/index.html` 第 17 行 | Supabase 公开密钥 |
 | `DB` | Cloudflare Pages → D1 binding | D1 数据库绑定变量名 |
 | `PAGES_BUCKET` | Cloudflare Pages → R2 binding | R2 存储桶绑定变量名（聊天文件上传） |
+| `AI` | Cloudflare Pages → AI binding | Workers AI 绑定变量名（网站工具包 AI 功能，可选） |
+| `MATRIX_ACCESS_TOKEN` | Cloudflare Pages → Environment variables | Matrix 访问令牌（博客发布到 Matrix 房间，可选） |
 | Storage 桶 `pages` | Supabase Storage | 开发者文件托管（公开桶） |
 
 > **R2 配置说明**：聊天图片/文件上传使用 Cloudflare R2（`PAGES_BUCKET` 绑定），需在 Pages 设置中配置 R2 绑定（见第六步半）。开发者文件托管仍使用 Supabase Storage 的 `pages` 桶。
@@ -304,14 +333,38 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - 频道分组管理（个人设置「频道」标签页 + 侧边栏分组筛选，localStorage 存储）
 - 频道公告（富文本 HTML + 置顶 + 可见性控制 + 弹窗阅读 + 管理员及以上可发布）
 - 频道工具（快捷链接管理）
+- 公开频道（开发者选取特定频道设为公开，所有用户默认可见，支持公开频道分组，一键加入）
 - 入群申请审核（频道顶部横幅 + 实时推送通知）
 - 消息自动清理（7天保留策略，pg_cron 定时执行）
 
 ### 开发者后台
 - 公告管理（CRUD + 富媒体插入）
-- 功能图标管理
+- 功能图标管理（外部链接 / 本地页面 / 网站工具三种创建方式）
 - 自定义页面（HTML 托管 + Supabase Storage 文件上传）
 - 文件管理（Supabase Storage `pages` 桶）
+- 公开频道管理（选取频道设为公开 + 独立分组管理 + 所有用户默认可见）
+
+### 网站工具包系统
+- **AI 工具**（基于 Cloudflare Workers AI）：AI对话（多轮上下文，历史存 localStorage）、AI翻译、AI总结、AI画图
+- **免费 API 工具**：天气查询（3天预报）、二维码生成、IP查询、汇率查询、随机笑话、每日名言、头像生成、数学计算（求导/积分/因式分解等）
+- **页面类工具**：小肥羊讲堂（博客平台）— 知乎风格 UI，支持发布/编辑/删除文章、评论、公告
+- 工具框架支持 5 种类型：ai_chat / ai_image / proxy_get / direct_url / page（详见 `TOOL_FRAMEWORK_GUIDE.md`）
+- 开发者可从工具注册表中选择工具创建为功能卡片，用户点击后在工具面板中交互式使用
+- AI 对话历史存储在浏览器本地，不占用 D1 数据库空间
+
+### 小肥羊讲堂（博客系统）
+- 知乎风格博客平台，作为「网站工具」在功能界面展示
+- **博客发布**：任何已登录用户可发布博客（标题、正文HTML、封面图、摘要、标签）
+- **博客阅读**：文章页支持 HTML 渲染、标签展示、Matrix 房间链接
+- **评论系统**：评论作者/博客作者/开发者可删除评论
+- **公告机制**：开发者可发布/删除公告，公告在博客列表顶部横幅展示
+- **Matrix 集成**：博客发布时自动发送到 Matrix 房间（需配置 `MATRIX_ACCESS_TOKEN`，未配置时静默跳过）
+- **权限模型**：开发者=全权管理，博客作者=管理自己的文章和评论，普通用户=阅读和评论
+
+### 注册安全
+- 同 IP 每小时最多注册 5 次（频率限制）
+- 同 IP 最多注册 10 个账号（总数限制，防止批量注册）
+- 设备指纹检测（可选，不阻塞注册）
 
 ### 主题
 - 亮色/暗色模式无缝切换
@@ -390,7 +443,7 @@ Tavern 依赖 `functions/api/proxy.js` 作为 CORS 代理，用于转发不支�
 
 ### 数据库分工
 - **D1 (SQLite)**：账户体系、好友关系、黑名单、举报、公告、频道元数据
-- **Supabase (PostgreSQL)**：聊天消息、表情反应、未读计数、实时推送、在线状态（user_presence）、频道公告
+- **Supabase (PostgreSQL)**：聊天消息、表情反应、未读计数、实时推送、在线状态（user_presence）、频道公告、公开频道
 - **picgo.net**：聊天图片上传首选图床（Chevereto API，需 API Key）
 - **tmpfile.link**：聊天图片/视频/文件上传第二选择（匿名上传，支持 iframe 预览嵌入）
 - **Cloudflare R2**：聊天图片/文件上传兜底存储（picgo.net 和 tmpfile.link 均失败时回退使用，通过 `/cdn-assets/` 路径访问）

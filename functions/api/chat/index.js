@@ -31,6 +31,9 @@ async function ensureTables(env) {
   await env.DB.prepare("ALTER TABLE users ADD COLUMN security_question_changed_at TEXT").run().catch(function() {});
   await env.DB.prepare("ALTER TABLE users ADD COLUMN name_changed_at TEXT").run().catch(function() {});
   await env.DB.prepare("ALTER TABLE users ADD COLUMN bio_changed_at TEXT").run().catch(function() {});
+  // 工具包整合迁移
+  await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_type TEXT").run().catch(function() {});
+  await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_config TEXT").run().catch(function() {});
 }
 
 async function isAdminOrCreator(env, room_id, user_id) {

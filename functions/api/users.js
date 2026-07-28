@@ -149,7 +149,7 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '主页链接格式不正确，请填写以 http:// 或 https:// 开头的链接' });
     }
 
-    // IP 频率限制：同 IP 1 小时内最多注册 3 次（轻量防刷）
+    // IP 频率限制：同 IP 1 小时内最多注册 5 次（轻量防刷）
     const clientIP = context.request.headers.get('CF-Connecting-IP')
       || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
       || 'unknown';
@@ -158,6 +158,14 @@ export async function onRequestPost(context) {
     ).bind(clientIP).first();
     if (recentRegs && recentRegs.cnt >= 5) {
       return Response.json({ success: false, error: '该网络注册过于频繁，请 1 小时后再试' });
+    }
+
+    // IP 总数限制：同 IP 最多注册 10 个账号（防止批量注册）
+    const totalRegs = await env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM users WHERE registered_ip = ?`
+    ).bind(clientIP).first();
+    if (totalRegs && totalRegs.cnt >= 10) {
+      return Response.json({ success: false, error: '该网络的注册账号数量已达上限' });
     }
 
     // 检查设备指纹（同一设备是否已注册过）

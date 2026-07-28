@@ -879,6 +879,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-msg-inner{display:flex;align-items:flex-start;gap:8px}
 .chat-msg-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px}
 
+/* AI 消息气泡 */
+.ai-msg-bubble{background:linear-gradient(135deg,#f0f7ff,#e8f4fd);border:1px solid #b8d9f5;border-radius:12px;padding:10px 14px;max-width:100%;font-size:13px;line-height:1.6;color:var(--text-primary);overflow-wrap:anywhere;word-break:break-word}
+.ai-msg-bubble img{max-width:280px;border-radius:8px;display:block;margin:4px 0}
+.ai-thinking{color:var(--text-faint);font-style:italic;display:flex;align-items:center;gap:6px}
+.ai-thinking::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);animation:aiPulse 1s infinite}
+@keyframes aiPulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+.ai-error{color:#e74c3c;font-size:13px}
+.ai-cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;vertical-align:text-bottom;animation:aiBlink 0.8s infinite}
+@keyframes aiBlink{0%,100%{opacity:1}50%{opacity:0}}
+.ai-cmd-hint{font-size:11px;color:var(--text-faint);padding:2px 16px 0;background:var(--bg-secondary)}
+.ai-cmd-hint code{background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent)}
+
+/* 工具面板 */
+.tool-panel{max-width:640px;margin:0 auto;padding:16px}
+.tool-card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.tool-desc{font-size:13px;color:var(--text-faint);margin-bottom:16px;line-height:1.5}
+.tool-field{margin-bottom:14px}
+.tool-field label{display:block;font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.tool-field input,.tool-field textarea,.tool-field select{width:100%;border:1.5px solid var(--border-strong);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--bg-primary);color:var(--text-primary);outline:none;transition:border-color .2s}
+.tool-field input:focus,.tool-field textarea:focus,.tool-field select:focus{border-color:var(--accent)}
+.tool-field textarea{min-height:80px;resize:vertical;font-family:inherit}
+.tool-result{background:var(--bg-secondary);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:80px}
+.tool-result-empty{color:var(--text-faint);text-align:center;padding:24px;font-size:13px}
+.tool-result-card{background:var(--bg-primary);border-radius:10px;padding:16px;border:1px solid var(--border)}
+.tool-weather-day{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tool-weather-day:last-child{border-bottom:none}
+.tool-table{width:100%;border-collapse:collapse;font-size:13px}
+.tool-table th,.tool-table td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.tool-table th{background:var(--bg-hover);font-weight:600}
+.tool-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--text-faint);font-size:13px}
+.tool-loading::after{content:'';width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:toolSpin 0.8s linear infinite}
+@keyframes toolSpin{to{transform:rotate(360deg)}}
+
 /* 聊天消息操作栏 */
 .chat-msg-actions{display:flex;gap:2px;margin-top:2px;opacity:0;transition:opacity .2s}
 .chat-msg:hover .chat-msg-actions{opacity:1}
