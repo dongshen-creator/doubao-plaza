@@ -32,7 +32,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=43">
+  <link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
 
@@ -2475,9 +2475,6 @@ async function blogShowList(container) {
     try { window.__blogSunEditor.destroy(); } catch(e) {}
     window.__blogSunEditor = null;
   }
-  // 恢复 app-main 的 overflow
-  var appMain = document.getElementById('mainContent');
-  if (appMain) appMain.style.overflow = '';
   blogState.currentView = 'list';
   var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
@@ -2662,9 +2659,6 @@ async function blogShowPost(container, postId) {
     try { window.__blogSunEditor.destroy(); } catch(e) {}
     window.__blogSunEditor = null;
   }
-  // 恢复 app-main 的 overflow
-  var appMain = document.getElementById('mainContent');
-  if (appMain) appMain.style.overflow = '';
   blogState.currentView = 'post';
   blogState.currentPostId = postId;
   container.innerHTML = '<div id="blogPostView" style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
@@ -2732,10 +2726,6 @@ function blogShowEditor(container, postId) {
   blogState.editorState = { postId: postId || null, sunEditor: null };
   var isEdit = !!postId;
 
-  // 编辑器激活时取消 app-main 的 overflow 限制，防止下拉菜单被裁剪
-  var appMain = document.getElementById('mainContent');
-  if (appMain) appMain.style.overflow = 'visible';
-
   // 销毁旧的 SunEditor 实例
   if (window.__blogSunEditor) {
     try { window.__blogSunEditor.destroy(); } catch(e) {}
@@ -2743,11 +2733,7 @@ function blogShowEditor(container, postId) {
   }
 
   container.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-      '<button class="btn btn-gray" style="font-size:12px;padding:4px 12px" onclick="blogShowList(blogState.container)">← 返回列表</button>' +
-      '<button class="btn btn-gray" style="font-size:12px;padding:4px 12px" onclick="blogShowList(blogState.container)">取消</button>' +
-    '</div>' +
-    '<div style="max-width:760px;margin:0 auto">' +
+    '<div style="max-width:100%;margin:0 auto">' +
       '<h3 style="font-size:18px;font-weight:700;margin-bottom:20px">' + (isEdit ? '编辑文章' : '写文章') + '</h3>' +
       '<div style="margin-bottom:16px">' +
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">标题</label>' +
