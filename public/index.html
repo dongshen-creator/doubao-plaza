@@ -57,6 +57,7 @@
     <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-label">频道</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span><span class="activity-label">公告</span><span class="activity-dot" id="actBarAnnouncementDot" style="display:none"></span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🎯</span><span class="activity-label">功能</span></button>
+    <button class="activity-item" data-view="blog" onclick="switchView('blog')" title="讲堂" aria-label="讲堂"><span class="activity-icon">📝</span><span class="activity-label">讲堂</span></button>
     <div class="activity-spacer"></div>
     <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span><span class="activity-label">主题</span></button>
     <button class="activity-item" id="actBarDeveloperBtn" onclick="showModal('developer')" title="开发者" aria-label="开发者" style="display:none"><span class="activity-icon">🛠</span><span class="activity-label">开发者</span></button>
@@ -1451,6 +1452,7 @@ function switchView(view) {
     else if (view === 'announcements') renderAnnouncementsView(sidebar, main);
     else if (view === 'features') renderFeaturesView(sidebar, main);
     else if (view === 'chat') renderChatView(sidebar, main);
+    else if (view === 'blog') renderBlogView(sidebar, main);
   } catch(e) {
     console.error('switchView render error:', e);
     // 渲染失败时显示错误信息
@@ -2097,7 +2099,13 @@ async function openToolPanel(toolId, title) {
 
   var main = document.getElementById('mainContent');
 
-  // === 页面类工具：调用 page_handler 渲染独立子页面 ===
+  // === 页面类工具：博客直接切换到独立视图 ===
+  if (tool.api_type === 'page' && tool.page_handler === 'renderBlogPage') {
+    switchView('blog');
+    return;
+  }
+
+  // === 页面类工具：其他 page 类型调用 page_handler 渲染 ===
   if (tool.api_type === 'page' && tool.page_handler) {
     var handlerFn = window[tool.page_handler];
     if (typeof handlerFn === 'function') {
@@ -2375,7 +2383,70 @@ function weatherCodeToText(code) {
 }
 
 // ===== 小肥羊讲堂（博客系统）=====
-var blogState = { currentView: 'list', currentPostId: null, currentUser: null };
+var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null };
+
+// 博客独立视图渲染（左侧导航栏入口）
+function renderBlogView(sidebar, main) {
+  if (!currentUser) {
+    sidebar.classList.remove('has-content');
+    sidebar.innerHTML = '';
+    main.innerHTML = '<div class="login-required" style="text-align:center;padding:48px 24px"><div class="welcome-icon" style="margin-bottom:24px">🔒</div><h3 style="font-size:20px;font-weight:700;color:var(--text-primary)">请先登录</h3><p style="font-size:14px;color:var(--text-faint);margin-top:8px">登录后即可阅读和发布博客</p><button class="btn btn-orange" style="padding:12px 32px;font-size:15px;border-radius:12px;margin-top:20px" onclick="showModal(\'login\')">立即登录</button></div>';
+    return;
+  }
+
+  var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+
+  // 侧边栏：公告 + 快捷操作
+  sidebar.classList.add('has-content');
+  sidebar.innerHTML =
+    '<div class="sidebar-section">' +
+      '<div class="sidebar-section-title">📝 小肥羊讲堂</div>' +
+      '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowList(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">📋</span><span class="sidebar-item-text">文章列表</span></div>' +
+      '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowEditor(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">✍</span><span class="sidebar-item-text">写文章</span></div>' +
+      (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogToggleAnnouncementMgr()"><span class="sidebar-item-icon">📢</span><span class="sidebar-item-text">管理公告</span></div>' : '') +
+    '</div>' +
+    '<div class="sidebar-section">' +
+      '<div class="sidebar-section-title">🔍 搜索</div>' +
+      '<input id="blogSearchInput" type="text" placeholder="搜索文章..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px" onkeyup="if(event.key===\'Enter\')blogLoadList()">' +
+    '</div>' +
+    '<div class="sidebar-section">' +
+      '<div id="blogSidebarAnnouncements" style="font-size:12px;color:var(--text-faint)">加载公告中...</div>' +
+    '</div>';
+
+  // 主区域：博客内容
+  main.innerHTML =
+    '<div class="view-header-bar">' +
+      '<span style="font-size:15px;font-weight:600">📝 小肥羊讲堂</span>' +
+    '</div>' +
+    '<div id="blogMainArea" style="padding:16px;max-width:800px;margin:0 auto"></div>';
+
+  blogState.container = document.getElementById('blogMainArea');
+  blogState.currentUser = currentUser;
+  blogShowList(blogState.container);
+
+  // 加载侧边栏公告摘要
+  blogLoadSidebarAnnouncements();
+}
+
+// 侧边栏公告摘要
+async function blogLoadSidebarAnnouncements() {
+  try {
+    var res = await fetch('/api/blog/announce');
+    var data = await res.json();
+    var el = document.getElementById('blogSidebarAnnouncements');
+    if (!el) return;
+    if (data.success && data.data && data.data.length > 0) {
+      el.innerHTML = data.data.map(function(a) {
+        return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="color:var(--text-secondary)">' + esc(a.content.substring(0, 60)) + (a.content.length > 60 ? '...' : '') + '</div><div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + esc(a.created_by_name) + '</div></div>';
+      }).join('');
+    } else {
+      el.innerHTML = '暂无公告';
+    }
+  } catch(e) {
+    var el2 = document.getElementById('blogSidebarAnnouncements');
+    if (el2) el2.innerHTML = '公告加载失败';
+  }
+}
 
 function renderBlogPage(container, tool) {
   blogState.container = container;
@@ -2409,7 +2480,14 @@ async function blogShowList(container) {
 // --- 公告管理面板 ---
 async function blogToggleAnnouncementMgr() {
   var panel = document.getElementById('blogAnnouncementMgr');
-  if (!panel) return;
+  if (!panel) {
+    // 不在列表页时，先切回列表页再打开公告管理
+    if (blogState.container) {
+      await blogShowList(blogState.container);
+      panel = document.getElementById('blogAnnouncementMgr');
+    }
+    if (!panel) return;
+  }
   if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
   panel.style.display = '';
   panel.innerHTML = '<div style="color:var(--text-faint);font-size:13px;padding:8px">加载中...</div>';
