@@ -249,6 +249,14 @@ ALTER TABLE features ADD COLUMN tool_type TEXT;
 ALTER TABLE features ADD COLUMN tool_config TEXT;
 
 -- ===== 小肥羊讲堂（博客系统）=====
+CREATE TABLE IF NOT EXISTS blog_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS blog_posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -261,12 +269,16 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   author_avatar TEXT,
   author_doubao_id TEXT,
   status TEXT DEFAULT 'published',
+  category_id INTEGER DEFAULT NULL,
+  reject_reason TEXT DEFAULT '',
   views INTEGER DEFAULT 0,
   matrix_event_id TEXT,
   matrix_room_url TEXT DEFAULT 'https://chat.freserafim.com/zh-CN/rooms/b9d7d6e7-191f-408b-b308-b210dbe1a764',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category_id);
 
 CREATE TABLE IF NOT EXISTS blog_comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

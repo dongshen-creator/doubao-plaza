@@ -1,6 +1,7 @@
 // Cloudflare Pages Function - Single Blog Post API
 // GET    /api/blog/[id]  - 获取单篇博客文章（含完整 content），并增加 views 计数
-// PUT    /api/blog/[id]  - 更新博客文章（仅作者本人或开发者可操作）
+// PUT    /api/blog/[id]  - 更新博客文章（仅作者本人或开发者可操作；支持 category_id 更新）
+// PATCH  /api/blog/[id]  - 审核操作（仅开发者）：approve 通过 / reject 驳回
 // DELETE /api/blog/[id]  - 删除博客文章（仅作者本人或开发者可操作，同时删除关联评论）
 
 // ===== 常量 =====
@@ -11,7 +12,7 @@ const DEV_IDS = ['470208447', 'East_pairs'];
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
@@ -77,6 +78,13 @@ function sanitizeHtml(html) {
   return cleaned;
 }
 
+// 从 context.params.id 取出文章 ID（注意可能是数组，取第一项）
+function getPostId(context) {
+  let id = context.params && context.params.id;
+  if (Array.isArray(id)) id = id[0];
+  return id || null;
+}
+
 // ===== 预检请求 =====
 export async function onRequestOptions(context) {
   return new Response(null, {
@@ -93,7 +101,7 @@ export async function onRequestGet(context) {
 
   try {
     const { env } = context;
-    const postId = context.params && context.params.id;
+    const postId = getPostId(context);
 
     if (!postId) {
       return jsonResponse({ success: false, error: '缺少博客文章 ID' });
@@ -133,7 +141,7 @@ export async function onRequestPut(context) {
 
   try {
     const { env, request } = context;
-    const postId = context.params && context.params.id;
+    const postId = getPostId(context);
 
     if (!postId) {
       return jsonResponse({ success: false, error: '缺少博客文章 ID' });
@@ -162,7 +170,7 @@ export async function onRequestPut(context) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { title, content, summary, cover_image, tags, status } = body;
+    const { title, content, summary, cover_image, tags, status, category_id } = body;
 
     // 构建动态更新字段
     const updates = [];
@@ -196,9 +204,42 @@ export async function onRequestPut(context) {
       updates.push('tags = ?');
       params.push(Array.isArray(tags) ? JSON.stringify(tags) : (tags || '[]'));
     }
-    if (status !== undefined) {
-      updates.push('status = ?');
-      params.push(status);
+
+    // status 更新规则：
+    // - 普通用户：不能通过 PUT 改 status（始终忽略）
+    // - 开发者编辑他人文章：不能改 status（请使用 PATCH 审核接口）
+    // - 开发者编辑自己文章：可以改 status
+    const allowStatusChange = isDev && isAuthor;
+    if (status !== undefined && allowStatusChange) {
+      if (['pending', 'published', 'rejected'].includes(status)) {
+        updates.push('status = ?');
+        params.push(status);
+        // 改为 published 时清空驳回理由
+        if (status === 'published') {
+          updates.push('reject_reason = ?');
+          params.push('');
+        }
+      }
+    }
+
+    // category_id 更新：传 0/null/空字符串 表示移除分类
+    if (category_id !== undefined) {
+      if (category_id === null || category_id === '' || String(category_id) === '0') {
+        updates.push('category_id = ?');
+        params.push(null);
+      } else {
+        const catId = parseInt(category_id, 10);
+        if (!isNaN(catId)) {
+          const cat = await env.DB.prepare(
+            `SELECT id FROM blog_categories WHERE id = ?`
+          ).bind(catId).first();
+          if (!cat) {
+            return jsonResponse({ success: false, error: '所选分类不存在' });
+          }
+          updates.push('category_id = ?');
+          params.push(catId);
+        }
+      }
     }
 
     if (updates.length === 0) {
@@ -228,6 +269,85 @@ export async function onRequestPut(context) {
   }
 }
 
+// ===== PATCH: 审核操作（仅开发者） =====
+// body: { action: 'approve' | 'reject', reason?: string }
+// approve -> status='published', reject_reason=''
+// reject  -> status='rejected', reject_reason=reason
+export async function onRequestPatch(context) {
+  if (!context.env || !context.env.DB) {
+    return jsonResponse({ success: false, error: '数据库未绑定，请在 Cloudflare Pages 设置中绑定 D1 数据库' }, 500);
+  }
+
+  try {
+    const { env, request } = context;
+    const postId = getPostId(context);
+
+    if (!postId) {
+      return jsonResponse({ success: false, error: '缺少博客文章 ID' });
+    }
+
+    // 鉴权
+    const authUserId = await getAuthUserId(env, request);
+    if (!authUserId) {
+      return jsonResponse({ success: false, error: '请先登录' }, 403);
+    }
+
+    // 仅开发者可审核
+    const isDev = await isDeveloper(env, authUserId);
+    if (!isDev) {
+      return jsonResponse({ success: false, error: '无权操作，仅开发者可审核文章' }, 403);
+    }
+
+    // 查询文章是否存在
+    const post = await env.DB.prepare(
+      `SELECT id, status FROM blog_posts WHERE id = ?`
+    ).bind(postId).first();
+
+    if (!post) {
+      return jsonResponse({ success: false, error: '博客文章不存在' }, 404);
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { action, reason } = body;
+
+    if (!action) {
+      return jsonResponse({ success: false, error: '缺少 action 参数（approve 或 reject）' });
+    }
+
+    if (action === 'approve') {
+      // 通过审核：status -> published，清空驳回理由
+      await env.DB.prepare(
+        `UPDATE blog_posts SET status = 'published', reject_reason = '', updated_at = datetime('now') WHERE id = ?`
+      ).bind(postId).run();
+    } else if (action === 'reject') {
+      // 驳回：需要 reason
+      if (!reason || !String(reason).trim()) {
+        return jsonResponse({ success: false, error: '驳回需要提供 reason 字段' });
+      }
+      await env.DB.prepare(
+        `UPDATE blog_posts SET status = 'rejected', reject_reason = ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(String(reason).trim(), postId).run();
+    } else {
+      return jsonResponse({ success: false, error: '无效的 action，仅支持 approve 或 reject' });
+    }
+
+    // 查询更新后的文章
+    const updatedPost = await env.DB.prepare(
+      `SELECT * FROM blog_posts WHERE id = ?`
+    ).bind(postId).first();
+
+    updatedPost.tags = safeParseTags(updatedPost.tags);
+    updatedPost.created_at = formatDate(updatedPost.created_at);
+    updatedPost.updated_at = formatDate(updatedPost.updated_at);
+
+    const message = action === 'approve' ? '文章已通过审核并发布' : '文章已驳回';
+
+    return jsonResponse({ success: true, data: updatedPost, message });
+  } catch (e) {
+    return jsonResponse({ success: false, error: '审核操作失败：' + e.message }, 500);
+  }
+}
+
 // ===== DELETE: 删除博客文章（仅作者本人或开发者可操作，同时删除关联评论） =====
 export async function onRequestDelete(context) {
   if (!context.env || !context.env.DB) {
@@ -236,7 +356,7 @@ export async function onRequestDelete(context) {
 
   try {
     const { env, request } = context;
-    const postId = context.params && context.params.id;
+    const postId = getPostId(context);
 
     if (!postId) {
       return jsonResponse({ success: false, error: '缺少博客文章 ID' });
