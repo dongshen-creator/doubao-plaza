@@ -2785,21 +2785,38 @@ function blogShowEditor(container, postId) {
   var textarea = document.getElementById('blogContentTextarea');
   if (textarea && typeof SUNEDITOR !== 'undefined') {
     var se = SUNEDITOR.create(textarea, {
-      height: 'auto',
-      minHeight: '400px',
+      height: '400px',
+      minHeight: '300px',
+      maxHeight: '800px',
       width: '100%',
+      resizingBar: true,
+      showPathLabel: true,
+      resizeEnable: true,
       buttonList: [
         ['undo', 'redo'],
         ['font', 'fontSize', 'formatBlock'],
         ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
         ['fontColor', 'hiliteColor', 'textStyle'],
         ['removeFormat'],
-        ['paragraphStyle', 'align', 'horizontalRule', 'list', 'indent', 'outdent'],
+        ['indent', 'outdent'],
+        ['align', 'horizontalRule', 'list', 'lineHeight'],
+        ['blockquote', 'paragraphStyle'],
         ['table', 'link', 'image', 'video'],
-        ['fullScreen', 'codeView']
+        ['fullScreen', 'showBlocks', 'codeView'],
+        ['preview', 'print']
       ],
       font: ['Arial', 'Courier New', 'Georgia', 'Microsoft YaHei', 'SimSun', 'Tahoma', 'Times New Roman', 'Verdana'],
       fontSize: [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32],
+      fontSizeUnit: 'px',
+      lineHeights: [
+        {text: '1', value: 1},
+        {text: '1.15', value: 1.15},
+        {text: '1.5', value: 1.5},
+        {text: '2', value: 2},
+        {text: '2.5', value: 2.5},
+        {text: '3', value: 3}
+      ],
+      formats: ['p', 'div', 'blockquote', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
       placeholder: '开始写作...',
       charCounter: true,
       charCounterType: 'byte-html',
