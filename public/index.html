@@ -2164,6 +2164,9 @@ async function executeTool() {
   } catch(e) {
     resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">❌ ' + esc(e.message || String(e)) + '</div></div>';
   }
+  btn.disabled = false;
+}
+
 // --- AI 文本对话（SSE 流式）---
 async function executeAITextTool(tool, params, resultArea) {
   var message = params.message || params.text || '';
