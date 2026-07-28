@@ -1382,3 +1382,162 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .browse-loading{text-align:center;padding:32px 16px;color:var(--text-faint);font-size:13px}
 .browse-loading::after{content:'';display:inline-block;width:16px;height:16px;border:2px solid var(--border-color);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════════════════════════════════════════
+   SunEditor 富文本编辑器样式覆盖
+   修复全局 *{margin:0;padding:0} 重置导致的布局问题
+   ═══════════════════════════════════════════════════════════ */
+
+/* SunEditor 容器基础样式 */
+.sun-editor {
+  position: relative;
+  z-index: 1;
+}
+/* 工具栏不应被裁剪 */
+.sun-editor .se-toolbar {
+  position: relative;
+  z-index: 10;
+  overflow: visible !important;
+}
+/* 下拉菜单需要高 z-index 且不被裁剪 */
+.sun-editor .se-menu,
+.sun-editor .se-list,
+.sun-editor .se-submenu,
+.sun-editor .se-select-layer,
+.sun-editor .se-layer {
+  z-index: 9999 !important;
+}
+/* 全屏模式覆盖所有内容 */
+.sun-editor .se-controller .se-controller-fullscreen {
+  z-index: 2147483647 !important;
+}
+.sun-editor.sun-editor-fullscreen {
+  z-index: 2147483647 !important;
+}
+
+/* 恢复 SunEditor 内部元素被全局重置清除的样式 */
+.sun-editor .se-btn {
+  margin: 0;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sun-editor .se-btn:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+.sun-editor .se-btn:active {
+  transform: none;
+}
+.sun-editor .se-toolbar-module button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 编辑区域恢复默认样式 */
+.sun-editor .se-wrapper .se-editing-area {
+  box-sizing: content-box;
+}
+.sun-editor .se-wrapper code,
+.sun-editor .se-wrapper pre {
+  margin: 4px 0;
+  padding: 8px 12px;
+}
+.sun-editor .se-wrapper ul,
+.sun-editor .se-wrapper ol {
+  margin: 4px 0;
+  padding-left: 24px;
+}
+.sun-editor .se-wrapper li {
+  margin: 2px 0;
+}
+.sun-editor .se-wrapper p {
+  margin: 4px 0;
+}
+.sun-editor .se-wrapper h1,
+.sun-editor .se-wrapper h2,
+.sun-editor .se-wrapper h3,
+.sun-editor .se-wrapper h4,
+.sun-editor .se-wrapper h5,
+.sun-editor .se-wrapper h6 {
+  margin: 8px 0 4px;
+}
+.sun-editor .se-wrapper table {
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+.sun-editor .se-wrapper td,
+.sun-editor .se-wrapper th {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+}
+.sun-editor .se-wrapper img {
+  max-width: 100%;
+}
+.sun-editor .se-wrapper blockquote {
+  margin: 8px 0;
+  padding: 8px 16px;
+  border-left: 4px solid #ddd;
+}
+
+/* 博客内容显示区域样式恢复 */
+.dp-rich-content.blog-content ul,
+.dp-rich-content.blog-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+.dp-rich-content.blog-content li {
+  margin: 2px 0;
+}
+.dp-rich-content.blog-content p {
+  margin: 6px 0;
+}
+.dp-rich-content.blog-content h1,
+.dp-rich-content.blog-content h2,
+.dp-rich-content.blog-content h3,
+.dp-rich-content.blog-content h4 {
+  margin: 12px 0 6px;
+}
+.dp-rich-content.blog-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: auto;
+}
+.dp-rich-content.blog-content td,
+.dp-rich-content.blog-content th {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #ddd);
+}
+.dp-rich-content.blog-content img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+.dp-rich-content.blog-content blockquote {
+  margin: 8px 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--accent, #FF6B35);
+  background: var(--bg-hover, #f5f5f5);
+  border-radius: 0 8px 8px 0;
+}
+.dp-rich-content.blog-content pre {
+  margin: 8px 0;
+  padding: 12px 16px;
+  background: var(--bg-tertiary, #f0f0f0);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+.dp-rich-content.blog-content code {
+  padding: 2px 6px;
+  background: var(--bg-tertiary, #f0f0f0);
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.dp-rich-content.blog-content a {
+  color: var(--accent, #FF6B35);
+  text-decoration: underline;
+}

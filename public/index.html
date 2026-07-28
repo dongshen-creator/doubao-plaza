@@ -32,7 +32,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=41">
+  <link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
 
@@ -2475,6 +2475,9 @@ async function blogShowList(container) {
     try { window.__blogSunEditor.destroy(); } catch(e) {}
     window.__blogSunEditor = null;
   }
+  // 恢复 app-main 的 overflow
+  var appMain = document.getElementById('mainContent');
+  if (appMain) appMain.style.overflow = '';
   blogState.currentView = 'list';
   var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
@@ -2659,6 +2662,9 @@ async function blogShowPost(container, postId) {
     try { window.__blogSunEditor.destroy(); } catch(e) {}
     window.__blogSunEditor = null;
   }
+  // 恢复 app-main 的 overflow
+  var appMain = document.getElementById('mainContent');
+  if (appMain) appMain.style.overflow = '';
   blogState.currentView = 'post';
   blogState.currentPostId = postId;
   container.innerHTML = '<div id="blogPostView" style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
@@ -2721,6 +2727,10 @@ function blogShowEditor(container, postId) {
   blogState.currentPostId = postId || null;
   blogState.editorState = { postId: postId || null, sunEditor: null };
   var isEdit = !!postId;
+
+  // 编辑器激活时取消 app-main 的 overflow 限制，防止下拉菜单被裁剪
+  var appMain = document.getElementById('mainContent');
+  if (appMain) appMain.style.overflow = 'visible';
 
   // 销毁旧的 SunEditor 实例
   if (window.__blogSunEditor) {
@@ -2945,22 +2955,29 @@ async function blogLoadComments(postId) {
       }
     });
 
-    var html = '<div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)">' +
-      '<h4 style="font-size:16px;font-weight:700;margin-bottom:16px">💬 评论 (' + comments.length + ')</h4>' +
-      '<div style="margin-bottom:20px;display:flex;gap:10px;align-items:flex-start">' +
-        '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+    var userAvatar = (currentUser && currentUser.avatar)
+      ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">'
+      : '<span style="font-size:16px">👤</span>';
+
+    var html = '<div style="margin-top:36px;padding-top:28px;border-top:2px solid var(--border)">' +
+      '<h4 style="font-size:17px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:6px">💬 <span>评论</span> <span style="font-size:14px;color:var(--text-faint);font-weight:400">(' + comments.length + ')</span></h4>' +
+      '<div style="margin-bottom:24px;display:flex;gap:12px;align-items:flex-start">' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px var(--accent-shadow)">' + userAvatar + '</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<textarea id="blogCommentInput" placeholder="写下你的评论..." style="width:100%;min-height:56px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font-size:13px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:border-color 0.2s" onfocus="this.style.borderColor=\'var(--accent)\'" onblur="this.style.borderColor=\'var(--border)\'"></textarea>' +
-          '<div style="display:flex;justify-content:flex-end;margin-top:6px">' +
-            '<button class="btn btn-orange" style="font-size:12px;padding:6px 18px;border-radius:8px" onclick="blogAddComment(' + postId + ',0)">发表评论</button>' +
+          '<textarea id="blogCommentInput" placeholder="分享你的想法..." style="width:100%;min-height:52px;padding:12px 16px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-card);color:var(--text-primary);font-size:14px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:all 0.2s;outline:none" onfocus="this.style.borderColor=\'var(--accent)\';this.style.boxShadow=\'0 0 0 3px var(--accent-bg)\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'"></textarea>' +
+          '<div style="display:flex;justify-content:flex-end;margin-top:8px">' +
+            '<button class="btn btn-orange" style="font-size:13px;padding:7px 22px;border-radius:8px;transition:all 0.2s" onclick="blogAddComment(' + postId + ',0)">发表评论</button>' +
           '</div>' +
         '</div>' +
       '</div>';
 
     if (comments.length === 0) {
-      html += '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">还没有评论，来说点什么吧</div>';
+      html += '<div style="text-align:center;padding:48px 16px;color:var(--text-faint);font-size:14px">' +
+        '<div style="font-size:36px;margin-bottom:12px;opacity:0.5">💭</div>' +
+        '<div>还没有评论，来发表第一条吧</div>' +
+      '</div>';
     } else {
-      html += '<div id="blogCommentList">';
+      html += '<div id="blogCommentList" style="display:flex;flex-direction:column;gap:16px">';
       topComments.forEach(function(c) {
         html += blogRenderComment(c, isDev, 0, replyMap);
       });
@@ -2969,7 +2986,7 @@ async function blogLoadComments(postId) {
     html += '</div>';
     section.innerHTML = html;
   } catch(e) {
-    section.innerHTML = '<div style="color:var(--danger);font-size:13px">评论加载失败</div>';
+    section.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:16px">评论加载失败</div>';
   }
 }
 
@@ -2978,27 +2995,38 @@ function blogRenderComment(c, isDev, depth, replyMap) {
   var replies = replyMap[c.id] || [];
   var maxDepth = 3;
   var actualDepth = Math.min(depth, maxDepth);
-  var indentStyle = depth > 0 ? 'margin-left:' + (actualDepth * 20) + 'px;padding-left:14px;border-left:2px solid var(--border);' : '';
-  var bgStyle = depth > 0 ? 'background:var(--bg-hover);' : 'background:var(--bg-card);';
-  var html = '<div style="margin-bottom:10px;' + indentStyle + '">' +
-    '<div style="padding:12px 14px;border-radius:10px;' + bgStyle + '" id="blogComment_' + c.id + '">' +
-      '<div style="display:flex;align-items:flex-start;gap:10px">' +
-        '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<span style="font-size:13px;font-weight:600;color:var(--text-primary)">' + esc(c.user_name) + '</span>' +
+  var isReply = depth > 0;
+  var avatarSize = isReply ? 28 : 36;
+  var indentStyle = isReply ? 'margin-left:' + (actualDepth * 16) + 'px;' : '';
+
+  var html = '<div style="' + indentStyle + '">' +
+    '<div style="display:flex;gap:10px;align-items:flex-start" id="blogComment_' + c.id + '">' +
+      '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:' + (isReply ? 12 : 14) + 'px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="' + (isReply ? 'background:var(--bg-hover);' : 'background:var(--bg-card);border:1px solid var(--border);') + 'border-radius:12px;padding:10px 14px;transition:background 0.15s">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
+            '<span style="font-size:' + (isReply ? 12 : 13) + 'px;font-weight:600;color:var(--text-primary)">' + esc(c.user_name) + '</span>' +
+            (isReply ? '<span style="font-size:11px;color:var(--text-faint);padding:1px 6px;background:var(--bg-tertiary);border-radius:4px">回复</span>' : '') +
             '<span style="font-size:11px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
-            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">删除</button>' : '') +
+            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 8px;border-radius:4px;opacity:0;transition:opacity 0.2s" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=0">删除</button>' : '') +
           '</div>' +
-          '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);margin-top:6px;word-break:break-word;line-height:1.6">' + renderRichContent(c.content) + '</div>' +
-          '<button onclick="blogShowReplyBox(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')" style="font-size:11px;color:var(--text-faint);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;transition:color 0.2s" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-faint)\'">↩ 回复</button>' +
+          '<div class="dp-rich-content" style="font-size:' + (isReply ? 12 : 13) + 'px;color:var(--text-secondary);word-break:break-word;line-height:1.6">' + renderRichContent(c.content) + '</div>' +
         '</div>' +
-      '</div>' +
-      '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:10px;margin-left:42px">' +
-        '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:48px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:border-color 0.2s" onfocus="this.style.borderColor=\'var(--accent)\'" onblur="this.style.borderColor=\'var(--border)\'"></textarea>' +
-        '<div style="display:flex;gap:6px;margin-top:6px">' +
-          '<button class="btn btn-orange" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="blogSubmitReply(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')">回复</button>' +
-          '<button class="btn btn-gray" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="document.getElementById(\'blogReplyBox_' + c.id + '\').style.display=\'none\'">取消</button>' +
+        '<div style="display:flex;gap:12px;margin-top:4px;padding-left:4px">' +
+          '<button onclick="blogShowReplyBox(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')" style="font-size:11px;color:var(--text-faint);background:none;border:none;cursor:pointer;padding:2px 0;transition:color 0.2s;font-weight:500" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-faint)\'">💬 回复</button>' +
+          (replies.length > 0 ? '<span style="font-size:11px;color:var(--text-faint);padding:2px 0">· ' + replies.length + ' 条回复</span>' : '') +
+        '</div>' +
+        '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:8px">' +
+          '<div style="display:flex;gap:8px;align-items:flex-start">' +
+            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+            '<div style="flex:1;min-width:0">' +
+              '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:42px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:all 0.2s;outline:none" onfocus="this.style.borderColor=\'var(--accent)\';this.style.boxShadow=\'0 0 0 2px var(--accent-bg)\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'"></textarea>' +
+              '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">' +
+                '<button class="btn btn-gray" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="document.getElementById(\'blogReplyBox_' + c.id + '\').style.display=\'none\'">取消</button>' +
+                '<button class="btn btn-orange" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="blogSubmitReply(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')">回复</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
