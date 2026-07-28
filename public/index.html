@@ -2672,7 +2672,11 @@ async function blogShowPost(container, postId) {
     var res = await api('/api/blog/' + postId);
     var view = document.getElementById('blogPostView');
     if (!view) return;
-    if (!res.success || !res.data) { view.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger)">文章不存在</div>'; return; }
+    // 清除加载状态的内联样式（text-align:center 会导致所有子元素继承居中）
+    view.style.textAlign = '';
+    view.style.padding = '';
+    view.style.color = '';
+    if (!res.success || !res.data) { view.style.textAlign = 'center'; view.style.padding = '40px'; view.style.color = 'var(--danger)'; view.innerHTML = '文章不存在'; return; }
     var p = res.data;
     var tags = blogParseTags(p.tags);
     var isAuthor = currentUser && p.author_id == currentUser.id;
@@ -2804,7 +2808,7 @@ function blogShowEditor(container, postId) {
       imageHeightLimit: 500,
       imageWidthLimit: 800,
       toolbarWidth: '100%',
-      attributes: { style: 'font-size:15px;line-height:1.8' }
+      attributes: { style: 'font-size:15px;line-height:1.8;text-align:left' }
     });
     window.__blogSunEditor = se;
     blogState.editorState.sunEditor = se;

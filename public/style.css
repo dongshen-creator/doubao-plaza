@@ -1392,6 +1392,48 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .sun-editor {
   position: relative;
   z-index: 1;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+.sun-editor .se-wrapper-inner {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.sun-editor .se-toolbar {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+.sun-editor .se-btn {
+  color: var(--text-secondary);
+}
+.sun-editor .se-btn:hover {
+  background: var(--bg-hover);
+}
+.sun-editor .se-btn.active,
+.sun-editor .se-btn.on {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.sun-editor .se-resizing-bar {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+.sun-editor .se-char-counter {
+  color: var(--text-faint);
+}
+.sun-editor .se-menu,
+.sun-editor .se-list,
+.sun-editor .se-submenu,
+.sun-editor .se-select-layer,
+.sun-editor .se-layer {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+.sun-editor .se-menu li:hover,
+.sun-editor .se-list li:hover {
+  background: var(--bg-hover);
 }
 /* 工具栏不应被裁剪 */
 .sun-editor .se-toolbar {
@@ -1540,4 +1582,101 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .dp-rich-content.blog-content a {
   color: var(--accent, #FF6B35);
   text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   全局 dp-rich-content 防继承样式
+   防止父容器 text-align:center 等样式继承到富文本内容
+   ═══════════════════════════════════════════════════════════ */
+.dp-rich-content {
+  text-align: left;
+}
+.dp-rich-content p {
+  text-align: left;
+  margin: 4px 0;
+}
+.dp-rich-content div {
+  text-align: left;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SunEditor 暗色主题适配
+   ═══════════════════════════════════════════════════════════ */
+.dark .sun-editor {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.dark .sun-editor .se-toolbar {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+.dark .sun-editor .se-btn {
+  color: var(--text-secondary);
+}
+.dark .sun-editor .se-btn:hover {
+  background: var(--bg-hover);
+}
+.dark .sun-editor .se-btn.active,
+.dark .sun-editor .se-btn.on {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.dark .sun-editor .se-menu,
+.dark .sun-editor .se-list,
+.dark .sun-editor .se-submenu,
+.dark .sun-editor .se-select-layer,
+.dark .sun-editor .se-layer {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+.dark .sun-editor .se-menu li:hover,
+.dark .sun-editor .se-list li:hover {
+  background: var(--bg-hover);
+}
+.dark .sun-editor .se-wrapper-inner {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.dark .sun-editor .se-wrapper-inner:focus {
+  outline-color: var(--accent);
+}
+.dark .sun-editor .se-resizing-bar {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+.dark .sun-editor .se-resizing-back {
+  background: var(--bg-tertiary);
+}
+.dark .sun-editor .se-char-counter {
+  color: var(--text-faint);
+}
+.dark .sun-editor .se-btn-group button {
+  color: var(--text-secondary);
+}
+.dark .sun-editor .se-btn-group button:hover {
+  background: var(--bg-hover);
+}
+.dark .sun-editor .se-input {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.dark .sun-editor .se-dialog {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+.dark .sun-editor .se-dialog label {
+  color: var(--text-secondary);
+}
+.dark .sun-editor .se-dialog .se-btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.dark .sun-editor .se-controller {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }
