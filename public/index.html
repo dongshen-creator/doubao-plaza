@@ -2240,7 +2240,7 @@ async function executeDirectUrlTool(tool, params, resultArea) {
     url = url.replace(matches[i], encodeURIComponent(val));
   }
   if (tool.result_type === 'image') {
-    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + esc(url) + '" style="max-width:100%;border-radius:8px" onerror="this.parentElement.innerHTML=\'<div class=\\'ai-error\\'>图片加载失败</div>\'"></div>';
+    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + esc(url) + '" style="max-width:100%;border-radius:8px" onerror="this.parentElement.textContent=\'图片加载失败\'"></div>';
   } else {
     resultArea.innerHTML = '<div class="tool-result-card"><a href="' + esc(url) + '" target="_blank" class="btn btn-orange">打开结果</a></div>';
   }
