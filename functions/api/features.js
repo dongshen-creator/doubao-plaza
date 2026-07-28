@@ -3,6 +3,12 @@
 // POST   /api/features          - 添加功能
 // DELETE /api/features?id=xxx   - 删除功能
 
+// 确保工具包相关列存在（幂等）
+async function ensureToolColumns(env) {
+  await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_type TEXT").run().catch(() => {});
+  await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_config TEXT").run().catch(() => {});
+}
+
 export async function onRequestGet(context) {
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
@@ -13,8 +19,9 @@ export async function onRequestGet(context) {
 
   try {
     const { env } = context;
+    await ensureToolColumns(env);
     const results = await env.DB.prepare(
-      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at 
+      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at, tool_type, tool_config
        FROM features ORDER BY sort_order ASC, created_at DESC`
     ).all();
 
@@ -34,8 +41,9 @@ export async function onRequestPost(context) {
 
   try {
     const { env } = context;
+    await ensureToolColumns(env);
     const body = await context.request.json().catch(() => ({}));
-    const { title, icon_url, link_url, created_by } = body;
+    const { title, icon_url, link_url, created_by, tool_type, tool_config } = body;
 
     if (!title || !link_url || !created_by) {
       return Response.json({ success: false, error: '标题、链接和创建者不能为空' });
@@ -53,11 +61,11 @@ export async function onRequestPost(context) {
     const sort_order = (maxOrder?.max_order || 0) + 1;
 
     const result = await env.DB.prepare(
-      `INSERT INTO features (title, icon_url, link_url, sort_order, created_by) VALUES (?, ?, ?, ?, ?)`
-    ).bind(title, icon_url || null, link_url, sort_order, created_by).run();
+      `INSERT INTO features (title, icon_url, link_url, sort_order, created_by, tool_type, tool_config) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(title, icon_url || null, link_url, sort_order, created_by, tool_type || null, tool_config || null).run();
 
     const feature = await env.DB.prepare(
-      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at FROM features WHERE id = ?`
+      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at, tool_type, tool_config FROM features WHERE id = ?`
     ).bind(result.meta.last_row_id).first();
 
     return Response.json({ success: true, data: feature });
@@ -76,10 +84,11 @@ export async function onRequestPut(context) {
 
   try {
     const { env } = context;
+    await ensureToolColumns(env);
     const url = new URL(context.request.url);
     const id = url.searchParams.get('id');
     const body = await context.request.json().catch(() => ({}));
-    const { title, icon_url, link_url, updated_by } = body;
+    const { title, icon_url, link_url, updated_by, tool_type, tool_config } = body;
 
     if (!id) {
       return Response.json({ success: false, error: '缺少功能ID' });
@@ -101,11 +110,11 @@ export async function onRequestPut(context) {
     }
 
     await env.DB.prepare(
-      `UPDATE features SET title = ?, icon_url = ?, link_url = ?, updated_at = datetime('now') WHERE id = ?`
-    ).bind(title, icon_url || null, link_url, id).run();
+      `UPDATE features SET title = ?, icon_url = ?, link_url = ?, tool_type = ?, tool_config = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(title, icon_url || null, link_url, tool_type || null, tool_config || null, id).run();
 
     const feature = await env.DB.prepare(
-      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at FROM features WHERE id = ?`
+      `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at, tool_type, tool_config FROM features WHERE id = ?`
     ).bind(id).first();
 
     return Response.json({ success: true, data: feature });

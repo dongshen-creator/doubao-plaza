@@ -4,6 +4,77 @@
 
 ---
 
+## v4.7 — 2026-07-28
+
+### 网站工具包系统（AI工具 + 免费API工具）
+
+#### 新增功能
+
+##### 1. 工具注册表（Tool Registry）
+
+**实现**：`functions/api/tools/registry.js` 统一管理所有工具定义，包含 12 个工具：
+- AI 类（4个）：AI对话、AI翻译、AI总结、AI画图（基于 Cloudflare Workers AI）
+- 免费 API 类（8个）：天气查询、二维码生成、IP查询、汇率查询、随机笑话、每日名言、头像生成、数学计算
+
+##### 2. AI 工具端点（`functions/api/tools/ai.js`）
+
+- 统一处理 AI 文本对话（SSE 流式输出）和图片生成
+- 基于 Cloudflare Workers AI 绑定（`env.AI`），支持 `@cf/zai-org/glm-4.7-flash`、`@cf/meta/llama-3.2-1b-instruct`、`@cf/black-forest-labs/flux-1-schnell` 等模型
+- 速率限制：每用户每小时 30 次（基于 `site_settings` 表）
+- Bearer Token 鉴权
+
+##### 3. 代理转发端点（`functions/api/tools/proxy.js`）
+
+- 转发免费公共 API 请求，避免前端 CORS 限制
+- 支持模板 URL（`{param}` 占位符）和查询参数两种模式
+- 天气工具内置地理编码前处理（城市名 → 经纬度）
+- 带超时控制（10秒）
+
+##### 4. 开发者界面第三种创建方法：网站工具
+
+- 功能管理界面新增「网站工具」链接类型
+- 开发者可从工具注册表中选择工具，创建为功能卡片
+- `features` 表扩展 `tool_type`、`tool_config` 列
+- 功能卡片显示工具图标 + "工具" 标签
+
+##### 5. 工具面板系统（前端）
+
+- 点击工具类功能卡片 → `openToolPanel()` 打开交互式面板
+- 动态渲染输入表单（文本框、下拉框、文本域）
+- AI 文本工具：SSE 流式输出，逐字显示，带光标动画
+- AI 图片工具：生成后显示图片 + 下载按钮
+- 天气工具：渲染天气卡片（当前天气 + 3天预报）
+- 汇率工具：渲染表格
+- 支持 6 种结果类型：`streaming_text`、`image`、`weather_card`、`json_card`、`table`、`text`
+
+##### 6. AI 对话历史本地缓存
+
+- AI 对话历史存储在浏览器 `localStorage`（`dp_ai_history_{toolId}`），不占用 D1 数据库空间
+- 保留最近 10 轮对话（20条消息），支持清空
+- 仅 `supports_history: true` 的工具启用多轮上下文
+
+#### 数据库变更
+
+- `features` 表新增 `tool_type TEXT`、`tool_config TEXT` 列
+- 移除 `ai_conversations` 表（改为 localStorage 存储）
+
+#### 文件变更
+
+- 新增：`functions/api/tools/registry.js`、`functions/api/tools/ai.js`、`functions/api/tools/proxy.js`
+- 删除：`functions/api/tools/ai-history.js`
+- 修改：`public/index.html`（工具面板系统、功能卡片支持工具类型、本地AI历史）
+- 修改：`public/style.css`（AI消息样式、工具面板样式）
+- 修改：`schema.sql`（移除 ai_conversations 表）
+- 修改：`functions/api/chat/index.js`（移除 ai_conversations 迁移）
+- 修改：`functions/api/features.js`（支持 tool_type/tool_config）
+
+#### 部署要求
+
+1. 在 Cloudflare Dashboard → Settings → Functions → AI bindings 中配置 AI 绑定（变量名 `AI`）
+2. 执行 `schema.sql` 中的工具包迁移语句（如已有数据库）
+
+---
+
 ## v4.6 — 2026-07-28
 
 ### 公开频道管理 + 频道公告权限深度修复 + 开发者界面新增标签

@@ -35,8 +35,11 @@ doubao-plaza/
 │   │   ├── blocked.js             # 黑名单
 │   │   ├── reports.js             # 举报
 │   │   ├── announcements.js       # 公告
-│   │   ├── features.js            # 功能图标
+│   │   ├── features.js            # 功能图标（支持外部链接/本地页面/网站工具）
 │   │   ├── custom-pages.js        # 自定义页面 CRUD
+│   │   ├── tools/registry.js      # 工具注册表（所有工具定义）
+│   │   ├── tools/ai.js            # AI 工具端点（对话/翻译/总结/画图）
+│   │   ├── tools/proxy.js         # 免费 API 代理转发
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
 │   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
 │   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
@@ -198,6 +201,19 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 ---
 
+### 第六步之三：绑定 Workers AI（可选，启用网站工具包的 AI 功能）
+
+网站工具包系统中的 AI 工具（AI对话、AI翻译、AI总结、AI画图）依赖 Cloudflare Workers AI：
+
+1. 进入 Cloudflare Dashboard → 你的 Pages 项目 → **Settings** → **Functions**
+2. 找到 **AI bindings**，点击 **Add binding**
+3. **Variable name** 填 `AI`，选择你的 Workers AI
+4. 点击 **Save**
+
+> 未绑定 AI 时，非 AI 工具（天气查询、二维码生成等）仍可正常使用，AI 类工具会返回 503 错误提示。
+
+---
+
 ### 第七步：重新部署
 
 1. 进入 **Deployments** 标签，找到最新的部署，点击 **Retry deployment**（或推送任意 commit 到 GitHub 触发重新部署）
@@ -265,6 +281,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | `SUPABASE_ANON_KEY` | `public/index.html` 第 17 行 | Supabase 公开密钥 |
 | `DB` | Cloudflare Pages → D1 binding | D1 数据库绑定变量名 |
 | `PAGES_BUCKET` | Cloudflare Pages → R2 binding | R2 存储桶绑定变量名（聊天文件上传） |
+| `AI` | Cloudflare Pages → AI binding | Workers AI 绑定变量名（网站工具包 AI 功能，可选） |
 | Storage 桶 `pages` | Supabase Storage | 开发者文件托管（公开桶） |
 
 > **R2 配置说明**：聊天图片/文件上传使用 Cloudflare R2（`PAGES_BUCKET` 绑定），需在 Pages 设置中配置 R2 绑定（见第六步半）。开发者文件托管仍使用 Supabase Storage 的 `pages` 桶。
@@ -312,10 +329,16 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 ### 开发者后台
 - 公告管理（CRUD + 富媒体插入）
-- 功能图标管理
+- 功能图标管理（外部链接 / 本地页面 / 网站工具三种创建方式）
 - 自定义页面（HTML 托管 + Supabase Storage 文件上传）
 - 文件管理（Supabase Storage `pages` 桶）
 - 公开频道管理（选取频道设为公开 + 独立分组管理 + 所有用户默认可见）
+
+### 网站工具包系统
+- **AI 工具**（基于 Cloudflare Workers AI）：AI对话（多轮上下文，历史存 localStorage）、AI翻译、AI总结、AI画图
+- **免费 API 工具**：天气查询（3天预报）、二维码生成、IP查询、汇率查询、随机笑话、每日名言、头像生成、数学计算（求导/积分/因式分解等）
+- 开发者可从工具注册表中选择工具创建为功能卡片，用户点击后在工具面板中交互式使用
+- AI 对话历史存储在浏览器本地，不占用 D1 数据库空间
 
 ### 主题
 - 亮色/暗色模式无缝切换

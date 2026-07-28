@@ -29,7 +29,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=39">
+  <link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 
@@ -561,7 +561,7 @@ function sanitizeCss(css) {
 function filterDangerousSelectors(css) {
   if (!css) return '';
   // 已知的应用级类名前缀，出现在选择器中时移除该规则
-  var appClassPattern = /\.(app-layout|app-sidebar|app-main|activity-bar|activity-item|activity-label|activity-icon|activity-badge|activity-dot|activity-spacer|sidebar-section|sidebar-header|sidebar-item|sidebar-item-icon|sidebar-item-text|sidebar-item-dot|sidebar-toggle|sidebar-toggle-btn|nav-bar|nav-user|nav-brand|modal-overlay|modal-title|modal-close|modal-header|chat-view-main|chat-view-center|chat-view-header|chat-view-body|chat-view-input|chat-view-context|view-header-bar|ctx-panel|ctx-panel-header|ctx-panel-body|friends-hero|login-required|mobile-overlay|activity-bar|chat-msg|chat-msg-bubble|chat-msg-content|chat-msg-sender|chat-msg-time|chat-msg-left|chat-msg-right|chat-msg-inner|chat-msg-avatar|chat-msg-reply|chat-msgs|chat-reply-bar|chat-muted-banner|chat-input|chat-send-btn|chat-action-btn|chat-empty-inline|chat-date-separator|chat-reactions|chat-reaction-badge|chat-recall-btn|chat-room-item|chat-room-avatar|chat-room-list|chat-toolbar-btn|chat-context-empty|chat-back-btn|dp-rich-content)\b/i;
+  var appClassPattern = /\.(app-layout|app-sidebar|app-main|activity-bar|activity-item|activity-label|activity-icon|activity-badge|activity-dot|activity-spacer|sidebar-section|sidebar-header|sidebar-item|sidebar-item-icon|sidebar-item-text|sidebar-item-dot|sidebar-toggle|sidebar-toggle-btn|nav-bar|nav-user|nav-brand|modal-overlay|modal-title|modal-close|modal-header|chat-view-main|chat-view-center|chat-view-header|chat-view-body|chat-view-input|chat-view-context|view-header-bar|ctx-panel|ctx-panel-header|ctx-panel-body|friends-hero|login-required|mobile-overlay|activity-bar|chat-msg|chat-msg-bubble|chat-msg-content|chat-msg-sender|chat-msg-time|chat-msg-left|chat-msg-right|chat-msg-inner|chat-msg-avatar|chat-msg-reply|chat-msgs|chat-reply-bar|chat-muted-banner|chat-input|chat-send-btn|chat-action-btn|chat-empty-inline|chat-date-separator|chat-reactions|chat-reaction-badge|chat-recall-btn|chat-room-item|chat-room-avatar|chat-room-list|chat-toolbar-btn|chat-context-empty|chat-back-btn|dp-rich-content|ai-msg-bubble|ai-thinking|ai-error|ai-cursor|tool-panel|tool-card|tool-field|tool-result|tool-table|tool-loading)\b/i;
   
   var result = '';
   var i = 0;
@@ -1962,6 +1962,9 @@ async function loadFeaturesSidebarList() {
       return;
     }
     el.innerHTML = res.data.map(function(f) {
+      if (f.tool_type) {
+        return '<div class="sidebar-item" style="cursor:pointer" onclick="openToolPanel(\'' + esc(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon">🛠️</span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
+      }
       return '<a href="' + esc(f.link_url) + '" target="_blank" rel="noopener" class="sidebar-item" style="text-decoration:none"><span class="sidebar-item-icon">' + (f.icon_url ? '🖼️' : '🔗') + '</span><span class="sidebar-item-text">' + esc(f.title) + '</span></a>';
     }).join('');
   } catch(e) {}
@@ -2008,14 +2011,22 @@ async function loadFeatures() {
         <div id="featuresContent" style="${localStorage.getItem('dp_collapsed_features') === '1' ? 'display:none' : ''}">
           <div class="card" style="padding:20px">
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:16px;text-align:center">
-              ${visibleFeatures.map(f => `
-                <a href="${esc(f.link_url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit">
-                  <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">
-                    ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🔗'">` : '🔗'}
-                  </div>
+              ${visibleFeatures.map(f => {
+                const isTool = !!f.tool_type;
+                const iconHtml = f.icon_url
+                  ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${isTool ? '🛠️' : '🔗'}'">`
+                  : (isTool ? '🛠️' : '🔗');
+                if (isTool) {
+                  return `<div style="cursor:pointer" onclick="openToolPanel('${esc(f.tool_type)}','${escAttr(f.title)}')">
+                    <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
+                    <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
+                  </div>`;
+                }
+                return `<a href="${esc(f.link_url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit">
+                  <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
                   <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
-                </a>
-              `).join('')}
+                </a>`;
+              }).join('')}
             </div>
           </div>
         </div>
@@ -2024,6 +2035,324 @@ async function loadFeatures() {
   } catch (e) {
     // silently fail
   }
+}
+
+// ===== 工具面板系统 =====
+var toolPanelState = { currentTool: null, registryCache: null };
+
+// --- 本地 AI 对话历史（localStorage，不占 D1）---
+function getLocalAIHistory(toolId) {
+  try { return JSON.parse(localStorage.getItem('dp_ai_history_' + toolId) || '[]'); }
+  catch(e) { return []; }
+}
+function saveLocalAIHistory(toolId, userInput, aiOutput) {
+  try {
+    var key = 'dp_ai_history_' + toolId;
+    var h = getLocalAIHistory(toolId);
+    h.push({ role: 'user', content: userInput });
+    h.push({ role: 'assistant', content: aiOutput });
+    if (h.length > 20) h = h.slice(-20);
+    localStorage.setItem(key, JSON.stringify(h));
+  } catch(e) {}
+}
+function clearLocalAIHistory(toolId) {
+  localStorage.removeItem('dp_ai_history_' + toolId);
+  toast('对话历史已清空');
+  if (toolPanelState.currentTool) openToolPanel(toolPanelState.currentTool.id, toolPanelState.currentTool.name);
+}
+
+// --- 渲染单个输入字段 ---
+function renderToolField(field) {
+  var id = 'toolField_' + field.name;
+  var label = '<label>' + esc(field.label) + (field.required ? ' *' : '') + '</label>';
+  if (field.type === 'textarea') {
+    return '<div class="tool-field">' + label + '<textarea id="' + id + '" placeholder="' + esc(field.placeholder || '') + '"></textarea></div>';
+  }
+  if (field.type === 'select') {
+    var opts = (field.options || []).map(function(o) {
+      return '<option value="' + esc(o.value) + '"' + (o.value === field.default ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+    return '<div class="tool-field">' + label + '<select id="' + id + '">' + opts + '</select></div>';
+  }
+  return '<div class="tool-field">' + label + '<input id="' + id + '" type="' + (field.type || 'text') + '" placeholder="' + esc(field.placeholder || '') + '"' + (field.default != null ? ' value="' + esc(field.default) + '"' : '') + '></div>';
+}
+
+// --- 打开工具面板 ---
+async function openToolPanel(toolId, title) {
+  if (!toolPanelState.registryCache) {
+    try {
+      var res = await fetch('/api/tools/registry');
+      var data = await res.json();
+      if (data.success) toolPanelState.registryCache = data.data;
+    } catch(e) {}
+  }
+  var tool = null;
+  if (toolPanelState.registryCache) {
+    for (var i = 0; i < toolPanelState.registryCache.length; i++) {
+      if (toolPanelState.registryCache[i].id === toolId) { tool = toolPanelState.registryCache[i]; break; }
+    }
+  }
+  if (!tool) { toast('工具不存在或已下线', 'error'); return; }
+  toolPanelState.currentTool = tool;
+
+  var main = document.getElementById('mainContent');
+  var isAi = (tool.api_type === 'ai_chat' || tool.api_type === 'ai_image');
+  var historySection = '';
+  if (tool.supports_history && getLocalAIHistory(toolId).length > 0) {
+    historySection = '<div style="margin-top:8px;font-size:11px"><a href="javascript:clearLocalAIHistory(\'' + toolId + '\')" style="color:var(--danger)">清空对话历史</a></div>';
+  }
+
+  main.innerHTML =
+    '<div class="view-header-bar">' +
+      '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
+      '<span style="font-size:15px;font-weight:600">' + esc(tool.icon) + ' ' + esc(title) + '</span>' +
+    '</div>' +
+    '<div class="tool-panel">' +
+      '<div class="tool-card">' +
+        '<div class="tool-desc">' + esc(tool.description) + '</div>' +
+        '<div id="toolInputArea">' + (tool.input_fields || []).map(renderToolField).join('') + '</div>' +
+        '<button class="btn btn-orange btn-full" style="margin-top:12px" id="toolExecBtn" onclick="executeTool()">' +
+          (isAi ? '🤖 询问AI' : '▶ 执行') +
+        '</button>' +
+        historySection +
+      '</div>' +
+      '<div id="toolResultArea" class="tool-result"><div class="tool-result-empty">输入参数后点击按钮查看结果</div></div>' +
+    '</div>';
+}
+
+// --- 执行工具 ---
+async function executeTool() {
+  var tool = toolPanelState.currentTool;
+  if (!tool) return;
+  var btn = document.getElementById('toolExecBtn');
+  var resultArea = document.getElementById('toolResultArea');
+  btn.disabled = true;
+
+  // 收集输入
+  var params = {}, hasError = false;
+  for (var i = 0; i < (tool.input_fields || []).length; i++) {
+    var f = tool.input_fields[i];
+    var el = document.getElementById('toolField_' + f.name);
+    if (!el) continue;
+    var val = el.value.trim();
+    if (f.required && !val) { toast(f.label + '不能为空', 'error'); hasError = true; }
+    if (val) params[f.name] = val;
+  }
+  if (hasError) { btn.disabled = false; return; }
+  resultArea.innerHTML = '<div class="tool-loading">正在执行...</div>';
+
+  try {
+    // === AI 文本对话（流式）===
+    if (tool.api_type === 'ai_chat') {
+      await executeAITextTool(tool, params, resultArea);
+    }
+    // === AI 图片生成 ===
+    else if (tool.api_type === 'ai_image') {
+      await executeAIImageTool(tool, params, resultArea);
+    }
+    // === 直接 URL 工具（图片类）===
+    else if (tool.api_type === 'direct_url') {
+      await executeDirectUrlTool(tool, params, resultArea);
+    }
+    // === 代理 GET 请求 ===
+    else if (tool.api_type === 'proxy_get') {
+      await executeProxyTool(tool, params, resultArea);
+    }
+    else {
+      resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">不支持的工具类型</div></div>';
+    }
+  } catch(e) {
+    resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">❌ ' + esc(e.message || String(e)) + '</div></div>';
+  }
+// --- AI 文本对话（SSE 流式）---
+async function executeAITextTool(tool, params, resultArea) {
+  var message = params.message || params.text || '';
+  if (!message) { toast('输入不能为空', 'error'); return; }
+  var history = tool.supports_history ? getLocalAIHistory(tool.id) : [];
+  resultArea.innerHTML = '<div class="tool-result-card"><div id="aiStreamText" style="min-height:40px;font-size:13px;line-height:1.6"></div></div>';
+  var streamEl = document.getElementById('aiStreamText');
+  streamEl.innerHTML = '<span class="ai-thinking">AI 正在思考</span>';
+  var response = await fetch('/api/tools/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+    body: JSON.stringify({ tool_id: tool.id, message: message, history: history, stream: true })
+  });
+  if (!response.ok) {
+    var errData = await response.json().catch(function() { return { error: 'AI请求失败' }; });
+    resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">❌ ' + esc(errData.error || 'AI请求失败') + '</div></div>';
+    return;
+  }
+  var reader = response.body.getReader();
+  var decoder = new TextDecoder();
+  var fullText = '', buffer = '', firstChunk = true;
+  while (true) {
+    var chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    var lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (var j = 0; j < lines.length; j++) {
+      var line = lines[j];
+      if (!line.startsWith('data: ')) continue;
+      var dataStr = line.slice(6).trim();
+      if (dataStr === '[DONE]') continue;
+      try {
+        var parsed = JSON.parse(dataStr);
+        if (parsed.text) {
+          if (firstChunk) { streamEl.innerHTML = ''; firstChunk = false; }
+          fullText += parsed.text;
+          streamEl.innerHTML = renderRichText(fullText) + '<span class="ai-cursor"></span>';
+        }
+      } catch(e) {}
+    }
+  }
+  streamEl.innerHTML = renderRichText(fullText) || '<em style="color:var(--text-faint)">（无回复内容）</em>';
+  if (fullText && tool.supports_history) saveLocalAIHistory(tool.id, message, fullText);
+}
+
+// --- AI 图片生成 ---
+async function executeAIImageTool(tool, params, resultArea) {
+  var prompt = params.prompt || params.message || '';
+  if (!prompt) { toast('描述不能为空', 'error'); return; }
+  resultArea.innerHTML = '<div class="tool-loading">🎨 正在生成图片...</div>';
+  var response = await fetch('/api/tools/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+    body: JSON.stringify({ tool_id: tool.id, message: prompt })
+  });
+  if (!response.ok) {
+    var errData = await response.json().catch(function() { return { error: '图片生成失败' }; });
+    resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">❌ ' + esc(errData.error || '图片生成失败') + '</div></div>';
+    return;
+  }
+  var blob = await response.blob();
+  var imgUrl = URL.createObjectURL(blob);
+  resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + imgUrl + '" style="max-width:100%;border-radius:8px;display:block;margin:0 auto"><div style="margin-top:8px"><a href="' + imgUrl + '" download="ai_image.png" class="btn btn-gray" style="font-size:12px">下载图片</a></div></div>';
+}
+
+// --- 直接 URL 工具 ---
+async function executeDirectUrlTool(tool, params, resultArea) {
+  var url = tool.url_template;
+  var matches = url.match(/\{(\w+)\}/g) || [];
+  for (var i = 0; i < matches.length; i++) {
+    var key = matches[i].slice(1, -1);
+    var val = params[key] || (tool.default_params && tool.default_params[key]) || '';
+    url = url.replace(matches[i], encodeURIComponent(val));
+  }
+  if (tool.result_type === 'image') {
+    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + esc(url) + '" style="max-width:100%;border-radius:8px" onerror="this.parentElement.innerHTML=\'<div class=\\'ai-error\\'>图片加载失败</div>\'"></div>';
+  } else {
+    resultArea.innerHTML = '<div class="tool-result-card"><a href="' + esc(url) + '" target="_blank" class="btn btn-orange">打开结果</a></div>';
+  }
+}
+
+// --- 代理 GET 工具 ---
+async function executeProxyTool(tool, params, resultArea) {
+  var queryParts = [];
+  for (var key in params) {
+    if (params[key]) queryParts.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
+  }
+  var queryStr = queryParts.join('&');
+  var url = '/api/tools/proxy?tool_id=' + encodeURIComponent(tool.id) + (queryStr ? '&' + queryStr : '');
+  var response = await fetch(url);
+  if (!response.ok) {
+    var errData = await response.json().catch(function() { return { error: '请求失败 (' + response.status + ')' }; });
+    resultArea.innerHTML = '<div class="tool-result-card"><div class="ai-error">❌ ' + esc(errData.error || '请求失败') + '</div></div>';
+    return;
+  }
+
+  var contentType = response.headers.get('Content-Type') || '';
+  if (contentType.includes('image/')) {
+    var blob = await response.blob();
+    var imgUrl = URL.createObjectURL(blob);
+    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + imgUrl + '" style="max-width:100%;border-radius:8px"></div>';
+    return;
+  }
+
+  var data = await response.json().catch(function() { return null; });
+  if (!data) {
+    var text = await response.text().catch(function() { return ''; });
+    resultArea.innerHTML = '<div class="tool-result-card"><pre style="white-space:pre-wrap;font-size:13px">' + esc(text) + '</pre></div>';
+    return;
+  }
+  resultArea.innerHTML = renderToolResult(tool, data);
+}
+
+// --- 渲染工具结果 ---
+function renderToolResult(tool, data) {
+  var html = '<div class="tool-result-card">';
+
+  // 天气卡片
+  if (tool.result_type === 'weather_card' && data.current) {
+    var cityName = data._city || '未知';
+    var temp = data.current.temperature_2m;
+    var humidity = data.current.relative_humidity_2m;
+    var weatherCode = data.current.weather_code;
+    var weatherDesc = weatherCodeToText(weatherCode);
+    html += '<div style="font-size:16px;font-weight:700;margin-bottom:4px">' + esc(cityName) + '</div>';
+    html += '<div style="font-size:36px;font-weight:700;color:var(--accent)">' + temp + '°C</div>';
+    html += '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px">' + weatherDesc + ' | 湿度 ' + humidity + '%</div>';
+    if (data.daily) {
+      html += '<div style="border-top:1px solid var(--border);margin-top:8px">';
+      for (var i = 0; i < data.daily.time.length; i++) {
+        var d = new Date(data.daily.time[i]);
+        var label = i === 0 ? '今天' : (i === 1 ? '明天' : (d.getMonth()+1) + '/' + d.getDate());
+        html += '<div class="tool-weather-day"><span style="width:50px;font-weight:600">' + label + '</span>';
+        html += '<span style="flex:1">' + weatherCodeToText(data.daily.weather_code[i]) + '</span>';
+        html += '<span style="color:var(--text-faint)">' + data.daily.temperature_2m_max[i] + '° / ' + data.daily.temperature_2m_min[i] + '°</span></div>';
+      }
+      html += '</div>';
+    }
+  }
+  // 表格
+  else if (tool.result_type === 'table' && data.rates) {
+    html += '<table class="tool-table"><thead><tr><th>货币</th><th>汇率</th></tr></thead><tbody>';
+    for (var cur in data.rates) {
+      html += '<tr><td>' + esc(cur) + '</td><td>' + data.rates[cur] + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  }
+  // JSON 卡片
+  else if (tool.result_type === 'json_card') {
+    html += '<pre style="white-space:pre-wrap;font-size:12px;max-height:400px;overflow-y:auto">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+  }
+  // 纯文本
+  else if (tool.result_type === 'text') {
+    if (data.setup && data.punchline) {
+      html += '<div style="font-size:14px;margin-bottom:8px">' + esc(data.setup) + '</div>';
+      html += '<div style="font-size:15px;font-weight:600;color:var(--accent)">' + esc(data.punchline) + '</div>';
+    } else if (data.q && data.a) {
+      html += '<div style="font-size:14px;margin-bottom:8px;font-style:italic">' + esc(data.q) + '</div>';
+      html += '<div style="font-size:15px;font-weight:600">' + esc(data.a) + '</div>';
+    } else if (Array.isArray(data) && data[0] && data[0].q) {
+      html += '<div style="font-size:14px;margin-bottom:8px;font-style:italic">' + esc(data[0].q) + '</div>';
+      html += '<div style="font-size:15px;font-weight:600">' + esc(data[0].a) + '</div>';
+    } else if (data.result) {
+      html += '<div style="font-size:14px">' + esc(data.result) + '</div>';
+    } else if (data.operation && data.expression) {
+      html += '<div style="font-size:13px;color:var(--text-faint);margin-bottom:4px">' + esc(data.operation) + ': ' + esc(data.expression) + '</div>';
+      html += '<div style="font-size:16px;font-weight:600;color:var(--accent)">' + esc(String(data.result)) + '</div>';
+    } else {
+      html += '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+    }
+  }
+  // 图片
+  else if (tool.result_type === 'image' && typeof data === 'string') {
+    html += '<img src="' + esc(data) + '" style="max-width:100%;border-radius:8px">';
+  }
+  // 默认 JSON
+  else {
+    html += '<pre style="white-space:pre-wrap;font-size:12px;max-height:400px;overflow-y:auto">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// 天气代码转文字
+function weatherCodeToText(code) {
+  var map = {0:'晴',1:'主要晴',2:'局部多云',3:'阴',45:'雾',48:'雾凇',51:'小毛毛雨',53:'毛毛雨',55:'大毛毛雨',61:'小雨',63:'中雨',65:'大雨',71:'小雪',73:'中雪',75:'大雪',77:'雪粒',80:'阵雨',81:'中阵雨',82:'大阵雨',85:'阵雪',86:'大阵雪',95:'雷暴',96:'雷暴冰雹',99:'大雷暴冰雹'};
+  return map[code] || '未知(' + code + ')';
 }
 
 // ===== Announcement Unread Red Dot =====
@@ -3592,14 +3921,17 @@ async function devUpdateAnnouncement(id) {
 async function loadFeaturesManager() {
   const el = document.getElementById('developerContent');
   try {
-    const [featuresRes, pagesRes] = await Promise.all([
+    const [featuresRes, pagesRes, tools] = await Promise.all([
       api('/api/features'),
-      api('/api/custom-pages')
+      api('/api/custom-pages'),
+      loadToolRegistry()
     ]);
     const features = featuresRes.data || [];
     const pages = pagesRes.data || [];
+    const independentTools = tools.filter(t => t.category === 'independent');
 
     const pageOptions = pages.map(p => `<option value="/pages/${p.id}">${esc(p.title)} (/pages/${p.id})</option>`).join('');
+    const toolOptions = independentTools.map(t => `<option value="${t.id}">${t.icon} ${esc(t.name)}</option>`).join('');
 
     el.innerHTML = `
       <div style="margin-bottom:16px">
@@ -3610,6 +3942,7 @@ async function loadFeaturesManager() {
           <select class="input" id="devFeatLinkType" onchange="toggleLinkInput()" style="margin-bottom:8px">
             <option value="external">外部链接</option>
             <option value="local">本地页面</option>
+            <option value="tool">网站工具</option>
           </select>
         </div>
         <div class="form-group" id="externalLinkGroup"><label class="form-label">外部链接 *</label><input class="input" id="devFeatExternalLink" placeholder="https://..."></div>
@@ -3620,6 +3953,14 @@ async function loadFeaturesManager() {
           </select>
           ${pages.length === 0 ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">暂无本地页面，请先在"本地页面"标签创建</div>' : ''}
         </div>
+        <div class="form-group" id="toolLinkGroup" style="display:none"><label class="form-label">选择工具 *</label>
+          <select class="input" id="devFeatToolSelect">
+            <option value="">-- 选择工具 --</option>
+            ${toolOptions}
+          </select>
+          <div id="toolConfigArea" style="margin-top:8px"></div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开，支持交互式操作</div>
+        </div>
         <button class="btn btn-orange btn-full" onclick="devAddFeature()">添加功能</button>
       </div>
       <div class="section-label">📋 现有功能</div>
@@ -3629,13 +3970,14 @@ async function loadFeaturesManager() {
             <div class="card" style="padding:12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                 <div style="width:36px;height:36px;border-radius:8px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-                  ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='🔗'">` : '🔗'}
+                  ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${f.tool_type ? '🛠️' : '🔗'}'">` : (f.tool_type ? '🛠️' : '🔗')}
                 </div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:13px;font-weight:600;color:var(--text-primary);word-break:break-all">${esc(f.title)}</div>
+                  ${f.tool_type ? '<span style="font-size:10px;color:var(--accent-color);background:var(--accent-soft);padding:1px 6px;border-radius:4px">工具</span>' : ''}
                 </div>
               </div>
-              <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">${esc(f.link_url)}</div>
+              <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">${esc(f.tool_type ? f.tool_type : f.link_url)}</div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditFeature('${f.id}')">编辑</button>
                 <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeleteFeature('${f.id}')">删除</button>
@@ -3650,10 +3992,32 @@ async function loadFeaturesManager() {
   }
 }
 
+// ===== Tool Registry Cache =====
+let toolRegistryCache = null;
+async function loadToolRegistry() {
+  if (toolRegistryCache) return toolRegistryCache;
+  try {
+    const res = await fetch('/api/tools/registry');
+    const data = await res.json();
+    if (data.success) {
+      toolRegistryCache = data.data;
+      return data.data;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function getToolIcon(toolId) {
+  if (!toolRegistryCache) return '🛠️';
+  const tool = toolRegistryCache.find(t => t.id === toolId);
+  return tool ? tool.icon : '🛠️';
+}
+
 function toggleLinkInput() {
   const type = document.getElementById('devFeatLinkType').value;
   document.getElementById('externalLinkGroup').style.display = type === 'external' ? 'block' : 'none';
   document.getElementById('localLinkGroup').style.display = type === 'local' ? 'block' : 'none';
+  document.getElementById('toolLinkGroup').style.display = type === 'tool' ? 'block' : 'none';
 }
 
 async function devAddFeature() {
@@ -3661,11 +4025,17 @@ async function devAddFeature() {
   const title = document.getElementById('devFeatTitle').value.trim();
   const linkType = document.getElementById('devFeatLinkType').value;
 
-  let link_url;
+  let link_url, tool_type = null, tool_config = null;
   if (linkType === 'external') {
     link_url = document.getElementById('devFeatExternalLink').value.trim();
-  } else {
+  } else if (linkType === 'local') {
     link_url = document.getElementById('devFeatLocalLink').value;
+  } else if (linkType === 'tool') {
+    const toolId = document.getElementById('devFeatToolSelect').value;
+    if (!toolId) { toast('请选择一个工具', 'error'); return; }
+    link_url = '/tools/' + toolId;
+    tool_type = toolId;
+    tool_config = JSON.stringify({});
   }
 
   if (!title || !link_url) { toast('标题和链接不能为空', 'error'); return; }
@@ -3673,14 +4043,15 @@ async function devAddFeature() {
   try {
     const res = await api('/api/features', {
       method: 'POST',
-      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, created_by: currentUser.id }),
+      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, created_by: currentUser.id, tool_type, tool_config }),
     });
     if (res.success) {
       toast('功能添加成功');
       document.getElementById('devFeatIcon').value = '';
       document.getElementById('devFeatTitle').value = '';
-      document.getElementById('devFeatExternalLink').value = '';
-      document.getElementById('devFeatLocalLink').value = '';
+      if (document.getElementById('devFeatExternalLink')) document.getElementById('devFeatExternalLink').value = '';
+      if (document.getElementById('devFeatLocalLink')) document.getElementById('devFeatLocalLink').value = '';
+      if (document.getElementById('devFeatToolSelect')) document.getElementById('devFeatToolSelect').value = '';
       loadFeaturesManager();
       loadFeatures(); // Refresh main page
     } else {
@@ -3713,10 +4084,16 @@ async function devEditFeature(id) {
     const feat = (res.data || []).find(f => f.id === id);
     if (!feat) { toast('功能不存在', 'error'); return; }
 
-    const pagesRes = await api('/api/custom-pages');
+    const [pagesRes, tools] = await Promise.all([
+      api('/api/custom-pages'),
+      loadToolRegistry()
+    ]);
     const pages = pagesRes.data || [];
+    const independentTools = tools.filter(t => t.category === 'independent');
     const pageOptions = pages.map(p => `<option value="/pages/${p.id}" ${feat.link_url === '/pages/'+p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('');
-    const isLocal = feat.link_url.startsWith('/pages/');
+    const isLocal = feat.link_url && feat.link_url.startsWith('/pages/');
+    const isTool = !!feat.tool_type;
+    const toolOptions = independentTools.map(t => `<option value="${t.id}" ${feat.tool_type === t.id ? 'selected' : ''}>${t.icon} ${esc(t.name)}</option>`).join('');
 
     const el = document.getElementById('developerContent');
     el.innerHTML = `
@@ -3726,13 +4103,18 @@ async function devEditFeature(id) {
         <div class="form-group"><label class="form-label">标题 *</label><input class="input" id="editFeatTitle" value="${esc(feat.title)}" maxlength="50"></div>
         <div class="form-group"><label class="form-label">链接类型</label>
           <select class="input" id="editFeatLinkType" onchange="toggleEditLinkInput()" style="margin-bottom:8px">
-            <option value="external" ${isLocal ? '' : 'selected'}>外部链接</option>
+            <option value="external" ${isLocal || isTool ? '' : 'selected'}>外部链接</option>
             <option value="local" ${isLocal ? 'selected' : ''}>本地页面</option>
+            <option value="tool" ${isTool ? 'selected' : ''}>网站工具</option>
           </select>
         </div>
-        <div class="form-group" id="editExternalLinkGroup" style="${isLocal ? 'display:none' : ''}"><label class="form-label">外部链接 *</label><input class="input" id="editFeatExternalLink" value="${isLocal ? '' : esc(feat.link_url)}" placeholder="https://..."></div>
+        <div class="form-group" id="editExternalLinkGroup" style="${isLocal || isTool ? 'display:none' : ''}"><label class="form-label">外部链接 *</label><input class="input" id="editFeatExternalLink" value="${isLocal || isTool ? '' : esc(feat.link_url)}" placeholder="https://..."></div>
         <div class="form-group" id="editLocalLinkGroup" style="${isLocal ? '' : 'display:none'}"><label class="form-label">选择本地页面 *</label>
           <select class="input" id="editFeatLocalLink"><option value="">-- 选择页面 --</option>${pageOptions}</select>
+        </div>
+        <div class="form-group" id="editToolLinkGroup" style="${isTool ? '' : 'display:none'}"><label class="form-label">选择工具 *</label>
+          <select class="input" id="editFeatToolSelect"><option value="">-- 选择工具 --</option>${toolOptions}</select>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开</div>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdateFeature('${id}')">保存修改</button>
@@ -3749,23 +4131,30 @@ function toggleEditLinkInput() {
   const type = document.getElementById('editFeatLinkType').value;
   document.getElementById('editExternalLinkGroup').style.display = type === 'external' ? 'block' : 'none';
   document.getElementById('editLocalLinkGroup').style.display = type === 'local' ? 'block' : 'none';
+  document.getElementById('editToolLinkGroup').style.display = type === 'tool' ? 'block' : 'none';
 }
 
 async function devUpdateFeature(id) {
   const icon_url = document.getElementById('editFeatIcon').value.trim();
   const title = document.getElementById('editFeatTitle').value.trim();
   const linkType = document.getElementById('editFeatLinkType').value;
-  let link_url;
+  let link_url, tool_type = null, tool_config = null;
   if (linkType === 'external') {
     link_url = document.getElementById('editFeatExternalLink').value.trim();
-  } else {
+  } else if (linkType === 'local') {
     link_url = document.getElementById('editFeatLocalLink').value;
+  } else if (linkType === 'tool') {
+    const toolId = document.getElementById('editFeatToolSelect').value;
+    if (!toolId) { toast('请选择一个工具', 'error'); return; }
+    link_url = '/tools/' + toolId;
+    tool_type = toolId;
+    tool_config = JSON.stringify({});
   }
   if (!title || !link_url) { toast('标题和链接不能为空', 'error'); return; }
   try {
     const res = await api(`/api/features?id=${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, updated_by: currentUser.id }),
+      body: JSON.stringify({ title, icon_url: icon_url || null, link_url, updated_by: currentUser.id, tool_type, tool_config }),
     });
     if (res.success) {
       toast('功能已更新');
@@ -5278,6 +5667,7 @@ async function sendChatMsg() {
   const input = document.getElementById('chatInput');
   const content = input.value.trim();
   if (!content || !chatState.currentRoomId) return;
+
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;

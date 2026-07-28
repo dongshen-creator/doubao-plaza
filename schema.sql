@@ -242,3 +242,8 @@ CREATE TABLE IF NOT EXISTS site_settings (
 -- 插入站点设置默认值（首次部署）：
 -- INSERT OR IGNORE INTO site_settings (key, value) VALUES ('maintenance_mode', 'off');
 -- INSERT OR IGNORE INTO site_settings (key, value) VALUES ('migration_mode', 'off');
+
+-- ===== 工具包整合迁移 =====
+-- features 表扩展：支持工具类型功能
+ALTER TABLE features ADD COLUMN tool_type TEXT;
+ALTER TABLE features ADD COLUMN tool_config TEXT;
