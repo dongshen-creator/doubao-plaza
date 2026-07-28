@@ -9,7 +9,7 @@
   <title>逗包用户广场</title>
   <meta name="description" content="逗包用户广场 - 连接豆包智能体用户的社交平台，支持实时聊天、好友系统、频道管理和自定义页面">
   <meta name="theme-color" content="#FF6B35">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta property="og:title" content="逗包用户广场">
   <meta property="og:description" content="连接豆包智能体用户的社交平台">
@@ -17,6 +17,9 @@
   <meta property="og:locale" content="zh_CN">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
+  <!-- SunEditor 富文本编辑器 -->
+  <link href="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.js"></script>
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
   <script src="supabase-sdk.js?v=2"></script>
@@ -29,7 +32,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=40">
+  <link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 
@@ -2395,6 +2398,7 @@ function renderBlogView(sidebar, main) {
   }
 
   var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+  var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
 
   // 侧边栏：公告 + 快捷操作
   sidebar.classList.add('has-content');
@@ -2402,7 +2406,7 @@ function renderBlogView(sidebar, main) {
     '<div class="sidebar-section">' +
       '<div class="sidebar-section-title">📝 小肥羊讲堂</div>' +
       '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowList(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">📋</span><span class="sidebar-item-text">文章列表</span></div>' +
-      '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowEditor(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">✍</span><span class="sidebar-item-text">写文章</span></div>' +
+      (isPunished ? '' : '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowEditor(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">✍</span><span class="sidebar-item-text">写文章</span></div>') +
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowReviewPanel(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">🔍</span><span class="sidebar-item-text">审核管理</span></div>' : '') +
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowCategoryMgr(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon">🏷</span><span class="sidebar-item-text">分类管理</span></div>' : '') +
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogToggleAnnouncementMgr()"><span class="sidebar-item-icon">📢</span><span class="sidebar-item-text">管理公告</span></div>' : '') +
@@ -2422,6 +2426,7 @@ function renderBlogView(sidebar, main) {
   // 主区域：博客内容
   main.innerHTML =
     '<div class="view-header-bar">' +
+      '<button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="侧边栏">☰</button>' +
       '<span style="font-size:15px;font-weight:600">📝 小肥羊讲堂</span>' +
     '</div>' +
     '<div id="blogMainArea" style="padding:16px;max-width:800px;margin:0 auto"></div>';
@@ -2465,8 +2470,14 @@ function renderBlogPage(container, tool) {
 
 // --- 博客列表页 ---
 async function blogShowList(container) {
+  // 导航离开编辑器时销毁 SunEditor 实例
+  if (window.__blogSunEditor) {
+    try { window.__blogSunEditor.destroy(); } catch(e) {}
+    window.__blogSunEditor = null;
+  }
   blogState.currentView = 'list';
   var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+  var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
   container.innerHTML =
     '<div id="blogListView">' +
       '<div id="blogAnnouncementBanner"></div>' +
@@ -2474,7 +2485,7 @@ async function blogShowList(container) {
         '<h3 style="font-size:20px;font-weight:700">📝 小肥羊讲堂</h3>' +
         '<div style="display:flex;gap:8px">' +
           (isDev ? '<button class="btn btn-gray" style="font-size:13px;padding:6px 12px" onclick="blogToggleAnnouncementMgr()">📢 管理公告</button>' : '') +
-          '<button class="btn btn-orange" style="font-size:13px;padding:6px 16px" onclick="blogShowEditor(blogState.container)">✍ 写文章</button>' +
+          (isPunished ? '' : '<button class="btn btn-orange" style="font-size:13px;padding:6px 16px" onclick="blogShowEditor(blogState.container)">✍ 写文章</button>') +
         '</div>' +
       '</div>' +
       '<div id="blogAnnouncementMgr" style="display:none;margin-bottom:16px"></div>' +
@@ -2643,6 +2654,11 @@ async function blogLoadList() {
 
 // --- 博客阅读页 ---
 async function blogShowPost(container, postId) {
+  // 导航离开编辑器时销毁 SunEditor 实例
+  if (window.__blogSunEditor) {
+    try { window.__blogSunEditor.destroy(); } catch(e) {}
+    window.__blogSunEditor = null;
+  }
   blogState.currentView = 'post';
   blogState.currentPostId = postId;
   container.innerHTML = '<div id="blogPostView" style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
@@ -2694,42 +2710,28 @@ async function blogShowPost(container, postId) {
   }
 }
 
-// --- 博客编辑器（富文本）---
+// --- 博客编辑器（SunEditor 富文本）---
 function blogShowEditor(container, postId) {
+  // 惩罚性隐身用户禁止写文章
+  if (currentUser && currentUser.privacy_setting === 'punished_stealth') {
+    toast('您的账号处于惩罚性隐身状态，暂时无法发布博客', 'error');
+    return;
+  }
   blogState.currentView = 'editor';
   blogState.currentPostId = postId || null;
-  blogState.editorState = { postId: postId || null, savedRange: null };
+  blogState.editorState = { postId: postId || null, sunEditor: null };
   var isEdit = !!postId;
 
+  // 销毁旧的 SunEditor 实例
+  if (window.__blogSunEditor) {
+    try { window.__blogSunEditor.destroy(); } catch(e) {}
+    window.__blogSunEditor = null;
+  }
+
   container.innerHTML =
-    '<style>' +
-    '.blog-rte-toolbar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:8px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--bg-card)}' +
-    '.blog-rte-btn{min-width:30px;height:30px;padding:0 6px;border:none;background:transparent;color:var(--text-secondary);border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s}' +
-    '.blog-rte-btn:hover{background:var(--bg-hover);color:var(--text-primary)}' +
-    '.blog-rte-active{background:var(--accent-bg);color:var(--accent)}' +
-    '.blog-rte-sep{width:1px;height:20px;background:var(--border);margin:0 3px;flex-shrink:0}' +
-    '.blog-rte-color{width:26px;height:26px;padding:0;border:1px solid var(--border);background:transparent;cursor:pointer;border-radius:6px}' +
-    '.blog-rte-editor{min-height:400px;max-height:760px;padding:16px;border:1px solid var(--border);border-radius:0 0 8px 8px;background:var(--bg-card);color:var(--text-primary);font-size:15px;line-height:1.8;outline:none;overflow-y:auto;word-break:break-word}' +
-    '.blog-rte-editor:focus{border-color:var(--accent)}' +
-    '.blog-rte-editor:empty:before{content:attr(data-placeholder);color:var(--text-faint)}' +
-    '.blog-rte-editor h1{font-size:1.8em;font-weight:700;margin:.6em 0 .3em}' +
-    '.blog-rte-editor h2{font-size:1.5em;font-weight:700;margin:.6em 0 .3em}' +
-    '.blog-rte-editor h3{font-size:1.25em;font-weight:700;margin:.6em 0 .3em}' +
-    '.blog-rte-editor p{margin:.4em 0}' +
-    '.blog-rte-editor ul,.blog-rte-editor ol{padding-left:1.6em;margin:.4em 0}' +
-    '.blog-rte-editor blockquote{border-left:3px solid var(--accent);padding:4px 12px;margin:.6em 0;background:var(--accent-bg);color:var(--text-secondary);border-radius:0 6px 6px 0}' +
-    '.blog-rte-editor pre{background:var(--bg-hover);padding:12px;border-radius:6px;overflow-x:auto;margin:.6em 0;font-family:Consolas,monospace;font-size:13px}' +
-    '.blog-rte-editor pre code{background:none;padding:0;font-family:inherit}' +
-    '.blog-rte-editor code{background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-family:Consolas,monospace;font-size:.9em}' +
-    '.blog-rte-editor a{color:var(--accent)}' +
-    '.blog-rte-editor img{max-width:100%;border-radius:6px}' +
-    '.blog-rte-editor hr{border:none;border-top:1px solid var(--border);margin:1em 0}' +
-    '</style>' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
       '<button class="btn btn-gray" style="font-size:12px;padding:4px 12px" onclick="blogShowList(blogState.container)">← 返回列表</button>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button class="btn btn-gray" style="font-size:12px;padding:4px 12px" onclick="blogShowList(blogState.container)">取消</button>' +
-      '</div>' +
+      '<button class="btn btn-gray" style="font-size:12px;padding:4px 12px" onclick="blogShowList(blogState.container)">取消</button>' +
     '</div>' +
     '<div style="max-width:760px;margin:0 auto">' +
       '<h3 style="font-size:18px;font-weight:700;margin-bottom:20px">' + (isEdit ? '编辑文章' : '写文章') + '</h3>' +
@@ -2753,40 +2755,7 @@ function blogShowEditor(container, postId) {
       '</div>' +
       '<div style="margin-bottom:16px">' +
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文</label>' +
-        '<div class="blog-rte-toolbar">' +
-          '<button type="button" class="blog-rte-btn" title="撤销" onclick="blogRteExec(\'undo\')">↶</button>' +
-          '<button type="button" class="blog-rte-btn" title="重做" onclick="blogRteExec(\'redo\')">↷</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" class="blog-rte-btn" title="标题1" onclick="blogRteBlock(\'h1\')" style="font-size:12px">H1</button>' +
-          '<button type="button" class="blog-rte-btn" title="标题2" onclick="blogRteBlock(\'h2\')" style="font-size:12px">H2</button>' +
-          '<button type="button" class="blog-rte-btn" title="标题3" onclick="blogRteBlock(\'h3\')" style="font-size:12px">H3</button>' +
-          '<button type="button" class="blog-rte-btn" title="正文段落" onclick="blogRteBlock(\'p\')" style="font-size:12px">正文</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" id="rte_bold" class="blog-rte-btn" title="加粗" onclick="blogRteExec(\'bold\')" style="font-weight:800">B</button>' +
-          '<button type="button" id="rte_italic" class="blog-rte-btn" title="斜体" onclick="blogRteExec(\'italic\')" style="font-style:italic">I</button>' +
-          '<button type="button" id="rte_underline" class="blog-rte-btn" title="下划线" onclick="blogRteExec(\'underline\')" style="text-decoration:underline">U</button>' +
-          '<button type="button" id="rte_strike" class="blog-rte-btn" title="删除线" onclick="blogRteExec(\'strikeThrough\')" style="text-decoration:line-through">S</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<input type="color" class="blog-rte-color" title="文字颜色" value="#1a1a2e" onchange="blogRteColor(this,\'fore\')" oninput="blogRteColor(this,\'fore\')">' +
-          '<input type="color" class="blog-rte-color" title="背景色" value="#FFEB3B" onchange="blogRteColor(this,\'hilite\')" oninput="blogRteColor(this,\'hilite\')">' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" id="rte_alignL" class="blog-rte-btn" title="左对齐" onclick="blogRteExec(\'justifyLeft\')">⯇</button>' +
-          '<button type="button" id="rte_alignC" class="blog-rte-btn" title="居中" onclick="blogRteExec(\'justifyCenter\')">≡</button>' +
-          '<button type="button" id="rte_alignR" class="blog-rte-btn" title="右对齐" onclick="blogRteExec(\'justifyRight\')">⯈</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" id="rte_ul" class="blog-rte-btn" title="无序列表" onclick="blogRteExec(\'insertUnorderedList\')">☰</button>' +
-          '<button type="button" id="rte_ol" class="blog-rte-btn" title="有序列表" onclick="blogRteExec(\'insertOrderedList\')">№</button>' +
-          '<button type="button" class="blog-rte-btn" title="引用块" onclick="blogRteBlock(\'blockquote\')">❝</button>' +
-          '<button type="button" class="blog-rte-btn" title="代码块" onclick="blogRteCode()">&lt;/&gt;</button>' +
-          '<button type="button" class="blog-rte-btn" title="分割线" onclick="blogRteExec(\'insertHorizontalRule\')">―</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" class="blog-rte-btn" title="插入链接" onclick="blogRteLink()">🔗</button>' +
-          '<button type="button" class="blog-rte-btn" title="插入图片" onclick="blogRteImage()">🖼</button>' +
-          '<span class="blog-rte-sep"></span>' +
-          '<button type="button" class="blog-rte-btn" title="清除格式" onclick="blogRteClear()">✕</button>' +
-        '</div>' +
-        '<div id="blogContentEditor" class="blog-rte-editor" contenteditable="true" data-placeholder="开始写作..." oninput="blogUpdateWordCount()" onkeyup="blogUpdateToolbarState()" onmouseup="blogUpdateToolbarState()"></div>' +
-        '<div style="display:flex;justify-content:flex-end;padding:4px 8px;font-size:11px;color:var(--text-faint)"><span id="blogWordCount">0 字</span></div>' +
+        '<textarea id="blogContentTextarea" style="width:100%;height:400px;display:none"></textarea>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">标签（用逗号分隔，最多5个）</label>' +
@@ -2798,168 +2767,65 @@ function blogShowEditor(container, postId) {
       '</div>' +
     '</div>';
 
-  // 粘贴时转为纯文本，避免外部样式污染编辑区
-  var editor = document.getElementById('blogContentEditor');
-  if (editor) {
-    editor.addEventListener('paste', function(e) {
-      e.preventDefault();
-      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-      document.execCommand('insertText', false, text);
+  // 初始化 SunEditor
+  var textarea = document.getElementById('blogContentTextarea');
+  if (textarea && typeof SUNEDITOR !== 'undefined') {
+    var se = SUNEDITOR.create(textarea, {
+      height: 'auto',
+      minHeight: '400px',
+      width: '100%',
+      buttonList: [
+        ['undo', 'redo'],
+        ['font', 'fontSize', 'formatBlock'],
+        ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
+        ['fontColor', 'hiliteColor', 'textStyle'],
+        ['removeFormat'],
+        ['paragraphStyle', 'align', 'horizontalRule', 'list', 'indent', 'outdent'],
+        ['table', 'link', 'image', 'video'],
+        ['fullScreen', 'codeView']
+      ],
+      font: ['Arial', 'Courier New', 'Georgia', 'Microsoft YaHei', 'SimSun', 'Tahoma', 'Times New Roman', 'Verdana'],
+      fontSize: [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32],
+      placeholder: '开始写作...',
+      charCounter: true,
+      charCounterType: 'byte-html',
+      charCounterLabel: '字数',
+      imageResizing: true,
+      imageHeightLimit: 500,
+      imageWidthLimit: 800,
+      toolbarWidth: '100%',
+      attributes: { style: 'font-size:15px;line-height:1.8' }
     });
+    window.__blogSunEditor = se;
+    blogState.editorState.sunEditor = se;
+  } else if (textarea) {
+    // SunEditor 未加载，显示纯文本编辑器作为降级方案
+    textarea.style.display = '';
+    textarea.style.width = '100%';
+    textarea.style.height = '400px';
+    textarea.style.padding = '12px';
+    textarea.style.border = '1px solid var(--border)';
+    textarea.style.borderRadius = '8px';
+    textarea.style.background = 'var(--bg-card)';
+    textarea.style.color = 'var(--text-primary)';
+    textarea.style.fontSize = '14px';
+    textarea.style.resize = 'vertical';
+    textarea.style.fontFamily = 'inherit';
+    textarea.placeholder = '编辑器加载中...如果长时间无响应请刷新页面';
+    // 降级模式下 getContents/setContents 使用 textarea.value
+    window.__blogSunEditor = {
+      getContents: function() { return textarea.value; },
+      getText: function() { return textarea.value; },
+      setContents: function(html) { textarea.value = html; },
+      destroy: function() {}
+    };
   }
 
   blogLoadCategoriesForEditor();
   if (isEdit) blogLoadPostForEdit(postId);
 }
 
-// --- 富文本编辑器：执行格式命令 ---
-function blogRteExec(cmd) {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogRestoreSelection();
-  try { document.execCommand(cmd, false, null); } catch(e) {}
-  blogUpdateToolbarState();
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：块级格式（标题/正文/引用）---
-function blogRteBlock(tag) {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogRestoreSelection();
-  try { document.execCommand('formatBlock', false, tag); } catch(e) {}
-  blogUpdateToolbarState();
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：颜色（文字色/背景色）---
-function blogRteColor(input, type) {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogRestoreSelection();
-  var color = input.value;
-  try {
-    if (type === 'fore') {
-      document.execCommand('foreColor', false, color);
-    } else {
-      var ok = document.execCommand('hiliteColor', false, color);
-      if (!ok) document.execCommand('backColor', false, color);
-    }
-  } catch(e) {
-    try { document.execCommand('backColor', false, color); } catch(e2) {}
-  }
-  blogUpdateToolbarState();
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：插入链接 ---
-function blogRteLink() {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogSaveSelection();
-  var url = prompt('请输入链接地址（含 http:// 或 https://）：', 'https://');
-  if (!url) return;
-  blogRestoreSelection();
-  var sel = window.getSelection();
-  var text = (sel && sel.rangeCount) ? sel.toString() : '';
-  if (text) {
-    try { document.execCommand('createLink', false, url); } catch(e) {}
-  } else {
-    document.execCommand('insertHTML', false, '<a href="' + esc(url) + '">' + esc(url) + '</a>');
-  }
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：插入图片 ---
-function blogRteImage() {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogSaveSelection();
-  var url = prompt('请输入图片地址：', 'https://');
-  if (!url) return;
-  blogRestoreSelection();
-  try { document.execCommand('insertImage', false, url); } catch(e) {}
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：代码块（pre>code 包裹）---
-function blogRteCode() {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogRestoreSelection();
-  var sel = window.getSelection();
-  var text = (sel && sel.rangeCount) ? sel.toString() : '';
-  if (text) {
-    var safe = esc(text).replace(/\n/g, '<br>');
-    document.execCommand('insertHTML', false, '<pre><code>' + safe + '</code></pre><p><br></p>');
-  } else {
-    document.execCommand('insertHTML', false, '<pre><code><br></code></pre><p><br></p>');
-  }
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：清除格式 ---
-function blogRteClear() {
-  var editor = document.getElementById('blogContentEditor');
-  if (!editor) return;
-  editor.focus();
-  blogRestoreSelection();
-  try { document.execCommand('removeFormat', false, null); } catch(e) {}
-  blogUpdateToolbarState();
-  blogUpdateWordCount();
-}
-
-// --- 富文本编辑器：保存/恢复选区 ---
-function blogSaveSelection() {
-  if (!blogState.editorState) return;
-  var sel = window.getSelection();
-  if (sel && sel.rangeCount > 0) {
-    var editor = document.getElementById('blogContentEditor');
-    var range = sel.getRangeAt(0);
-    if (editor && (editor === range.commonAncestorContainer || editor.contains(range.commonAncestorContainer))) {
-      blogState.editorState.savedRange = range.cloneRange();
-    }
-  }
-}
-
-function blogRestoreSelection() {
-  if (!blogState.editorState || !blogState.editorState.savedRange) return;
-  var sel = window.getSelection();
-  if (sel) {
-    sel.removeAllRanges();
-    try { sel.addRange(blogState.editorState.savedRange); } catch(e) {}
-  }
-}
-
-// --- 富文本编辑器：字数统计 ---
-function blogUpdateWordCount() {
-  var editor = document.getElementById('blogContentEditor');
-  var el = document.getElementById('blogWordCount');
-  if (!editor || !el) return;
-  var text = editor.innerText || editor.textContent || '';
-  var count = text.replace(/\s/g, '').length;
-  el.textContent = count + ' 字';
-}
-
-// --- 富文本编辑器：工具栏 active 状态 ---
-function blogUpdateToolbarState() {
-  blogSaveSelection();
-  var map = { rte_bold: 'bold', rte_italic: 'italic', rte_underline: 'underline', rte_strike: 'strikeThrough', rte_ul: 'insertUnorderedList', rte_ol: 'insertOrderedList', rte_alignL: 'justifyLeft', rte_alignC: 'justifyCenter', rte_alignR: 'justifyRight' };
-  for (var id in map) {
-    var btn = document.getElementById(id);
-    if (!btn) continue;
-    try {
-      if (document.queryCommandState(map[id])) btn.classList.add('blog-rte-active');
-      else btn.classList.remove('blog-rte-active');
-    } catch(e) {}
-  }
-}
+// --- 旧的自定义编辑器辅助函数已移除，改用 SunEditor ---
 
 // --- 编辑器分类下拉加载 ---
 async function blogLoadCategoriesForEditor() {
@@ -2989,26 +2855,25 @@ async function blogLoadPostForEdit(postId) {
     document.getElementById('blogTitleInput').value = p.title || '';
     document.getElementById('blogCoverInput').value = p.cover_image || '';
     document.getElementById('blogSummaryInput').value = p.summary || '';
-    var editor = document.getElementById('blogContentEditor');
-    if (editor) editor.innerHTML = p.content || '';
+    // 使用 SunEditor API 设置内容
+    if (window.__blogSunEditor) {
+      window.__blogSunEditor.setContents(p.content || '');
+    }
     document.getElementById('blogTagsInput').value = tags.join(', ');
-    // 确保分类列表加载完成后再选中
     await blogLoadCategoriesForEditor();
     var catSel = document.getElementById('blogCategorySelect');
     if (catSel && p.category_id != null && p.category_id !== '') {
       catSel.value = p.category_id;
     }
-    blogUpdateWordCount();
   } catch(e) { toast('加载文章失败', 'error'); }
 }
 
 // --- 保存/发布文章 ---
 async function blogSavePost() {
   var titleEl = document.getElementById('blogTitleInput');
-  var editor = document.getElementById('blogContentEditor');
-  if (!titleEl || !editor) return;
+  if (!titleEl) return;
   var title = titleEl.value.trim();
-  var content = editor.innerHTML.trim();
+  var content = window.__blogSunEditor ? window.__blogSunEditor.getContents().trim() : '';
   var cover = document.getElementById('blogCoverInput').value.trim();
   var summary = document.getElementById('blogSummaryInput').value.trim();
   var tagsStr = document.getElementById('blogTagsInput').value.trim();
@@ -3016,7 +2881,7 @@ async function blogSavePost() {
   var categoryId = catSel ? (catSel.value || null) : null;
   if (!title) { toast('标题不能为空', 'error'); return; }
   if (!content) { toast('正文不能为空', 'error'); return; }
-  if (!summary) { summary = (editor.innerText || '').replace(/\s/g, '').slice(0, 100); }
+  if (!summary) { summary = ''; if (window.__blogSunEditor) { var plainText = window.__blogSunEditor.getText(); summary = plainText.replace(/\s/g, '').slice(0, 100); } }
   var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean).slice(0, 5) : [];
 
   try {
@@ -3070,36 +2935,105 @@ async function blogLoadComments(postId) {
     var comments = (res.success && res.data) ? res.data : [];
     var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
 
-    var html = '<h4 style="font-size:16px;font-weight:700;margin-bottom:16px">💬 评论 (' + comments.length + ')</h4>';
-    html += '<div style="margin-bottom:20px">' +
-      '<textarea id="blogCommentInput" placeholder="写下你的评论..." style="width:100%;min-height:80px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;resize:vertical"></textarea>' +
-      '<button class="btn btn-orange" style="font-size:12px;padding:6px 16px;margin-top:8px" onclick="blogAddComment(' + postId + ',0)">发表评论</button>' +
-    '</div>';
+    // 构建嵌套评论树
+    var topComments = comments.filter(function(c) { return !c.parent_id || c.parent_id === 0; });
+    var replyMap = {};
+    comments.forEach(function(c) {
+      if (c.parent_id && c.parent_id !== 0) {
+        if (!replyMap[c.parent_id]) replyMap[c.parent_id] = [];
+        replyMap[c.parent_id].push(c);
+      }
+    });
+
+    var html = '<div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)">' +
+      '<h4 style="font-size:16px;font-weight:700;margin-bottom:16px">💬 评论 (' + comments.length + ')</h4>' +
+      '<div style="margin-bottom:20px;display:flex;gap:10px;align-items:flex-start">' +
+        '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<textarea id="blogCommentInput" placeholder="写下你的评论..." style="width:100%;min-height:56px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font-size:13px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:border-color 0.2s" onfocus="this.style.borderColor=\'var(--accent)\'" onblur="this.style.borderColor=\'var(--border)\'"></textarea>' +
+          '<div style="display:flex;justify-content:flex-end;margin-top:6px">' +
+            '<button class="btn btn-orange" style="font-size:12px;padding:6px 18px;border-radius:8px" onclick="blogAddComment(' + postId + ',0)">发表评论</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
 
     if (comments.length === 0) {
-      html += '<div style="text-align:center;padding:20px;color:var(--text-faint);font-size:13px">还没有评论，来说点什么吧</div>';
+      html += '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">还没有评论，来说点什么吧</div>';
     } else {
-      html += '<div id="blogCommentList">' + comments.map(function(c) {
-        var canDelete = currentUser && (c.user_id == currentUser.id || isDev);
-        return '<div class="card" style="margin-bottom:10px;padding:12px" id="blogComment_' + c.id + '">' +
-          '<div style="display:flex;align-items:flex-start;gap:8px">' +
-            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
-            '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;align-items:center;gap:6px">' +
-                '<span style="font-size:13px;font-weight:600">' + esc(c.user_name) + '</span>' +
-                '<span style="font-size:11px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
-                (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer">删除</button>' : '') +
-              '</div>' +
-              '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);margin-top:4px;word-break:break-word">' + renderRichContent(c.content) + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('') + '</div>';
+      html += '<div id="blogCommentList">';
+      topComments.forEach(function(c) {
+        html += blogRenderComment(c, isDev, 0, replyMap);
+      });
+      html += '</div>';
     }
+    html += '</div>';
     section.innerHTML = html;
   } catch(e) {
     section.innerHTML = '<div style="color:var(--danger);font-size:13px">评论加载失败</div>';
   }
+}
+
+function blogRenderComment(c, isDev, depth, replyMap) {
+  var canDelete = currentUser && (c.user_id == currentUser.id || isDev);
+  var replies = replyMap[c.id] || [];
+  var maxDepth = 3;
+  var actualDepth = Math.min(depth, maxDepth);
+  var indentStyle = depth > 0 ? 'margin-left:' + (actualDepth * 20) + 'px;padding-left:14px;border-left:2px solid var(--border);' : '';
+  var bgStyle = depth > 0 ? 'background:var(--bg-hover);' : 'background:var(--bg-card);';
+  var html = '<div style="margin-bottom:10px;' + indentStyle + '">' +
+    '<div style="padding:12px 14px;border-radius:10px;' + bgStyle + '" id="blogComment_' + c.id + '">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px">' +
+        '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+            '<span style="font-size:13px;font-weight:600;color:var(--text-primary)">' + esc(c.user_name) + '</span>' +
+            '<span style="font-size:11px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
+            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 6px;opacity:0.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">删除</button>' : '') +
+          '</div>' +
+          '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);margin-top:6px;word-break:break-word;line-height:1.6">' + renderRichContent(c.content) + '</div>' +
+          '<button onclick="blogShowReplyBox(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')" style="font-size:11px;color:var(--text-faint);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;transition:color 0.2s" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-faint)\'">↩ 回复</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:10px;margin-left:42px">' +
+        '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:48px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:border-color 0.2s" onfocus="this.style.borderColor=\'var(--accent)\'" onblur="this.style.borderColor=\'var(--border)\'"></textarea>' +
+        '<div style="display:flex;gap:6px;margin-top:6px">' +
+          '<button class="btn btn-orange" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="blogSubmitReply(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')">回复</button>' +
+          '<button class="btn btn-gray" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="document.getElementById(\'blogReplyBox_' + c.id + '\').style.display=\'none\'">取消</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  // 渲染子回复
+  replies.forEach(function(r) {
+    html += blogRenderComment(r, isDev, depth + 1, replyMap);
+  });
+  html += '</div>';
+  return html;
+}
+
+function blogShowReplyBox(commentId, postId) {
+  var box = document.getElementById('blogReplyBox_' + commentId);
+  if (!box) return;
+  box.style.display = box.style.display === 'none' ? '' : 'none';
+  if (box.style.display !== 'none') {
+    var input = document.getElementById('blogReplyInput_' + commentId);
+    if (input) setTimeout(function() { input.focus(); }, 100);
+  }
+}
+
+async function blogSubmitReply(parentId, postId) {
+  var input = document.getElementById('blogReplyInput_' + parentId);
+  if (!input) return;
+  var content = input.value.trim();
+  if (!content) { toast('回复不能为空', 'error'); return; }
+  try {
+    var res = await api('/api/blog/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ post_id: postId, content: content, parent_id: parentId })
+    });
+    if (res.success) { toast('回复已发表'); blogLoadComments(postId); }
+    else toast(res.error || '回复失败', 'error');
+  } catch(e) { toast('回复失败', 'error'); }
 }
 
 // --- 添加评论 ---
@@ -3111,7 +3045,7 @@ async function blogAddComment(postId, parentId) {
   try {
     var res = await api('/api/blog/comments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ post_id: postId, content: content, parent_id: parentId || 0 })
     });
     if (res.success) { input.value = ''; toast('评论已发表'); blogLoadComments(postId); }

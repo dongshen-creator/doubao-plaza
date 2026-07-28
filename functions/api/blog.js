@@ -237,11 +237,19 @@ export async function onRequestPost(context) {
 
     // 从 users 表获取作者信息（以认证用户为准）
     const user = await env.DB.prepare(
-      `SELECT id, name, avatar, doubao_id FROM users WHERE id = ?`
+      `SELECT id, name, avatar, doubao_id, privacy_setting, punished_until FROM users WHERE id = ?`
     ).bind(authUserId).first();
 
     if (!user) {
       return jsonResponse({ success: false, error: '用户信息不存在' }, 403);
+    }
+
+    // 惩罚性隐身用户禁止发布博客
+    if (user.privacy_setting === 'punished_stealth') {
+      const now = new Date().toISOString();
+      if (!user.punished_until || user.punished_until > now) {
+        return jsonResponse({ success: false, error: '您的账号处于惩罚性隐身状态，暂时无法发布博客' }, 403);
+      }
     }
 
     // 审核逻辑：开发者发布直接 published；普通用户发布需审核（pending）
