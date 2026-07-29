@@ -32,7 +32,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=45">
 </head>
 <body>
 
@@ -901,6 +901,7 @@ async function init() {
   applyChatBackground();
   startPresenceHeartbeat();
   startOnlineCountUpdater();
+  loadBlockedIds(); // 加载黑名单ID缓存用于聊天消息过滤
   window.addEventListener('beforeunload', function() {
     Object.values(chatState.sbChannels).forEach(function(c) { try { c.unsubscribe(); } catch(e) {} });
     // 退出时标记离线
@@ -1104,7 +1105,7 @@ function updateNavbar() {
   var themeIcon = document.body.classList.contains('dark') ? '☀️' : '🌙';
   if (currentUser) {
     el.innerHTML = `
-      <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:default;padding:6px 10px"></span>
+      <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:pointer;padding:6px 10px" onclick="showOnlineUsers()" title="点击查看在线用户"></span>
       ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')">🛠 开发者</button>' : ''}
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天">💬 <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
@@ -1277,8 +1278,10 @@ function startPresenceHeartbeat() {
   if (!currentUser || !window.__SB) return;
   // 立即发送一次心跳
   sendPresenceHeartbeat();
-  // 每 30 秒发送一次
-  _presenceTimer = setInterval(sendPresenceHeartbeat, 30000);
+  // 每 30 秒发送一次（页面可见时），不可见时降频到 2 分钟
+  _presenceTimer = setInterval(function() {
+    if (!document.hidden || Math.random() < 0.25) sendPresenceHeartbeat();
+  }, 30000);
   // 页面可见性变化时也发送
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) sendPresenceHeartbeat();
@@ -1336,7 +1339,10 @@ var _onlineCountTimer = null;
 function startOnlineCountUpdater() {
   if (_onlineCountTimer) clearInterval(_onlineCountTimer);
   updateOnlineCountDisplay();
-  _onlineCountTimer = setInterval(updateOnlineCountDisplay, 60000);
+  // 每 60 秒刷新（页面可见时），不可见时跳过
+  _onlineCountTimer = setInterval(function() {
+    if (!document.hidden) updateOnlineCountDisplay();
+  }, 60000);
 }
 
 async function updateOnlineCountDisplay() {
@@ -1349,6 +1355,114 @@ async function updateOnlineCountDisplay() {
   // 在频道上下文面板中显示在线成员
   var ctxOnline = document.getElementById('ctxOnlineCount');
   if (ctxOnline) ctxOnline.textContent = count;
+}
+
+// 在线用户列表弹窗
+var _onlineUsersCache = null;
+var _onlineUsersCacheTime = 0;
+async function showOnlineUsers() {
+  // 5秒内使用缓存（防止频繁点击）
+  var now = Date.now();
+  if (!_onlineUsersCache || now - _onlineUsersCacheTime > 5000) {
+    _onlineUsersCache = null;
+    _onlineUsersCacheTime = now;
+  }
+
+  var existing = document.getElementById('onlineUsersModal');
+  if (existing) { existing.remove(); return; }
+
+  // 先弹出一个加载中的弹窗
+  var modal = document.createElement('div');
+  modal.id = 'onlineUsersModal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;z-index:10000';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div class="modal" style="max-width:380px;max-height:70vh;display:flex;flex-direction:column">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    + '<h3 style="font-size:16px;font-weight:700">🟢 在线用户</h3>'
+    + '<button class="modal-close" onclick="document.getElementById(\'onlineUsersModal\').remove()">✕</button>'
+    + '</div>'
+    + '<div id="onlineUsersList" style="overflow-y:auto;flex:1;text-align:center;padding:20px;color:var(--text-faint);font-size:13px">加载中...</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+
+  try {
+    // 1. 从 Supabase 获取在线用户ID列表（5分钟内有活动）
+    var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    var { data: presenceData, error: presenceErr } = await __SB.from('user_presence')
+      .select('user_id, last_seen')
+      .gte('last_seen', fiveMinAgo)
+      .order('last_seen', { ascending: false })
+      .limit(100);
+
+    if (presenceErr) {
+      if (presenceErr.code === 'PGRST205') {
+        __presenceTableMissing = true;
+        document.getElementById('onlineUsersList').innerHTML = '<div style="color:var(--text-faint)">在线状态功能未启用</div>';
+        return;
+      }
+      throw presenceErr;
+    }
+
+    if (!presenceData || presenceData.length === 0) {
+      document.getElementById('onlineUsersList').innerHTML = '<div style="color:var(--text-faint)">当前没有在线用户</div>';
+      return;
+    }
+
+    // 2. 批量获取用户信息
+    var userIds = presenceData.map(function(p) { return p.user_id; });
+    var lastSeenMap = {};
+    presenceData.forEach(function(p) { lastSeenMap[p.user_id] = p.last_seen; });
+
+    var res = await api('/api/users/batch?ids=' + encodeURIComponent(userIds.join(',')));
+    var users = (res && res.success && res.data) ? res.data : [];
+
+    // 3. 按最后活动时间排序渲染
+    users.sort(function(a, b) {
+      var ta = lastSeenMap[a.id] ? new Date(lastSeenMap[a.id]).getTime() : 0;
+      var tb = lastSeenMap[b.id] ? new Date(lastSeenMap[b.id]).getTime() : 0;
+      return tb - ta;
+    });
+
+    var html = users.map(function(u) {
+      var isSelf = currentUser && u.id === currentUser.id;
+      var ls = lastSeenMap[u.id];
+      var timeStr = '';
+      if (ls) {
+        var diff = Date.now() - new Date(ls).getTime();
+        if (diff < 60000) timeStr = '刚刚活跃';
+        else if (diff < 300000) timeStr = Math.floor(diff / 60000) + '分钟前活跃';
+        else timeStr = '5分钟内活跃';
+      }
+      return '<div class="list-item" style="cursor:pointer;padding:8px 12px;border-radius:8px;margin-bottom:4px" onclick="showUserPopup(\'' + esc(u.id) + '\',\'' + escAttr(u.name || '') + '\',\'' + escAttr(u.avatar || '') + '\',\'' + escAttr(u.doubao_id || '') + '\');document.getElementById(\'onlineUsersModal\').remove()">'
+        + '<div style="display:flex;align-items:center;gap:10px">'
+        + avatarHTML(u, true, true)
+        + '<div style="flex:1;min-width:0">'
+        + '<div class="list-item-name" style="font-size:14px">' + esc(u.name || '未知用户') + (isSelf ? ' <span style="font-size:11px;color:var(--text-faint)">(你)</span>' : '') + '</div>'
+        + '<div style="font-size:11px;color:#10b981">🟢 ' + timeStr + '</div>'
+        + '</div></div></div>';
+    }).join('');
+
+    document.getElementById('onlineUsersList').innerHTML = html || '<div style="color:var(--text-faint)">当前没有在线用户</div>';
+    _onlineUsersCache = users;
+  } catch(e) {
+    document.getElementById('onlineUsersList').innerHTML = '<div style="color:#ef4444">加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+// ===== 黑名单ID缓存（用于聊天消息过滤）=====
+var _blockedIdsSet = new Set();
+async function loadBlockedIds() {
+  if (!currentUser) return;
+  try {
+    var res = await api('/api/blocked?user_id=' + currentUser.id);
+    if (res && res.success && res.data) {
+      _blockedIdsSet = new Set(res.data.map(function(b) { return b.blocked_user && b.blocked_user.id; }).filter(Boolean));
+    }
+  } catch(e) { console.warn('loadBlockedIds error:', e); }
+}
+function isUserBlocked(userId) {
+  return userId && _blockedIdsSet.has(userId);
 }
 
 // ===== 视图切换系统 =====
@@ -3611,8 +3725,13 @@ async function blockUser(userId, btn) {
     });
     if (res.success) {
       toast('已拉黑该用户');
+      _blockedIdsSet.add(userId); // 立即更新黑名单缓存
       doSearch();
       loadMyFriends();
+      // 立即从当前聊天中移除被拉黑用户的消息并重新渲染
+      if (chatState.currentRoomId && chatState.chatOpen) {
+        renderMessages(chatState.currentRoomId);
+      }
     } else {
       toast(res.error, 'error');
     }
@@ -4279,8 +4398,13 @@ async function unblockUser(blockId) {
     const res = await api(`/api/blocked?id=${blockId}`, { method: 'DELETE' });
     if (res.success) {
       toast('已移出黑名单');
+      loadBlockedIds(); // 重新加载黑名单缓存
       switchSettingsTab('blocks');
       doSearch();
+      // 如果聊天窗口打开，重新渲染以恢复被拉黑用户的消息
+      if (chatState.currentRoomId && chatState.chatOpen) {
+        renderMessages(chatState.currentRoomId);
+      }
     } else toast(res.error, 'error');
   } catch (e) {
     toast(e.message, 'error');
@@ -5576,6 +5700,12 @@ function closeChat() {
 
 async function loadRoomList() {
   if (!currentUser) return;
+  // 节流：15秒内不重复全量加载（除非强制）
+  var now = Date.now();
+  if (chatState.lastRoomListRefresh && now - chatState.lastRoomListRefresh < 15000 && !chatState._forceRoomListReload) {
+    renderRoomList(); return;
+  }
+  chatState._forceRoomListReload = false;
   try {
     const { data: memberships, error } = await __SB
       .from('chat_room_members')
@@ -5614,32 +5744,39 @@ async function loadRoomList() {
       renderRoomList(); return;
     }
     const roomIds = memberships.map(m => m.room_id);
-    const { data: roomData } = await __SB.from('chat_rooms').select('*').in('id', roomIds);
+    // 并行查询：房间数据 + 未读数 + 成员数 + 管理员 + 频道设置
+    var parallelResults = await Promise.all([
+      __SB.from('chat_rooms').select('*').in('id', roomIds),
+      __SB.from('chat_unread').select('room_id,count').eq('user_id', currentUser.id).in('room_id', roomIds),
+      __SB.from('chat_room_members').select('room_id').in('room_id', roomIds),
+      __SB.from('chat_admins').select('room_id').eq('user_id', currentUser.id).in('room_id', roomIds)
+    ]);
+    const roomData = parallelResults[0].data;
+    const unreadAll = parallelResults[1].data;
+    const memberCounts = parallelResults[2].data;
+    const adminAll = parallelResults[3].data;
     const roomMap = {};
     if (roomData) roomData.forEach(r => { roomMap[r.id] = r; });
-    // 只查询频道类型的房间设置（私聊房间不在 chat_channel_settings 表中，减少 URL 长度）
+    // 频道设置（仅频道类型，分批并行查询）
     var channelRoomIds = roomIds.filter(function(rid) { return roomMap[rid] && roomMap[rid].type === 'channel'; });
     var settingsMap = {};
     if (channelRoomIds.length > 0) {
-      // 分批查询避免 URL 过长（每批最多 10 个 ID）
+      var settingsPromises = [];
       for (var ci = 0; ci < channelRoomIds.length; ci += 10) {
         var batchIds = channelRoomIds.slice(ci, ci + 10);
-        try {
-          var { data: batchSettings, error: batchErr } = await __SB.from('chat_channel_settings').select('room_id, avatar_url').in('room_id', batchIds);
-          if (batchErr) { console.warn('chat_channel_settings query error:', batchErr); break; }
-          if (batchSettings) batchSettings.forEach(function(s) { settingsMap[s.room_id] = s; });
-        } catch(e) { console.warn('chat_channel_settings query failed:', e); break; }
+        settingsPromises.push(__SB.from('chat_channel_settings').select('room_id, avatar_url, guest_mode').in('room_id', batchIds));
       }
+      var settingsResults = await Promise.all(settingsPromises);
+      settingsResults.forEach(function(sr) {
+        if (sr.data) sr.data.forEach(function(s) { settingsMap[s.room_id] = s; });
+      });
     }
-    var { data: unreadAll } = await __SB.from('chat_unread').select('room_id,count').eq('user_id', currentUser.id).in('room_id', roomIds);
-    var { data: memberCounts } = await __SB.from('chat_room_members').select('room_id').in('room_id', roomIds);
-    var { data: adminAll } = await __SB.from('chat_admins').select('room_id').eq('user_id', currentUser.id).in('room_id', roomIds);
     var unreadMap = {}; var memberCountMap = {}; var adminMap = {};
     if (unreadAll) unreadAll.forEach(function(u) { unreadMap[u.room_id] = u.count || 0; });
     if (memberCounts) memberCounts.forEach(function(m) { memberCountMap[m.room_id] = (memberCountMap[m.room_id] || 0) + 1; });
     if (adminAll) adminAll.forEach(function(a) { adminMap[a.room_id] = true; });
     const rooms = [];
-    // Parallel fetch private room user info
+    // 批量获取私聊对方的用户信息（使用批量API替代N+1查询）
     const privateRoomIds = [];
     for (const m of memberships) {
       if (roomMap[m.room_id]?.type === 'private') privateRoomIds.push(m.room_id);
@@ -5649,15 +5786,31 @@ async function loadRoomList() {
       const { data: otherMembersData } = await __SB.from('chat_room_members').select('room_id, user_id').in('room_id', privateRoomIds).neq('user_id', currentUser.id);
       if (otherMembersData) {
         const userIds = [...new Set(otherMembersData.map(function(om) { return om.user_id; }).filter(Boolean))];
-        const userResults = await Promise.all(userIds.map(function(uid) {
-          return api('/api/users/' + uid).then(function(r) { return { uid: uid, res: r }; }).catch(function() { return null; });
-        }));
-        const userInfoMap = {};
-        userResults.forEach(function(ur) { if (ur && ur.res?.success && ur.res.data) { var d = ur.res.data; userInfoMap[ur.uid] = { id: d.id, name: d.name, avatar: d.avatar, doubao_id: d.doubao_id }; } });
-        otherMembersData.forEach(function(om) {
-          var uData = userInfoMap[om.user_id];
-          privateUserMap[om.room_id] = uData || { id: om.user_id || '', name: (roomMap[om.room_id]?.name) || '聊天', avatar: '', doubao_id: '' };
-        });
+        // 使用批量API一次性获取所有用户信息
+        if (userIds.length > 0) {
+          try {
+            var batchRes = await api('/api/users/batch?ids=' + encodeURIComponent(userIds.join(',')));
+            if (batchRes && batchRes.success && batchRes.data) {
+              const userInfoMap = {};
+              batchRes.data.forEach(function(d) { userInfoMap[d.id] = { id: d.id, name: d.name, avatar: d.avatar, doubao_id: d.doubao_id }; });
+              otherMembersData.forEach(function(om) {
+                var uData = userInfoMap[om.user_id];
+                privateUserMap[om.room_id] = uData || { id: om.user_id || '', name: (roomMap[om.room_id]?.name) || '聊天', avatar: '', doubao_id: '' };
+              });
+            }
+          } catch(e) {
+            // 批量API失败时回退到逐个查询
+            const userResults = await Promise.all(userIds.map(function(uid) {
+              return api('/api/users/' + uid).then(function(r) { return { uid: uid, res: r }; }).catch(function() { return null; });
+            }));
+            const userInfoMap = {};
+            userResults.forEach(function(ur) { if (ur && ur.res?.success && ur.res.data) { var d = ur.res.data; userInfoMap[ur.uid] = { id: d.id, name: d.name, avatar: d.avatar, doubao_id: d.doubao_id }; } });
+            otherMembersData.forEach(function(om) {
+              var uData = userInfoMap[om.user_id];
+              privateUserMap[om.room_id] = uData || { id: om.user_id || '', name: (roomMap[om.room_id]?.name) || '聊天', avatar: '', doubao_id: '' };
+            });
+          }
+        }
       }
     }
     for (const m of memberships) {
@@ -5680,18 +5833,21 @@ async function loadRoomList() {
     chatState.rooms = rooms;
     chatState.lastRoomListRefresh = Date.now();
     chatState.userChannelCount = rooms.filter(r => r.type === 'channel' && r.created_by === currentUser.id).length;
-    // 获取公开频道（所有用户可见，无需加入）
+    // 获取公开频道（所有用户可见，无需加入）- 并行查询
     try {
       var pubChs = await fetchPublicChannels();
       var joinedRoomIds = rooms.map(function(r) { return r.id; });
       var pubRoomIds = pubChs.map(function(p) { return p.room_id; }).filter(function(rid) { return joinedRoomIds.indexOf(rid) < 0; });
       var pubRoomsData = [];
       if (pubRoomIds.length) {
-        var { data: pubRoomsRaw } = await __SB.from('chat_rooms').select('*').in('id', pubRoomIds);
+        var pubParallel = await Promise.all([
+          __SB.from('chat_rooms').select('*').in('id', pubRoomIds),
+          __SB.from('chat_channel_settings').select('room_id, avatar_url, topic, guest_mode').in('room_id', pubRoomIds)
+        ]);
+        var pubRoomsRaw = pubParallel[0].data;
+        var pubSettings = pubParallel[1].data;
         if (pubRoomsRaw) {
-          // 获取公开频道的设置（头像等）
           var pubSettingsMap = {};
-          var { data: pubSettings } = await __SB.from('chat_channel_settings').select('room_id, avatar_url, topic').in('room_id', pubRoomIds);
           if (pubSettings) pubSettings.forEach(function(s) { pubSettingsMap[s.room_id] = s; });
           pubRoomsData = pubRoomsRaw.map(function(r) {
             var pubInfo = pubChs.find(function(p) { return p.room_id === r.id; });
@@ -6064,10 +6220,20 @@ async function loadMessages(roomId) {
   if (msgsEl) msgsEl.style.display = '';
   if (empty) empty.style.display = 'none';
   if (msgsEl) msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">加载中...</div>';
-  var [msgResult, reactResult] = await Promise.all([
+  // 并行查询：消息 + 表情反应 + 置顶公告（减少串行等待）
+  var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
+  var isChannel = loadRoom && loadRoom.type === 'channel';
+  var queries = [
     __SB.from('chat_messages').select('id, event_id, room_id, sender_id, sender_name, sender_avatar, sender_doubao_id, content, reply_to, recalled, rel_type, relates_to_event_id, ts').eq('room_id', roomId).order('id', { ascending: true }).limit(200),
     __SB.from('chat_reactions').select('event_id,reaction,sender_id').eq('room_id', roomId)
-  ]);
+  ];
+  if (isChannel) {
+    queries.push(__SB.from('chat_channel_announcements').select('id, title, content, created_at').eq('room_id', roomId).eq('pinned', 1).order('created_at', { ascending: false }).limit(5));
+  }
+  var queryResults = await Promise.all(queries);
+  var msgResult = queryResults[0];
+  var reactResult = queryResults[1];
+  var pinnedResult = isChannel ? queryResults[2] : null;
   var data = msgResult.data, error = msgResult.error;
   if (error) { console.error('loadMessages error:', error); return; }
   const msgs = (data || []).map(m => ({
@@ -6108,9 +6274,8 @@ async function loadMessages(roomId) {
   chatState.messages[roomId] = keptRealtime.concat(nonEdits).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
   if (roomId !== chatState.currentRoomId) return;
   renderMessages(roomId);
-  var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
-  if (loadRoom && loadRoom.type === 'channel') {
-    var { data: pinned } = await __SB.from('chat_channel_announcements').select('id, title, content, created_at').eq('room_id', roomId).eq('pinned', 1).order('created_at', { ascending: false }).limit(5);
+  if (isChannel && pinnedResult && pinnedResult.data && pinnedResult.data.length) {
+    var pinned = pinnedResult.data;
     if (pinned?.length) {
       var banner = document.getElementById('channelAnnouncementBanner');
       if (!banner) {
@@ -6169,7 +6334,9 @@ function renderMessages(roomId) {
   applyChatBackground();
   const msgs = chatState.messages[roomId] || [];
   if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty-inline" style="padding:32px;text-align:center;color:var(--text-faint)">暂无消息，发送第一条吧</div>'; return; }
-  for (const msg of msgs) {
+  // 过滤被拉黑用户的消息（自己的消息不过滤）
+  const visibleMsgs = msgs.filter(m => m.sender_id === currentUser.id || !isUserBlocked(m.sender_id));
+  for (const msg of visibleMsgs) {
     const reacts = chatState.reactionsMap[msg.event_id];
     if (reacts) {
       msg.reactions = Object.entries(reacts).map(([key, senders]) => ({ key, count: senders.length, senders }));
@@ -6184,8 +6351,8 @@ function renderMessages(roomId) {
   }
   var htmlParts = [];
   var lastDateStr = '';
-  for (var i = 0; i < msgs.length; i++) {
-    var m = msgs[i];
+  for (var i = 0; i < visibleMsgs.length; i++) {
+    var m = visibleMsgs[i];
     // 日期分隔符
     if (m.ts) {
       var d = new Date(m.ts);
@@ -6430,6 +6597,8 @@ function subscribeToJoinRequests() {
 
 function handleRealtimeMessage(roomId, msg) {
   try {
+  // 被拉黑用户的消息不显示、不计入未读
+  if (msg.sender_id && msg.sender_id !== currentUser.id && isUserBlocked(msg.sender_id)) { return; }
   var roomN = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isMuted = roomN && roomN.mute_notifications;
   // Dedup check
@@ -6936,6 +7105,8 @@ async function pollNewMessages() {
           var m = data[k];
           var eid = m.event_id || ('msg_' + m.id);
           if (existingIds[eid]) continue;
+          // 跳过被拉黑用户的消息
+          if (m.sender_id && m.sender_id !== currentUser.id && isUserBlocked(m.sender_id)) { existingIds[eid] = true; continue; }
           if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
             var target = existingMsgs.find(function(x) { return x.event_id === m.relates_to_event_id; });
             if (target) { target.content = m.recalled ? '' : m.content; target.edited = true; existingIds[eid] = true; }
@@ -6960,10 +7131,14 @@ async function pollNewMessages() {
     } catch(e) { console.warn('[CHAT-POLL] pollNewMessages error:', e); }
   }
   // 自适应轮询：有新消息时 5s 后再查；连续 3 次无新消息则放慢到 12s
+  // 页面不可见时进一步降低频率到 30s，减少 Supabase 请求
   // Realtime 是主要推送通道，轮询仅作兜底
   if (gotNew) { chatState._pollIdleCount = 0; }
   else { chatState._pollIdleCount = (chatState._pollIdleCount || 0) + 1; }
-  var nextInterval = chatState._pollIdleCount >= 3 ? 12000 : 5000;
+  var nextInterval;
+  if (document.hidden) { nextInterval = 30000; } // 后台标签页 30s
+  else if (chatState._pollIdleCount >= 3) { nextInterval = 12000; } // 空闲 12s
+  else { nextInterval = 5000; } // 活跃 5s
   messagePollTimer = setTimeout(pollNewMessages, nextInterval);
 }
 
@@ -6990,8 +7165,10 @@ function startUnreadPolling() {
     }
     // 定期刷新入群申请（所有视图，因为 chatState 存储了数量）
     loadChannelJoinRequests().catch(function(){});
-    unreadPollTimer = setTimeout(startUnreadPolling, 10000);
-  }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, 10000); });
+    // 页面不可见时降低未读轮询频率
+    var unreadInterval = document.hidden ? 30000 : 10000;
+    unreadPollTimer = setTimeout(startUnreadPolling, unreadInterval);
+  }).catch(() => { if (currentUser) unreadPollTimer = setTimeout(startUnreadPolling, document.hidden ? 30000 : 10000); });
 }
 
 function autoChatResize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
@@ -7222,6 +7399,7 @@ async function deleteConversation(roomId) {
   if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
   delete chatState.messages[roomId];
   chatState.rooms = (chatState.rooms || []).filter(function(r) { return r.id !== roomId; });
+  chatState._forceRoomListReload = true;
   await loadRoomList();
   toast('已删除', 'success');
 }
@@ -7241,10 +7419,12 @@ async function leaveChannel(roomId) {
     await __SB.from('chat_banned').delete().eq('room_id', roomId);
     await __SB.from('chat_admins').delete().eq('room_id', roomId);
     await __SB.from('chat_rooms').delete().eq('id', roomId);
+    chatState._forceRoomListReload = true;
     await loadRoomList();
     toast('频道已无成员，自动删除');
     return;
   }
+  chatState._forceRoomListReload = true;
   await loadRoomList();
   toast('已离开频道', 'success');
 }
