@@ -62,9 +62,8 @@ export async function onRequestPost(context) {
     }
 
     // 验证创建者是开发者
-    const DEV_IDS = ['470208447', 'East_pairs'];
-    const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(created_by).first();
-    if (!user || !DEV_IDS.includes(user.doubao_id)) {
+    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(created_by).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
       return Response.json({ success: false, error: '只有开发者才能发布公告' });
     }
 
@@ -113,9 +112,8 @@ export async function onRequestPut(context) {
     }
 
     // 验证创建者是开发者
-    const DEV_IDS = ['470208447', 'East_pairs'];
-    const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(created_by).first();
-    if (!user || !DEV_IDS.includes(user.doubao_id)) {
+    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(created_by).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
       return Response.json({ success: false, error: '只有开发者才能编辑公告' });
     }
 

@@ -5,7 +5,7 @@
 // 小肥羊讲堂 - 博客系统后端
 
 // ===== 常量 =====
-const DEV_IDS = ['470208447', 'East_pairs'];
+
 // 博客房间浏览器访问 URL
 const BLOG_ROOM_URL = 'https://chat.freserafim.com/zh-CN/rooms/b9d7d6e7-191f-408b-b308-b210dbe1a764';
 
@@ -63,18 +63,14 @@ async function getAuthUserId(env, request) {
   return session ? session.user_id : null;
 }
 
-// 检查用户是否为开发者（DEV_IDS 白名单 或 is_developer === 1）
+// 检查用户是否为开发者（is_developer === 1）
 async function isDeveloper(env, userId) {
   if (!env || !env.DB || !userId) return false;
   const user = await env.DB.prepare(
-    `SELECT doubao_id, is_developer FROM users WHERE id = ?`
+    `SELECT is_developer FROM users WHERE id = ?`
   ).bind(userId).first();
   if (!user) return false;
-  // 兼容 D1 返回的整数/字符串/布尔值
-  if (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true) return true;
-  // 检查 doubao_id 白名单
-  if (user.doubao_id && DEV_IDS.includes(user.doubao_id)) return true;
-  return false;
+  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
 // 简单 HTML 净化：移除 <script> 标签和 on* 事件属性

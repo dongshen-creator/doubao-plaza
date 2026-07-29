@@ -5,7 +5,7 @@
 // DELETE /api/blog/[id]  - 删除博客文章（仅作者本人或开发者可操作，同时删除关联评论）
 
 // ===== 常量 =====
-const DEV_IDS = ['470208447', 'East_pairs'];
+
 
 // ===== 通用辅助函数 =====
 
@@ -56,16 +56,14 @@ async function getAuthUserId(env, request) {
   return session ? session.user_id : null;
 }
 
-// 检查用户是否为开发者（DEV_IDS 白名单 或 is_developer === 1）
+// 检查用户是否为开发者（is_developer === 1）
 async function isDeveloper(env, userId) {
   if (!env || !env.DB || !userId) return false;
   const user = await env.DB.prepare(
-    `SELECT doubao_id, is_developer FROM users WHERE id = ?`
+    `SELECT is_developer FROM users WHERE id = ?`
   ).bind(userId).first();
   if (!user) return false;
-  if (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true) return true;
-  if (user.doubao_id && DEV_IDS.includes(user.doubao_id)) return true;
-  return false;
+  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
 // 简单 HTML 净化：移除 <script> 标签和 on* 事件属性

@@ -3,7 +3,7 @@
 //
 // 简化版：不调用 Matrix API，仅返回房间 URL 供用户访问
 
-const DEV_IDS = ['470208447', 'East_pairs'];
+
 const BLOG_ROOM_URL = 'https://chat.freserafim.com/zh-CN/rooms/b9d7d6e7-191f-408b-b308-b210dbe1a764';
 
 function corsHeaders() {
@@ -37,12 +37,10 @@ async function getAuthUserId(env, request) {
 async function isDeveloper(env, userId) {
   if (!env || !env.DB || !userId) return false;
   const user = await env.DB.prepare(
-    `SELECT doubao_id, is_developer FROM users WHERE id = ?`
+    `SELECT is_developer FROM users WHERE id = ?`
   ).bind(userId).first();
   if (!user) return false;
-  if (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true) return true;
-  if (user.doubao_id && DEV_IDS.includes(user.doubao_id)) return true;
-  return false;
+  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
 export async function onRequestOptions(context) {

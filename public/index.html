@@ -1132,9 +1132,7 @@ function updateNavbar() {
 
 function isDeveloper() {
   if (!currentUser) return false;
-  if (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1') return true;
-  if (['470208447', 'East_pairs'].includes(currentUser.doubao_id)) return true;
-  return false;
+  return currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1';
 }
 
 // 撤回权限：开发者全局可撤回 | 频道创建者/管理员频道内可撤回 | 普通用户仅撤回自己的
@@ -2511,7 +2509,7 @@ function renderBlogView(sidebar, main) {
     return;
   }
 
-  var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
 
   // 侧边栏：公告 + 快捷操作
@@ -2590,7 +2588,7 @@ async function blogShowList(container) {
     window.__blogSunEditor = null;
   }
   blogState.currentView = 'list';
-  var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
   container.innerHTML =
     '<div id="blogListView">' +
@@ -2698,7 +2696,7 @@ async function blogLoadList() {
   var area = document.getElementById('blogListArea');
   if (!area) return;
   area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
-  var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
   try {
     var url = '/api/blog?page=1&page_size=20';
     if (blogState.currentCategory) url += '&category_id=' + encodeURIComponent(blogState.currentCategory);
@@ -2788,7 +2786,7 @@ async function blogShowPost(container, postId) {
     var p = res.data;
     var tags = blogParseTags(p.tags);
     var isAuthor = currentUser && p.author_id == currentUser.id;
-    var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+    var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
     var canManage = isAuthor || isDev;
 
     // 审核状态横幅（仅 pending / rejected 显示）
@@ -3064,7 +3062,7 @@ async function blogLoadComments(postId) {
   try {
     var res = await api('/api/blog/comments?post_id=' + postId);
     var comments = (res.success && res.data) ? res.data : [];
-    var isDev = currentUser && (currentUser.is_developer || currentUser.doubao_id === '470208447' || currentUser.doubao_id === 'East_pairs');
+    var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
 
     // 构建嵌套评论树
     var topComments = comments.filter(function(c) { return !c.parent_id || c.parent_id === 0; });

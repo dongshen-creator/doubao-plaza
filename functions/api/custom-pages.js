@@ -6,10 +6,9 @@
 // DELETE /api/custom-pages?id=xxx   - 删除页面（仅开发者）
 
 // 检查是否为开发者
-const DEV_IDS = ['470208447', 'East_pairs'];
 async function isDeveloper(env, userId) {
-  const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(userId).first();
-  return user && DEV_IDS.includes(user.doubao_id);
+  const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(userId).first();
+  return user && (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true);
 }
 
 // 从 Authorization 头解析已登录用户 ID
@@ -165,8 +164,8 @@ export async function onRequestDelete(context) {
     if (!authUserId) {
       return Response.json({ success: false, error: '请先登录' }, { status: 403 });
     }
-    const u = await env.DB.prepare('SELECT doubao_id, is_developer FROM users WHERE id=?').bind(authUserId).first();
-    var isDev = u && (u.is_developer === 1 || u.is_developer === '1' || u.is_developer === true || DEV_IDS.includes(u.doubao_id));
+    const u = await env.DB.prepare('SELECT is_developer FROM users WHERE id=?').bind(authUserId).first();
+    var isDev = u && (u.is_developer === 1 || u.is_developer === '1' || u.is_developer === true);
     if (!isDev) {
       return Response.json({ success: false, error: '仅开发者可删除页面' }, { status: 403 });
     }

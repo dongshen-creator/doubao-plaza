@@ -53,10 +53,7 @@ export async function onRequestGet(context) {
 function checkIsDeveloper(user) {
   if (!user) return false;
   var val = user.is_developer;
-  if (val === 1 || val === '1' || val === true) return true;
-  // 也检查 doubao_id 白名单
-  if (user.doubao_id && ['470208447', 'East_pairs'].includes(user.doubao_id)) return true;
-  return false;
+  return val === 1 || val === '1' || val === true;
 }
 
 export async function onRequestPut(context) {

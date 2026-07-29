@@ -3,8 +3,6 @@
 // POST   /api/features          - 添加功能
 // DELETE /api/features?id=xxx   - 删除功能
 
-const DEV_IDS = ['470208447', 'East_pairs'];
-
 // 确保工具包相关列存在（幂等）
 async function ensureToolColumns(env) {
   await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_type TEXT").run().catch(() => {});
@@ -23,16 +21,14 @@ async function getAuthUserId(env, request) {
   return session ? session.user_id : null;
 }
 
-// 检查用户是否为开发者（is_developer === 1 或 DEV_IDS 白名单）
+// 检查用户是否为开发者（is_developer === 1）
 async function isDeveloper(env, userId) {
   if (!userId) return false;
   const user = await env.DB.prepare(
-    `SELECT doubao_id, is_developer FROM users WHERE id = ?`
+    `SELECT is_developer FROM users WHERE id = ?`
   ).bind(userId).first();
   if (!user) return false;
-  if (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true) return true;
-  if (user.doubao_id && DEV_IDS.includes(user.doubao_id)) return true;
-  return false;
+  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
 export async function onRequestGet(context) {

@@ -3,11 +3,10 @@
 // POST   /api/pages/upload?id=xxx        - 上传文件
 // DELETE /api/pages/upload?id=xxx&path=yyy - 删除文件
 
-const DEV_IDS = ['470208447', 'East_pairs'];
 async function isDeveloper(env, userId) {
   if (!userId) return false;
-  const user = await env.DB.prepare(`SELECT doubao_id FROM users WHERE id = ?`).bind(userId).first();
-  return user && DEV_IDS.includes(user.doubao_id);
+  const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(userId).first();
+  return user && (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true);
 }
 
 function getContentType(filename) {

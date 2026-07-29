@@ -247,8 +247,6 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 5. 重新登录网站，左侧导航栏应出现「开发者」入口
 
-> **备选方式**：也可以在 `functions/api/custom-pages.js`、`functions/api/announcements.js` 等文件顶部的 `DEV_IDS` 数组中添加你的 `doubao_id`，然后重新部署。
-
 **验证**：登录后能看到开发者面板，可以管理公告、创建自定义页面、管理公开频道。
 
 ---
@@ -497,7 +495,7 @@ A: D1 Web Console 不支持多语句一次性执行。请逐条粘贴执行（�
 A: 说明数据库中存在引用了已删除房间的孤立数据。`supabase-migration.sql` 中已包含孤立数据清理语句，确保在创建外键之前执行。
 
 **Q: 开发者模式看不到？**
-A: 需要在 D1 数据库中将你的 `is_developer` 设为 1（见第七步），或在 `DEV_IDS` 数组中添加你的 `doubao_id`。
+A: 需要在 D1 数据库中将你的 `is_developer` 设为 1（见第七步）。
 
 **Q: 开发者文件上传失败？**
 A: 检查 Supabase Storage 中是否已创建名为 `pages` 的**公开**存储桶。Storage 权限策略已包含在 `supabase-migration.sql` 中。
