@@ -203,7 +203,7 @@ export async function onRequestPost(context) {
 
     // 通过 doubao_id 查询刚创建的用户
     const user = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, privacy_setting, created_at, last_login_ip, pat_suffix 
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, is_developer, privacy_setting, created_at, last_login_ip, pat_suffix 
        FROM users WHERE doubao_id = ?`
     ).bind(doubao_id).first();
 
