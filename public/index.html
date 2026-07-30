@@ -1547,10 +1547,7 @@ function switchView(view) {
     try { batchMarkReadByType('channel'); } catch(e) { console.warn('batchMarkRead error:', e); }
     loadChannelJoinRequests().catch(function(){});
   }
-  // 切换到好友视图时清除好友栏私聊红点
-  if (view === 'friends') {
-    try { batchMarkReadByType('private'); } catch(e) { console.warn('batchMarkRead error:', e); }
-  }
+  // 切换到好友视图时不清除私聊未读——红点应保留到用户实际打开对话
   // 切换到公告视图时标记公告为已读
   if (view === 'announcements') {
     markAnnouncementsRead();
@@ -1771,7 +1768,12 @@ async function openPrivateChatInFriends(friendId, friendName) {
 
   chatState.chatOpen = true;
   chatState.currentRoomId = roomId;
+  // 立即清除该好友的红点（同步更新内存，不等 markRead 的异步回调）
+  var _roomToClear = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (_roomToClear) _roomToClear.unread = 0;
   markRead(roomId);
+  loadMyFriends(); // 刷新好友列表，移除该好友的红点
+  loadTempChats().catch(function(){}); // 同时刷新临时私聊列表
   await loadRoomList();
   if (chatState._openingTarget !== friendId) return; // 被新点击中断
   await loadMessages(roomId);
