@@ -6076,12 +6076,15 @@ async function switchRoom(roomId) {
   // 立即清除该会话的未读红点
   markRead(roomId);
   if (chatState.messages[roomId]?.length) {
+    // 先用缓存消息渲染（即时反馈），再异步加载最新消息
     renderMessages(roomId);
     subscribeToRoom(roomId);
     startMessagePolling();
     var input = document.getElementById('chatInput');
     if (input) input.focus();
     if (input && !input._atBound) { input.addEventListener('input', function(e) { handleAtAutocomplete(input); }); input._atBound = true; }
+    // 后台静默加载最新消息（不显示加载中，保留缓存消息显示）
+    loadMessages(roomId, true).catch(function(e) { console.warn('switchRoom loadMessages:', e); });
   } else {
     stopMessagePolling();
     await loadMessages(roomId);
@@ -6267,12 +6270,13 @@ async function renderChatContextPanel(room) {
   if (room && room.type === 'channel') { loadChannelAnnouncements(room.id); loadChannelTools(room.id); }
 }
 
-async function loadMessages(roomId) {
+async function loadMessages(roomId, silent) {
   const msgsEl = document.getElementById('chatMsgs');
   const empty = document.getElementById('chatEmpty');
   if (msgsEl) msgsEl.style.display = '';
   if (empty) empty.style.display = 'none';
-  if (msgsEl) msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">加载中...</div>';
+  // silent 模式不显示加载中（用于后台静默刷新，保留已有消息显示）
+  if (msgsEl && !silent && !(chatState.messages[roomId]?.length)) msgsEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint);font-size:13px">加载中...</div>';
   // 并行查询：消息 + 表情反应 + 置顶公告（减少串行等待）
   var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isChannel = loadRoom && loadRoom.type === 'channel';
@@ -6339,9 +6343,12 @@ async function loadMessages(roomId) {
     }
   }
   markRead(roomId);
-  document.getElementById('chatInput').focus();
+  if (!silent) {
+    var _ci = document.getElementById('chatInput');
+    if (_ci) _ci.focus();
+  }
   var input2 = document.getElementById('chatInput');
-  if (!input2._atBound) { input2.addEventListener('input', function(e) { handleAtAutocomplete(input2); }); input2._atBound = true; }
+  if (input2 && !input2._atBound) { input2.addEventListener('input', function(e) { handleAtAutocomplete(input2); }); input2._atBound = true; }
   var msgsContainer = document.getElementById('chatMsgs');
   msgsContainer.onscroll = function() {
     if (msgsContainer.scrollTop === 0 && chatState.currentRoomId === roomId) {
