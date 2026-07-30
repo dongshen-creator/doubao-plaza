@@ -448,6 +448,8 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
   if (isSelf) {
     html += '<button class="btn btn-orange btn-full" onclick="document.getElementById(\'userPopupModal\').remove();showModal(\'settings\')">🏠 这是我的主页</button>';
+    html += '<button class="btn btn-gray btn-full" onclick="showShareCardPicker()">💳 分享名片</button>';
+    html += '<button class="btn btn-gray btn-full" onclick="showShareChannelPicker()">📢 分享频道</button>';
   } else {
     if (userInfo && (userInfo.privacy_setting === 'stealth' || userInfo.privacy_setting === 'punished_stealth')) {
       html += '<div style="text-align:center;padding:8px;color:var(--text-faint);font-size:12px">此用户处于隐身模式</div>';
@@ -6512,6 +6514,29 @@ function renderMsgHTML(m, roomId) {
       '<div style="width:36px;height:36px;border-radius:10px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">' + esc(tIcon) + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(tTitle) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
+  } else if (text.startsWith('card:')) {
+    // 用户名片分享: card:<userId>|<name>|<avatar>|<doubaoId>
+    var cardParts = text.slice(5).split('|');
+    var cUid = cardParts[0] || '';
+    var cName = cardParts[1] || '用户';
+    var cAvatar = cardParts[2] || '';
+    var cDoubao = cardParts[3] || '';
+    var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
+    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+      '<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + avatarInner + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
+      '<div style="font-size:11px;color:var(--accent)">' + (cDoubao ? '@' + esc(cDoubao) : '') + ' · 个人名片 · 点击查看 →</div></div></div>';
+  } else if (text.startsWith('channel:')) {
+    // 频道分享: channel:<roomId>|<roomName>|<avatar>
+    var chParts = text.slice(8).split('|');
+    var chRid = chParts[0] || '';
+    var chName = chParts[1] || '频道';
+    var chAvatar = chParts[2] || '';
+    var chAvatarInner = chAvatar ? '<img src="' + esc(chAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
+    contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+      '<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + chAvatarInner + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(chName) + '</div>' +
+      '<div style="font-size:11px;color:var(--accent)">频道分享 · 点击加入 →</div></div></div>';
   } else {
     // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
     contentHtml = renderRichText(text);
@@ -6535,7 +6560,7 @@ function renderMsgHTML(m, roomId) {
     '<div class="chat-msg-inner" style="display:flex;align-items:flex-start;gap:8px' + (isMine ? ';flex-direction:row-reverse' : '') + '">' +
     avatarHtml +
     '<div class="chat-msg-bubble">' +
-    (!isMine ? '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' : '') +
+    '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' +
     replyHtml +
     '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
@@ -6560,6 +6585,12 @@ function renderReplyBlock(eventId, roomId) {
   } else if (t.startsWith('tool:')) {
     var tp = t.slice(5).split('|');
     preview = (tp[2] || '🔗') + ' ' + esc(tp[3] || '工具');
+  } else if (t.startsWith('card:')) {
+    var cp = t.slice(5).split('|');
+    preview = '💳 ' + esc(cp[1] || '名片');
+  } else if (t.startsWith('channel:')) {
+    var chp = t.slice(8).split('|');
+    preview = '📢 ' + esc(chp[1] || '频道');
   } else {
     preview = renderRichText(t.length > 80 ? t.slice(0,80) + '…' : t);
   }
@@ -8144,8 +8175,7 @@ var TOOL_TYPES = {
   embed: { icon: '🌐', label: '内嵌网页', badge: '网页' },
   api: { icon: '⚡', label: 'API工具', badge: 'API' },
   vote: { icon: '📊', label: '投票', badge: '投票' },
-  chain: { icon: '📝', label: '接龙', badge: '接龙' },
-  card: { icon: '💳', label: '个人名片', badge: '名片' }
+  chain: { icon: '📝', label: '接龙', badge: '接龙' }
 };
 var _toolEditorState = { type: 'link' };
 var _toolPanelState = { tool: null };
@@ -8195,7 +8225,6 @@ async function showToolEditor() {
     '<button class="tool-type-btn" onclick="selectToolType(\'api\')" data-type="api"><span class="tool-type-icon">⚡</span><span class="tool-type-label">API工具</span></button>' +
     '<button class="tool-type-btn" onclick="selectToolType(\'vote\')" data-type="vote"><span class="tool-type-icon">📊</span><span class="tool-type-label">投票</span></button>' +
     '<button class="tool-type-btn" onclick="selectToolType(\'chain\')" data-type="chain"><span class="tool-type-icon">📝</span><span class="tool-type-label">接龙</span></button>' +
-    '<button class="tool-type-btn" onclick="selectToolType(\'card\')" data-type="card"><span class="tool-type-icon">💳</span><span class="tool-type-label">个人名片</span></button>' +
     '</div><div id="toolConfigArea"></div></div></div>';
   modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
   document.body.appendChild(modal);
@@ -8225,8 +8254,6 @@ function selectToolType(type) {
   } else if (type === 'chain') {
     html += '<div class="tool-editor-form-group"><label class="tool-editor-label">接龙说明</label><input class="tool-editor-input" id="toolDesc" placeholder="接龙规则说明"></div>';
     html += '<div class="tool-editor-form-group"><label class="tool-editor-label">起始内容</label><textarea class="tool-editor-input" id="toolChainStart" rows="2" placeholder="接龙起始内容"></textarea></div>';
-  } else if (type === 'card') {
-    html += '<div class="tool-editor-form-group"><label class="tool-editor-label">描述 (可选)</label><input class="tool-editor-input" id="toolDesc" placeholder="名片墙说明"></div>';
   }
   html += '<button class="btn btn-orange btn-full" style="margin-top:8px" onclick="saveToolFromEditor()">保存工具</button>';
   area.innerHTML = html;
@@ -8281,8 +8308,6 @@ async function saveToolFromEditor() {
         await __SB.from('chat_tool_chains').insert({ id: chainId, tool_id: tId, room_id: chatState.currentRoomId, content: startContent, seq: 1, user_id: currentUser.id, user_name: currentUser.name, user_avatar: currentUser.avatar || '' });
       } catch(e) { console.warn('chain insert:', e); }
     }
-  } else if (type === 'card') {
-    config = { description: desc };
   }
 
   await __SB.from('chat_channel_tools').insert({ id: tId, room_id: chatState.currentRoomId, title: title, url: url, icon: icon, tool_type: type, config: config, description: desc, created_by: currentUser.id });
@@ -8308,7 +8333,6 @@ async function deleteChannelTool(toolId, roomId) {
   } catch(e) {}
   try { await __SB.from('chat_tool_votes').delete().eq('tool_id', toolId); } catch(e) {}
   try { await __SB.from('chat_tool_chains').delete().eq('tool_id', toolId); } catch(e) {}
-  try { await __SB.from('chat_tool_cards').delete().eq('tool_id', toolId); } catch(e) {}
   await __SB.from('chat_channel_tools').delete().eq('id', toolId);
   loadChannelTools(roomId);
   if (document.getElementById('settingsChannelToolList')) loadChannelTools(roomId, 'settingsChannelToolList');
@@ -8369,6 +8393,159 @@ async function shareToolToChannel(toolId, toolType, icon, title) {
   toast('已分享到频道', 'success');
 }
 
+// ═══ 分享名片 / 分享频道 ═══
+var SHARE_COOLDOWN = 30 * 60 * 1000; // 30分钟
+
+function checkShareCooldown(type) {
+  var key = 'lastShare_' + type;
+  var last = parseInt(localStorage.getItem(key) || '0', 10);
+  var elapsed = Date.now() - last;
+  if (elapsed < SHARE_COOLDOWN) {
+    var remain = Math.ceil((SHARE_COOLDOWN - elapsed) / 60000);
+    toast('分享太频繁，请 ' + remain + ' 分钟后再试', 'error');
+    return false;
+  }
+  return true;
+}
+
+function setShareCooldown(type) {
+  localStorage.setItem('lastShare_' + type, String(Date.now()));
+}
+
+async function showShareCardPicker() {
+  if (!chatState.currentRoomId) { toast('请先进入一个频道', 'error'); return; }
+  if (!checkShareCooldown('card')) return;
+  var popup = document.getElementById('userPopupModal');
+  if (popup) popup.remove();
+  var existing = document.getElementById('shareCardPicker');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'shareCardPicker';
+  modal.style.display = 'flex';
+  modal.innerHTML = '<div class="modal" style="max-width:360px"><div class="modal-header"><div class="modal-title">💳 分享名片</div><button class="modal-close" onclick="document.getElementById(\'shareCardPicker\').remove()">✕</button></div><div id="shareCardList" style="max-height:300px;overflow-y:auto"><div class="embed-loading">加载中...</div></div></div>';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+  var listEl = document.getElementById('shareCardList');
+  var html = '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">选择要分享的名片：</div>';
+  // 自己
+  html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(currentUser.id) + '\',\'' + escAttr(currentUser.name) + '\',\'' + escAttr(currentUser.avatar||'') + '\',\'' + escAttr(currentUser.doubao_id||'') + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(currentUser.name) + ' (我)</span><span class="tool-card-type-badge">自己</span></div>';
+  // 好友列表
+  try {
+    var fRes = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
+    if (fRes && fRes.success && fRes.data) {
+      fRes.data.forEach(function(f) {
+        var fid = (f.friend && f.friend.id) || f.friend_id;
+        var fname = (f.friend && f.friend.name) || f.friend_name || '好友';
+        var favatar = (f.friend && f.friend.avatar) || '';
+        var fdoubao = (f.friend && f.friend.doubao_id) || '';
+        html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(fid) + '\',\'' + escAttr(fname) + '\',\'' + escAttr(favatar) + '\',\'' + escAttr(fdoubao) + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (favatar ? '<img src="' + esc(favatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(fname) + '</span><span class="tool-card-type-badge">好友</span></div>';
+      });
+    }
+  } catch(e) {}
+  listEl.innerHTML = html;
+}
+
+async function sendShareCard(uid, name, avatar, doubaoId) {
+  if (!chatState.currentRoomId) return;
+  var picker = document.getElementById('shareCardPicker');
+  if (picker) picker.remove();
+  var content = 'card:' + uid + '|' + name + '|' + (avatar || '') + '|' + (doubaoId || '');
+  var eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
+  var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  renderMessages(chatState.currentRoomId);
+  await __SB.from('chat_messages').insert({
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: content, reply_to: null, ts: Date.now()
+  });
+  setShareCooldown('card');
+  toast('名片已分享到频道', 'success');
+}
+
+async function showShareChannelPicker() {
+  if (!chatState.currentRoomId) { toast('请先进入一个频道', 'error'); return; }
+  if (!checkShareCooldown('channel')) return;
+  var popup = document.getElementById('userPopupModal');
+  if (popup) popup.remove();
+  var existing = document.getElementById('shareChannelPicker');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'shareChannelPicker';
+  modal.style.display = 'flex';
+  modal.innerHTML = '<div class="modal" style="max-width:360px"><div class="modal-header"><div class="modal-title">📢 分享频道</div><button class="modal-close" onclick="document.getElementById(\'shareChannelPicker\').remove()">✕</button></div><div id="shareChannelList" style="max-height:300px;overflow-y:auto"><div class="embed-loading">加载中...</div></div></div>';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+  var listEl = document.getElementById('shareChannelList');
+  var channels = (chatState.rooms || []).filter(function(r) { return r.type === 'channel'; });
+  if (channels.length === 0) {
+    listEl.innerHTML = '<div class="card-empty">你还没有加入任何频道</div>';
+    return;
+  }
+  var html = '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">选择要分享的频道：</div>';
+  // 获取频道头像
+  var roomIds = channels.map(function(c) { return c.id; });
+  var { data: settings } = await __SB.from('chat_channel_settings').select('room_id,avatar_url').in('room_id', roomIds);
+  var avatarMap = {};
+  if (settings) { settings.forEach(function(s) { avatarMap[s.room_id] = s.avatar_url || ''; }); }
+  channels.forEach(function(c) {
+    var cAvatar = avatarMap[c.id] || '';
+    html += '<div class="tool-card-item" onclick="sendShareChannel(\'' + escAttr(c.id) + '\',\'' + escAttr(c.name||'频道') + '\',\'' + escAttr(cAvatar) + '\')"><div style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">💬</div>') + '</div><span class="tool-card-name">' + esc(c.name || '频道') + '</span><span class="tool-card-type-badge">频道</span></div>';
+  });
+  listEl.innerHTML = html;
+}
+
+async function sendShareChannel(roomId, roomName, avatar) {
+  if (!chatState.currentRoomId) return;
+  var picker = document.getElementById('shareChannelPicker');
+  if (picker) picker.remove();
+  var content = 'channel:' + roomId + '|' + (roomName || '频道') + '|' + (avatar || '');
+  var eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
+  var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  renderMessages(chatState.currentRoomId);
+  await __SB.from('chat_messages').insert({
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: content, reply_to: null, ts: Date.now()
+  });
+  setShareCooldown('channel');
+  toast('频道已分享', 'success');
+}
+
+async function joinSharedChannel(roomId, roomName) {
+  // 检查是否已加入
+  var existing = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (existing) {
+    switchRoom(roomId);
+    toast('已切换到频道: ' + roomName);
+    return;
+  }
+  // 尝试加入频道
+  try {
+    var { data: room } = await __SB.from('chat_rooms').select('*').eq('id', roomId).maybeSingle();
+    if (!room) { toast('频道不存在', 'error'); return; }
+    var { data: sData } = await __SB.from('chat_channel_settings').select('admission_mode,admission').eq('room_id', roomId).maybeSingle();
+    var admission = 'open';
+    if (sData) { admission = sData.admission_mode || sData.admission || 'open'; }
+    if (admission === 'open') {
+      var memberId = 'm_' + roomId + '_' + currentUser.id;
+      await __SB.from('chat_room_members').upsert({ id: memberId, room_id: roomId, user_id: currentUser.id }, { onConflict: 'room_id,user_id' });
+      toast('已加入频道: ' + roomName, 'success');
+      await loadRoomList();
+      switchRoom(roomId);
+    } else {
+      toast('该频道需要' + (admission === 'invite' ? '邀请' : admission === 'approval' ? '审核' : admission === 'password' ? '密码' : '验证') + '才能加入', 'info');
+    }
+  } catch(e) {
+    toast('加入失败: ' + e.message, 'error');
+  }
+}
+
 // ═══ 工具面板覆盖层 ═══
 async function openToolPanel(toolId, roomId) {
   var { data: tool } = await __SB.from('chat_channel_tools').select('*').eq('id', toolId).maybeSingle();
@@ -8391,7 +8568,6 @@ async function openToolPanel(toolId, roomId) {
   else if (tool.tool_type === 'api') { renderApiTool(tool); }
   else if (tool.tool_type === 'vote') { renderVoteTool(tool); }
   else if (tool.tool_type === 'chain') { renderChainTool(tool); }
-  else if (tool.tool_type === 'card') { renderCardTool(tool); }
 }
 
 function closeToolPanel() {
@@ -8548,127 +8724,6 @@ async function addToChain(toolId, roomId) {
   await __SB.from('chat_tool_chains').insert({ id: chainId, tool_id: toolId, room_id: roomId, content: text, seq: nextSeq, user_id: currentUser.id, user_name: currentUser.name, user_avatar: currentUser.avatar || '' });
   input.value = '';
   toast('已参与接龙', 'success');
-}
-
-// ═══ 个人名片工具 ═══
-async function renderCardTool(tool) {
-  var content = document.getElementById('toolPanelContent');
-  if (!content) return;
-  var { data: cards } = await __SB.from('chat_tool_cards').select('*').eq('tool_id', tool.id).order('updated_at', { ascending: false });
-  cards = cards || [];
-  var myCard = cards.find(function(c) { return c.user_id === currentUser.id; });
-  var html = '';
-  if (tool.config && tool.config.description) { html += '<div style="padding:10px 14px;border-radius:10px;background:var(--bg-secondary);border:1px solid var(--border-color);margin-bottom:16px;font-size:13px;color:var(--text-secondary)">' + esc(tool.config.description) + '</div>'; }
-  html += '<div style="margin-bottom:16px;text-align:center">';
-  if (myCard) {
-    html += '<button class="btn btn-sm btn-orange" onclick="showCardEditor(\'' + tool.id + '\',\'' + tool.room_id + '\')">✏️ 编辑我的名片</button>';
-    html += ' <button class="btn btn-sm btn-red" onclick="deleteMyCard(\'' + tool.id + '\')">🗑 删除名片</button>';
-  } else {
-    html += '<button class="btn btn-orange" onclick="showCardEditor(\'' + tool.id + '\',\'' + tool.room_id + '\')">+ 创建我的名片</button>';
-  }
-  html += '</div>';
-  if (cards.length === 0) { html += '<div class="card-empty">还没有人创建名片，快来创建第一张吧！</div>'; }
-  else {
-    html += '<div class="card-gallery">';
-    cards.forEach(function(c) {
-      var avatarHTML = c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" onerror="this.parentElement.innerHTML=\'<div class=&quot;card-item-avatar-placeholder&quot;>👤</div>\'">' : '<div class="card-item-avatar-placeholder">👤</div>';
-      html += '<div class="card-item"><div class="card-item-header"><div class="card-item-avatar">' + avatarHTML + '</div><div class="card-item-name">' + esc(c.user_name) + '</div></div>';
-      if (c.bio) { html += '<div class="card-item-bio">' + esc(c.bio) + '</div>'; }
-      var links = c.links || [];
-      if (links.length > 0) {
-        html += '<div class="card-item-links">';
-        links.forEach(function(l) { if (l.url) { html += '<a class="card-item-link" href="' + esc(l.url) + '" target="_blank">' + esc(l.label || l.url) + '</a>'; } });
-        html += '</div>';
-      }
-      var fields = c.custom_fields || [];
-      if (fields.length > 0) {
-        html += '<div class="card-item-fields">';
-        fields.forEach(function(f) { if (f.label && f.value) { html += '<div class="card-item-field"><span class="card-item-field-label">' + esc(f.label) + ':</span> <span>' + esc(f.value) + '</span></div>'; } });
-        html += '</div>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
-  }
-  content.innerHTML = html;
-  if (_toolPanelSub) { try { _toolPanelSub.unsubscribe(); } catch(e) {} }
-  _toolPanelSub = __SB.channel('tool-card-' + tool.id)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_tool_cards', filter: 'tool_id=eq.' + tool.id }, function() { renderCardTool(tool); })
-    .subscribe();
-}
-
-function showCardEditor(toolId, roomId) {
-  __SB.from('chat_tool_cards').select('*').eq('tool_id', toolId).eq('user_id', currentUser.id).maybeSingle().then(function(result) {
-    var card = result.data;
-    var existing = document.getElementById('cardEditorModal');
-    if (existing) existing.remove();
-    var bio = (card && card.bio) || '';
-    var links = (card && card.links) || [];
-    var fields = (card && card.custom_fields) || [];
-    var modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.id = 'cardEditorModal';
-    modal.style.display = 'flex';
-    modal.innerHTML = '<div class="modal modal-lg"><div class="modal-header"><div class="modal-title">💳 编辑个人名片</div><button class="modal-close" onclick="document.getElementById(\'cardEditorModal\').remove()">✕</button></div>' +
-      '<div><div class="tool-editor-form-group"><label class="tool-editor-label">名称</label><input class="tool-editor-input" id="cardName" value="' + esc((card && card.user_name) || currentUser.name || '') + '"></div>' +
-      '<div class="tool-editor-form-group"><label class="tool-editor-label">简介</label><textarea class="tool-editor-input" id="cardBio" rows="3" placeholder="一句话介绍自己">' + esc(bio) + '</textarea></div>' +
-      '<div class="tool-editor-form-group"><label class="tool-editor-label">链接 (标签 + URL)</label><div id="cardLinksContainer"></div><button class="tool-add-option-btn" onclick="addCardLink()">+ 添加链接</button></div>' +
-      '<div class="tool-editor-form-group"><label class="tool-editor-label">自定义字段 (标签 + 内容)</label><div id="cardFieldsContainer"></div><button class="tool-add-option-btn" onclick="addCardField()">+ 添加字段</button></div>' +
-      '<button class="btn btn-orange btn-full" onclick="saveCard(\'' + toolId + '\',\'' + roomId + '\')">保存名片</button></div></div>';
-    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
-    document.body.appendChild(modal);
-    if (links.length === 0) { addCardLink(); } else { links.forEach(function(l) { addCardLink(l.label, l.url); }); }
-    if (fields.length === 0) { addCardField(); } else { fields.forEach(function(f) { addCardField(f.label, f.value); }); }
-  });
-}
-
-function addCardLink(label, url) {
-  var container = document.getElementById('cardLinksContainer');
-  if (!container) return;
-  var div = document.createElement('div');
-  div.className = 'tool-option-row';
-  div.innerHTML = '<input class="tool-editor-input" style="flex:0 0 80px" placeholder="标签" value="' + esc(label || '') + '"><input class="tool-editor-input" placeholder="https://..." value="' + esc(url || '') + '"><span style="cursor:pointer;color:#ef4444;font-size:16px" onclick="this.parentElement.remove()">✕</span>';
-  container.appendChild(div);
-}
-
-function addCardField(label, value) {
-  var container = document.getElementById('cardFieldsContainer');
-  if (!container) return;
-  var div = document.createElement('div');
-  div.className = 'tool-option-row';
-  div.innerHTML = '<input class="tool-editor-input" style="flex:0 0 80px" placeholder="标签" value="' + esc(label || '') + '"><input class="tool-editor-input" placeholder="内容" value="' + esc(value || '') + '"><span style="cursor:pointer;color:#ef4444;font-size:16px" onclick="this.parentElement.remove()">✕</span>';
-  container.appendChild(div);
-}
-
-async function saveCard(toolId, roomId) {
-  var name = document.getElementById('cardName') ? document.getElementById('cardName').value.trim() : '';
-  if (!name) { toast('请输入名称', 'error'); return; }
-  var bio = document.getElementById('cardBio') ? document.getElementById('cardBio').value.trim() : '';
-  var links = [];
-  document.querySelectorAll('#cardLinksContainer .tool-option-row').forEach(function(row) {
-    var inputs = row.querySelectorAll('input');
-    var label = inputs[0] ? inputs[0].value.trim() : '';
-    var url = inputs[1] ? inputs[1].value.trim() : '';
-    if (url) links.push({ label: label || url, url: url });
-  });
-  var fields = [];
-  document.querySelectorAll('#cardFieldsContainer .tool-option-row').forEach(function(row) {
-    var inputs = row.querySelectorAll('input');
-    var label = inputs[0] ? inputs[0].value.trim() : '';
-    var value = inputs[1] ? inputs[1].value.trim() : '';
-    if (label && value) fields.push({ label: label, value: value });
-  });
-  var cardId = 'card_' + toolId + '_' + currentUser.id;
-  await __SB.from('chat_tool_cards').upsert({ id: cardId, tool_id: toolId, room_id: roomId, user_id: currentUser.id, user_name: name, user_avatar: currentUser.avatar || '', bio: bio, links: links, custom_fields: fields, updated_at: new Date().toISOString() }, { onConflict: 'tool_id,user_id' });
-  var modal = document.getElementById('cardEditorModal');
-  if (modal) modal.remove();
-  toast('名片已保存', 'success');
-}
-
-async function deleteMyCard(toolId) {
-  if (!confirm('确定删除你的名片？')) return;
-  await __SB.from('chat_tool_cards').delete().eq('tool_id', toolId).eq('user_id', currentUser.id);
-  toast('名片已删除');
 }
 
 async function updateAdmissionMode() {
