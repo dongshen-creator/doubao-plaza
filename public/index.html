@@ -36,7 +36,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=47">
 </head>
 <body>
 
@@ -804,32 +804,36 @@ function escAttr(s) {
 }
 
 // 渲染富文本内容（支持HTML标签，包括 <style> 动画）
+var __latexIdCounter = 0;
 function renderRichContent(content) {
   if (!content) return '';
   // 统一使用 sanitizeHtml 进行安全净化
   var sanitized = sanitizeHtml(content);
   // 使用 processHtmlTextNodes 处理文本节点的换行和链接（跳过 <style> 标签）
   var processed = processHtmlTextNodes(sanitized);
-  // LaTeX 渲染：在返回的 HTML 中自动渲染 $$...$$ 和 $...$
+  // LaTeX 渲染：用唯一ID包装器精准定位目标元素
+  var latexId = '__latex_' + (++__latexIdCounter);
   setTimeout(function() {
-    if (typeof renderMathInElement === 'function') {
-      var containers = document.querySelectorAll('.dp-rich-content, .blog-content');
-      containers.forEach(function(el) {
-        try {
-          renderMathInElement(el, {
-            delimiters: [
-              {left: '$$', right: '$$', display: true},
-              {left: '\\[', right: '\\]', display: true},
-              {left: '$', right: '$', display: false},
-              {left: '\\(', right: '\\)', display: false}
-            ],
-            throwOnError: false
-          });
-        } catch(e) {}
-      });
-    }
+    renderLatexInElement(document.getElementById(latexId));
   }, 50);
-  return processed;
+  return '<div id="' + latexId + '" style="display:contents">' + processed + '</div>';
+}
+
+// 在指定元素上渲染LaTeX（KaTeX auto-render）
+function renderLatexInElement(el) {
+  if (!el || typeof renderMathInElement !== 'function') return;
+  try {
+    renderMathInElement(el, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '\\[', right: '\\]', display: true},
+        {left: '$', right: '$', display: false},
+        {left: '\\(', right: '\\)', display: false}
+      ],
+      throwOnError: false,
+      ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    });
+  } catch(e) {}
 }
 
 function formatDate(str) {
@@ -3028,6 +3032,11 @@ async function blogShowPost(container, postId) {
       '<div class="dp-rich-content blog-content" style="font-size:15px;line-height:1.8;color:var(--text-primary)">' + renderRichContent(p.content) + '</div>' +
       (tags.length > 0 ? '<div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:8px">' + tags.map(function(t) { return '<span style="background:var(--accent-bg);color:var(--accent);padding:4px 12px;border-radius:16px;font-size:12px">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
       '<div id="blogCommentsSection" style="margin-top:32px"></div>';
+    // 双保险：200ms后对文章内容区域显式渲染LaTeX
+    setTimeout(function() {
+      var blogContent = view.querySelector('.blog-content');
+      if (blogContent) renderLatexInElement(blogContent);
+    }, 200);
     blogLoadComments(postId);
   } catch(e) {
     var v = document.getElementById('blogPostView');
@@ -3088,6 +3097,7 @@ function blogShowEditor(container, postId) {
       '</div>' +
       '<div style="display:flex;gap:12px">' +
         '<button class="btn btn-orange" style="flex:1;padding:12px;font-size:14px" onclick="blogSavePost()">' + (isEdit ? '更新文章' : '发布文章') + '</button>' +
+        '<button class="btn btn-gray" style="padding:12px 20px;font-size:14px" onclick="blogShowLatexPreview()">👁 预览</button>' +
         '<button class="btn btn-gray" style="padding:12px 20px;font-size:14px" onclick="blogShowList(blogState.container)">取消</button>' +
       '</div>' +
     '</div>';
@@ -3114,7 +3124,7 @@ function blogShowEditor(container, postId) {
         ['blockquote', 'paragraphStyle'],
         ['table', 'link', 'image', 'video'],
         ['fullScreen', 'showBlocks', 'codeView'],
-        ['preview', 'print']
+        ['print']
       ],
       font: ['Arial', 'Courier New', 'Georgia', 'Microsoft YaHei', 'SimSun', 'Tahoma', 'Times New Roman', 'Verdana'],
       fontSize: [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32],
@@ -3172,6 +3182,56 @@ function blogShowEditor(container, postId) {
 
   blogLoadCategoriesForEditor();
   if (isEdit) blogLoadPostForEdit(postId);
+}
+
+// --- LaTeX 预览弹窗 ---
+function blogShowLatexPreview() {
+  // 获取编辑器内容
+  var content = '';
+  if (window.__blogSunEditor && typeof window.__blogSunEditor.getContents === 'function') {
+    content = window.__blogSunEditor.getContents();
+  } else {
+    var ta = document.getElementById('blogContentTextarea');
+    if (ta) content = ta.value;
+  }
+  if (!content || !content.trim()) {
+    toast('没有内容可预览', 'error');
+    return;
+  }
+
+  var title = (document.getElementById('blogTitleInput') || {}).value || '预览';
+
+  // 创建预览弹窗
+  var existing = document.getElementById('blogLatexPreviewModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'blogLatexPreviewModal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;z-index:10000';
+  modal.innerHTML =
+    '<div class="modal-box" style="max-width:800px;width:90%;max-height:85vh;display:flex;flex-direction:column">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border-color);flex-shrink:0">' +
+        '<span style="font-size:15px;font-weight:600">👁 文章预览（含LaTeX渲染）</span>' +
+        '<button onclick="document.getElementById(\'blogLatexPreviewModal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-faint);padding:4px 8px">✕</button>' +
+      '</div>' +
+      '<div id="blogLatexPreviewContent" style="flex:1;overflow-y:auto;padding:20px;min-height:0">' +
+        '<h1 style="font-size:24px;font-weight:700;margin-bottom:16px;color:var(--text-primary)">' + esc(title) + '</h1>' +
+        '<div class="dp-rich-content blog-content" style="font-size:15px;line-height:1.8;color:var(--text-primary)">' + renderRichContent(content) + '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  // 点击遮罩关闭
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) modal.remove();
+  });
+
+  // 额外保险：200ms后再次尝试渲染LaTeX（确保DOM已就绪）
+  setTimeout(function() {
+    var el = document.getElementById('blogLatexPreviewContent');
+    if (el) renderLatexInElement(el);
+  }, 200);
 }
 
 // --- 旧的自定义编辑器辅助函数已移除，改用 SunEditor ---
