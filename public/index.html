@@ -1612,7 +1612,7 @@ function renderFriendsView(sidebar, main) {
   // 主内容区：渐变欢迎卡片 + 搜索结果 + 私聊
   main.innerHTML = `
     <div id="friendsMainContainer" style="height:100%;display:flex;flex-direction:column">
-      <div class="view-header-bar"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><span style="font-size:15px;font-weight:600;color:var(--text-primary)">好友</span></div>
+      <div class="view-header-bar" id="friendsViewHeaderBar"><button class="sidebar-toggle-btn" onclick="toggleMobileSidebar()" aria-label="会话列表">☰</button><span style="font-size:15px;font-weight:600;color:var(--text-primary)">好友</span></div>
       <div id="searchResults"></div>
       <div class="friends-hero anim-up" id="friendsWelcomeCard">
         <div class="friends-hero-icon">✨</div>
@@ -1689,11 +1689,13 @@ async function openPrivateChatInFriends(friendId, friendName) {
   // 记录正在打开的目标，支持中断
   chatState._openingTarget = friendId;
 
-  // 隐藏欢迎卡片和搜索结果
+  // 隐藏欢迎卡片、搜索结果和顶部标题栏（聊天界面自带头部）
   var welcome = document.getElementById('friendsWelcomeCard');
   var searchR = document.getElementById('searchResults');
+  var headerBar = document.getElementById('friendsViewHeaderBar');
   if (welcome) welcome.style.display = 'none';
   if (searchR) searchR.style.display = 'none';
+  if (headerBar) headerBar.style.display = 'none';
 
   // 查找或创建私聊房间
   var roomId;
@@ -1787,8 +1789,10 @@ function closePrivateChatInFriends() {
   if (area) { area.innerHTML = ''; area.style.display = 'none'; }
   var welcome = document.getElementById('friendsWelcomeCard');
   var searchR = document.getElementById('searchResults');
+  var headerBar = document.getElementById('friendsViewHeaderBar');
   if (welcome) welcome.style.display = '';
   if (searchR) searchR.style.display = '';
+  if (headerBar) headerBar.style.display = '';
   chatState.currentRoomId = null;
   stopMessagePolling();
   // 移动端返回时打开侧边栏
@@ -6368,12 +6372,14 @@ async function loadOlderMessages(roomId) {
     .order('id', { ascending: false })
     .limit(50);
   if (error || !data?.length) return;
-  var olderMsgs = data.reverse().map(function(m) { return {
+  // 过滤旧版编辑标记消息（已改用 UPDATE 方式，但兼容历史数据）
+  var filteredData = data.filter(function(m) { return !(m.rel_type === 'm.replace' && m.relates_to_event_id); });
+  var olderMsgs = filteredData.reverse().map(function(m) { return {
     event_id: m.event_id || ('msg_' + m.id),
     sender: m.sender_name || '未知用户', sender_id: m.sender_id,
     sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
     content: m.recalled ? '' : m.content, reply_to: m.reply_to || null,
-    ts: m.ts || 0, recalled: !!m.recalled, edited: !!m.rel_type && m.rel_type === 'm.replace'
+    ts: m.ts || 0, recalled: !!m.recalled, edited: false
   };});
   chatState.messages[roomId] = olderMsgs.concat(existing);
   renderMessages(roomId);
@@ -6744,6 +6750,7 @@ function handleRealtimeUpdate(roomId, msg) {
   const found = existing.find(m => m.event_id === msg.event_id);
   if (found) {
     if (msg.recalled) { found.recalled = true; found.content = ''; }
+    else if (msg.content) { found.content = msg.content; found.edited = true; }
     if (roomId === chatState.currentRoomId) renderMessages(roomId);
   }
 }
@@ -7362,12 +7369,11 @@ async function editMessage(eventId, currentContent) {
   if (displayContent.length > 50) displayContent = displayContent.slice(0, 50) + '…';
   var newContent = prompt('编辑消息（仅限自己发送的消息）:\n原文: ' + displayContent, currentContent);
   if (newContent === null || !newContent.trim()) return;
-  const editId = 'edit_' + Date.now().toString(36);
-  const { error } = await __SB.from('chat_messages').insert({
-    event_id: editId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
-    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
-    content: newContent.trim(), rel_type: 'm.replace', relates_to_event_id: eventId, ts: Date.now()
-  });
+  // 直接 UPDATE 原消息内容（与撤回使用相同机制，可靠且实时同步）
+  const { error } = await __SB.from('chat_messages')
+    .update({ content: newContent.trim() })
+    .eq('event_id', eventId)
+    .eq('sender_id', currentUser.id);
   if (error) { toast('编辑失败: ' + error.message, 'error'); return; }
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   const msg = msgs.find(m => m.event_id === eventId);
