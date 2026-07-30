@@ -6515,23 +6515,23 @@ function renderMsgHTML(m, roomId) {
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(tTitle) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
   } else if (text.startsWith('card:')) {
-    // 用户名片分享: card:<userId>|<name>|<avatar>|<doubaoId>
+    // 用户名片分享: card:<userId>|<name>|<avatar>|<doubaoId> (各段已 encodeURIComponent)
     var cardParts = text.slice(5).split('|');
-    var cUid = cardParts[0] || '';
-    var cName = cardParts[1] || '用户';
-    var cAvatar = cardParts[2] || '';
-    var cDoubao = cardParts[3] || '';
+    var cUid = decodeURIComponent(cardParts[0] || '');
+    var cName = decodeURIComponent(cardParts[1] || '用户');
+    var cAvatar = decodeURIComponent(cardParts[2] || '');
+    var cDoubao = decodeURIComponent(cardParts[3] || '');
     var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
     contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
       '<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + avatarInner + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">' + (cDoubao ? '@' + esc(cDoubao) : '') + ' · 个人名片 · 点击查看 →</div></div></div>';
   } else if (text.startsWith('channel:')) {
-    // 频道分享: channel:<roomId>|<roomName>|<avatar>
+    // 频道分享: channel:<roomId>|<roomName>|<avatar> (各段已 encodeURIComponent)
     var chParts = text.slice(8).split('|');
-    var chRid = chParts[0] || '';
-    var chName = chParts[1] || '频道';
-    var chAvatar = chParts[2] || '';
+    var chRid = decodeURIComponent(chParts[0] || '');
+    var chName = decodeURIComponent(chParts[1] || '频道');
+    var chAvatar = decodeURIComponent(chParts[2] || '');
     var chAvatarInner = chAvatar ? '<img src="' + esc(chAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
     contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
       '<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + chAvatarInner + '</div>' +
@@ -6587,10 +6587,10 @@ function renderReplyBlock(eventId, roomId) {
     preview = (tp[2] || '🔗') + ' ' + esc(tp[3] || '工具');
   } else if (t.startsWith('card:')) {
     var cp = t.slice(5).split('|');
-    preview = '💳 ' + esc(cp[1] || '名片');
+    preview = '💳 ' + esc(decodeURIComponent(cp[1] || '名片'));
   } else if (t.startsWith('channel:')) {
     var chp = t.slice(8).split('|');
-    preview = '📢 ' + esc(chp[1] || '频道');
+    preview = '📢 ' + esc(decodeURIComponent(chp[1] || '频道'));
   } else {
     preview = renderRichText(t.length > 80 ? t.slice(0,80) + '…' : t);
   }
@@ -8450,7 +8450,7 @@ async function sendShareCard(uid, name, avatar, doubaoId) {
   if (!chatState.currentRoomId) return;
   var picker = document.getElementById('shareCardPicker');
   if (picker) picker.remove();
-  var content = 'card:' + uid + '|' + name + '|' + (avatar || '') + '|' + (doubaoId || '');
+  var content = 'card:' + encodeURIComponent(uid) + '|' + encodeURIComponent(name) + '|' + encodeURIComponent(avatar || '') + '|' + encodeURIComponent(doubaoId || '');
   var eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
   var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
@@ -8502,7 +8502,7 @@ async function sendShareChannel(roomId, roomName, avatar) {
   if (!chatState.currentRoomId) return;
   var picker = document.getElementById('shareChannelPicker');
   if (picker) picker.remove();
-  var content = 'channel:' + roomId + '|' + (roomName || '频道') + '|' + (avatar || '');
+  var content = 'channel:' + encodeURIComponent(roomId) + '|' + encodeURIComponent(roomName || '频道') + '|' + encodeURIComponent(avatar || '');
   var eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
   var prevMsgs = chatState.messages[chatState.currentRoomId] || [];

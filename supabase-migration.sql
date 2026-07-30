@@ -596,22 +596,8 @@ CREATE TABLE IF NOT EXISTS chat_tool_chains (
 );
 CREATE INDEX IF NOT EXISTS idx_ctc_tool ON chat_tool_chains(tool_id, seq);
 
--- ===== 27. 个人名片工具表 =====
-CREATE TABLE IF NOT EXISTS chat_tool_cards (
-  id TEXT PRIMARY KEY,
-  tool_id TEXT NOT NULL,
-  room_id TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  user_name TEXT NOT NULL,
-  user_avatar TEXT,
-  bio TEXT DEFAULT '',
-  links JSON DEFAULT '[]',
-  custom_fields JSON DEFAULT '[]',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(tool_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS idx_ctcard_tool ON chat_tool_cards(tool_id);
+-- ===== 27. 个人名片工具表（已废弃，删除残留表） =====
+DROP TABLE IF EXISTS chat_tool_cards;
 
 -- ===== 28. 新工具表 RLS 策略 =====
 ALTER TABLE chat_tool_votes ENABLE ROW LEVEL SECURITY;
@@ -640,15 +626,7 @@ CREATE POLICY "ctc_insert" ON chat_tool_chains FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "ctc_delete" ON chat_tool_chains;
 CREATE POLICY "ctc_delete" ON chat_tool_chains FOR DELETE USING (true);
 
-ALTER TABLE chat_tool_cards ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "ctcard_read" ON chat_tool_cards;
-CREATE POLICY "ctcard_read" ON chat_tool_cards FOR SELECT USING (true);
-DROP POLICY IF EXISTS "ctcard_insert" ON chat_tool_cards;
-CREATE POLICY "ctcard_insert" ON chat_tool_cards FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS "ctcard_update" ON chat_tool_cards;
-CREATE POLICY "ctcard_update" ON chat_tool_cards FOR UPDATE USING (true);
-DROP POLICY IF EXISTS "ctcard_delete" ON chat_tool_cards;
-CREATE POLICY "ctcard_delete" ON chat_tool_cards FOR DELETE USING (true);
+-- chat_tool_cards 已废弃，RLS 策略不再需要
 
 -- ===== 29. 新工具表 Realtime =====
 DO $$ BEGIN
@@ -666,11 +644,7 @@ DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_chains;
   END IF;
 END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_tool_cards') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_cards;
-  END IF;
-END $$;
+-- chat_tool_cards 已废弃，Realtime 订阅不再需要
 
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错
