@@ -6281,7 +6281,7 @@ async function loadMessages(roomId, silent) {
   var loadRoom = chatState.rooms.find(function(r) { return r.id === roomId; });
   var isChannel = loadRoom && loadRoom.type === 'channel';
   var queries = [
-    __SB.from('chat_messages').select('id, event_id, room_id, sender_id, sender_name, sender_avatar, sender_doubao_id, content, reply_to, recalled, rel_type, relates_to_event_id, ts').eq('room_id', roomId).order('id', { ascending: true }).limit(200),
+    __SB.from('chat_messages').select('id, event_id, room_id, sender_id, sender_name, sender_avatar, sender_doubao_id, content, reply_to, recalled, rel_type, relates_to_event_id, ts').eq('room_id', roomId).order('id', { ascending: false }).limit(200),
     __SB.from('chat_reactions').select('event_id,reaction,sender_id').eq('room_id', roomId)
   ];
   if (isChannel) {
@@ -6293,7 +6293,8 @@ async function loadMessages(roomId, silent) {
   var pinnedResult = isChannel ? queryResults[2] : null;
   var data = msgResult.data, error = msgResult.error;
   if (error) { console.error('loadMessages error:', error); return; }
-  const msgs = (data || []).filter(function(m) { return !(m.rel_type === 'm.replace' && m.relates_to_event_id); }).map(m => ({
+  // 查询使用 id DESC 取最新 200 条，此处反转为时间升序
+  const msgs = (data || []).reverse().filter(function(m) { return !(m.rel_type === 'm.replace' && m.relates_to_event_id); }).map(m => ({
     event_id: m.event_id || ('msg_' + m.id),
     sender: m.sender_name || '未知用户', sender_id: m.sender_id,
     sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
