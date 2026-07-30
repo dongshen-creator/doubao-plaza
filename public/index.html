@@ -1760,6 +1760,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
             <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
             <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频" aria-label="上传图片或视频">🖼</button>
             <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件" aria-label="上传文件">📎</button>
+            <button class="chat-action-btn" onclick="showQuickTools()" title="频道工具" aria-label="频道工具">📦</button>
             <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this)" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
             <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
           </div>
@@ -1877,6 +1878,7 @@ function renderChatView(sidebar, main) {
           <input type="file" id="chatAnyFileInput" style="display:none" onchange="uploadChatFile(this)">
           <button class="chat-action-btn" onclick="document.getElementById('chatFileInput').click()" title="图片/视频" aria-label="上传图片或视频">🖼</button>
           <button class="chat-action-btn" onclick="document.getElementById('chatAnyFileInput').click()" title="文件" aria-label="上传文件">📎</button>
+          <button class="chat-action-btn" onclick="showQuickTools()" title="频道工具" aria-label="频道工具">📦</button>
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="输入消息…" aria-label="聊天输入框" oninput="autoChatResize(this);handleAtAutocomplete(this);sendTyping()" onkeydown="handleChatKeydown(event)" onpaste="handleChatPaste(event)"></textarea>
           <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()" aria-label="发送消息">📤</button>
         </div>
@@ -6498,6 +6500,18 @@ function renderMsgHTML(m, roomId) {
     } else {
       contentHtml = '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary)">📎 ' + esc(fname || '文件') + '</a>';
     }
+  } else if (text.startsWith('tool:')) {
+    // 工具分享卡片消息: tool:<toolId>|<toolType>|<icon>|<title>
+    var toolParts = text.slice(5).split('|');
+    var tId = toolParts[0] || '';
+    var tType = toolParts[1] || 'link';
+    var tIcon = toolParts[2] || '🔗';
+    var tTitle = toolParts[3] || '工具';
+    var tMeta = TOOL_TYPES[tType] || TOOL_TYPES.link;
+    contentHtml = '<div onclick="openToolPanel(\'' + escAttr(tId) + '\',\'' + escAttr(roomId || '') + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+      '<div style="width:36px;height:36px;border-radius:10px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">' + esc(tIcon) + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(tTitle) + '</div>' +
+      '<div style="font-size:11px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
   } else {
     // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
     contentHtml = renderRichText(text);
@@ -6543,6 +6557,9 @@ function renderReplyBlock(eventId, roomId) {
   } else if (t.startsWith('file:')) {
     const fc = t.slice(5); const lc = fc.lastIndexOf(':');
     preview = '📎 ' + esc(lc > 0 ? fc.substring(0, lc) : fc || '文件');
+  } else if (t.startsWith('tool:')) {
+    var tp = t.slice(5).split('|');
+    preview = (tp[2] || '🔗') + ' ' + esc(tp[3] || '工具');
   } else {
     preview = renderRichText(t.length > 80 ? t.slice(0,80) + '…' : t);
   }
@@ -8274,6 +8291,8 @@ async function saveToolFromEditor() {
   loadChannelTools(chatState.currentRoomId);
   if (document.getElementById('settingsChannelToolList')) loadChannelTools(chatState.currentRoomId, 'settingsChannelToolList');
   toast('工具已添加', 'success');
+  // 自动发送工具分享消息到频道
+  shareToolToChannel(tId, type, icon, title);
 }
 
 async function deleteChannelTool(toolId, roomId) {
@@ -8296,6 +8315,60 @@ async function deleteChannelTool(toolId, roomId) {
   toast('工具已删除');
 }
 
+// ═══ 快捷工具弹窗 + 工具分享消息 ═══
+async function showQuickTools() {
+  if (!chatState.currentRoomId) { toast('请先选择一个频道', 'error'); return; }
+  var { data: tools } = await __SB.from('chat_channel_tools').select('*').eq('room_id', chatState.currentRoomId).order('sort_order');
+  var existing = document.getElementById('quickToolsPopup');
+  if (existing) existing.remove();
+  var popup = document.createElement('div');
+  popup.className = 'modal-overlay';
+  popup.id = 'quickToolsPopup';
+  popup.style.display = 'flex';
+  var bodyHtml = '';
+  if (!tools || tools.length === 0) {
+    bodyHtml = '<div style="text-align:center;padding:24px;color:var(--text-faint);font-size:13px">此频道还没有工具<br><button class="btn btn-sm btn-orange" style="margin-top:12px" onclick="document.getElementById(\'quickToolsPopup\').remove();showToolEditor()">+ 添加工具</button></div>';
+  } else {
+    bodyHtml = '<div style="display:flex;flex-direction:column;gap:8px">';
+    tools.forEach(function(t) {
+      var tt = t.tool_type || 'link';
+      var meta = TOOL_TYPES[tt] || TOOL_TYPES.link;
+      if (tt === 'link') {
+        bodyHtml += '<a href="' + esc(t.url || '#') + '" target="_blank" class="tool-card-item" style="text-decoration:none">' +
+          '<span class="tool-card-icon">' + (t.icon || meta.icon) + '</span>' +
+          '<span class="tool-card-name">' + esc(t.title) + '</span>' +
+          '<span class="tool-card-type-badge">链接</span></a>';
+      } else {
+        bodyHtml += '<div class="tool-card-item" onclick="document.getElementById(\'quickToolsPopup\').remove();openToolPanel(\'' + t.id + '\',\'' + chatState.currentRoomId + '\')">' +
+          '<span class="tool-card-icon">' + (t.icon || meta.icon) + '</span>' +
+          '<span class="tool-card-name">' + esc(t.title) + '</span>' +
+          '<span class="tool-card-type-badge">' + meta.badge + '</span>' +
+          '<span class="tool-card-delete" onclick="event.stopPropagation();shareToolToChannel(\'' + t.id + '\',\'' + tt + '\',\'' + escAttr(t.icon || meta.icon) + '\',\'' + escAttr(t.title) + '\')">📤</span></div>';
+      }
+    });
+    bodyHtml += '</div>';
+  }
+  popup.innerHTML = '<div class="modal" style="max-width:380px"><div class="modal-header"><div class="modal-title">📦 频道工具</div><button class="modal-close" onclick="document.getElementById(\'quickToolsPopup\').remove()">✕</button></div>' + bodyHtml + '</div>';
+  popup.onclick = function(e) { if (e.target === popup) popup.remove(); };
+  document.body.appendChild(popup);
+}
+
+async function shareToolToChannel(toolId, toolType, icon, title) {
+  if (!chatState.currentRoomId) return;
+  var content = 'tool:' + toolId + '|' + (toolType || 'link') + '|' + (icon || '🔗') + '|' + (title || '工具');
+  var eventId = 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
+  var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
+  chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  renderMessages(chatState.currentRoomId);
+  await __SB.from('chat_messages').insert({
+    event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+    sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+    content: content, reply_to: null, ts: Date.now()
+  });
+  toast('已分享到频道', 'success');
+}
+
 // ═══ 工具面板覆盖层 ═══
 async function openToolPanel(toolId, roomId) {
   var { data: tool } = await __SB.from('chat_channel_tools').select('*').eq('id', toolId).maybeSingle();
@@ -8307,7 +8380,7 @@ async function openToolPanel(toolId, roomId) {
   var overlay = document.createElement('div');
   overlay.id = 'toolPanelOverlay';
   overlay.className = 'tool-panel-overlay';
-  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
+  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span><button class="btn btn-sm btn-gray" style="font-size:11px;flex-shrink:0" onclick="shareToolToChannel(\'' + tool.id + '\',\'' + (tool.tool_type||'link') + '\',\'' + escAttr(tool.icon||meta.icon) + '\',\'' + escAttr(tool.title) + '\')">📤 分享到频道</button></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
   center.appendChild(overlay);
   ['chatMsgs', 'chatViewInput', 'chatReplyBar', 'chatMutedBanner'].forEach(function(id) {
     var el = document.getElementById(id);
