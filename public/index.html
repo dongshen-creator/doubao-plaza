@@ -6510,7 +6510,7 @@ function renderMsgHTML(m, roomId) {
     var tIcon = toolParts[2] || '🔗';
     var tTitle = toolParts[3] || '工具';
     var tMeta = TOOL_TYPES[tType] || TOOL_TYPES.link;
-    contentHtml = '<div onclick="openToolPanel(\'' + escAttr(tId) + '\',\'' + escAttr(roomId || '') + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+    contentHtml = '<div onclick="openToolPanel(\'' + escAttr(tId) + '\',\'' + escAttr(roomId || '') + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<div style="width:36px;height:36px;border-radius:10px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">' + esc(tIcon) + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(tTitle) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
@@ -6522,7 +6522,7 @@ function renderMsgHTML(m, roomId) {
     var cAvatar = decodeURIComponent(cardParts[2] || '');
     var cDoubao = decodeURIComponent(cardParts[3] || '');
     var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
-    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + avatarInner + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">' + (cDoubao ? '@' + esc(cDoubao) : '') + ' · 个人名片 · 点击查看 →</div></div></div>';
@@ -6533,7 +6533,7 @@ function renderMsgHTML(m, roomId) {
     var chName = decodeURIComponent(chParts[1] || '频道');
     var chAvatar = decodeURIComponent(chParts[2] || '');
     var chAvatarInner = chAvatar ? '<img src="' + esc(chAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
-    contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02\')'" onmouseout="this.style.transform=\'scale(1)\')">' +
+    contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + chAvatarInner + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(chName) + '</div>' +
       '<div style="font-size:11px;color:var(--accent)">频道分享 · 点击加入 →</div></div></div>';
@@ -7756,8 +7756,20 @@ async function loadRoomMemberList(roomId) {
   if (!members?.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px">暂无成员</div>'; return; }
   const userIds = members.map(m => m.user_id);
   const userInfos = {};
-  for (const uid of userIds) {
-    try { const r = await api('/api/users/' + uid); if (r?.success) userInfos[uid] = r.data; } catch(e) {}
+  // 批量查询用户信息，避免逐个串行请求
+  try {
+    var batchRes = await api('/api/users/batch?ids=' + encodeURIComponent(userIds.join(',')));
+    if (batchRes && batchRes.success && batchRes.data) {
+      batchRes.data.forEach(function(d) { userInfos[d.id] = d; });
+    }
+  } catch(e) {}
+  // 从聊天消息中补充缺失的用户信息
+  var roomMsgs = chatState.messages[roomId] || [];
+  for (var mi = 0; mi < roomMsgs.length; mi++) {
+    var msg = roomMsgs[mi];
+    if (msg.sender_id && !userInfos[msg.sender_id]) {
+      userInfos[msg.sender_id] = { id: msg.sender_id, name: msg.sender, avatar: msg.sender_avatar || '', doubao_id: msg.sender_doubao_id || '' };
+    }
   }
   const room = chatState.rooms.find(r => r.id === roomId);
   var isCreator = room && (room.created_by === currentUser.id || isDeveloper());
@@ -7774,7 +7786,7 @@ async function loadRoomMemberList(roomId) {
   }
   let html = '';
   for (const uid of userIds) {
-    const u = userInfos[uid] || { name: uid.slice(0, 8), avatar: '', doubao_id: '' };
+    const u = userInfos[uid] || { name: '用户' + uid.slice(-4), avatar: '', doubao_id: '' };
     const isAdmin = adminSet.has(uid);
     const isMuted = mutedSet.has(uid);
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color)">';
