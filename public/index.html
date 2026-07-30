@@ -6289,29 +6289,20 @@ async function loadMessages(roomId) {
   var pinnedResult = isChannel ? queryResults[2] : null;
   var data = msgResult.data, error = msgResult.error;
   if (error) { console.error('loadMessages error:', error); return; }
-  const msgs = (data || []).map(m => ({
+  const msgs = (data || []).filter(function(m) { return !(m.rel_type === 'm.replace' && m.relates_to_event_id); }).map(m => ({
     event_id: m.event_id || ('msg_' + m.id),
     sender: m.sender_name || '未知用户', sender_id: m.sender_id,
     sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
     content: m.recalled ? '' : m.content, reply_to: m.reply_to || null,
-    rel_type: m.rel_type || null, relates_to_event_id: m.relates_to_event_id || null,
-    ts: m.ts || 0, recalled: !!m.recalled, edited: !!m.rel_type && m.rel_type === 'm.replace'
+    ts: m.ts || 0, recalled: !!m.recalled, edited: false
   }));
-  const editMap = {};
   const nonEdits = [];
   // 获取本地清理时间戳，过滤掉清理之前的消息
   var _localClearTs = getLocalClearTimestamp(roomId);
   for (const m of msgs) {
-    if (m.rel_type === 'm.replace' && m.relates_to_event_id) { editMap[m.relates_to_event_id] = m.content; }
-    else {
-      // 跳过本地清理时间戳之前的消息
-      if (_localClearTs && m.ts && m.ts < _localClearTs) continue;
-      nonEdits.push(m);
-    }
-  }
-  for (const [targetId, newContent] of Object.entries(editMap)) {
-    const target = nonEdits.find(x => x.event_id === targetId);
-    if (target) { target.content = newContent; target.edited = true; }
+    // 跳过本地清理时间戳之前的消息
+    if (_localClearTs && m.ts && m.ts < _localClearTs) continue;
+    nonEdits.push(m);
   }
   var reacts = reactResult.data;
   if (reacts) {
@@ -6504,7 +6495,7 @@ function renderMsgHTML(m, roomId) {
   }
   const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
   const replyBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReplyTo(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(text.slice(0,50)) + '\')" style="color:var(--text-muted);font-size:10px">引用</button>' : '';
-  const editBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();editMessage(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(text.slice(0,100)) + '\')" style="color:var(--text-muted);font-size:10px">编辑</button>' : '';
+  const editBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();editMessage(\'' + escAttr(m.event_id || '') + '\')" style="color:var(--text-muted);font-size:10px">编辑</button>' : '';
   const reactionBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();showReactionPicker(\'' + escAttr(m.event_id || '') + '\')" style="color:var(--text-muted);font-size:10px">😀</button>' : '';
   const recallBtn = !m.recalled && canRecallMessage(roomId, m) ? '<button class="chat-recall-btn" onclick="event.stopPropagation();recallMessage(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(roomId || '') + '\')" style="color:var(--text-muted);font-size:10px">撤回</button>' : '';
   var avatarHtml;
@@ -6689,11 +6680,11 @@ function handleRealtimeMessage(roomId, msg) {
     sender_id: msg.sender_id, sender_avatar: msg.sender_avatar || '', sender_doubao_id: msg.sender_doubao_id || '',
     content, reply_to: msg.reply_to || null, ts: msg.ts || Date.now(), recalled: !!msg.recalled
   };
+  // 跳过旧版编辑标记消息（已改用 UPDATE 方式，编辑通过 UPDATE 事件处理）
   if (msg.rel_type === 'm.replace' && msg.relates_to_event_id) {
-    const existing = chatState.messages[roomId] || [];
-    const target = existing.find(m => m.event_id === msg.relates_to_event_id);
-    if (target) { target.content = content; target.edited = true; }
-  } else {
+    return;
+  }
+  {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
     var room = chatState.rooms.find(r => r.id === roomId);
@@ -7176,27 +7167,29 @@ async function pollNewMessages() {
         var existingIds = {};
         for (var j = 0; j < existingMsgs.length; j++) { existingIds[existingMsgs[j].event_id] = true; }
         var newMsgs = [];
+        var contentChanged = false;
         for (var k = 0; k < data.length; k++) {
           var m = data[k];
           var eid = m.event_id || ('msg_' + m.id);
-          if (existingIds[eid]) continue;
-          // 跳过被拉黑用户的消息
-          if (m.sender_id && m.sender_id !== currentUser.id && isUserBlocked(m.sender_id)) { existingIds[eid] = true; continue; }
-          if (m.rel_type === 'm.replace' && m.relates_to_event_id) {
-            var target = existingMsgs.find(function(x) { return x.event_id === m.relates_to_event_id; });
-            if (target) { target.content = m.recalled ? '' : m.content; target.edited = true; existingIds[eid] = true; }
+          // 跳过旧版编辑标记消息（已改用 UPDATE 方式）
+          if (m.rel_type === 'm.replace' && m.relates_to_event_id) continue;
+          if (existingIds[eid]) {
+            // 检查已有消息内容是否变化（编辑后内容更新）
+            var exMsg = existingMsgs.find(function(x) { return x.event_id === eid; });
+            if (exMsg && !m.recalled && m.content && exMsg.content !== m.content) { exMsg.content = m.content; exMsg.edited = true; contentChanged = true; }
             continue;
           }
+          // 跳过被拉黑用户的消息
+          if (m.sender_id && m.sender_id !== currentUser.id && isUserBlocked(m.sender_id)) { existingIds[eid] = true; continue; }
           newMsgs.push({
             event_id: eid, sender: m.sender_name || '未知用户', sender_id: m.sender_id,
             sender_avatar: m.sender_avatar || '', sender_doubao_id: m.sender_doubao_id || '',
             content: m.recalled ? '' : m.content, reply_to: m.reply_to || null,
-            rel_type: m.rel_type || null, relates_to_event_id: m.relates_to_event_id || null,
             ts: m.ts || 0, recalled: !!m.recalled
           });
           existingIds[eid] = true;
         }
-        if (newMsgs.length > 0) {
+        if (newMsgs.length > 0 || contentChanged) {
           chatState.messages[roomId] = existingMsgs.concat(newMsgs).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
           if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
           if (!chatState._openingChat) { loadRoomList(); }
@@ -7364,20 +7357,90 @@ function linkify(text) {
   }).replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
 }
 
-async function editMessage(eventId, currentContent) {
-  var displayContent = currentContent;
-  if (displayContent.length > 50) displayContent = displayContent.slice(0, 50) + '…';
-  var newContent = prompt('编辑消息（仅限自己发送的消息）:\n原文: ' + displayContent, currentContent);
-  if (newContent === null || !newContent.trim()) return;
+function editMessage(eventId) {
+  var msgs = chatState.messages[chatState.currentRoomId] || [];
+  var msg = msgs.find(function(m) { return m.event_id === eventId; });
+  if (!msg) return;
+  // 已有编辑框则取消编辑
+  var existingEditor = document.getElementById('inlineEditor_' + eventId);
+  if (existingEditor) { cancelEdit(eventId); return; }
+  // 找到消息气泡元素
+  var msgEl = document.querySelector('[data-eid="' + CSS.escape(eventId) + '"]');
+  if (!msgEl) return;
+  var contentEl = msgEl.querySelector('.chat-msg-content');
+  if (!contentEl) return;
+  // 保存原始 HTML 以便取消时恢复
+  msg._originalHTML = contentEl.innerHTML;
+  // 构建内联编辑器
+  var wrapper = document.createElement('div');
+  wrapper.id = 'inlineEditor_' + eventId;
+  wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+  var textarea = document.createElement('textarea');
+  textarea.id = 'editInput_' + eventId;
+  textarea.className = 'input';
+  textarea.value = msg.content || '';
+  textarea.style.cssText = 'width:100%;min-height:40px;max-height:120px;resize:vertical;font-size:13px;padding:6px 8px;border-radius:8px';
+  textarea.onkeydown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(eventId); }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit(eventId); }
+  };
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:4px;justify-content:flex-end';
+  var saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-sm btn-orange';
+  saveBtn.style.cssText = 'font-size:11px;padding:2px 10px';
+  saveBtn.textContent = '保存';
+  saveBtn.onclick = function() { saveEdit(eventId); };
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-sm btn-gray';
+  cancelBtn.style.cssText = 'font-size:11px;padding:2px 10px';
+  cancelBtn.textContent = '取消';
+  cancelBtn.onclick = function() { cancelEdit(eventId); };
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  wrapper.appendChild(textarea);
+  wrapper.appendChild(btnRow);
+  // 替换内容区
+  contentEl.innerHTML = '';
+  contentEl.appendChild(wrapper);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function cancelEdit(eventId) {
+  var msgs = chatState.messages[chatState.currentRoomId] || [];
+  var msg = msgs.find(function(m) { return m.event_id === eventId; });
+  var editor = document.getElementById('inlineEditor_' + eventId);
+  if (editor && editor.parentElement) {
+    editor.parentElement.innerHTML = msg ? msg._originalHTML : '';
+  }
+  if (msg) delete msg._originalHTML;
+}
+
+async function saveEdit(eventId) {
+  var input = document.getElementById('editInput_' + eventId);
+  if (!input) return;
+  var newContent = input.value.trim();
+  if (!newContent) { toast('消息内容不能为空', 'warning'); return; }
+  var msgs = chatState.messages[chatState.currentRoomId] || [];
+  var msg = msgs.find(function(m) { return m.event_id === eventId; });
+  if (!msg) return;
+  // 禁用按钮防止重复提交
+  input.disabled = true;
   // 直接 UPDATE 原消息内容（与撤回使用相同机制，可靠且实时同步）
   const { error } = await __SB.from('chat_messages')
-    .update({ content: newContent.trim() })
+    .update({ content: newContent })
     .eq('event_id', eventId)
     .eq('sender_id', currentUser.id);
-  if (error) { toast('编辑失败: ' + error.message, 'error'); return; }
-  const msgs = chatState.messages[chatState.currentRoomId] || [];
-  const msg = msgs.find(m => m.event_id === eventId);
-  if (msg) { msg.content = newContent.trim(); msg.edited = true; }
+  if (error) {
+    toast('编辑失败: ' + error.message, 'error');
+    input.disabled = false;
+    cancelEdit(eventId);
+    return;
+  }
+  msg.content = newContent;
+  msg.edited = true;
+  delete msg._originalHTML;
   renderMessages(chatState.currentRoomId);
   toast('消息已编辑', 'success');
 }
