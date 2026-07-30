@@ -20,6 +20,10 @@
   <!-- SunEditor 富文本编辑器 -->
   <link href="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/css/suneditor.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.js"></script>
+  <!-- KaTeX LaTeX 渲染 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
   <script src="supabase-sdk.js?v=2"></script>
@@ -805,7 +809,27 @@ function renderRichContent(content) {
   // 统一使用 sanitizeHtml 进行安全净化
   var sanitized = sanitizeHtml(content);
   // 使用 processHtmlTextNodes 处理文本节点的换行和链接（跳过 <style> 标签）
-  return processHtmlTextNodes(sanitized);
+  var processed = processHtmlTextNodes(sanitized);
+  // LaTeX 渲染：在返回的 HTML 中自动渲染 $$...$$ 和 $...$
+  setTimeout(function() {
+    if (typeof renderMathInElement === 'function') {
+      var containers = document.querySelectorAll('.dp-rich-content, .blog-content');
+      containers.forEach(function(el) {
+        try {
+          renderMathInElement(el, {
+            delimiters: [
+              {left: '$$', right: '$$', display: true},
+              {left: '\\[', right: '\\]', display: true},
+              {left: '$', right: '$', display: false},
+              {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+          });
+        } catch(e) {}
+      });
+    }
+  }, 50);
+  return processed;
 }
 
 function formatDate(str) {
@@ -2852,7 +2876,6 @@ async function blogShowPost(container, postId) {
       '</div>' +
       '<div class="dp-rich-content blog-content" style="font-size:15px;line-height:1.8;color:var(--text-primary)">' + renderRichContent(p.content) + '</div>' +
       (tags.length > 0 ? '<div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:8px">' + tags.map(function(t) { return '<span style="background:var(--accent-bg);color:var(--accent);padding:4px 12px;border-radius:16px;font-size:12px">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
-      (p.matrix_room_url ? '<div style="margin-top:20px;padding:12px;background:var(--bg-hover);border-radius:8px;font-size:12px;color:var(--text-faint)"><a href="' + esc(p.matrix_room_url) + '" target="_blank" style="color:var(--accent)">🔗 在 Matrix 聊天室中查看</a></div>' : '') +
       '<div id="blogCommentsSection" style="margin-top:32px"></div>';
     blogLoadComments(postId);
   } catch(e) {
@@ -2894,6 +2917,7 @@ function blogShowEditor(container, postId) {
         '<div style="flex:1;min-width:200px">' +
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">封面图片URL（可选）</label>' +
           '<input id="blogCoverInput" type="text" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px">' +
+          '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">💡 建议先上传到图床（如 <a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -2901,7 +2925,10 @@ function blogShowEditor(container, postId) {
         '<input id="blogSummaryInput" type="text" placeholder="一句话概括你的文章..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px">' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
-        '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文</label>' +
+        '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文 ' +
+        '<span style="font-size:11px;font-weight:400;color:var(--text-faint)">（支持 LaTeX：用 $...$ 行内公式，$$...$$ 独立公式）</span>' +
+        '</label>' +
+        '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px">📷 <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
         '<textarea id="blogContentTextarea" style="width:100%;height:400px;display:none"></textarea>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -2957,6 +2984,13 @@ function blogShowEditor(container, postId) {
       imageResizing: true,
       imageHeightLimit: 500,
       imageWidthLimit: 800,
+      onImageUpload: function(files, info, core) {
+        // 阻止本地文件上传，提示用户使用图床
+        toast('请勿直接上传图片。请先上传到图床（如路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
+        if (window.__blogSunEditor && window.__blogSunEditor.core) {
+          try { window.__blogSunEditor.core.initImageSelect(); } catch(e) {}
+        }
+      },
       toolbarWidth: '100%',
       attributes: { style: 'font-size:15px;line-height:1.8;text-align:left' }
     });
@@ -6522,10 +6556,12 @@ function renderMsgHTML(m, roomId) {
     var cAvatar = decodeURIComponent(cardParts[2] || '');
     var cDoubao = decodeURIComponent(cardParts[3] || '');
     var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
-    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
-      '<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + avatarInner + '</div>' +
-      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
-      '<div style="font-size:11px;color:var(--accent)">' + (cDoubao ? '@' + esc(cDoubao) : '') + ' · 个人名片 · 点击查看 →</div></div></div>';
+    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,var(--accent-bg) 0%,var(--bg-secondary) 100%);border:1px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:all .25s cubic-bezier(.4,0,.2,1);max-width:300px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 20px rgba(0,0,0,0.12)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.06)\';this.style.borderColor=\'var(--accent)\'">' +
+      '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
+      '<div style="width:44px;height:44px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:20px;flex-shrink:0;border:2px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,0.1)">' + avatarInner + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px">' + esc(cName) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-faint);margin-top:2px;display:flex;align-items:center;gap:4px">' + (cDoubao ? '<span style="color:var(--accent);font-weight:600">@' + esc(cDoubao) + '</span>' : '') + '</div>' +
+      '<div style="font-size:10px;color:var(--accent);margin-top:4px;font-weight:600;letter-spacing:.5px">💳 个人名片 · 点击查看</div></div></div>';
   } else if (text.startsWith('channel:')) {
     // 频道分享: channel:<roomId>|<roomName>|<avatar> (各段已 encodeURIComponent)
     var chParts = text.slice(8).split('|');
@@ -6542,10 +6578,23 @@ function renderMsgHTML(m, roomId) {
     contentHtml = renderRichText(text);
   }
   const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
-  const replyBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();setReplyTo(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(text.slice(0,50)) + '\')" style="color:var(--text-muted);font-size:10px">引用</button>' : '';
-  const editBtn = isMine && !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();editMessage(\'' + escAttr(m.event_id || '') + '\')" style="color:var(--text-muted);font-size:10px">编辑</button>' : '';
-  const reactionBtn = !m.recalled ? '<button class="chat-recall-btn" onclick="event.stopPropagation();showReactionPicker(\'' + escAttr(m.event_id || '') + '\')" style="color:var(--text-muted);font-size:10px">😀</button>' : '';
-  const recallBtn = !m.recalled && canRecallMessage(roomId, m) ? '<button class="chat-recall-btn" onclick="event.stopPropagation();recallMessage(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(roomId || '') + '\')" style="color:var(--text-muted);font-size:10px">撤回</button>' : '';
+  var eid = escAttr(m.event_id || '');
+  var rid = escAttr(roomId || '');
+  // 引用和表情按钮始终可见
+  var replyBtn = !m.recalled ? '<button class="chat-action-btn" onclick="event.stopPropagation();setReplyTo(\'' + eid + '\',\'' + escAttr(text.slice(0,50)) + '\')">引用</button>' : '';
+  var reactionBtn = !m.recalled ? '<button class="chat-action-btn" onclick="event.stopPropagation();showReactionPicker(\'' + eid + '\')">😀</button>' : '';
+  // 收纳菜单：编辑、撤回、翻译
+  var moreActions = '';
+  if (!m.recalled) {
+    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eid + '\')">🌐 翻译</div>';
+  }
+  if (isMine && !m.recalled) {
+    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();editMessage(\'' + eid + '\')">✏️ 编辑</div>';
+  }
+  if (!m.recalled && canRecallMessage(roomId, m)) {
+    moreActions += '<div class="chat-more-menu-item chat-more-danger" onclick="event.stopPropagation();recallMessage(\'' + eid + '\',\'' + rid + '\')">🗑 撤回</div>';
+  }
+  var moreBtn = moreActions ? '<div class="chat-more-wrapper" onclick="event.stopPropagation();var m=this.querySelector(\'.chat-more-menu\');if(m.style.display===\'block\'){m.style.display=\'none\'}else{m.style.display=\'block\'}" style="position:relative;display:inline-block"><button class="chat-action-btn">⋯</button><div class="chat-more-menu" style="display:none">' + moreActions + '</div></div>' : '';
   var avatarHtml;
   if (isMine) {
     avatarHtml = currentUser.avatar
@@ -6566,7 +6615,7 @@ function renderMsgHTML(m, roomId) {
     '</div>' +
     '</div>' +
     reactionsHtml +
-    '<div class="chat-msg-time">' + time + ' ' + replyBtn + recallBtn + editBtn + reactionBtn + '</div>' +
+    '<div class="chat-msg-time">' + time + ' ' + replyBtn + reactionBtn + moreBtn + '</div>' +
   '</div>';
 }
 
@@ -7503,17 +7552,50 @@ async function saveEdit(eventId) {
 }
 
 function showReactionPicker(eventId) {
-  const emojis = ['👍','❤️','😂','😮','😢','😡','🎉','🔥','✅','👀','🤔','👏'];
-  const existing = document.getElementById('reactionPicker');
+  var emojiData = {
+    '常用': ['👍','❤️','😂','😮','😢','😡','🎉','🔥','✅','👀','🤔','👏','🙏','💪','🤝','💯'],
+    '表情': ['😊','😄','🥰','😎','🤩','😜','🤗','😇','🙃','😅','🥲','😴','🤤','😋','🤓','🧐','🤭','😏','😬','🥳','😔','😟','🙄','😤','😭','😱','😨','😰','🥶','🥵','🤒','🤕','🤧','😷'],
+    '手势': ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','👈','👉','👆','👇','☝️','✊','👊','🤛','🤜','🙌','👐','🤲','🫶','✍️'],
+    '心形': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','💌'],
+    '动物': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🦄','🐝','🐛','🦋','🐙','🦀','🐠','🐬','🐳','🐋'],
+    '食物': ['🍎','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍑','🍒','🥝','🍍','🥭','🥥','🍅','🥑','🌽','🌶️','🥕','🍔','🍟','🍕','🌭','🥪','🌮','🍜','🍣','🍰','🍦','🍩','🍪','☕','🍺','🍻','🥂','🍷'],
+    '自然': ['🌸','🌺','🌻','🌹','🌷','🌼','🌱','🌿','☘️','🍀','🌳','🌲','🌴','🌵','🌾','🌊','⛰️','🏔️','🌋','🌅','🌄','🏜️','🏖️','🏝️','🌈','☀️','⭐','✨','💫','⚡','🔥','❄️','💧'],
+    '物品': ['🎁','🎈','🎉','🎊','🎀','🏆','🥇','🥈','🥉','⚽','🏀','🏈','⚾','🎾','🏐','🎱','🎮','🎲','🎯','🎸','🎹','🎵','🎶','📞','📱','💻','⌨️','🖥️','🖨️','📷','🎥','📺','🔊','💡','📚','✏️','🔧','🔨'],
+    '符号': ['✅','❌','⭕','🚫','💯','💢','💬','💭','💤','⚠️','🚸','🔱','⚜️','🔰','♻️','✳️','❇️','🌐','Ⓜ️','🆗','🆕','🆙','🆒','🆓','🆖','📶','🎦','🅿️','🈳','🈵','🈴','🈹']
+  };
+  var existing = document.getElementById('reactionPicker');
   if (existing) existing.remove();
-  const picker = document.createElement('div');
+  window._emojiPickerEventId = eventId;
+  window._emojiData = emojiData;
+  var picker = document.createElement('div');
   picker.id = 'reactionPicker';
-  picker.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg-secondary);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:8px 12px;display:flex;gap:4px;z-index:200;flex-wrap:wrap;max-width:320px;justify-content:center';
-  picker.innerHTML = emojis.map(e => '<button onclick="sendReaction(\'' + escJS(eventId) + '\',\'' + escJS(e) + '\');this.parentElement.remove()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:4px;border-radius:8px">' + e + '</button>').join('');
+  picker.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg-secondary);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:0;z-index:200;max-width:360px;overflow:hidden;border:1px solid var(--border-color)';
+  var cats = Object.keys(emojiData);
+  var tabsHtml = cats.map(function(c, i) {
+    return '<button class="emoji-cat-tab" data-idx="' + i + '" onclick="switchEmojiTab(' + i + ')" style="background:' + (i===0?'var(--accent-bg)':'transparent') + ';color:' + (i===0?'var(--accent)':'var(--text-faint)') + ';border:none;font-size:11px;padding:4px 10px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap;font-weight:600">' + esc(c) + '</button>';
+  }).join('');
+  picker.innerHTML = '<div style="display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--border-color);overflow-x:auto;scrollbar-width:thin">' + tabsHtml + '</div>' +
+    '<div id="emojiCatPanel" style="padding:8px;display:flex;flex-wrap:wrap;gap:2px;max-height:200px;overflow-y:auto"></div>';
   document.body.appendChild(picker);
-  setTimeout(() => { if (document.getElementById('reactionPicker')) document.getElementById('reactionPicker').remove(); }, 10000);
+  switchEmojiTab(0);
+  setTimeout(function() { if (document.getElementById('reactionPicker')) document.getElementById('reactionPicker').remove(); }, 15000);
 }
 
+function switchEmojiTab(idx) {
+  var tabs = document.querySelectorAll('.emoji-cat-tab');
+  tabs.forEach(function(t, i) {
+    t.style.background = i === idx ? 'var(--accent-bg)' : 'transparent';
+    t.style.color = i === idx ? 'var(--accent)' : 'var(--text-faint)';
+  });
+  var panel = document.getElementById('emojiCatPanel');
+  if (!panel || !window._emojiData) return;
+  var cats = Object.keys(window._emojiData);
+  var emojis = window._emojiData[cats[idx]] || [];
+  var eid = window._emojiPickerEventId || '';
+  panel.innerHTML = emojis.map(function(e) {
+    return '<button onclick="sendReaction(\'' + escJS(eid) + '\',\'' + escJS(e) + '\');document.getElementById(\'reactionPicker\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;padding:4px;border-radius:8px;transition:background .15s" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' + e + '</button>';
+  }).join('');
+}
 async function sendReaction(eventId, reaction) {
   if (!chatState.reactionsMap[eventId]) chatState.reactionsMap[eventId] = {};
   if (!chatState.reactionsMap[eventId][reaction]) chatState.reactionsMap[eventId][reaction] = [];
@@ -7540,6 +7622,59 @@ async function sendReaction(eventId, reaction) {
     renderMessages(chatState.currentRoomId);
   }
 }
+
+// ═══ 消息翻译功能 ═══
+async function translateMessage(eventId) {
+  // 关闭更多菜单
+  document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
+  var msgs = chatState.messages[chatState.currentRoomId] || [];
+  var msg = msgs.find(function(m) { return m.event_id === eventId; });
+  if (!msg) return;
+  var text = msg.content || '';
+  // 跳过非文本消息
+  if (text.startsWith('img:') || text.startsWith('video:') || text.startsWith('file:') || text.startsWith('tool:') || text.startsWith('card:') || text.startsWith('channel:')) {
+    toast('该消息类型不支持翻译', 'info');
+    return;
+  }
+  // 查找或创建翻译结果容器
+  var msgEl = document.querySelector('[data-eid="' + eventId + '"] .chat-msg-content');
+  if (!msgEl) return;
+  var existing = document.getElementById('translateResult_' + eventId);
+  if (existing) { existing.remove(); return; } // 再次点击关闭
+  // 显示加载中
+  var loadingDiv = document.createElement('div');
+  loadingDiv.id = 'translateResult_' + eventId;
+  loadingDiv.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:8px;background:var(--bg-hover);font-size:12px;color:var(--text-faint);border-left:3px solid var(--accent)';
+  loadingDiv.innerHTML = '🌐 翻译中...';
+  msgEl.parentElement.appendChild(loadingDiv);
+  try {
+    // 使用 Google Translate 公开 API（免费、支持多语种）
+    var translateUrl = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh&dt=t&q=' + encodeURIComponent(text);
+    var res = await fetch(translateUrl);
+    if (!res.ok) throw new Error('翻译请求失败');
+    var data = await res.json();
+    // data[0] 是翻译段数组，每段 [translated, original, ...]
+    var translated = '';
+    if (data && data[0]) {
+      for (var i = 0; i < data[0].length; i++) {
+        if (data[0][i] && data[0][i][0]) translated += data[0][i][0];
+      }
+    }
+    var detectedLang = (data && data[2]) ? data[2] : '';
+    var langName = { 'zh':'中文','en':'英语','ja':'日语','ko':'韩语','fr':'法语','de':'德语','es':'西班牙语','ru':'俄语','ar':'阿拉伯语','pt':'葡萄牙语','it':'意大利语' }[detectedLang] || detectedLang;
+    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译' + (langName ? '（检测: ' + esc(langName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+  } catch(e) {
+    loadingDiv.innerHTML = '<div style="color:var(--danger);font-size:12px">❌ 翻译失败: ' + esc(e.message) + '</div>';
+    setTimeout(function() { if (loadingDiv.parentElement) loadingDiv.remove(); }, 3000);
+  }
+}
+
+// 点击其他区域关闭更多操作菜单
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.chat-more-wrapper')) {
+    document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
+  }
+});
 
 function cancelReply() {
   chatState.replyTo = null;
