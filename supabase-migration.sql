@@ -551,5 +551,126 @@ CREATE POLICY "user_presence_update" ON user_presence FOR UPDATE USING (true);
 DROP POLICY IF EXISTS "user_presence_delete" ON user_presence;
 CREATE POLICY "user_presence_delete" ON user_presence FOR DELETE USING (true);
 
+-- ===== 24. 频道工具扩展字段（支持多种工具类型） =====
+ALTER TABLE chat_channel_tools ADD COLUMN IF NOT EXISTS tool_type TEXT DEFAULT 'link';
+ALTER TABLE chat_channel_tools ADD COLUMN IF NOT EXISTS config JSON;
+ALTER TABLE chat_channel_tools ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+-- 补充 UPDATE 策略（原来只有 CRUD 中的 R/I/D）
+DROP POLICY IF EXISTS "chat_channel_tools_update" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_update" ON chat_channel_tools FOR UPDATE USING (true);
+
+-- ===== 25. 投票工具表 =====
+CREATE TABLE IF NOT EXISTS chat_tool_votes (
+  id TEXT PRIMARY KEY,
+  tool_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  question TEXT NOT NULL,
+  options JSON NOT NULL,
+  closed BOOLEAN DEFAULT FALSE,
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ctv_tool ON chat_tool_votes(tool_id);
+CREATE TABLE IF NOT EXISTS chat_tool_vote_records (
+  id TEXT PRIMARY KEY,
+  vote_id TEXT NOT NULL,
+  option_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(vote_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ctvr_vote ON chat_tool_vote_records(vote_id);
+
+-- ===== 26. 接龙工具表 =====
+CREATE TABLE IF NOT EXISTS chat_tool_chains (
+  id TEXT PRIMARY KEY,
+  tool_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  user_avatar TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ctc_tool ON chat_tool_chains(tool_id, seq);
+
+-- ===== 27. 个人名片工具表 =====
+CREATE TABLE IF NOT EXISTS chat_tool_cards (
+  id TEXT PRIMARY KEY,
+  tool_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  user_avatar TEXT,
+  bio TEXT DEFAULT '',
+  links JSON DEFAULT '[]',
+  custom_fields JSON DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(tool_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ctcard_tool ON chat_tool_cards(tool_id);
+
+-- ===== 28. 新工具表 RLS 策略 =====
+ALTER TABLE chat_tool_votes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ctv_read" ON chat_tool_votes;
+CREATE POLICY "ctv_read" ON chat_tool_votes FOR SELECT USING (true);
+DROP POLICY IF EXISTS "ctv_insert" ON chat_tool_votes;
+CREATE POLICY "ctv_insert" ON chat_tool_votes FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "ctv_update" ON chat_tool_votes;
+CREATE POLICY "ctv_update" ON chat_tool_votes FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "ctv_delete" ON chat_tool_votes;
+CREATE POLICY "ctv_delete" ON chat_tool_votes FOR DELETE USING (true);
+
+ALTER TABLE chat_tool_vote_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ctvr_read" ON chat_tool_vote_records;
+CREATE POLICY "ctvr_read" ON chat_tool_vote_records FOR SELECT USING (true);
+DROP POLICY IF EXISTS "ctvr_insert" ON chat_tool_vote_records;
+CREATE POLICY "ctvr_insert" ON chat_tool_vote_records FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "ctvr_delete" ON chat_tool_vote_records;
+CREATE POLICY "ctvr_delete" ON chat_tool_vote_records FOR DELETE USING (true);
+
+ALTER TABLE chat_tool_chains ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ctc_read" ON chat_tool_chains;
+CREATE POLICY "ctc_read" ON chat_tool_chains FOR SELECT USING (true);
+DROP POLICY IF EXISTS "ctc_insert" ON chat_tool_chains;
+CREATE POLICY "ctc_insert" ON chat_tool_chains FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "ctc_delete" ON chat_tool_chains;
+CREATE POLICY "ctc_delete" ON chat_tool_chains FOR DELETE USING (true);
+
+ALTER TABLE chat_tool_cards ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ctcard_read" ON chat_tool_cards;
+CREATE POLICY "ctcard_read" ON chat_tool_cards FOR SELECT USING (true);
+DROP POLICY IF EXISTS "ctcard_insert" ON chat_tool_cards;
+CREATE POLICY "ctcard_insert" ON chat_tool_cards FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "ctcard_update" ON chat_tool_cards;
+CREATE POLICY "ctcard_update" ON chat_tool_cards FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "ctcard_delete" ON chat_tool_cards;
+CREATE POLICY "ctcard_delete" ON chat_tool_cards FOR DELETE USING (true);
+
+-- ===== 29. 新工具表 Realtime =====
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_tool_votes') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_votes;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_tool_vote_records') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_vote_records;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_tool_chains') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_chains;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_tool_cards') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_tool_cards;
+  END IF;
+END $$;
+
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错
