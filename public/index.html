@@ -36,7 +36,7 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=45">
+  <link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
 
@@ -64,7 +64,7 @@
     <button class="activity-item" data-view="chat" onclick="switchView('chat')" title="频道" aria-label="频道"><span class="activity-icon">💬</span><span class="activity-label">频道</span><span class="activity-badge" id="actBarChatBadge" style="display:none">0</span></button>
     <button class="activity-item" data-view="announcements" onclick="switchView('announcements')" title="公告" aria-label="公告"><span class="activity-icon">📢</span><span class="activity-label">公告</span><span class="activity-dot" id="actBarAnnouncementDot" style="display:none"></span></button>
     <button class="activity-item" data-view="features" onclick="switchView('features')" title="功能" aria-label="功能"><span class="activity-icon">🎯</span><span class="activity-label">功能</span></button>
-    <button class="activity-item" data-view="blog" onclick="switchView('blog')" title="讲堂" aria-label="讲堂"><span class="activity-icon">📝</span><span class="activity-label">讲堂</span></button>
+    <button class="activity-item" data-view="blog" onclick="switchView('blog')" title="讲堂" aria-label="讲堂"><span class="activity-icon">📝</span><span class="activity-label">讲堂</span><span class="activity-dot" id="actBarBlogDot" style="display:none"></span></button>
     <div class="activity-spacer"></div>
     <button class="activity-item" onclick="toggleTheme()" title="主题" aria-label="切换主题"><span class="activity-icon" id="actBarThemeIcon">🌙</span><span class="activity-label">主题</span></button>
     <button class="activity-item" id="actBarDeveloperBtn" onclick="showModal('developer')" title="开发者" aria-label="开发者" style="display:none"><span class="activity-icon">🛠</span><span class="activity-label">开发者</span></button>
@@ -917,6 +917,8 @@ async function init() {
   renderContent();
   checkUnreadAnnouncements();
   setInterval(checkUnreadAnnouncements, 300000); // 每5分钟检查一次未读公告
+  blogPollNotifications();
+  setInterval(blogPollNotifications, 120000); // 每2分钟检查一次博客通知
   startUnreadPolling();
   if (notifEnabled && 'Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
@@ -2583,6 +2585,10 @@ function renderBlogView(sidebar, main) {
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogToggleAnnouncementMgr()"><span class="sidebar-item-icon">📢</span><span class="sidebar-item-text">管理公告</span></div>' : '') +
     '</div>' +
     '<div class="sidebar-section">' +
+      '<div class="sidebar-section-title" style="display:flex;align-items:center;justify-content:space-between"><span>🔔 博客通知</span><span id="blogNotifUnreadBadge" style="background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;display:none">0</span></div>' +
+      '<div id="blogSidebarNotifications" style="font-size:12px;color:var(--text-faint)">加载中...</div>' +
+    '</div>' +
+    '<div class="sidebar-section">' +
       '<div class="sidebar-section-title">🏷 分类</div>' +
       '<div id="blogSidebarCategories" style="font-size:12px;color:var(--text-faint)">加载中...</div>' +
     '</div>' +
@@ -2605,6 +2611,7 @@ function renderBlogView(sidebar, main) {
   blogState.container = document.getElementById('blogMainArea');
   blogState.currentUser = currentUser;
   blogShowList(blogState.container);
+  blogLoadNotifications();
 
   // 加载侧边栏分类导航
   blogLoadSidebarCategories();
@@ -2820,6 +2827,150 @@ async function blogLoadList() {
     }).join('');
   } catch(e) {
     area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger)">加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+// --- 博客通知系统 ---
+var blogNotifState = { notifications: [], unreadCount: 0, loaded: false };
+var blogJumpTargetComment = null; // 跳转目标评论ID
+
+// 轮询：检查未读通知，更新活动栏红点
+async function blogPollNotifications() {
+  if (!currentUser) return;
+  try {
+    var res = await api('/api/blog/notifications');
+    if (res.success) {
+      blogNotifState.unreadCount = res.unread_count || 0;
+      var dot = document.getElementById('actBarBlogDot');
+      if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
+      // 如果当前在博客视图，同时更新侧边栏
+      if (document.getElementById('blogSidebarNotifications')) {
+        blogNotifState.notifications = res.data || [];
+        blogRenderSidebarNotifications();
+      }
+    }
+  } catch(e) {}
+}
+
+// 加载通知到博客侧边栏
+async function blogLoadNotifications() {
+  var container = document.getElementById('blogSidebarNotifications');
+  if (!container || !currentUser) return;
+  try {
+    var res = await api('/api/blog/notifications');
+    if (res.success) {
+      blogNotifState.notifications = res.data || [];
+      blogNotifState.unreadCount = res.unread_count || 0;
+      blogRenderSidebarNotifications();
+      // 更新活动栏红点
+      var dot = document.getElementById('actBarBlogDot');
+      if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
+    } else {
+      container.innerHTML = '<div style="opacity:0.6">暂无通知</div>';
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="opacity:0.6">加载失败</div>';
+  }
+}
+
+// 渲染侧边栏通知列表
+function blogRenderSidebarNotifications() {
+  var container = document.getElementById('blogSidebarNotifications');
+  if (!container) return;
+  var badge = document.getElementById('blogNotifUnreadBadge');
+  var notifications = blogNotifState.notifications || [];
+
+  // 更新未读徽章
+  if (badge) {
+    if (blogNotifState.unreadCount > 0) {
+      badge.textContent = blogNotifState.unreadCount > 99 ? '99+' : blogNotifState.unreadCount;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  if (notifications.length === 0) {
+    container.innerHTML = '<div style="opacity:0.6;padding:4px 0">暂无通知</div>';
+    return;
+  }
+
+  var html = '';
+  // 最多显示8条
+  notifications.slice(0, 8).forEach(function(n) {
+    var timeStr = blogFormatDate(n.created_at);
+    var avatarHtml = n.sender_avatar
+      ? '<img src="' + esc(n.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover">'
+      : '<span style="font-size:10px">👤</span>';
+    var unreadStyle = n.read ? '' : 'font-weight:600;';
+    var unreadDot = n.read ? '' : '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>';
+    var contentPreview = esc(n.content.length > 50 ? n.content.substring(0, 50) + '...' : n.content);
+
+    html += '<div class="blog-notif-item" style="padding:8px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;display:flex;gap:8px;align-items:flex-start" ' +
+      'onmouseover="this.style.background=\'var(--bg-hover)\'" ' +
+      'onmouseout="this.style.background=\'\'" ' +
+      'onclick="blogJumpToComment(' + n.post_id + ',' + n.comment_id + ',' + n.id + ')">' +
+      '<div style="width:24px;height:24px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">' + avatarHtml + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:4px">' + unreadDot +
+          '<span style="font-size:12px;' + unreadStyle + 'color:var(--text-primary)">' + esc(n.sender_name) + '</span>' +
+          '<span style="font-size:10px;color:var(--text-faint)">评论了</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + contentPreview + '</div>' +
+        '<div style="font-size:10px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 ' + esc(n.post_title) + ' · ' + timeStr + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  if (notifications.length > 8) {
+    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--text-faint)">还有 ' + (notifications.length - 8) + ' 条通知</div>';
+  }
+
+  // 全部已读按钮
+  if (blogNotifState.unreadCount > 0) {
+    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--accent);cursor:pointer" onclick="blogMarkAllNotificationsRead()">全部标为已读</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// 跳转到博客文章评论
+async function blogJumpToComment(postId, commentId, notifId) {
+  // 标记单条通知为已读
+  if (notifId) {
+    try {
+      await api('/api/blog/notifications', { method: 'POST', body: JSON.stringify({ action: 'read_one', id: notifId }) });
+    } catch(e) {}
+  }
+
+  // 更新本地状态
+  var notifs = blogNotifState.notifications || [];
+  for (var i = 0; i < notifs.length; i++) {
+    if (notifs[i].id === notifId) { notifs[i].read = true; break; }
+  }
+  blogNotifState.unreadCount = Math.max(0, blogNotifState.unreadCount - 1);
+  blogRenderSidebarNotifications();
+  var dot = document.getElementById('actBarBlogDot');
+  if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
+
+  // 跳转到文章
+  blogJumpTargetComment = commentId;
+  blogShowPost(blogState.container, postId);
+}
+
+// 标记所有通知为已读
+async function blogMarkAllNotificationsRead() {
+  try {
+    await api('/api/blog/notifications', { method: 'POST', body: JSON.stringify({ action: 'read_all' }) });
+    // 更新本地状态
+    (blogNotifState.notifications || []).forEach(function(n) { n.read = true; });
+    blogNotifState.unreadCount = 0;
+    blogRenderSidebarNotifications();
+    var dot = document.getElementById('actBarBlogDot');
+    if (dot) dot.style.display = 'none';
+    toast('已全部标为已读');
+  } catch(e) {
+    toast('操作失败', 'error');
   }
 }
 
@@ -3173,6 +3324,33 @@ async function blogLoadComments(postId) {
     }
     html += '</div>';
     section.innerHTML = html;
+
+    // 如果有跳转目标评论，滚动到该评论
+    if (blogJumpTargetComment) {
+      var targetId = blogJumpTargetComment;
+      blogJumpTargetComment = null; // 清除目标
+      setTimeout(function() {
+        var commentEl = document.getElementById('blogComment_' + targetId);
+        if (commentEl) {
+          commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // 高亮闪烁
+          var bubble = commentEl.querySelector('div[style*="border-radius"]');
+          if (bubble) {
+            var origBg = bubble.style.background;
+            var origTransition = bubble.style.transition;
+            bubble.style.transition = 'background 0.3s';
+            bubble.style.background = 'var(--accent-bg)';
+            setTimeout(function() {
+              bubble.style.background = origBg;
+              setTimeout(function() { bubble.style.transition = origTransition; }, 300);
+            }, 2000);
+          }
+        } else {
+          // 评论可能已被删除，滚动到评论区底部
+          section.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      }, 500);
+    }
   } catch(e) {
     section.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:16px">评论加载失败</div>';
   }

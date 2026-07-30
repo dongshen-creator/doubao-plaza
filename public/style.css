@@ -952,6 +952,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-settings-label{font-size:13px;color:var(--text-secondary)}
 .chat-settings-value{font-size:13px;color:var(--text-faint)}
 
+/* 博客通知 */
+.blog-notif-item{border-radius:8px;transition:background .15s}
+.blog-notif-item:hover{background:var(--bg-hover)}
+
 .chat-room-item:hover .chat-room-actions{opacity:1}
 .chat-room-actions{display:flex;gap:1px;opacity:0;transition:opacity .15s;flex-shrink:0}
 .chat-room-act{background:none;border:none;border-radius:6px;padding:4px 6px;font-size:11px;cursor:pointer;color:var(--text-faint);transition:all .15s}

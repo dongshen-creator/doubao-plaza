@@ -122,9 +122,9 @@ export async function onRequestPost(context) {
       return jsonResponse({ success: false, error: '评论内容不能为空' });
     }
 
-    // 验证文章是否存在
+    // 验证文章是否存在，同时获取作者信息和标题
     const post = await env.DB.prepare(
-      `SELECT id FROM blog_posts WHERE id = ?`
+      `SELECT id, title, author_id FROM blog_posts WHERE id = ?`
     ).bind(post_id).first();
     if (!post) {
       return jsonResponse({ success: false, error: '文章不存在' }, 404);
@@ -147,13 +147,52 @@ export async function onRequestPost(context) {
       String(content).trim(), parent_id || 0
     ).run();
 
+    const commentId = result.meta.last_row_id;
+
     // 查询新创建的评论
     const comment = await env.DB.prepare(
       `SELECT id, post_id, user_id, user_name, user_avatar, content, parent_id, pinned, created_at
        FROM blog_comments WHERE id = ?`
-    ).bind(result.meta.last_row_id).first();
+    ).bind(commentId).first();
 
     comment.created_at = formatDate(comment.created_at);
+
+    // ===== 创建博客通知 =====
+    const commentPreview = String(content).trim().substring(0, 100);
+    const notifiedUsers = new Set();
+
+    // 1. 通知文章作者（评论者不是作者本人时）
+    if (post.author_id && post.author_id !== user.id) {
+      notifiedUsers.add(post.author_id);
+      try {
+        await env.DB.prepare(
+          `INSERT INTO blog_notifications (user_id, post_id, post_title, comment_id, sender_id, sender_name, sender_avatar, content)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          post.author_id, post_id, post.title || '无标题', commentId,
+          user.id, user.name, user.avatar || null, commentPreview
+        ).run();
+      } catch(e) { /* 通知写入失败不影响评论 */ }
+    }
+
+    // 2. 如果是回复，通知被回复的评论作者（不是自己且不是文章作者避免重复）
+    if (parent_id && parent_id !== 0) {
+      try {
+        const parentComment = await env.DB.prepare(
+          `SELECT user_id FROM blog_comments WHERE id = ?`
+        ).bind(parent_id).first();
+        if (parentComment && parentComment.user_id !== user.id && !notifiedUsers.has(parentComment.user_id)) {
+          notifiedUsers.add(parentComment.user_id);
+          await env.DB.prepare(
+            `INSERT INTO blog_notifications (user_id, post_id, post_title, comment_id, sender_id, sender_name, sender_avatar, content)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            parentComment.user_id, post_id, post.title || '无标题', commentId,
+            user.id, user.name, user.avatar || null, commentPreview
+          ).run();
+        }
+      } catch(e) { /* 回复通知失败不影响评论 */ }
+    }
 
     return jsonResponse({ success: true, data: comment });
   } catch (e) {

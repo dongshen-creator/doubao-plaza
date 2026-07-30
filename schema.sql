@@ -301,3 +301,19 @@ CREATE TABLE IF NOT EXISTS blog_announcements (
   pinned INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS blog_notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  post_id INTEGER NOT NULL,
+  post_title TEXT NOT NULL,
+  comment_id INTEGER NOT NULL,
+  sender_id TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  sender_avatar TEXT,
+  content TEXT NOT NULL,
+  read INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_blog_notif_user ON blog_notifications(user_id, read);
+CREATE INDEX IF NOT EXISTS idx_blog_notif_post ON blog_notifications(post_id);
