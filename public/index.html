@@ -1483,7 +1483,10 @@ function sendBeaconPresence(status) {
   try {
     fetch('/api/presence', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + sessionToken
+      },
       body: JSON.stringify({ user_id: currentUser.id, status: status }),
       keepalive: true
     }).catch(function(){});
