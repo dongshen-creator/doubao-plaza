@@ -1,62 +1,51 @@
-// JWT 签发工具 — 使用 Web Crypto API 签发 HS256 JWT
-// 用于桥接 D1 自定义认证与 Supabase RLS（External JWT Generation 模式）
-// PostgREST 只校验签名 + role + exp，不查 auth.users 表
-
-function base64Url(bytes) {
-  let str = '';
-  for (const b of bytes) str += String.fromCharCode(b);
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function textToBytes(str) {
-  return new TextEncoder().encode(str);
-}
+// JWT 获取工具 — 通过 Supabase Edge Function 获取真实 Supabase Auth JWT
+// 项目已迁移到 ES256 非对称签名，旧的 HS256 JWT Secret 不再可用
+// 改为通过 Edge Function 在 Supabase Auth 中创建用户并获取真实 access_token
+// JWT 包含 app_metadata.d1_user_id，RLS 通过 app_user_id() 函数读取
 
 /**
- * 签发 Supabase 兼容的 JWT
+ * 获取 Supabase 兼容的 JWT（通过 Edge Function）
  * @param {string} userId - D1 中的用户 ID
- * @param {object} env - Cloudflare 环境变量，需含 SUPABASE_JWT_SECRET
- * @param {number} expiresIn - 过期时间（秒），默认 86400（24 小时）
- * @returns {Promise<string>} JWT 字符串
+ * @param {object} env - Cloudflare 环境变量，需含 SUPABASE_EDGE_FUNCTION_URL 和 EDGE_PROXY_SECRET
+ * @param {number} expiresIn - 保留参数（过期时间由 Supabase Auth 控制）
+ * @returns {Promise<string>} JWT 字符串，失败时返回空字符串
  */
 export async function signSupabaseJWT(userId, env, expiresIn) {
-  if (!env.SUPABASE_JWT_SECRET) {
-    // JWT Secret 未配置，返回空字符串（前端会降级为 anon 模式）
-    console.warn('[JWT] SUPABASE_JWT_SECRET 未配置，跳过 JWT 签发');
+  const edgeFunctionUrl = env.SUPABASE_EDGE_FUNCTION_URL;
+  const proxySecret = env.EDGE_PROXY_SECRET;
+
+  if (!edgeFunctionUrl || !proxySecret) {
+    console.warn('[JWT] SUPABASE_EDGE_FUNCTION_URL 或 EDGE_PROXY_SECRET 未配置，跳过 JWT 获取');
     return '';
   }
 
-  const ttl = expiresIn || 86400; // 24 小时
-  const now = Math.floor(Date.now() / 1000);
-  const projectRef = env.SUPABASE_PROJECT_REF || 'qwslopgbfkvnxrkqlvjl';
+  try {
+    const res = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proxy_secret: proxySecret,
+        user_id: userId,
+      }),
+    });
 
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const payload = {
-    iss: `https://${projectRef}.supabase.co/auth/v1/`,
-    sub: userId,
-    aud: 'authenticated',
-    exp: now + ttl,
-    iat: now,
-    role: 'authenticated',
-    aal: 'aal1',
-    session_id: crypto.randomUUID(),
-    is_anonymous: false,
-    app_metadata: { provider: 'custom' },
-  };
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error('[JWT] Edge Function 返回错误:', res.status, errText);
+      return '';
+    }
 
-  const headerB64 = base64Url(textToBytes(JSON.stringify(header)));
-  const payloadB64 = base64Url(textToBytes(JSON.stringify(payload)));
-  const data = `${headerB64}.${payloadB64}`;
+    const data = await res.json();
+    if (!data.token) {
+      console.error('[JWT] Edge Function 未返回 token:', JSON.stringify(data));
+      return '';
+    }
 
-  const key = await crypto.subtle.importKey(
-    'raw',
-    textToBytes(env.SUPABASE_JWT_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sigBuf = await crypto.subtle.sign('HMAC', key, textToBytes(data));
-  return `${data}.${base64Url(new Uint8Array(sigBuf))}`;
+    return data.token;
+  } catch (e) {
+    console.error('[JWT] 调用 Edge Function 失败:', e.message);
+    return '';
+  }
 }
 
 /**

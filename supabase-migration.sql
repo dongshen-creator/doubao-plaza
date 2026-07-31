@@ -657,7 +657,10 @@ END $$;
 -- 辅助函数：从 JWT 中提取用户 ID（兼容非 UUID 格式的自定义用户 ID）
 CREATE OR REPLACE FUNCTION public.app_user_id() RETURNS TEXT
 LANGUAGE SQL STABLE AS $$
-  SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.sub', true), ''), '')
+  SELECT COALESCE(
+    NULLIF((current_setting('request.jwt.claim.app_metadata', true)::jsonb)->>'d1_user_id', ''),
+    NULLIF(current_setting('request.jwt.claim.sub', true), '')
+  )
 $$;
 
 -- chat_rooms：仅创建者可创建/修改/删除
