@@ -143,9 +143,15 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '豆包号是必填项' });
     }
     
-    // 主页链接为选填项：提供时仅校验是否为合法 http(s) 链接
+    // 主页链接为必填项：必须是AI视频链接，不支持智能体链接
     const homepageUrl = agent_url ? String(agent_url).trim() : '';
-    if (homepageUrl && !isValidHttpUrl(homepageUrl)) {
+    if (!homepageUrl) {
+      return Response.json({ success: false, error: 'AI视频链接是必填项' });
+    }
+    if (/\/bot\//i.test(homepageUrl) || /doubao\.com\/bot/i.test(homepageUrl)) {
+      return Response.json({ success: false, error: '不支持AI智能体链接（/bot/），请填写AI视频链接' });
+    }
+    if (!isValidHttpUrl(homepageUrl)) {
       return Response.json({ success: false, error: '主页链接格式不正确，请填写以 http:// 或 https:// 开头的链接' });
     }
 
@@ -183,11 +189,9 @@ export async function onRequestPost(context) {
     const existingDoubaoId = await env.DB.prepare(`SELECT id FROM users WHERE doubao_id = ?`).bind(doubao_id).first();
     if (existingDoubaoId) return Response.json({ success: false, error: '该豆包号已被注册' });
     
-    // 检查主页链接是否已被占用（仅当填写时）
-    if (homepageUrl) {
-      const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(homepageUrl).first();
-      if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
-    }
+    // 检查主页链接是否已被占用
+    const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(homepageUrl).first();
+    if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
 
     const regIP = context.request.headers.get('CF-Connecting-IP')
       || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()

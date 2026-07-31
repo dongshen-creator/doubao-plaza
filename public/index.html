@@ -231,7 +231,7 @@
     <div class="form-group"><label class="form-label">姓名 *</label><input class="input" id="regName" placeholder="你的昵称" maxlength="100"></div>
     <div class="form-group"><label class="form-label">密码 *</label><input class="input" id="regPassword" type="password" placeholder="设置密码（6-32位）" maxlength="32" autocomplete="new-password"></div>
     <div class="form-group"><label class="form-label">豆包号 *</label><input class="input" id="regDoubaoId" placeholder="你的豆包号（必填）" maxlength="50"></div>
-    <div class="form-group"><label class="form-label">主页链接（选填）</label><input class="input" id="regAgentUrl" placeholder="https://doubao.com/bot/xxx 或创作视频链接"><div class="form-hint">豆包智能体链接或创作视频链接，将其作为用户主页</div></div>
+    <div class="form-group"><label class="form-label">AI视频链接 *</label><input class="input" id="regAgentUrl" placeholder="https://www.doubao.com/share/... 或创作视频链接"><div class="form-hint">必须填写AI视频链接（不支持智能体链接 /bot/ 链接），将作为用户主页</div></div>
     <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
     <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填，最多500字）" rows="3" maxlength="500" style="resize:vertical"></textarea><div class="form-hint">最多500字</div></div>
     <button type="submit" class="btn btn-orange btn-full">注册</button>
@@ -499,6 +499,10 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   html += renderBio(bio);
   html += '</div>';
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  // 跳转主页按钮（如果用户绑定了主页链接）
+  if (userInfo && userInfo.agent_url) {
+    html += '<button class="btn btn-blue btn-full" onclick="window.open(\'' + escAttr(userInfo.agent_url) + '\',\'_blank\')">🔗 跳转主页</button>';
+  }
   if (isSelf) {
     html += '<button class="btn btn-orange btn-full" onclick="document.getElementById(\'userPopupModal\').remove();showModal(\'settings\')">🏠 这是我的主页</button>';
     html += '<button class="btn btn-gray btn-full" onclick="showShareCardPicker()">💳 分享名片</button>';
@@ -1328,6 +1332,8 @@ async function doRegister() {
   if (!name || !password) { errEl.innerHTML = '<div class="form-error">姓名和密码是必填项</div>'; return; }
   if (password.length < 6 || password.length > 32) { errEl.innerHTML = '<div class="form-error">密码长度必须为6-32位</div>'; return; }
   if (!doubao_id) { errEl.innerHTML = '<div class="form-error">豆包号是必填项</div>'; return; }
+  if (!agent_url) { errEl.innerHTML = '<div class="form-error">AI视频链接是必填项</div>'; return; }
+  if (/\/bot\//i.test(agent_url) || /doubao\.com\/bot/i.test(agent_url)) { errEl.innerHTML = '<div class="form-error">不支持AI智能体链接（/bot/），请填写AI视频链接</div>'; return; }
 
   // 获取设备指纹（失败不阻止注册）
   const fingerprint = await getDeviceFingerprint();
@@ -6892,7 +6898,7 @@ function renderMsgHTML(m, roomId) {
   // 收纳菜单：编辑、撤回、翻译
   var moreActions = '';
   if (!m.recalled) {
-    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();showTranslateLangPicker(this,\'' + eid + '\')">🌐 翻译 ▶</div>';
+    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eid + '\')">🌐 翻译</div>';
   }
   if (isMine && !m.recalled) {
     moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();editMessage(\'' + eid + '\')">✏️ 编辑</div>';
@@ -7940,43 +7946,9 @@ var TRANSLATE_LANGS = [
   {code:'vi',name:'越南语'},{code:'id',name:'印尼语'}
 ];
 
-function showTranslateLangPicker(menuItem, eventId) {
-  // 关闭其他菜单
-  document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
-  // 移除已有的语言选择面板
-  var existing = document.getElementById('translateLangPicker');
-  if (existing) { existing.remove(); return; }
-  // 创建语言选择面板
-  var picker = document.createElement('div');
-  picker.id = 'translateLangPicker';
-  picker.style.cssText = 'position:absolute;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:4px 0;min-width:100px;z-index:200;display:block';
-  var html = '';
-  for (var i = 0; i < TRANSLATE_LANGS.length; i++) {
-    html += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eventId + "','" + TRANSLATE_LANGS[i].code + "')\">" + TRANSLATE_LANGS[i].name + '</div>';
-  }
-  picker.innerHTML = html;
-  // 定位在菜单项右侧
-  var rect = menuItem.getBoundingClientRect();
-  picker.style.left = rect.right + 'px';
-  picker.style.top = rect.top + 'px';
-  document.body.appendChild(picker);
-  // 点击外部关闭
-  setTimeout(function() {
-    var closeHandler = function(e) {
-      if (!e.target.closest('#translateLangPicker')) {
-        picker.remove();
-        document.removeEventListener('click', closeHandler);
-      }
-    };
-    document.addEventListener('click', closeHandler);
-  }, 0);
-}
-
 async function translateMessage(eventId, targetLang) {
-  // 关闭菜单和语言选择面板
+  // 关闭菜单
   document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
-  var picker = document.getElementById('translateLangPicker');
-  if (picker) picker.remove();
 
   if (!targetLang) targetLang = 'zh';
   var langNameMap = {};
@@ -8011,22 +7983,46 @@ async function translateMessage(eventId, targetLang) {
     }
   } catch(e) {}
 
-  // 显示加载中
-  var loadingDiv = document.createElement('div');
-  loadingDiv.id = 'translateResult_' + eventId;
-  loadingDiv.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:8px;background:var(--bg-hover);font-size:12px;color:var(--text-faint);border-left:3px solid var(--accent)';
-  loadingDiv.innerHTML = '🌐 翻译为' + esc(targetLangName) + '中...';
-  msgEl.parentElement.appendChild(loadingDiv);
+  // 创建翻译结果容器
+  var resultDiv = document.createElement('div');
+  resultDiv.id = 'translateResult_' + eventId;
+  resultDiv.style.cssText = 'margin-top:8px;padding:10px 14px;border-radius:10px;background:var(--bg-hover);font-size:13px;border-left:3px solid var(--accent)';
+  msgEl.parentElement.appendChild(resultDiv);
+
+  // 构建语言选择下拉菜单HTML
+  function buildLangSelector(currentLang) {
+    var options = '';
+    for (var i = 0; i < TRANSLATE_LANGS.length; i++) {
+      var sel = TRANSLATE_LANGS[i].code === currentLang ? ' selected' : '';
+      options += '<option value="' + TRANSLATE_LANGS[i].code + '"' + sel + '>' + TRANSLATE_LANGS[i].name + '</option>';
+    }
+    return '<select onchange="translateMessage(\'' + eventId + '\',this.value);this.closest(\'#translateResult_' + eventId + '\').remove()" style="font-size:10px;padding:1px 4px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-muted);cursor:pointer;outline:none">' + options + '</select>';
+  }
+
+  function showResult(translated, detectedLangName) {
+    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:10px;color:var(--text-faint)">🌐 翻译为' + esc(targetLangName) + (detectedLangName ? '（原文: ' + esc(detectedLangName) + '）' : '') + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+  }
+
+  function showLoading() {
+    resultDiv.innerHTML = '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-faint)">🌐 翻译为' + esc(targetLangName) + '中... <span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border-color);border-top-color:var(--accent);border-radius:50%;animation:dpSpin .6s linear infinite"></span></div>';
+  }
+
+  // 添加旋转动画（如果还没有）
+  if (!document.getElementById('dpSpinKeyframes')) {
+    var styleEl = document.createElement('style');
+    styleEl.id = 'dpSpinKeyframes';
+    styleEl.textContent = '@keyframes dpSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(styleEl);
+  }
 
   if (cached) {
-    // 使用缓存结果
     var cachedLangName = langNameMap[cached.detected] || cached.detected || '';
-    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译为' + esc(targetLangName) + (cachedLangName ? '（原文: ' + esc(cachedLangName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(cached.translated || '翻译结果为空') + '</div>';
+    showResult(cached.translated, cachedLangName);
     return;
   }
 
+  showLoading();
   try {
-    // 使用后端代理API（解决CORS问题）
     var res = await fetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -8039,8 +8035,7 @@ async function translateMessage(eventId, targetLang) {
     var translated = data.translated || '';
     var detectedLang = data.detected_lang || '';
     var detectedLangName = langNameMap[detectedLang] || detectedLang || '';
-
-    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译为' + esc(targetLangName) + (detectedLangName ? '（原文: ' + esc(detectedLangName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+    showResult(translated, detectedLangName);
 
     // 缓存结果
     try {
@@ -8051,19 +8046,15 @@ async function translateMessage(eventId, targetLang) {
       }));
     } catch(e) {}
   } catch(e) {
-    loadingDiv.innerHTML = '<div style="color:var(--danger);font-size:12px">❌ 翻译失败: ' + esc(e.message) + '</div>';
-    setTimeout(function() { if (loadingDiv.parentElement) loadingDiv.remove(); }, 3000);
+    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-size:10px;color:var(--text-faint)">🌐 翻译为' + esc(targetLangName) + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--danger);font-size:12px">❌ ' + esc(e.message) + '</div>';
+    setTimeout(function() { if (resultDiv.parentElement) resultDiv.remove(); }, 5000);
   }
 }
 
-// 点击其他区域关闭更多操作菜单和语言选择面板
+// 点击其他区域关闭更多操作菜单
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.chat-more-wrapper')) {
     document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
-  }
-  if (!e.target.closest('#translateLangPicker') && !e.target.closest('.chat-more-menu-item')) {
-    var picker = document.getElementById('translateLangPicker');
-    if (picker) picker.remove();
   }
 });
 

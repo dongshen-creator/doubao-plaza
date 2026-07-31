@@ -878,8 +878,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-action-btn:hover{background:var(--bg-hover);color:var(--accent)}
 .chat-msg-right .chat-action-btn:hover{background:var(--bg-hover);color:var(--accent)}
 /* 收纳菜单 */
-.chat-more-menu{position:absolute;bottom:100%;right:0;margin-bottom:4px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:4px 0;min-width:120px;z-index:100;display:none}
-.chat-more-menu-item{padding:8px 14px;font-size:12px;cursor:pointer;transition:background .15s;color:var(--text-primary);white-space:nowrap}
+.chat-more-menu{position:absolute;bottom:100%;right:0;margin-bottom:6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:6px;min-width:130px;z-index:100;display:none;animation:chatMoreFadeIn .15s ease}
+@keyframes chatMoreFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.chat-more-menu-item{padding:8px 14px;font-size:13px;cursor:pointer;transition:all .15s;color:var(--text-primary);white-space:nowrap;border-radius:8px;display:flex;align-items:center;gap:6px}
 .chat-more-menu-item:hover{background:var(--bg-hover)}
 .chat-more-danger{color:var(--danger)}
 .chat-more-danger:hover{background:#fee2e2}
