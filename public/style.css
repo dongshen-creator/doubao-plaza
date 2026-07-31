@@ -843,10 +843,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-msg-bubble:hover{box-shadow:0 1px 4px rgba(0,0,0,0.06)}
 .chat-msg-left .chat-msg-bubble{background:var(--chat-recv-bubble);border:1px solid var(--chat-recv-border);border-bottom-left-radius:4px}
 .chat-msg-right .chat-msg-bubble{background:var(--accent-gradient);color:#fff;border-bottom-right-radius:4px}
-.chat-msg-sender{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;display:block}
-.chat-msg-right .chat-msg-sender{color:rgba(255,255,255,.9);text-align:right}
+.chat-msg-sender{font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:2px;display:block;padding:0 4px}
+.chat-msg-right .chat-msg-sender{color:var(--text-muted);text-align:right}
 .chat-msg-time{font-size:10px;color:var(--text-faint);margin-top:4px;text-align:right}
-.chat-msg-right .chat-msg-time{color:rgba(255,255,255,.7)}
+.chat-msg-right .chat-msg-time{color:var(--text-faint)}
 .chat-date-separator{text-align:center;margin:12px 0 8px;position:relative}
 .chat-date-separator::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--border)}
 .chat-date-separator span{position:relative;background:var(--bg-secondary);padding:2px 14px;font-size:11px;color:var(--text-faint);border-radius:12px;z-index:1}
@@ -873,10 +873,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .chat-msg-left .chat-recall-btn{color:var(--accent);opacity:.7}
 .chat-msg-left .chat-recall-btn:hover{opacity:1}
 /* 新版操作按钮 */
-.chat-action-btn{background:transparent;border:none;font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s;color:var(--text-faint);vertical-align:middle}
-.chat-msg-right .chat-action-btn{color:rgba(255,255,255,.6)}
+.chat-action-btn{background:transparent;border:none;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s;color:var(--text-faint);vertical-align:middle}
+.chat-msg-right .chat-action-btn{color:var(--text-faint)}
 .chat-action-btn:hover{background:var(--bg-hover);color:var(--accent)}
-.chat-msg-right .chat-action-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+.chat-msg-right .chat-action-btn:hover{background:var(--bg-hover);color:var(--accent)}
 /* 收纳菜单 */
 .chat-more-menu{position:absolute;bottom:100%;right:0;margin-bottom:4px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:4px 0;min-width:120px;z-index:100;display:none}
 .chat-more-menu-item{padding:8px 14px;font-size:12px;cursor:pointer;transition:background .15s;color:var(--text-primary);white-space:nowrap}
@@ -929,10 +929,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 /* 聊天消息操作栏 */
 .chat-msg-actions{display:flex;gap:2px;margin-top:2px;opacity:0;transition:opacity .2s}
 .chat-msg:hover .chat-msg-actions{opacity:1}
-.chat-msg-action{background:none;border:none;color:var(--text-faint);font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s}
+.chat-msg-action{background:none;border:none;color:var(--text-faint);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s}
 .chat-msg-action:hover{background:var(--bg-hover);color:var(--accent)}
-.chat-msg-right .chat-msg-action{color:rgba(255,255,255,.5)}
-.chat-msg-right .chat-msg-action:hover{background:rgba(255,255,255,.1);color:#fff}
+.chat-msg-right .chat-msg-action{color:var(--text-faint)}
+.chat-msg-right .chat-msg-action:hover{background:var(--bg-hover);color:var(--accent)}
 
 /* 表情反应徽章 */
 .chat-reactions{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
@@ -1800,3 +1800,80 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   .tool-type-grid{grid-template-columns:repeat(2,1fr)}
   .card-gallery{grid-template-columns:1fr}
 }
+
+/* ═══════════════════════════════════════════════════════════
+   暗色模式：强制覆盖内联硬编码文字颜色
+   解决SunEditor等编辑器输出的 color:#000 / color:black 在暗色模式下不可见的问题
+   ═══════════════════════════════════════════════════════════ */
+.dark .dp-rich-content [style*="color:#000"],
+.dark .dp-rich-content [style*="color: #000"],
+.dark .dp-rich-content [style*="color:#000000"],
+.dark .dp-rich-content [style*="color: #000000"],
+.dark .dp-rich-content [style*="color:black"],
+.dark .dp-rich-content [style*="color: black"],
+.dark .dp-rich-content [style*="color:#333"],
+.dark .dp-rich-content [style*="color: #333"],
+.dark .dp-rich-content [style*="color:#333333"],
+.dark .dp-rich-content [style*="color:#222"],
+.dark .dp-rich-content [style*="color:#222222"],
+.dark .dp-rich-content [style*="color:#111"],
+.dark .dp-rich-content [style*="color:#111111"],
+.dark .dp-rich-content [style*="color:#444"],
+.dark .dp-rich-content [style*="color:#444444"],
+.dark .dp-rich-content [style*="color:#555"],
+.dark .dp-rich-content [style*="color:#555555"],
+.dark .dp-rich-content [style*="color:#666"],
+.dark .dp-rich-content [style*="color:#666666"],
+.dark .dp-rich-content [style*="color:rgb(0"],
+.dark .dp-rich-content [style*="color:rgb(0,"],
+.dark .dp-rich-content [style*="color:rgb(17"],
+.dark .dp-rich-content [style*="color:rgb(34"],
+.dark .dp-rich-content [style*="color:rgb(51"],
+.dark .dp-rich-content [style*="color:rgb(68"],
+.dark .dp-rich-content [style*="color:rgb(85"],
+.dark .dp-rich-content [style*="color:rgb(102"] {
+  color: var(--text-primary) !important;
+}
+/* 暗色模式下白色文字（在白色背景上不可见）也覆盖 */
+.dark .dp-rich-content [style*="color:#fff"],
+.dark .dp-rich-content [style*="color:#ffffff"],
+.dark .dp-rich-content [style*="color:white"],
+.dark .dp-rich-content [style*="color: white"],
+.dark .dp-rich-content [style*="color:rgb(255,255,255"] {
+  color: var(--text-primary) !important;
+}
+/* 暗色模式下背景色覆盖：白色/浅色背景改为深色 */
+.dark .dp-rich-content [style*="background:#fff"],
+.dark .dp-rich-content [style*="background:#ffffff"],
+.dark .dp-rich-content [style*="background:white"],
+.dark .dp-rich-content [style*="background:#f"],
+.dark .dp-rich-content [style*="background:#ffff"],
+.dark .dp-rich-content [style*="background:rgb(255,255,255"] {
+  background: var(--bg-tertiary) !important;
+}
+.dark .dp-rich-content [style*="background-color:#fff"],
+.dark .dp-rich-content [style*="background-color:#ffffff"],
+.dark .dp-rich-content [style*="background-color:white"] {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   聊天气泡操作按钮颜色修复
+   操作按钮在气泡外部，不应使用白色文字
+   ═══════════════════════════════════════════════════════════ */
+.chat-msg-right .chat-action-btn {
+  color: var(--text-faint) !important;
+}
+.chat-msg-right .chat-action-btn:hover {
+  background: var(--bg-hover) !important;
+  color: var(--accent) !important;
+}
+.chat-msg-right .chat-msg-time {
+  color: var(--text-faint) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   聊天消息布局优化
+   ═══════════════════════════════════════════════════════════ */
+.chat-msg-bubble-time{font-size:10px;color:var(--text-faint);text-align:right;margin-top:4px}
+.chat-msg-right .chat-msg-bubble-time{color:var(--text-faint)}

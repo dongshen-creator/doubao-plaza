@@ -20,10 +20,59 @@
   <!-- SunEditor 富文本编辑器 -->
   <link href="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/css/suneditor.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.js"></script>
-  <!-- KaTeX LaTeX 渲染 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- KaTeX LaTeX 渲染（多CDN回退 + 动态加载） -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" onerror="this.href='https://unpkg.com/katex@0.16.9/dist/katex.min.css'">
+  <script>
+  // KaTeX 多CDN动态加载（jsdelivr → unpkg → cdnjs）
+  (function() {
+    var katexCDNs = [
+      'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
+      'https://unpkg.com/katex@0.16.9/dist/katex.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'
+    ];
+    var autoRenderCDNs = [
+      'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
+      'https://unpkg.com/katex@0.16.9/dist/contrib/auto-render.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js'
+    ];
+    window.__katexReady = false;
+    window.__katexCallbacks = [];
+
+    function loadScript(url, onSuccess, onError) {
+      var s = document.createElement('script');
+      s.src = url;
+      s.onload = onSuccess;
+      s.onerror = function() { s.remove(); onError(); };
+      document.head.appendChild(s);
+    }
+
+    function tryLoadCDN(urls, index, onComplete) {
+      if (index >= urls.length) { onComplete(false); return; }
+      loadScript(urls[index], function() { onComplete(true); }, function() {
+        tryLoadCDN(urls, index + 1, onComplete);
+      });
+    }
+
+    tryLoadCDN(katexCDNs, 0, function(katexOk) {
+      if (!katexOk) { console.error('[LaTeX] KaTeX 主库所有CDN加载失败'); return; }
+      console.log('[LaTeX] KaTeX 主库加载成功');
+      tryLoadCDN(autoRenderCDNs, 0, function(renderOk) {
+        if (!renderOk) { console.error('[LaTeX] auto-render 所有CDN加载失败'); return; }
+        console.log('[LaTeX] auto-render 加载成功');
+        window.__katexReady = true;
+        // 执行所有等待中的回调
+        window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
+        window.__katexCallbacks = [];
+      });
+    });
+
+    // 全局回调注册函数
+    window.onKatexReady = function(cb) {
+      if (window.__katexReady) { try { cb(); } catch(e) {} }
+      else { window.__katexCallbacks.push(cb); }
+    };
+  })();
+  </script>
   <!-- FingerprintJS 开源版 -->
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
   <script src="supabase-sdk.js?v=2"></script>
@@ -804,25 +853,30 @@ function escAttr(s) {
 }
 
 // 渲染富文本内容（支持HTML标签，包括 <style> 动画）
-var __latexIdCounter = 0;
 function renderRichContent(content) {
   if (!content) return '';
   // 统一使用 sanitizeHtml 进行安全净化
   var sanitized = sanitizeHtml(content);
   // 使用 processHtmlTextNodes 处理文本节点的换行和链接（跳过 <style> 标签）
   var processed = processHtmlTextNodes(sanitized);
-  // LaTeX 渲染：用唯一ID包装器精准定位目标元素
-  var latexId = '__latex_' + (++__latexIdCounter);
-  setTimeout(function() {
-    renderLatexInElement(document.getElementById(latexId));
-  }, 50);
-  return '<div id="' + latexId + '" style="display:contents">' + processed + '</div>';
+  // LaTeX 渲染由调用方在 innerHTML 设置后通过 applyLatex() 显式触发
+  return processed;
 }
 
 // 在指定元素上渲染LaTeX（KaTeX auto-render）
 function renderLatexInElement(el) {
-  if (!el || typeof renderMathInElement !== 'function') return;
+  if (!el) return;
+  if (typeof renderMathInElement !== 'function') {
+    // KaTeX 尚未加载，注册回调稍后重试
+    if (typeof onKatexReady === 'function') {
+      onKatexReady(function() { renderLatexInElement(el); });
+    } else {
+      console.warn('[LaTeX] onKatexReady 未定义，KaTeX 可能未正确加载');
+    }
+    return;
+  }
   try {
+    el.normalize(); // 合并相邻文本节点，解决 SunEditor 拆分文本节点问题
     renderMathInElement(el, {
       delimiters: [
         {left: '$$', right: '$$', display: true},
@@ -833,7 +887,23 @@ function renderLatexInElement(el) {
       throwOnError: false,
       ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     });
-  } catch(e) {}
+  } catch(e) {
+    console.warn('[LaTeX] 渲染失败:', e.message);
+  }
+}
+
+// 在容器内所有富文本元素上渲染LaTeX（innerHTML 设置后调用）
+function applyLatex(container) {
+  if (!container) return;
+  // 对容器内所有富文本元素渲染
+  var elements = container.querySelectorAll('.dp-rich-content, .blog-content');
+  for (var i = 0; i < elements.length; i++) {
+    renderLatexInElement(elements[i]);
+  }
+  // 如果容器本身就是富文本元素
+  if (container.classList && (container.classList.contains('dp-rich-content') || container.classList.contains('blog-content'))) {
+    renderLatexInElement(container);
+  }
 }
 
 function formatDate(str) {
@@ -3032,11 +3102,8 @@ async function blogShowPost(container, postId) {
       '<div class="dp-rich-content blog-content" style="font-size:15px;line-height:1.8;color:var(--text-primary)">' + renderRichContent(p.content) + '</div>' +
       (tags.length > 0 ? '<div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:8px">' + tags.map(function(t) { return '<span style="background:var(--accent-bg);color:var(--accent);padding:4px 12px;border-radius:16px;font-size:12px">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
       '<div id="blogCommentsSection" style="margin-top:32px"></div>';
-    // 双保险：200ms后对文章内容区域显式渲染LaTeX
-    setTimeout(function() {
-      var blogContent = view.querySelector('.blog-content');
-      if (blogContent) renderLatexInElement(blogContent);
-    }, 200);
+    // 显式渲染LaTeX
+    applyLatex(view);
     blogLoadComments(postId);
   } catch(e) {
     var v = document.getElementById('blogPostView');
@@ -3227,11 +3294,9 @@ function blogShowLatexPreview() {
     if (e.target === modal) modal.remove();
   });
 
-  // 额外保险：200ms后再次尝试渲染LaTeX（确保DOM已就绪）
-  setTimeout(function() {
-    var el = document.getElementById('blogLatexPreviewContent');
-    if (el) renderLatexInElement(el);
-  }, 200);
+  // 渲染LaTeX
+  var previewContent = document.getElementById('blogLatexPreviewContent');
+  if (previewContent) applyLatex(previewContent);
 }
 
 // --- 旧的自定义编辑器辅助函数已移除，改用 SunEditor ---
@@ -3384,6 +3449,7 @@ async function blogLoadComments(postId) {
     }
     html += '</div>';
     section.innerHTML = html;
+    applyLatex(section);
 
     // 如果有跳转目标评论，滚动到该评论
     if (blogJumpTargetComment) {
@@ -6702,6 +6768,7 @@ function renderMessages(roomId) {
     htmlParts.push(renderMsgHTML(m, roomId));
   }
   msgsEl.innerHTML = htmlParts.join('');
+    applyLatex(msgsEl);
   if (savedAnchor) {
     var newAnchor = msgsEl.querySelector('[data-eid="' + savedAnchor.eid + '"]');
     if (newAnchor) msgsEl.scrollTop = newAnchor.offsetTop - savedAnchor.offset;
@@ -6794,12 +6861,12 @@ function renderMsgHTML(m, roomId) {
     var cAvatar = decodeURIComponent(cardParts[2] || '');
     var cDoubao = decodeURIComponent(cardParts[3] || '');
     var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
-    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,var(--accent-bg) 0%,var(--bg-secondary) 100%);border:1px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:all .25s cubic-bezier(.4,0,.2,1);max-width:300px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 20px rgba(0,0,0,0.12)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.06)\';this.style.borderColor=\'var(--accent)\'">' +
+    contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border-strong);box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all .2s;max-width:320px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.15)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.1)\';this.style.borderColor=\'var(--border-strong)\'">' +
       '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
-      '<div style="width:44px;height:44px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:20px;flex-shrink:0;border:2px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,0.1)">' + avatarInner + '</div>' +
-      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px">' + esc(cName) + '</div>' +
-      '<div style="font-size:11px;color:var(--text-faint);margin-top:2px;display:flex;align-items:center;gap:4px">' + (cDoubao ? '<span style="color:var(--accent);font-weight:600">@' + esc(cDoubao) + '</span>' : '') + '</div>' +
-      '<div style="font-size:10px;color:var(--accent);margin-top:4px;font-weight:600;letter-spacing:.5px">💳 个人名片 · 点击查看</div></div></div>';
+      '<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:22px;flex-shrink:0;border:2px solid var(--accent)">' + avatarInner + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:3px">' + (cDoubao ? '豆包号 @' + esc(cDoubao) : '') + '</div>' +
+      '<div style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600">💳 个人名片 · 点击查看</div></div></div>';
   } else if (text.startsWith('channel:')) {
     // 频道分享: channel:<roomId>|<roomName>|<avatar> (各段已 encodeURIComponent)
     var chParts = text.slice(8).split('|');
@@ -6807,10 +6874,11 @@ function renderMsgHTML(m, roomId) {
     var chName = decodeURIComponent(chParts[1] || '频道');
     var chAvatar = decodeURIComponent(chParts[2] || '');
     var chAvatarInner = chAvatar ? '<img src="' + esc(chAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
-    contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
-      '<div style="width:40px;height:40px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:18px;flex-shrink:0">' + chAvatarInner + '</div>' +
-      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(chName) + '</div>' +
-      '<div style="font-size:11px;color:var(--accent)">频道分享 · 点击加入 →</div></div></div>';
+    contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border-strong);box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all .2s;max-width:320px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.15)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.1)\';this.style.borderColor=\'var(--border-strong)\'">' +
+      '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
+      '<div style="width:44px;height:44px;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:20px;flex-shrink:0">' + chAvatarInner + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;color:var(--text-primary)">' + esc(chName) + '</div>' +
+      '<div style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600">📢 频道分享 · 点击加入 →</div></div></div>';
   } else {
     // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
     contentHtml = renderRichText(text);
@@ -6824,7 +6892,7 @@ function renderMsgHTML(m, roomId) {
   // 收纳菜单：编辑、撤回、翻译
   var moreActions = '';
   if (!m.recalled) {
-    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eid + '\')">🌐 翻译</div>';
+    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();showTranslateLangPicker(this,\'' + eid + '\')">🌐 翻译 ▶</div>';
   }
   if (isMine && !m.recalled) {
     moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();editMessage(\'' + eid + '\')">✏️ 编辑</div>';
@@ -6846,14 +6914,16 @@ function renderMsgHTML(m, roomId) {
   return '<div class="chat-msg ' + side + '" data-eid="' + esc(m.event_id || '') + '">' +
     '<div class="chat-msg-inner" style="display:flex;align-items:flex-start;gap:8px' + (isMine ? ';flex-direction:row-reverse' : '') + '">' +
     avatarHtml +
+    '<div class="chat-msg-body" style="min-width:0;display:flex;flex-direction:column' + (isMine ? ';align-items:flex-end' : '') + '">' +
+    '<div class="chat-msg-sender" style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:2px;padding:0 4px" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.6">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' +
     '<div class="chat-msg-bubble">' +
-    '<div class="chat-msg-sender" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.7">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' +
     replyHtml +
     '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
-    '</div>' +
     reactionsHtml +
     '<div class="chat-msg-time">' + time + ' ' + replyBtn + reactionBtn + moreBtn + '</div>' +
+    '</div>' +
+    '</div>' +
   '</div>';
 }
 
@@ -7691,7 +7761,7 @@ function linkify(text) {
   return text.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
     const url = match;
     const ext = url.split('?')[0].split('/').pop().toLowerCase();
-    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext) || /cdn|media|upload|image|img/.test(url))
+    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext))
       return '<img src="' + url + '" loading="lazy" style="max-width:200px;max-height:200px;border-radius:8px;display:block;margin:4px 0">';
     if (/\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)(\?|$)/i.test(ext))
       return '<video src="' + url + '" controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
@@ -7862,9 +7932,57 @@ async function sendReaction(eventId, reaction) {
 }
 
 // ═══ 消息翻译功能 ═══
-async function translateMessage(eventId) {
-  // 关闭更多菜单
+var TRANSLATE_LANGS = [
+  {code:'zh',name:'中文'},{code:'en',name:'英语'},{code:'ja',name:'日语'},
+  {code:'ko',name:'韩语'},{code:'fr',name:'法语'},{code:'de',name:'德语'},
+  {code:'es',name:'西班牙语'},{code:'ru',name:'俄语'},{code:'pt',name:'葡萄牙语'},
+  {code:'it',name:'意大利语'},{code:'ar',name:'阿拉伯语'},{code:'th',name:'泰语'},
+  {code:'vi',name:'越南语'},{code:'id',name:'印尼语'}
+];
+
+function showTranslateLangPicker(menuItem, eventId) {
+  // 关闭其他菜单
   document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
+  // 移除已有的语言选择面板
+  var existing = document.getElementById('translateLangPicker');
+  if (existing) { existing.remove(); return; }
+  // 创建语言选择面板
+  var picker = document.createElement('div');
+  picker.id = 'translateLangPicker';
+  picker.style.cssText = 'position:absolute;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:4px 0;min-width:100px;z-index:200;display:block';
+  var html = '';
+  for (var i = 0; i < TRANSLATE_LANGS.length; i++) {
+    html += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eventId + "','" + TRANSLATE_LANGS[i].code + "')\">" + TRANSLATE_LANGS[i].name + '</div>';
+  }
+  picker.innerHTML = html;
+  // 定位在菜单项右侧
+  var rect = menuItem.getBoundingClientRect();
+  picker.style.left = rect.right + 'px';
+  picker.style.top = rect.top + 'px';
+  document.body.appendChild(picker);
+  // 点击外部关闭
+  setTimeout(function() {
+    var closeHandler = function(e) {
+      if (!e.target.closest('#translateLangPicker')) {
+        picker.remove();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+  }, 0);
+}
+
+async function translateMessage(eventId, targetLang) {
+  // 关闭菜单和语言选择面板
+  document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
+  var picker = document.getElementById('translateLangPicker');
+  if (picker) picker.remove();
+
+  if (!targetLang) targetLang = 'zh';
+  var langNameMap = {};
+  for (var i = 0; i < TRANSLATE_LANGS.length; i++) langNameMap[TRANSLATE_LANGS[i].code] = TRANSLATE_LANGS[i].name;
+  var targetLangName = langNameMap[targetLang] || targetLang;
+
   var msgs = chatState.messages[chatState.currentRoomId] || [];
   var msg = msgs.find(function(m) { return m.event_id === eventId; });
   if (!msg) return;
@@ -7879,38 +7997,73 @@ async function translateMessage(eventId) {
   if (!msgEl) return;
   var existing = document.getElementById('translateResult_' + eventId);
   if (existing) { existing.remove(); return; } // 再次点击关闭
+
+  // 检查localStorage缓存（24小时过期）
+  var cacheKey = 'tr_' + targetLang + '_' + text.substring(0, 100);
+  var cached = null;
+  try {
+    var raw = localStorage.getItem(cacheKey);
+    if (raw) {
+      var obj = JSON.parse(raw);
+      if (obj && obj.ts && Date.now() - obj.ts < 86400000) {
+        cached = obj;
+      }
+    }
+  } catch(e) {}
+
   // 显示加载中
   var loadingDiv = document.createElement('div');
   loadingDiv.id = 'translateResult_' + eventId;
   loadingDiv.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:8px;background:var(--bg-hover);font-size:12px;color:var(--text-faint);border-left:3px solid var(--accent)';
-  loadingDiv.innerHTML = '🌐 翻译中...';
+  loadingDiv.innerHTML = '🌐 翻译为' + esc(targetLangName) + '中...';
   msgEl.parentElement.appendChild(loadingDiv);
+
+  if (cached) {
+    // 使用缓存结果
+    var cachedLangName = langNameMap[cached.detected] || cached.detected || '';
+    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译为' + esc(targetLangName) + (cachedLangName ? '（原文: ' + esc(cachedLangName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(cached.translated || '翻译结果为空') + '</div>';
+    return;
+  }
+
   try {
-    // 使用 Google Translate 公开 API（免费、支持多语种）
-    var translateUrl = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh&dt=t&q=' + encodeURIComponent(text);
-    var res = await fetch(translateUrl);
-    if (!res.ok) throw new Error('翻译请求失败');
+    // 使用后端代理API（解决CORS问题）
+    var res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, source_lang: 'auto', target_lang: targetLang })
+    });
+    if (!res.ok) throw new Error('翻译请求失败 (' + res.status + ')');
     var data = await res.json();
-    // data[0] 是翻译段数组，每段 [translated, original, ...]
-    var translated = '';
-    if (data && data[0]) {
-      for (var i = 0; i < data[0].length; i++) {
-        if (data[0][i] && data[0][i][0]) translated += data[0][i][0];
-      }
-    }
-    var detectedLang = (data && data[2]) ? data[2] : '';
-    var langName = { 'zh':'中文','en':'英语','ja':'日语','ko':'韩语','fr':'法语','de':'德语','es':'西班牙语','ru':'俄语','ar':'阿拉伯语','pt':'葡萄牙语','it':'意大利语' }[detectedLang] || detectedLang;
-    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译' + (langName ? '（检测: ' + esc(langName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+    if (!data.success) throw new Error(data.error || '翻译失败');
+
+    var translated = data.translated || '';
+    var detectedLang = data.detected_lang || '';
+    var detectedLangName = langNameMap[detectedLang] || detectedLang || '';
+
+    loadingDiv.innerHTML = '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">🌐 翻译为' + esc(targetLangName) + (detectedLangName ? '（原文: ' + esc(detectedLangName) + '）' : '') + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+
+    // 缓存结果
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        translated: translated,
+        detected: detectedLang,
+        ts: Date.now()
+      }));
+    } catch(e) {}
   } catch(e) {
     loadingDiv.innerHTML = '<div style="color:var(--danger);font-size:12px">❌ 翻译失败: ' + esc(e.message) + '</div>';
     setTimeout(function() { if (loadingDiv.parentElement) loadingDiv.remove(); }, 3000);
   }
 }
 
-// 点击其他区域关闭更多操作菜单
+// 点击其他区域关闭更多操作菜单和语言选择面板
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.chat-more-wrapper')) {
     document.querySelectorAll('.chat-more-menu').forEach(function(m) { m.style.display = 'none'; });
+  }
+  if (!e.target.closest('#translateLangPicker') && !e.target.closest('.chat-more-menu-item')) {
+    var picker = document.getElementById('translateLangPicker');
+    if (picker) picker.remove();
   }
 });
 
