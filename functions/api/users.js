@@ -301,9 +301,9 @@ export async function onRequestPost(context) {
        FROM users WHERE doubao_id = ?`
     ).bind(doubao_id).first();
 
-    // 创建会话
+    // 创建会话（30天有效期）
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
     ).bind(user.id, token, expiresAt).run();

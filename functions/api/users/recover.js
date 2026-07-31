@@ -208,7 +208,7 @@ export async function onRequestPost(context) {
 
     // 创建新会话（24h 有效）
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
     ).bind(user_id, token, expiresAt).run();

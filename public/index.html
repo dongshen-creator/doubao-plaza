@@ -85,9 +85,19 @@
         realtime: { params: { eventsPerSecond: 10 } }
       });
       // 将后端签发的 JWT 设置到 Supabase 客户端，使后续直连请求携带 authenticated 身份
+      window.__sbTokenExp = 0; // JWT 过期时间戳（ms）
+      window.__sbRefreshPromise = null; // 防止并发刷新
       window.__setSupabaseSession = async function(supabaseToken) {
         if (!supabaseToken || !window.__SB) return;
         try {
+          // 解析 JWT payload 获取过期时间
+          var parts = supabaseToken.split('.');
+          if (parts.length === 3) {
+            var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            if (payload.exp) {
+              window.__sbTokenExp = payload.exp * 1000; // 转为毫秒
+            }
+          }
           await window.__SB.auth.setSession({
             access_token: supabaseToken,
             refresh_token: supabaseToken
@@ -96,9 +106,42 @@
           console.warn('[SB] setSession failed:', e);
         }
       };
+      // 检查 JWT 是否快过期（5 分钟内），如果是则自动刷新
+      window.__ensureSupabaseSession = async function() {
+        if (!window.__SB || !sessionToken) return;
+        var now = Date.now();
+        // 如果 token 还有 5 分钟以上有效期，不需要刷新
+        if (window.__sbTokenExp - now > 5 * 60 * 1000) return;
+        // 防止并发刷新
+        if (window.__sbRefreshPromise) return window.__sbRefreshPromise;
+        window.__sbRefreshPromise = (async function() {
+          try {
+            var res = await fetch('/api/refresh-supabase-token', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + sessionToken
+              }
+            });
+            if (res.ok) {
+              var data = await res.json();
+              if (data.success && data.supabase_token) {
+                await window.__setSupabaseSession(data.supabase_token);
+                console.log('[SB] JWT 已自动刷新');
+              }
+            }
+          } catch(e) {
+            console.warn('[SB] JWT 刷新失败:', e);
+          } finally {
+            window.__sbRefreshPromise = null;
+          }
+        })();
+        return window.__sbRefreshPromise;
+      };
       // 清除 Supabase 会话（登出时调用）
       window.__clearSupabaseSession = async function() {
         if (!window.__SB) return;
+        window.__sbTokenExp = 0;
         try { await window.__SB.auth.signOut(); } catch(e) {}
       };
     })();
@@ -597,6 +640,7 @@ function closeUserPopup() {
 
 async function patUser(targetUserId, targetUserName, targetSuffix) {
   if (!currentUser || !chatState.currentRoomId) return;
+  await window.__ensureSupabaseSession();
   // 转义后缀防止XSS
   var suffix = esc(targetSuffix || '').trim();
   var safeName = esc(targetUserName || '');
@@ -1464,6 +1508,7 @@ var __presenceTableMissing = false;
 async function sendPresenceHeartbeat() {
   if (!currentUser || !window.__SB || __presenceTableMissing) return;
   try {
+    await window.__ensureSupabaseSession();
     var { error } = await __SB.from('user_presence')
       .upsert({ user_id: currentUser.id, last_seen: new Date().toISOString(), status: 'online' });
     if (error) {
@@ -7477,6 +7522,7 @@ async function sendChatMsg() {
   const content = input.value.trim();
   if (!content || !chatState.currentRoomId) return;
 
+  await window.__ensureSupabaseSession();
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;

@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
 
     // Token 轮换：删除旧 token，签发新 token（防止 token 被窃后长期有效）
     const newToken = generateToken();
-    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
