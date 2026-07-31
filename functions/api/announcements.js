@@ -1,8 +1,10 @@
 // Cloudflare Pages Function - Announcements API
 // GET  /api/announcements        - 获取所有公告
-// POST /api/announcements        - 发布公告
-// PUT  /api/announcements        - 编辑公告
-// DELETE /api/announcements?id=xxx - 删除公告
+// POST /api/announcements        - 发布公告（需 token 鉴权）
+// PUT  /api/announcements        - 编辑公告（需 token 鉴权）
+// DELETE /api/announcements?id=xxx - 删除公告（需 token 鉴权）
+
+import { getAuthUserId } from './_lib/jwt.js';
 
 export async function onRequestGet(context) {
   if (!context.env.DB) {
@@ -55,14 +57,20 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { title, content, created_by, is_system } = body;
+    const { title, content, is_system } = body;
 
-    if (!title || !content || !created_by) {
-      return Response.json({ success: false, error: '标题、内容和创建者不能为空' });
+    if (!title || !content) {
+      return Response.json({ success: false, error: '标题和内容不能为空' });
     }
 
-    // 验证创建者是开发者
-    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(created_by).first();
+    // Token 鉴权：从 Authorization 头获取用户身份
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+
+    // 验证当前用户是开发者
+    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
     if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
       return Response.json({ success: false, error: '只有开发者才能发布公告' });
     }
@@ -71,11 +79,11 @@ export async function onRequestPost(context) {
     if (is_system) {
       result = await env.DB.prepare(
         "INSERT INTO announcements (title, content, created_by, is_system) VALUES (?, ?, ?, ?)"
-      ).bind(title, content, created_by, 1).run();
+      ).bind(title, content, authUserId, 1).run();
     } else {
       result = await env.DB.prepare(
         "INSERT INTO announcements (title, content, created_by) VALUES (?, ?, ?)"
-      ).bind(title, content, created_by).run();
+      ).bind(title, content, authUserId).run();
     }
 
     const announcement = await env.DB.prepare(
@@ -102,7 +110,7 @@ export async function onRequestPut(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { id, title, content, created_by } = body;
+    const { id, title, content } = body;
 
     if (!id) {
       return Response.json({ success: false, error: '缺少公告ID' });
@@ -111,8 +119,14 @@ export async function onRequestPut(context) {
       return Response.json({ success: false, error: '标题和内容不能为空' });
     }
 
-    // 验证创建者是开发者
-    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(created_by).first();
+    // Token 鉴权：从 Authorization 头获取用户身份
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+
+    // 验证当前用户是开发者
+    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
     if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
       return Response.json({ success: false, error: '只有开发者才能编辑公告' });
     }
@@ -181,6 +195,16 @@ export async function onRequestDelete(context) {
 
     if (id === '__system__') {
       return Response.json({ success: false, error: '初始公告不可删除' });
+    }
+
+    // Token 鉴权：只有开发者可以删除公告
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
+      return Response.json({ success: false, error: '只有开发者才能删除公告' }, { status: 403 });
     }
 
     await env.DB.prepare(`DELETE FROM announcements WHERE id = ?`).bind(id).run();

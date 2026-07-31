@@ -646,5 +646,315 @@ DO $$ BEGIN
 END $$;
 -- chat_tool_cards 已废弃，Realtime 订阅不再需要
 
+-- ═══════════════════════════════════════════════════════════
+-- ===== 30. 安全加固：RLS 策略收紧（V1+V3 修复）=====
+-- 原有策略对 anon 完全开放读写，现改为：
+-- - SELECT 保持开放（Realtime 读取需要）
+-- - INSERT/UPDATE/DELETE 收紧为 TO authenticated + 身份校验
+-- 前端通过自定义 JWT（signSupabaseJWT）获取 authenticated 角色
+-- ═══════════════════════════════════════════════════════════
+
+-- 辅助函数：从 JWT 中提取用户 ID（兼容非 UUID 格式的自定义用户 ID）
+CREATE OR REPLACE FUNCTION public.app_user_id() RETURNS TEXT
+LANGUAGE SQL STABLE AS $$
+  SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.sub', true), ''), '')
+$$;
+
+-- chat_rooms：仅创建者可创建/修改/删除
+DROP POLICY IF EXISTS "chat_rooms_insert" ON chat_rooms;
+CREATE POLICY "chat_rooms_insert" ON chat_rooms FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = created_by);
+DROP POLICY IF EXISTS "chat_rooms_update" ON chat_rooms;
+CREATE POLICY "chat_rooms_update" ON chat_rooms FOR UPDATE TO authenticated
+  USING (app_user_id() = created_by);
+DROP POLICY IF EXISTS "chat_rooms_delete" ON chat_rooms;
+CREATE POLICY "chat_rooms_delete" ON chat_rooms FOR DELETE TO authenticated
+  USING (app_user_id() = created_by);
+
+-- chat_room_members：本人可加入/退出，频道创建者可删除所有成员（删除频道时）
+DROP POLICY IF EXISTS "chat_room_members_insert" ON chat_room_members;
+CREATE POLICY "chat_room_members_insert" ON chat_room_members FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "chat_room_members_update" ON chat_room_members;
+CREATE POLICY "chat_room_members_update" ON chat_room_members FOR UPDATE TO authenticated
+  USING (app_user_id() = user_id);
+DROP POLICY IF EXISTS "chat_room_members_delete" ON chat_room_members;
+CREATE POLICY "chat_room_members_delete" ON chat_room_members FOR DELETE TO authenticated
+  USING (
+    app_user_id() = user_id
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+  );
+
+-- chat_messages：仅房间成员可发消息，sender_id 必须为本人；管理员/创建者可撤回/删除
+DROP POLICY IF EXISTS "chat_messages_insert" ON chat_messages;
+CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT TO authenticated
+  WITH CHECK (
+    app_user_id() = sender_id
+    AND EXISTS (SELECT 1 FROM chat_room_members WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_messages_update" ON chat_messages;
+CREATE POLICY "chat_messages_update" ON chat_messages FOR UPDATE TO authenticated
+  USING (
+    app_user_id() = sender_id
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = chat_messages.room_id AND created_by = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_messages_delete" ON chat_messages;
+CREATE POLICY "chat_messages_delete" ON chat_messages FOR DELETE TO authenticated
+  USING (
+    app_user_id() = sender_id
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = chat_messages.room_id AND created_by = app_user_id())
+  );
+
+-- chat_reactions：仅本人可添加/删除自己的反应；管理员/创建者可删除（删除频道时）
+DROP POLICY IF EXISTS "chat_reactions_insert" ON chat_reactions;
+CREATE POLICY "chat_reactions_insert" ON chat_reactions FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = sender_id);
+DROP POLICY IF EXISTS "chat_reactions_delete" ON chat_reactions;
+CREATE POLICY "chat_reactions_delete" ON chat_reactions FOR DELETE TO authenticated
+  USING (
+    app_user_id() = sender_id
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_reactions.room_id AND user_id = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = chat_reactions.room_id AND created_by = app_user_id())
+  );
+
+-- chat_admins：仅频道创建者可管理管理员
+DROP POLICY IF EXISTS "chat_admins_insert" ON chat_admins;
+CREATE POLICY "chat_admins_insert" ON chat_admins FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_admins_delete" ON chat_admins;
+CREATE POLICY "chat_admins_delete" ON chat_admins FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+  );
+
+-- chat_muted：仅频道创建者/管理员可操作
+DROP POLICY IF EXISTS "chat_muted_insert" ON chat_muted;
+CREATE POLICY "chat_muted_insert" ON chat_muted FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_muted.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_muted_update" ON chat_muted;
+CREATE POLICY "chat_muted_update" ON chat_muted FOR UPDATE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_muted.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_muted_delete" ON chat_muted;
+CREATE POLICY "chat_muted_delete" ON chat_muted FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_muted.room_id AND user_id = app_user_id())
+  );
+
+-- chat_banned：仅频道创建者/管理员可操作
+DROP POLICY IF EXISTS "chat_banned_insert" ON chat_banned;
+CREATE POLICY "chat_banned_insert" ON chat_banned FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_banned.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_banned_delete" ON chat_banned;
+CREATE POLICY "chat_banned_delete" ON chat_banned FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_banned.room_id AND user_id = app_user_id())
+  );
+
+-- chat_unread：仅本人可更新自己的未读计数；频道创建者可删除所有（删除频道时）
+DROP POLICY IF EXISTS "chat_unread_insert" ON chat_unread;
+CREATE POLICY "chat_unread_insert" ON chat_unread FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "chat_unread_update" ON chat_unread;
+CREATE POLICY "chat_unread_update" ON chat_unread FOR UPDATE TO authenticated
+  USING (app_user_id() = user_id);
+DROP POLICY IF EXISTS "chat_unread_delete" ON chat_unread;
+CREATE POLICY "chat_unread_delete" ON chat_unread FOR DELETE TO authenticated
+  USING (
+    app_user_id() = user_id
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+  );
+
+-- chat_channel_settings：仅频道创建者/管理员可修改
+DROP POLICY IF EXISTS "chat_channel_settings_insert" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_insert" ON chat_channel_settings FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = created_by);
+DROP POLICY IF EXISTS "chat_channel_settings_update" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_update" ON chat_channel_settings FOR UPDATE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_settings.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_channel_settings_delete" ON chat_channel_settings;
+CREATE POLICY "chat_channel_settings_delete" ON chat_channel_settings FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_settings.room_id AND user_id = app_user_id())
+  );
+
+-- chat_channel_announcements：仅频道创建者/管理员可发公告
+DROP POLICY IF EXISTS "chat_channel_announcements_insert" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_insert" ON chat_channel_announcements FOR INSERT TO authenticated
+  WITH CHECK (
+    app_user_id() = created_by AND (
+      EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+      OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_announcements.room_id AND user_id = app_user_id())
+    )
+  );
+DROP POLICY IF EXISTS "chat_channel_announcements_update" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_update" ON chat_channel_announcements FOR UPDATE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_announcements.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_channel_announcements_delete" ON chat_channel_announcements;
+CREATE POLICY "chat_channel_announcements_delete" ON chat_channel_announcements FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_announcements.room_id AND user_id = app_user_id())
+  );
+
+-- chat_channel_tools：仅频道创建者/管理员可管理工具
+DROP POLICY IF EXISTS "chat_channel_tools_insert" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_insert" ON chat_channel_tools FOR INSERT TO authenticated
+  WITH CHECK (
+    app_user_id() = created_by AND (
+      EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+      OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_tools.room_id AND user_id = app_user_id())
+    )
+  );
+DROP POLICY IF EXISTS "chat_channel_tools_update" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_update" ON chat_channel_tools FOR UPDATE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_tools.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "chat_channel_tools_delete" ON chat_channel_tools;
+CREATE POLICY "chat_channel_tools_delete" ON chat_channel_tools FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_channel_tools.room_id AND user_id = app_user_id())
+  );
+
+-- channel_join_requests：用户可提交自己的申请，频道管理员可审批
+DROP POLICY IF EXISTS "任何人可插入入群申请" ON channel_join_requests;
+CREATE POLICY "join_requests_insert" ON channel_join_requests FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "任何人可更新入群申请" ON channel_join_requests;
+CREATE POLICY "join_requests_update" ON channel_join_requests FOR UPDATE TO authenticated
+  USING (
+    app_user_id() = user_id
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_join_requests.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "任何人可删除入群申请" ON channel_join_requests;
+CREATE POLICY "join_requests_delete" ON channel_join_requests FOR DELETE TO authenticated
+  USING (
+    app_user_id() = user_id
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_join_requests.room_id AND user_id = app_user_id())
+  );
+
+-- channel_invites：仅频道创建者/管理员可操作
+DROP POLICY IF EXISTS "channel_invites_insert" ON channel_invites;
+CREATE POLICY "channel_invites_insert" ON channel_invites FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_invites.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "channel_invites_update" ON channel_invites;
+CREATE POLICY "channel_invites_update" ON channel_invites FOR UPDATE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_invites.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "channel_invites_delete" ON channel_invites;
+CREATE POLICY "channel_invites_delete" ON channel_invites FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_invites.room_id AND user_id = app_user_id())
+  );
+
+-- questionnaire tables：仅频道创建者/管理员可管理
+DROP POLICY IF EXISTS "channel_questionnaires_insert" ON channel_questionnaires;
+CREATE POLICY "channel_questionnaires_insert" ON channel_questionnaires FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_questionnaires.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "channel_questionnaires_delete" ON channel_questionnaires;
+CREATE POLICY "channel_questionnaires_delete" ON channel_questionnaires FOR DELETE TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = channel_questionnaires.room_id AND user_id = app_user_id())
+  );
+DROP POLICY IF EXISTS "channel_questionnaire_answers_insert" ON channel_questionnaire_answers;
+CREATE POLICY "channel_questionnaire_answers_insert" ON channel_questionnaire_answers FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = (SELECT user_id FROM channel_join_requests WHERE id = request_id));
+
+-- user_presence：仅本人可更新在线状态
+DROP POLICY IF EXISTS "user_presence_insert" ON user_presence;
+CREATE POLICY "user_presence_insert" ON user_presence FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "user_presence_update" ON user_presence;
+CREATE POLICY "user_presence_update" ON user_presence FOR UPDATE TO authenticated
+  USING (app_user_id() = user_id);
+DROP POLICY IF EXISTS "user_presence_delete" ON user_presence;
+CREATE POLICY "user_presence_delete" ON user_presence FOR DELETE TO authenticated
+  USING (app_user_id() = user_id);
+
+-- public_channels：需要登录才能操作（开发者权限由 Worker 端校验）
+DROP POLICY IF EXISTS "public_channels_insert" ON public_channels;
+CREATE POLICY "public_channels_insert" ON public_channels FOR INSERT TO authenticated
+  WITH CHECK (true);
+DROP POLICY IF EXISTS "public_channels_update" ON public_channels;
+CREATE POLICY "public_channels_update" ON public_channels FOR UPDATE TO authenticated
+  USING (true);
+DROP POLICY IF EXISTS "public_channels_delete" ON public_channels;
+CREATE POLICY "public_channels_delete" ON public_channels FOR DELETE TO authenticated
+  USING (true);
+
+-- chat_tool_votes：仅本人可创建投票（创建者权限由应用层校验）
+DROP POLICY IF EXISTS "ctv_insert" ON chat_tool_votes;
+CREATE POLICY "ctv_insert" ON chat_tool_votes FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = created_by);
+DROP POLICY IF EXISTS "ctv_update" ON chat_tool_votes;
+CREATE POLICY "ctv_update" ON chat_tool_votes FOR UPDATE TO authenticated
+  USING (app_user_id() = created_by);
+DROP POLICY IF EXISTS "ctv_delete" ON chat_tool_votes;
+CREATE POLICY "ctv_delete" ON chat_tool_votes FOR DELETE TO authenticated
+  USING (app_user_id() = created_by);
+
+-- chat_tool_vote_records：仅本人可投票
+DROP POLICY IF EXISTS "ctvr_insert" ON chat_tool_vote_records;
+CREATE POLICY "ctvr_insert" ON chat_tool_vote_records FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "ctvr_delete" ON chat_tool_vote_records;
+CREATE POLICY "ctvr_delete" ON chat_tool_vote_records FOR DELETE TO authenticated
+  USING (app_user_id() = user_id);
+
+-- chat_tool_chains：仅本人可添加接龙
+DROP POLICY IF EXISTS "ctc_insert" ON chat_tool_chains;
+CREATE POLICY "ctc_insert" ON chat_tool_chains FOR INSERT TO authenticated
+  WITH CHECK (app_user_id() = user_id);
+DROP POLICY IF EXISTS "ctc_delete" ON chat_tool_chains;
+CREATE POLICY "ctc_delete" ON chat_tool_chains FOR DELETE TO authenticated
+  USING (app_user_id() = user_id);
+
+-- Storage：收紧上传权限为已认证用户
+DROP POLICY IF EXISTS "Auth upload" ON storage.objects;
+CREATE POLICY "Auth upload" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'pages');
+DROP POLICY IF EXISTS "Auth delete" ON storage.objects;
+CREATE POLICY "Auth delete" ON storage.objects
+  FOR DELETE TO authenticated USING (bucket_id = 'pages');
+DROP POLICY IF EXISTS "Auth update" ON storage.objects;
+CREATE POLICY "Auth update" ON storage.objects
+  FOR UPDATE TO authenticated USING (bucket_id = 'pages');
+
 -- ===== 完成 =====
 -- 这个文件可以无限次重复执行，不会丢数据（除了问卷表），不会报错

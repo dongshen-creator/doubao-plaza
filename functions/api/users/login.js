@@ -1,11 +1,7 @@
 // Cloudflare Pages Function - Login
 // POST /api/users/login
 
-function generateToken() {
-  const arr = new Uint8Array(32);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
-}
+import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
 
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -96,11 +92,14 @@ export async function onRequestPost(context) {
     await checkAndUpdatePunishment(env, user.id);
 
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
     ).bind(user.id, token, expiresAt).run();
+
+    // 签发 Supabase JWT（用于 RLS 鉴权）
+    const supabaseToken = await signSupabaseJWT(user.id, env);
 
     const clientIP = context.request.headers.get('CF-Connecting-IP')
       || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
@@ -130,7 +129,7 @@ export async function onRequestPost(context) {
       pat_suffix: user.pat_suffix
     };
 
-    return Response.json({ success: true, data: safeUser, token });
+    return Response.json({ success: true, data: safeUser, token, supabase_token: supabaseToken });
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误：' + e.message });
   }

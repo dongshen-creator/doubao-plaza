@@ -73,12 +73,14 @@ async function isDeveloper(env, userId) {
   return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
-// 简单 HTML 净化：移除 <script> 标签和 on* 事件属性
+// 简单 HTML 净化：移除 <script>/<style> 标签和 on* 事件属性
 function sanitizeHtml(html) {
   if (!html) return '';
   let cleaned = String(html);
   // 移除 <script>...</script> 标签（含内容）
   cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  // 移除 <style>...</style> 标签（含内容）—— V4 修复：防止 CSS 注入
+  cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   // 移除 on* 事件属性（onclick, onload, onerror 等）
   cleaned = cleaned.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
   // 将 javascript: URL 替换为 #

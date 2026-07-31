@@ -81,11 +81,63 @@
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
       var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3c2xvcGdiZmt2bnhya3FsdmpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjgzNjksImV4cCI6MjA5NjYwNDM2OX0.774LBSE3xSHtOM8SN2O3Pj3jz9YqEMGacR4CsYT41T0';
       window.__SB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
         realtime: { params: { eventsPerSecond: 10 } }
       });
+      // 将后端签发的 JWT 设置到 Supabase 客户端，使后续直连请求携带 authenticated 身份
+      window.__setSupabaseSession = async function(supabaseToken) {
+        if (!supabaseToken || !window.__SB) return;
+        try {
+          await window.__SB.auth.setSession({
+            access_token: supabaseToken,
+            refresh_token: supabaseToken
+          });
+        } catch(e) {
+          console.warn('[SB] setSession failed:', e);
+        }
+      };
+      // 清除 Supabase 会话（登出时调用）
+      window.__clearSupabaseSession = async function() {
+        if (!window.__SB) return;
+        try { await window.__SB.auth.signOut(); } catch(e) {}
+      };
     })();
   </script>
   <link rel="stylesheet" href="style.css?v=47">
+  <!-- V11 修复：Cloudflare Turnstile 人机验证脚本 -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script>
+    // V11 修复：Turnstile 站点密钥（从 Cloudflare Dashboard 获取，公开密钥安全嵌入前端）
+    // 配置步骤：Cloudflare Dashboard → Turnstile → 创建站点 → 复制 Site Key 填入下方
+    // 同时在 Pages Settings → Environment Variables 添加 TURNSTILE_SECRET（服务端密钥）
+    var TURNSTILE_SITE_KEY = ''; // 留空则跳过验证（向后兼容）
+    var _turnstileWidgetId = null;
+
+    function renderTurnstile() {
+      if (!TURNSTILE_SITE_KEY || !window.turnstile) {
+        // 未配置或脚本未加载，隐藏容器
+        var c = document.getElementById('turnstileContainer');
+        if (c) c.style.display = 'none';
+        return;
+      }
+      var container = document.getElementById('turnstileWidget');
+      var hiddenInput = document.getElementById('turnstileToken');
+      if (!container || !hiddenInput) return;
+      // 显示容器
+      document.getElementById('turnstileContainer').style.display = '';
+      // 重置之前的 widget
+      if (_turnstileWidgetId !== null) {
+        try { window.turnstile.reset(_turnstileWidgetId); } catch(e) {}
+      }
+      hiddenInput.value = '';
+      _turnstileWidgetId = window.turnstile.render('#turnstileWidget', {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: function(token) { hiddenInput.value = token; },
+        'expired-callback': function() { hiddenInput.value = ''; },
+        'error-callback': function() { hiddenInput.value = ''; },
+      });
+    }
+  </script>
 </head>
 <body>
 
@@ -234,6 +286,8 @@
     <div class="form-group"><label class="form-label">AI视频链接 *</label><input class="input" id="regAgentUrl" placeholder="https://www.doubao.com/share/... 或创作视频链接"><div class="form-hint">必须填写AI视频链接（不支持智能体链接 /bot/ 链接），将作为用户主页</div></div>
     <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
     <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填，最多500字）" rows="3" maxlength="500" style="resize:vertical"></textarea><div class="form-hint">最多500字</div></div>
+    <!-- V11 修复：Turnstile 人机验证 -->
+    <div class="form-group" id="turnstileContainer" style="display:none"><div class="form-label">人机验证</div><div id="turnstileWidget"></div><input type="hidden" id="turnstileToken"></div>
     <button type="submit" class="btn btn-orange btn-full">注册</button>
     </form>
     <p style="text-align:center;font-size:13px;color:var(--text-faint);margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:var(--accent);font-weight:600">去登录</a></p>
@@ -594,7 +648,7 @@ var SAFE_HTML_TAGS = {
   'mark': ['style','class'],
   'abbr': ['title','style','class']
 };
-var SAFE_HTML_STYLE = /^(color|background|background-color|background-image|background-clip|font-size|font-weight|font-style|font-family|text-decoration|text-align|text-shadow|text-indent|text-transform|margin|margin-top|margin-bottom|margin-left|margin-right|padding|padding-top|padding-bottom|padding-left|padding-right|border|border-radius|border-color|border-style|border-width|border-top|border-bottom|border-left|border-right|display|width|max-width|min-width|height|max-height|min-height|line-height|letter-spacing|vertical-align|opacity|float|clear|list-style|white-space|word-break|word-wrap|overflow|overflow-x|overflow-y|text-overflow|cursor|animation|animation-name|animation-duration|animation-timing-function|animation-delay|animation-iteration-count|animation-direction|animation-fill-mode|transform|transform-origin|transform-style|transition|transition-property|transition-duration|transition-timing-function|transition-delay|box-shadow|filter|backdrop-filter|gap|flex|flex-direction|flex-wrap|flex-grow|flex-shrink|flex-basis|justify-content|align-items|align-content|align-self|grid|grid-template|grid-template-columns|grid-template-rows|grid-column|grid-row|grid-gap|position|top|left|right|bottom|z-index|object-fit|outline|outline-offset|resize|visibility|pointer-events|content|will-change|perspective|perspective-origin|backface-visibility|-webkit-background-clip|-webkit-text-fill-color|-webkit-text-stroke|-webkit-line-clamp|-webkit-box-orient|-webkit-box|-moz-background-clip|-moz-text-fill-color)(-[^:]+)?:/i;
+var SAFE_HTML_STYLE = /^(color|background|background-color|background-image|background-clip|font-size|font-weight|font-style|font-family|text-decoration|text-align|text-shadow|text-indent|text-transform|margin|margin-top|margin-bottom|margin-left|margin-right|padding|padding-top|padding-bottom|padding-left|padding-right|border|border-radius|border-color|border-style|border-width|border-top|border-bottom|border-left|border-right|display|width|max-width|min-width|height|max-height|min-height|line-height|letter-spacing|vertical-align|opacity|float|clear|list-style|white-space|word-break|word-wrap|overflow|overflow-x|overflow-y|text-overflow|cursor|animation|animation-name|animation-duration|animation-timing-function|animation-delay|animation-iteration-count|animation-direction|animation-fill-mode|transform|transform-origin|transform-style|transition|transition-property|transition-duration|transition-timing-function|transition-delay|box-shadow|filter|backdrop-filter|gap|flex|flex-direction|flex-wrap|flex-grow|flex-shrink|flex-basis|justify-content|align-items|align-content|align-self|grid|grid-template|grid-template-columns|grid-template-rows|grid-column|grid-row|grid-gap|object-fit|outline|outline-offset|resize|visibility|pointer-events|content|will-change|perspective|perspective-origin|backface-visibility|-webkit-background-clip|-webkit-text-fill-color|-webkit-text-stroke|-webkit-line-clamp|-webkit-box-orient|-webkit-box|-moz-background-clip|-moz-text-fill-color)(-[^:]+)?:/i;
 
 // 净化 CSS 文本：过滤危险内容，保留 @keyframes、动画、渐变等安全 CSS
 function sanitizeCss(css) {
@@ -698,21 +752,8 @@ function sanitizeHtml(html) {
       var tag = child.tagName.toLowerCase();
       // 不在白名单中的标签：检查是否需要提取内容
       if (!SAFE_HTML_TAGS[tag]) {
-        // style 标签：净化 CSS 内容后保留（支持 @keyframes 动画等）
-        if (tag === 'style') {
-          var cssText = child.textContent || '';
-          var safeCss = sanitizeCss(cssText);
-          if (safeCss.trim()) {
-            child.textContent = safeCss;
-          } else {
-            node.removeChild(child);
-            continue;
-          }
-          // style 标签不需要清理属性，继续处理兄弟节点
-          continue;
-        }
-        // script/iframe 等直接删除（含内容）
-        if (['script','iframe','object','embed','form','input','textarea','button','select','option','link','meta','base','noscript'].indexOf(tag) >= 0) {
+        // style/script/iframe 等直接删除（含内容）—— V4 修复：移除 <style> 标签支持，防止 CSS 注入
+        if (['style','script','iframe','object','embed','form','input','textarea','button','select','option','link','meta','base','noscript'].indexOf(tag) >= 0) {
           node.removeChild(child);
           continue;
         }
@@ -932,6 +973,9 @@ function loadUsageNotice() {
 var siteSettings = { maintenance_mode: 'off', migration_mode: 'off' };
 
 async function init() {
+  // V6b 修复：清除旧的 PicGo key（不再存储在 localStorage）
+  localStorage.removeItem('dp_picgo_key');
+
   // 拉取站点设置（维护模式 / 迁移模式）
   try {
     const ss = await fetch('/api/site-settings').then(r => r.json());
@@ -950,13 +994,16 @@ async function init() {
         sessionToken = res.token;
         localStorage.setItem('dp_token', sessionToken);
         saveDeviceLogin(currentUser);
+        if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
       } else {
         localStorage.removeItem('dp_token');
         sessionToken = null;
+        if (window.__clearSupabaseSession) window.__clearSupabaseSession();
       }
     } catch (e) {
       localStorage.removeItem('dp_token');
       sessionToken = null;
+      if (window.__clearSupabaseSession) window.__clearSupabaseSession();
     }
   }
 
@@ -1304,6 +1351,7 @@ function removeDeviceLogin(userId) {
         sessionToken = res.token;
         localStorage.setItem('dp_token', sessionToken);
         saveDeviceLogin(currentUser);
+        if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
         closeModal('login');
         updateNavbar();
         if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1339,10 +1387,17 @@ async function doRegister() {
   // 获取设备指纹（失败不阻止注册）
   const fingerprint = await getDeviceFingerprint();
 
+  // V11 修复：获取 Turnstile token（配置了站点密钥时才校验）
+  var turnstileToken = '';
+  if (TURNSTILE_SITE_KEY) {
+    turnstileToken = (document.getElementById('turnstileToken') || {}).value || '';
+    if (!turnstileToken) { errEl.innerHTML = '<div class="form-error">请完成人机验证</div>'; return; }
+  }
+
   try {
     const res = await api('/api/users', {
       method: 'POST',
-      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio, device_fingerprint: fingerprint }),
+      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio, device_fingerprint: fingerprint, turnstile_token: turnstileToken }),
     });
 
     if (res.success) {
@@ -1350,6 +1405,7 @@ async function doRegister() {
       sessionToken = res.token;
       localStorage.setItem('dp_token', sessionToken);
       saveDeviceLogin(currentUser);
+      if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
       closeModal('register');
       updateNavbar();
       if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1360,9 +1416,19 @@ async function doRegister() {
       toast('注册成功！欢迎加入逗包用户广场');
     } else {
       errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
+      // V11 修复：注册失败时重置 Turnstile
+      if (TURNSTILE_SITE_KEY && _turnstileWidgetId !== null && window.turnstile) {
+        try { window.turnstile.reset(_turnstileWidgetId); } catch(e) {}
+        document.getElementById('turnstileToken').value = '';
+      }
     }
   } catch (e) {
     errEl.innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+    // V11 修复：异常时重置 Turnstile
+    if (TURNSTILE_SITE_KEY && _turnstileWidgetId !== null && window.turnstile) {
+      try { window.turnstile.reset(_turnstileWidgetId); } catch(e) {}
+      document.getElementById('turnstileToken').value = '';
+    }
   }
 }
 
@@ -1371,6 +1437,7 @@ function doLogout() {
   currentUser = null;
   sessionToken = null;
   localStorage.removeItem('dp_token');
+  if (window.__clearSupabaseSession) window.__clearSupabaseSession();
   updateNavbar();
   renderContent();
   toast('已退出登录', 'info');
@@ -4985,6 +5052,8 @@ async function showModal(name) {
   document.getElementById(name + 'Modal').style.display = 'flex';
   if (name === 'settings') loadSettings();
   if (name === 'recover') showRecoveryAccounts();
+  // V11 修复：注册弹窗打开时渲染 Turnstile
+  if (name === 'register') setTimeout(renderTurnstile, 100);
 }
 
 // ===== 密保找回流程 =====
@@ -5058,6 +5127,7 @@ async function submitRecovery() {
       sessionToken = res.token;
       localStorage.setItem('dp_token', sessionToken);
       saveDeviceLogin(currentUser);
+      if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
       closeModal('recover');
       updateNavbar();
       renderContent();
@@ -7528,7 +7598,7 @@ async function uploadImageToPicgo(file) {
     try {
       var pForm = new FormData();
       pForm.append('file', file);
-      var pRes = await fetch('/api/upload/picgo', { method: 'POST', body: pForm }).then(safeJsonParse);
+      var pRes = await fetch('/api/upload/picgo', { method: 'POST', body: pForm, headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') } }).then(safeJsonParse);
       if (pRes && pRes.success && pRes.url) { url = pRes.url; }
       else if (pRes && pRes.error) errors.push('picgo.net: ' + pRes.error);
       else errors.push('picgo.net: 响应异常');
@@ -10591,13 +10661,12 @@ function settingsAccountHTML() {
     '</div>' +
     '<div id="chatBgStatus" style="font-size:11px;color:var(--text-secondary);margin-top:4px"></div>' +
     '</div>' +
-    '<div class="form-group"><label class="form-label">图床设置（上传图片/视频/文件用）</label>' +
+    '<div class="form-group"><label class="form-label">图床设置</label>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">' +
-    '<input type="password" id="picgoKeyInput" placeholder="PicGo.net API Key（可选）" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px">' +
-    '<a href="https://www.picgo.net/settings/api" target="_blank" rel="noopener" class="btn btn-sm" title="获取 API Key">获取</a>' +
-    '<button class="btn btn-sm btn-orange" onclick="savePicgoKey()">保存</button>' +
+    '<input type="password" id="picgoKeyInput" placeholder="图床已由服务端配置，无需手动设置" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px" disabled>' +
+    '<button class="btn btn-sm btn-gray" onclick="savePicgoKey()">清除旧Key</button>' +
     '</div>' +
-    '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">配置后优先使用 picgo.net 上传，成功率更高。不填则使用免 Key 图床。</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">图床上传由服务端统一管理，API Key 不再存储在浏览器中。</div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">功能显示设置</label><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div><div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div></div>' +
     '<div class="form-group" style="margin-top:16px"><label class="form-label">消息通知</label>' +
@@ -10875,10 +10944,12 @@ function setThemeColor(colorId) {
 }
 
 // ===== 聊天背景图 =====
+// V6b 修复：PicGo key 不再存储到 localStorage（服务端已有硬编码 key，前端无需保存）
 function savePicgoKey() {
-  var key = document.getElementById('picgoKeyInput').value.trim();
-  localStorage.setItem('dp_picgo_key', key);
-  toast(key ? 'PicGo API Key 已保存' : '已清除 PicGo API Key', 'success');
+  localStorage.removeItem('dp_picgo_key');
+  var inp = document.getElementById('picgoKeyInput');
+  if (inp) inp.value = '';
+  toast('图床使用服务端配置，无需手动设置 API Key', 'info');
 }
 
 function applyChatBackground() {

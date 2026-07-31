@@ -1,6 +1,8 @@
 // Cloudflare Pages Function - Auto Login
 // POST /api/users/auto-login
 
+import { signSupabaseJWT, generateToken, getAuthUserId } from '../_lib/jwt.js';
+
 async function checkAndUpdatePunishment(env, userId) {
   if (!env.DB) throw new Error('数据库未绑定');
   const user = await env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId).first();
@@ -44,6 +46,17 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '会话已过期' });
     }
 
+    // Token 轮换：删除旧 token，签发新 token（防止 token 被窃后长期有效）
+    const newToken = generateToken();
+    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
+    await env.DB.prepare(
+      `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
+    ).bind(session.user_id, newToken, newExpiresAt).run();
+
+    // 签发 Supabase JWT（用于 RLS 鉴权）
+    const supabaseToken = await signSupabaseJWT(session.user_id, env);
+
     const clientIP = context.request.headers.get('CF-Connecting-IP')
       || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
       || 'unknown';
@@ -78,7 +91,7 @@ export async function onRequestPost(context) {
       pat_suffix: user.pat_suffix
     };
 
-    return Response.json({ success: true, data: safeUser, token });
+    return Response.json({ success: true, data: safeUser, token: newToken, supabase_token: supabaseToken });
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误：' + e.message });
   }

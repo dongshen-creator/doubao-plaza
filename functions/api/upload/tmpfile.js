@@ -1,35 +1,40 @@
 // Cloudflare Pages Function - tmpfile.link 文件上传 API
 // POST /api/upload/tmpfile - 上传文件到 tmpfile.link
 //
-// 鉴权：无（匿名上传，文件 7 天后自动删除）
+// 鉴权：需 Bearer token（V7 修复）
 // 上传目标：tmpfile.link
-// 限制：最大 100MB，支持所有文件类型
-// 文档：https://tmpfile.link（API Documentation 部分）
+// 限制：最大 100MB，屏蔽危险类型（SVG/HTML/可执行文件）
+
+import { getAuthUserId } from '../_lib/jwt.js';
 
 const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+// V7 修复：屏蔽危险文件类型
+const BLOCKED_TYPES = ['image/svg+xml', 'text/html', 'application/xhtml+xml', 'text/xml', 'application/xml'];
+const BLOCKED_EXTS = ['svg', 'html', 'htm', 'xhtml', 'xml', 'js', 'exe', 'bat', 'cmd', 'sh', 'php', 'jsp', 'asp', 'aspx'];
 
-function corsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-  };
-}
-
+// V6c 修复：收紧 CORS（仅同源请求）
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export async function onRequestOptions(context) {
-  return new Response(null, { status: 204, headers: corsHeaders() });
+  return new Response(null, { status: 204 });
 }
 
 export async function onRequestPost(context) {
-  const { request } = context;
+  const { env, request } = context;
+
+  // V7 修复：Token 鉴权
+  if (!env.DB) {
+    return json({ success: false, error: '数据库未绑定' }, 500);
+  }
+  const authUserId = await getAuthUserId(env, request);
+  if (!authUserId) {
+    return json({ success: false, error: '请先登录' }, 401);
+  }
 
   try {
     // 1. 解析表单
@@ -38,6 +43,13 @@ export async function onRequestPost(context) {
 
     if (!file) {
       return json({ success: false, error: '请选择要上传的文件' }, 400);
+    }
+
+    // V7 修复：屏蔽危险文件类型
+    const ct = (file.type || '').toLowerCase();
+    const ext = (file.name || '').split('.').pop()?.toLowerCase();
+    if (BLOCKED_TYPES.includes(ct) || (ext && BLOCKED_EXTS.includes(ext))) {
+      return json({ success: false, error: '不支持上传此类型文件（SVG/HTML/可执行文件等被禁止）' }, 400);
     }
 
     // 2. 校验文件大小
@@ -50,10 +62,6 @@ export async function onRequestPost(context) {
     }
 
     // 3. 构建发送到 tmpfile.link 的 FormData
-    // 根据官方 API 文档 (https://tmpfile.link):
-    //   POST https://tmpfile.link/api/upload
-    //   FormData 字段: file=文件（直接使用 File 对象）
-    // 注意：直接用原始 File 对象，不包装成 Blob（兼容性更好）
     const tmpForm = new FormData();
     tmpForm.append('file', file, file.name || 'file');
 
@@ -73,7 +81,6 @@ export async function onRequestPost(context) {
     }
 
     // 6. 检查上传结果
-    // 响应: { fileName, downloadLink, downloadLinkEncoded, size, type, uploadedTo }
     if (respData.downloadLink) {
       return json({
         success: true,

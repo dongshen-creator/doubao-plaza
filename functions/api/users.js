@@ -5,6 +5,8 @@
 // (自动登录见 /api/users/auto-login.js)
 // (注销见 /api/users/[id].js)
 
+import { signSupabaseJWT, generateToken } from './_lib/jwt.js';
+
 // 校验是否为合法的 http(s) 链接（豆包智能体链接或创作视频链接等均可）
 function isValidHttpUrl(url) {
   if (!url) return false;
@@ -14,6 +16,22 @@ function isValidHttpUrl(url) {
   } catch {
     return false;
   }
+}
+
+// V12 修复：校验头像 URL 安全性
+// 允许空值（无头像），非空时必须是 http(s) 链接，屏蔽 data:/javascript:/vbscript: 等危险协议
+function validateAvatarUrl(avatar) {
+  if (!avatar || !String(avatar).trim()) return { valid: true, value: null };
+  const url = String(avatar).trim();
+  if (url.length > 500) return { valid: false, error: '头像链接过长' };
+  // 屏蔽危险协议
+  if (/^\s*(javascript|data|vbscript|file|about):/i.test(url)) {
+    return { valid: false, error: '头像链接协议不安全' };
+  }
+  if (!isValidHttpUrl(url)) {
+    return { valid: false, error: '头像链接必须是 http:// 或 https:// 开头的有效链接' };
+  }
+  return { valid: true, value: url };
 }
 
 // 昵称规范化：去除零宽字符、不可见字符，NFC 归一化，折叠空白，转小写
@@ -48,10 +66,27 @@ function validateName(name) {
   return { valid: true, normalized };
 }
 
-function generateToken() {
-  const arr = new Uint8Array(32);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+// V11 修复：Cloudflare Turnstile 人机验证
+async function verifyTurnstile(token, env, remoteIP) {
+  // 如果未配置 Turnstile 密钥，跳过验证（向后兼容）
+  if (!env.TURNSTILE_SECRET) return { success: true, skipped: true };
+  if (!token) return { success: false, error: '请完成人机验证' };
+  try {
+    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        secret: env.TURNSTILE_SECRET,
+        response: token,
+        remoteip: remoteIP || '',
+      }),
+    });
+    const data = await resp.json();
+    if (data.success) return { success: true };
+    return { success: false, error: '人机验证失败，请重试' };
+  } catch (e) {
+    return { success: false, error: '人机验证服务异常' };
+  }
 }
 
 async function hashPassword(password) {
@@ -162,7 +197,16 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { name, password, doubao_id, agent_url, avatar, bio, device_fingerprint } = body;
+    const { name, password, doubao_id, agent_url, avatar, bio, device_fingerprint, turnstile_token } = body;
+
+    // V11 修复：Turnstile 人机验证（配置了 TURNSTILE_SECRET 时强制校验）
+    const clientIP = context.request.headers.get('CF-Connecting-IP')
+      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+      || 'unknown';
+    const turnstileResult = await verifyTurnstile(turnstile_token, env, clientIP);
+    if (!turnstileResult.success) {
+      return Response.json({ success: false, error: turnstileResult.error });
+    }
 
     // 基本验证
     if (!name || !password) {
@@ -200,10 +244,14 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '主页链接格式不正确，请填写以 http:// 或 https:// 开头的链接' });
     }
 
+    // V12 修复：校验头像 URL
+    const avatarCheck = validateAvatarUrl(avatar);
+    if (!avatarCheck.valid) {
+      return Response.json({ success: false, error: avatarCheck.error });
+    }
+    const safeAvatar = avatarCheck.value;
+
     // IP 频率限制：同 IP 1 小时内最多注册 5 次（轻量防刷）
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
     const recentRegs = await env.DB.prepare(
       `SELECT COUNT(*) as cnt FROM users WHERE registered_ip = ? AND created_at > datetime('now', '-1 hour')`
     ).bind(clientIP).first();
@@ -238,9 +286,6 @@ export async function onRequestPost(context) {
     const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(homepageUrl).first();
     if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
 
-    const regIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
     const regUA = context.request.headers.get('User-Agent') || '';
 
     // 创建用户（ID由数据库自动生成）；主页链接为空时存 NULL
@@ -248,7 +293,7 @@ export async function onRequestPost(context) {
     await env.DB.prepare(
       `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio, registered_ip, last_login_ip, last_login_ua) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(name, hashedPassword, doubao_id, homepageUrl || null, device_fingerprint || null, avatar || null, bio || null, regIP, regIP, regUA).run();
+    ).bind(name, hashedPassword, doubao_id, homepageUrl || null, device_fingerprint || null, safeAvatar, bio || null, clientIP, clientIP, regUA).run();
 
     // 通过 doubao_id 查询刚创建的用户
     const user = await env.DB.prepare(
@@ -258,12 +303,15 @@ export async function onRequestPost(context) {
 
     // 创建会话
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
     ).bind(user.id, token, expiresAt).run();
 
-    return Response.json({ success: true, data: user, token });
+    // 签发 Supabase JWT（用于 RLS 鉴权）
+    const supabaseToken = await signSupabaseJWT(user.id, env);
+
+    return Response.json({ success: true, data: user, token, supabase_token: supabaseToken });
   } catch (e) {
     return Response.json({ success: false, error: '注册失败：' + e.message });
   }

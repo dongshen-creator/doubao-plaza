@@ -1,17 +1,14 @@
 // Cloudflare Pages Function - Reports API (举报系统)
 // POST /api/reports - 举报用户
+//
+// V10 修复：增加每日举报上限（服务端强制），防止刷举报
 
-// 统一鉴权：从 Authorization 头取 token，校验会话有效性，返回 user_id 或 null
-async function getAuthUserId(env, request) {
-  const auth = request.headers.get('Authorization') || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  const token = auth.slice(7).trim();
-  if (!token) return null;
-  const session = await env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE token = ? AND expires_at > datetime('now')`
-  ).bind(token).first();
-  return session ? session.user_id : null;
-}
+import { getAuthUserId } from './_lib/jwt.js';
+
+// V10 修复：每日举报上限
+const DAILY_REPORT_LIMIT = 5;
+// V10 修复：每小时举报上限（防短时间内集中刷）
+const HOURLY_REPORT_LIMIT = 3;
 
 export async function onRequestPost(context) {
   // 首先检查环境变量
@@ -34,10 +31,28 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '不能举报自己' });
     }
 
-    // 鉴权：仅本人可发起举报
+    // 鉴权：仅本人可发起举报（使用共享 JWT 模块）
     const authUserId = await getAuthUserId(env, context.request);
     if (!authUserId || authUserId !== reporter_id) {
       return Response.json({ success: false, error: '无权操作，请先登录' }, { status: 403 });
+    }
+
+    // V10 修复：服务端强制每日举报上限
+    const dailyCount = await env.DB.prepare(
+      `SELECT COUNT(*) as count FROM reports WHERE reporter_id = ? AND created_at > datetime('now', '-1 day')`
+    ).bind(reporter_id).first();
+
+    if (dailyCount.count >= DAILY_REPORT_LIMIT) {
+      return Response.json({ success: false, error: `每日最多举报 ${DAILY_REPORT_LIMIT} 次，请明日再试` }, { status: 429 });
+    }
+
+    // V10 修复：服务端强制每小时举报上限
+    const hourlyCount = await env.DB.prepare(
+      `SELECT COUNT(*) as count FROM reports WHERE reporter_id = ? AND created_at > datetime('now', '-1 hour')`
+    ).bind(reporter_id).first();
+
+    if (hourlyCount.count >= HOURLY_REPORT_LIMIT) {
+      return Response.json({ success: false, error: '举报过于频繁，请稍后再试' }, { status: 429 });
     }
 
     // 检查是否已举报过（同一举报人30天内不能重复举报同一用户）
@@ -47,6 +62,15 @@ export async function onRequestPost(context) {
 
     if (existing) {
       return Response.json({ success: false, error: '您已举报过该用户，30天内不能重复举报' });
+    }
+
+    // V10 修复：验证被举报用户是否存在
+    const reportedUserExists = await env.DB.prepare(
+      `SELECT id FROM users WHERE id = ?`
+    ).bind(reported_id).first();
+
+    if (!reportedUserExists) {
+      return Response.json({ success: false, error: '被举报用户不存在' });
     }
 
     // 创建举报记录
@@ -102,7 +126,9 @@ export async function onRequestPost(context) {
     return Response.json({ 
       success: true, 
       message: '举报成功',
-      punishment: punishment
+      punishment: punishment,
+      // V10 修复：返回剩余举报次数，前端可据此展示
+      remaining_daily: DAILY_REPORT_LIMIT - dailyCount.count - 1
     });
   } catch (e) {
     return Response.json({ success: false, error: e.message });

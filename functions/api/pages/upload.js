@@ -2,6 +2,10 @@
 // GET    /api/pages/upload?id=xxx        - 列出页面的所有文件
 // POST   /api/pages/upload?id=xxx        - 上传文件
 // DELETE /api/pages/upload?id=xxx&path=yyy - 删除文件
+//
+// V1 修复：使用 Token 鉴权替代客户端自填 user_id
+
+import { getAuthUserId } from '../_lib/jwt.js';
 
 async function isDeveloper(env, userId) {
   if (!userId) return false;
@@ -21,6 +25,16 @@ function getContentType(filename) {
     'woff2':'font/woff2','ttf':'font/ttf',
   };
   return map[ext] || 'application/octet-stream';
+}
+
+// V1 修复：路径穿越防护
+function safeFilePath(path) {
+  if (!path) return 'index.html';
+  // 去除目录穿越尝试
+  const cleaned = String(path).replace(/\.\./g, '').replace(/\\/g, '/');
+  // 仅保留文件名部分
+  const parts = cleaned.split('/').filter(p => p && p !== '.' && p !== '..');
+  return parts.join('/') || 'index.html';
 }
 
 export async function onRequestGet(context) {
@@ -61,15 +75,20 @@ export async function onRequestPost(context) {
     const pageId = url.searchParams.get('id');
     if (!pageId) return Response.json({ success: false, error: '缺少页面ID' });
 
+    // V1 修复：Token 鉴权替代客户端自填 user_id
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+    if (!await isDeveloper(env, authUserId)) {
+      return Response.json({ success: false, error: '只有开发者才能上传文件' }, { status: 403 });
+    }
+
     const formData = await context.request.formData();
     const file = formData.get('file');
-    const filePath = formData.get('path') || file?.name || 'index.html';
-    const userId = formData.get('user_id');
+    const filePath = safeFilePath(formData.get('path') || file?.name || 'index.html');
 
     if (!file) return Response.json({ success: false, error: '请选择文件' });
-    if (!await isDeveloper(env, userId)) {
-      return Response.json({ success: false, error: '只有开发者才能上传文件' });
-    }
 
     if (!env.PAGES_BUCKET) {
       return Response.json({ success: false, error: 'R2 存储桶未绑定' });
@@ -95,12 +114,17 @@ export async function onRequestDelete(context) {
     const { env } = context;
     const url = new URL(context.request.url);
     const pageId = url.searchParams.get('id');
-    const filePath = url.searchParams.get('path');
-    const userId = url.searchParams.get('user_id');
+    const filePath = safeFilePath(url.searchParams.get('path'));
 
     if (!pageId || !filePath) return Response.json({ success: false, error: '缺少页面ID或文件路径' });
-    if (!await isDeveloper(env, userId)) {
-      return Response.json({ success: false, error: '只有开发者才能删除文件' });
+
+    // V1 修复：Token 鉴权替代客户端自填 user_id
+    const authUserId = await getAuthUserId(env, context.request);
+    if (!authUserId) {
+      return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+    if (!await isDeveloper(env, authUserId)) {
+      return Response.json({ success: false, error: '只有开发者才能删除文件' }, { status: 403 });
     }
 
     if (!env.PAGES_BUCKET) {

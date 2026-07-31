@@ -52,6 +52,30 @@ function validateName(name) {
   return { valid: true, normalized };
 }
 
+// V12 修复：校验头像 URL 安全性
+function isValidHttpUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function validateAvatarUrl(avatar) {
+  if (!avatar || !String(avatar).trim()) return { valid: true, value: null };
+  const url = String(avatar).trim();
+  if (url.length > 500) return { valid: false, error: '头像链接过长' };
+  if (/^\s*(javascript|data|vbscript|file|about):/i.test(url)) {
+    return { valid: false, error: '头像链接协议不安全' };
+  }
+  if (!isValidHttpUrl(url)) {
+    return { valid: false, error: '头像链接必须是 http:// 或 https:// 开头的有效链接' };
+  }
+  return { valid: true, value: url };
+}
+
 export async function onRequestGet(context) {
   // 首先检查环境变量
   if (!context.env.DB) {
@@ -207,8 +231,13 @@ export async function onRequestPut(context) {
     }
 
     if (action === 'update_avatar') {
+      // V12 修复：校验头像 URL
+      const avatarCheck = validateAvatarUrl(avatar);
+      if (!avatarCheck.valid) {
+        return Response.json({ success: false, error: avatarCheck.error });
+      }
       await env.DB.prepare(`UPDATE users SET avatar = ?, updated_at = datetime('now') WHERE id = ?`)
-        .bind(avatar || null, userId).run();
+        .bind(avatarCheck.value, userId).run();
       return Response.json({ success: true, message: '头像更新成功' });
     }
 

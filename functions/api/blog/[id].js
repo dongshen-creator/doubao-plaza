@@ -66,11 +66,12 @@ async function isDeveloper(env, userId) {
   return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
-// 简单 HTML 净化：移除 <script> 标签和 on* 事件属性
+// 简单 HTML 净化：移除 <script>/<style> 标签和 on* 事件属性
 function sanitizeHtml(html) {
   if (!html) return '';
   let cleaned = String(html);
   cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   cleaned = cleaned.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
   cleaned = cleaned.replace(/(href|src)\s*=\s*(["'])javascript:[^"']*\2/gi, '$1=$2#$2', cleaned);
   return cleaned;
