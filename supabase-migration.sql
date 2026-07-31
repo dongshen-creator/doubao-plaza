@@ -658,8 +658,16 @@ END $$;
 CREATE OR REPLACE FUNCTION public.app_user_id() RETURNS TEXT
 LANGUAGE SQL STABLE AS $$
   SELECT COALESCE(
+    -- 1. 尝试从 request.jwt.claim.app_metadata 提取（旧方式，对 HS256 有效）
     NULLIF((current_setting('request.jwt.claim.app_metadata', true)::jsonb)->>'d1_user_id', ''),
-    NULLIF(current_setting('request.jwt.claim.sub', true), '')
+    -- 2. 从 request.jwt.claims 整体 JSON 中提取 app_metadata.d1_user_id（对 ES256 有效）
+    NULLIF((current_setting('request.jwt.claims', true)::jsonb)->'app_metadata'->>'d1_user_id', ''),
+    -- 3. 从 request.jwt.claims 整体 JSON 中提取 email 并解析
+    NULLIF(substring(current_setting('request.jwt.claims', true)::jsonb->>'email' FROM '^d1_([a-f0-9]+)@dbp\.local$'), ''),
+    -- 4. 回退到 request.jwt.claim.sub
+    NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+    -- 5. 回退到 request.jwt.claims 整体 JSON 中的 sub
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb->>'sub', '')
   )
 $$;
 
