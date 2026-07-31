@@ -111,6 +111,16 @@ export async function onRequestPost(context) {
       await env.DB.prepare(
         `UPDATE blog_notifications SET read = 1 WHERE id = ? AND user_id = ?`
       ).bind(body.id, authUserId).run();
+    } else if (action === 'delete_one' && body.id) {
+      // 删除单条通知
+      await env.DB.prepare(
+        `DELETE FROM blog_notifications WHERE id = ? AND user_id = ?`
+      ).bind(body.id, authUserId).run();
+    } else if (action === 'delete_read') {
+      // 删除所有已读通知
+      await env.DB.prepare(
+        `DELETE FROM blog_notifications WHERE user_id = ? AND read = 1`
+      ).bind(authUserId).run();
     } else {
       // 标记所有通知为已读
       await env.DB.prepare(

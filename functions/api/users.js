@@ -16,6 +16,38 @@ function isValidHttpUrl(url) {
   }
 }
 
+// 昵称规范化：去除零宽字符、不可见字符，NFC 归一化，折叠空白，转小写
+// 用于检测视觉上完全一致的昵称（防止用特殊字符达到重复效果）
+function normalizeName(name) {
+  if (!name) return '';
+  // 去除零宽字符和不可见字符：ZWSP, ZWNJ, ZWJ, BOM, WJ, soft hyphen, 方向控制符等
+  let s = name.replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u200E\u200F\u202A-\u202E\u2061-\u2064]/g, '');
+  // NFC 归一化（合并组合字符序列）
+  s = s.normalize('NFC');
+  // 折叠所有空白（包括各种 Unicode 空格）为单个普通空格
+  s = s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
+  // 去除首尾空白
+  s = s.trim();
+  // 转小写用于比较
+  return s.toLowerCase();
+}
+
+// 昵称合法性检查：返回 { valid: bool, error: string }
+function validateName(name) {
+  if (!name) return { valid: false, error: '昵称不能为空' };
+  const trimmed = String(name).trim();
+  if (trimmed.length === 0) return { valid: false, error: '昵称不能为空' };
+  if (trimmed.length > 20) return { valid: false, error: '昵称长度不能超过20位' };
+  // 去除零宽字符后检查是否为空（防止用不可见字符注册空昵称）
+  const normalized = normalizeName(trimmed);
+  if (normalized.length === 0) return { valid: false, error: '昵称不能仅包含不可见字符' };
+  // 禁止纯空白或纯标点符号昵称
+  if (/^[\s\p{P}\p{S}]+$/u.test(trimmed)) {
+    return { valid: false, error: '昵称不能仅包含标点符号或空白' };
+  }
+  return { valid: true, normalized };
+}
+
 function generateToken() {
   const arr = new Uint8Array(32);
   crypto.getRandomValues(arr);
@@ -135,6 +167,19 @@ export async function onRequestPost(context) {
     // 基本验证
     if (!name || !password) {
       return Response.json({ success: false, error: '姓名和密码是必填项' });
+    }
+    // 昵称合法性检查
+    const nameCheck = validateName(name);
+    if (!nameCheck.valid) {
+      return Response.json({ success: false, error: nameCheck.error });
+    }
+    // 检查昵称是否重复（规范化比较，防止视觉一致的昵称）
+    const allUsers = await env.DB.prepare(`SELECT name FROM users`).all();
+    const existingNames = (allUsers.results || []).map(r => r.name);
+    for (const existingName of existingNames) {
+      if (normalizeName(existingName) === nameCheck.normalized) {
+        return Response.json({ success: false, error: '该昵称已被使用，请换一个' });
+      }
     }
     if (!password || password.length < 6 || password.length > 32) {
       return Response.json({ success: false, error: '密码长度必须为6-32位' });

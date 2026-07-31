@@ -516,6 +516,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
       html += '<button class="btn btn-blue btn-full" onclick="var code=prompt(\'请输入邀请码\');if(code)addFriendWithCode(\'' + userId + '\',code);document.getElementById(\'userPopupModal\').remove()">➕ 加好友(需邀请码)</button>';
     } else {
       html += '<button class="btn btn-blue btn-full" onclick="addFriend(\'' + userId + '\',this);document.getElementById(\'userPopupModal\').remove()">➕ 加好友</button>';
+      html += '<button class="btn btn-green btn-full" onclick="openChatWith(\'' + userId + '\',\'' + escAttr(userName) + '\');document.getElementById(\'userPopupModal\').remove()">💬 发起私聊</button>';
     }
     html += '<button class="btn btn-gray btn-full" onclick="patUser(\'' + userId + '\',\'' + escAttr(userName) + '\',\'' + escAttr((userInfo && userInfo.pat_suffix) || '') + '\');document.getElementById(\'userPopupModal\').remove()">👋 拍一拍</button>';
     html += '<button class="btn btn-gray btn-full" style="margin-bottom:8px" onclick="blockUser(\'' + userId + '\',this);closeUserPopup()">🚫 拉黑用户</button>';
@@ -996,7 +997,7 @@ async function init() {
   checkUnreadAnnouncements();
   setInterval(checkUnreadAnnouncements, 300000); // 每5分钟检查一次未读公告
   blogPollNotifications();
-  setInterval(blogPollNotifications, 120000); // 每2分钟检查一次博客通知
+  setInterval(blogPollNotifications, 30000); // 每30秒检查一次博客通知
   startUnreadPolling();
   if (notifEnabled && 'Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
@@ -1786,8 +1787,11 @@ async function loadTempChats() {
 }
 
 // 在好友视图主栏中打开私聊
-async function openPrivateChatInFriends(friendId, friendName) {
+async function openPrivateChatInFriends(friendId, friendName, isFriend) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
+  // 存储非好友私聊状态，用于消息限制
+  chatState._isNonFriendChat = !isFriend;
+  chatState._nonFriendOtherId = friendId;
   // 停止旧轮询和退订旧频道
   stopMessagePolling();
   // 退订旧频道
@@ -1848,7 +1852,7 @@ async function openPrivateChatInFriends(friendId, friendName) {
             <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:14px">👤</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(friendName)}</div>
-              <div style="font-size:11px;color:var(--text-faint)">私聊</div>
+              <div style="font-size:11px;color:var(--text-faint)">${isFriend ? '私聊' : '非好友私聊 · 对方回复前只能发一条'}</div>
             </div>
             <button onclick="showPrivateChatMenu('${roomId}')" title="设置" aria-label="设置" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">⚙️</button>
           </div>
@@ -1888,9 +1892,26 @@ async function openPrivateChatInFriends(friendId, friendName) {
   await loadRoomList();
   if (chatState._openingTarget !== friendId) return; // 被新点击中断
   await loadMessages(roomId);
+  updateNonFriendChatStatus(roomId, friendName);
   subscribeToRoom(roomId);
   startMessagePolling();
   chatState._openingChat = false;
+}
+
+// 更新非好友私聊状态：对方回复后解除限制，更新头部提示
+function updateNonFriendChatStatus(roomId, friendName) {
+  if (!chatState._isNonFriendChat || !chatState._nonFriendOtherId) return;
+  var otherId = chatState._nonFriendOtherId;
+  var msgs = chatState.messages[roomId] || [];
+  var hasOtherReplied = msgs.some(function(m) { return m.sender_id === otherId; });
+  if (hasOtherReplied) {
+    // 对方已回复，解除限制
+    chatState._isNonFriendChat = false;
+    var subtitle = document.querySelector('#chatViewHeader div[style*="font-size:11px"]');
+    if (subtitle) subtitle.textContent = '私聊';
+    var inputEl = document.getElementById('chatInput');
+    if (inputEl) { inputEl.disabled = false; inputEl.placeholder = '输入消息…'; }
+  }
 }
 
 function closePrivateChatInFriends() {
@@ -2920,12 +2941,17 @@ async function blogPollNotifications() {
   try {
     var res = await api('/api/blog/notifications');
     if (res.success) {
+      var prevUnread = blogNotifState.unreadCount;
+      blogNotifState.notifications = res.data || [];
       blogNotifState.unreadCount = res.unread_count || 0;
       var dot = document.getElementById('actBarBlogDot');
       if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
       // 如果当前在博客视图，同时更新侧边栏
       if (document.getElementById('blogSidebarNotifications')) {
-        blogNotifState.notifications = res.data || [];
+        blogRenderSidebarNotifications();
+      }
+      // 如果有新通知（未读数增加），刷新侧边栏
+      if (blogNotifState.unreadCount > prevUnread && document.getElementById('blogSidebarNotifications')) {
         blogRenderSidebarNotifications();
       }
     }
@@ -2953,7 +2979,7 @@ async function blogLoadNotifications() {
   }
 }
 
-// 渲染侧边栏通知列表
+// 渲染侧边栏通知列表（合并相同来源）
 function blogRenderSidebarNotifications() {
   var container = document.getElementById('blogSidebarNotifications');
   if (!container) return;
@@ -2975,43 +3001,103 @@ function blogRenderSidebarNotifications() {
     return;
   }
 
-  var html = '';
-  // 最多显示8条
-  notifications.slice(0, 8).forEach(function(n) {
-    var timeStr = blogFormatDate(n.created_at);
-    var avatarHtml = n.sender_avatar
-      ? '<img src="' + esc(n.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover">'
-      : '<span style="font-size:10px">👤</span>';
-    var unreadStyle = n.read ? '' : 'font-weight:600;';
-    var unreadDot = n.read ? '' : '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>';
-    var contentPreview = esc(n.content.length > 50 ? n.content.substring(0, 50) + '...' : n.content);
+  // 按 post_id 合并通知
+  var groups = {};
+  var groupOrder = [];
+  notifications.forEach(function(n) {
+    var key = n.post_id;
+    if (!groups[key]) {
+      groups[key] = { post_id: n.post_id, post_title: n.post_title, items: [], unreadCount: 0, latestTs: n.created_at };
+      groupOrder.push(key);
+    }
+    groups[key].items.push(n);
+    if (!n.read) groups[key].unreadCount++;
+    if (n.created_at > groups[key].latestTs) groups[key].latestTs = n.created_at;
+  });
 
-    html += '<div class="blog-notif-item" style="padding:8px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;display:flex;gap:8px;align-items:flex-start" ' +
+  var html = '';
+  var displayedGroups = 0;
+  for (var gi = 0; gi < groupOrder.length && displayedGroups < 8; gi++) {
+    var g = groups[groupOrder[gi]];
+    var latest = g.items[0]; // items 已按时间倒序，第一条最新
+    var timeStr = blogFormatDate(g.latestTs);
+    var avatarHtml = latest.sender_avatar
+      ? '<img src="' + esc(latest.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover">'
+      : '<span style="font-size:10px">👤</span>';
+    var unreadStyle = g.unreadCount > 0 ? 'font-weight:600;' : '';
+    var unreadDot = g.unreadCount > 0 ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>' : '';
+    var countBadge = g.items.length > 1 ? '<span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:10px">' + g.items.length + '条</span>' : '';
+    var contentPreview = esc(latest.content.length > 50 ? latest.content.substring(0, 50) + '...' : latest.content);
+    // 合并通知的 sender 显示
+    var senderDisplay = g.items.length > 1
+      ? esc(latest.sender_name) + ' 等'
+      : esc(latest.sender_name);
+
+    html += '<div class="blog-notif-item" style="padding:8px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;display:flex;gap:8px;align-items:flex-start;position:relative" ' +
       'onmouseover="this.style.background=\'var(--bg-hover)\'" ' +
       'onmouseout="this.style.background=\'\'" ' +
-      'onclick="blogJumpToComment(' + n.post_id + ',' + n.comment_id + ',' + n.id + ')">' +
+      'onclick="blogJumpToComment(' + latest.post_id + ',' + latest.comment_id + ',' + latest.id + ')">' +
       '<div style="width:24px;height:24px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">' + avatarHtml + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:4px">' + unreadDot +
-          '<span style="font-size:12px;' + unreadStyle + 'color:var(--text-primary)">' + esc(n.sender_name) + '</span>' +
+          '<span style="font-size:12px;' + unreadStyle + 'color:var(--text-primary)">' + senderDisplay + '</span>' +
           '<span style="font-size:10px;color:var(--text-faint)">评论了</span>' +
+          countBadge +
         '</div>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + contentPreview + '</div>' +
-        '<div style="font-size:10px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 ' + esc(n.post_title) + ' · ' + timeStr + '</div>' +
+        '<div style="font-size:10px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 ' + esc(g.post_title) + ' · ' + timeStr + '</div>' +
       '</div>' +
+      '<button onclick="event.stopPropagation();blogDeleteNotification(' + latest.id + ')" title="删除" style="position:absolute;top:4px;right:4px;background:none;border:none;font-size:12px;cursor:pointer;color:var(--text-faint);opacity:0.5;padding:2px 4px;line-height:1" ' +
+        'onmouseover="this.style.opacity=1;this.style.color=\'var(--danger)\'" onmouseout="this.style.opacity=0.5;this.style.color=\'var(--text-faint)\'">✕</button>' +
     '</div>';
-  });
-
-  if (notifications.length > 8) {
-    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--text-faint)">还有 ' + (notifications.length - 8) + ' 条通知</div>';
+    displayedGroups++;
   }
 
-  // 全部已读按钮
+  if (groupOrder.length > 8) {
+    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--text-faint)">还有 ' + (groupOrder.length - 8) + ' 篇文章的通知</div>';
+  }
+
+  // 操作按钮行
+  html += '<div style="display:flex;justify-content:center;gap:12px;padding:6px;font-size:11px">';
   if (blogNotifState.unreadCount > 0) {
-    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--accent);cursor:pointer" onclick="blogMarkAllNotificationsRead()">全部标为已读</div>';
+    html += '<span style="color:var(--accent);cursor:pointer" onclick="blogMarkAllNotificationsRead()">全部已读</span>';
   }
+  html += '<span style="color:var(--text-faint);cursor:pointer" onclick="blogDeleteReadNotifications()">清除已读</span>';
+  html += '</div>';
 
   container.innerHTML = html;
+}
+
+// 删除单条通知
+async function blogDeleteNotification(notifId) {
+  try {
+    await api('/api/blog/notifications', { method: 'POST', body: JSON.stringify({ action: 'delete_one', id: notifId }) });
+    // 更新本地状态
+    var notifs = blogNotifState.notifications || [];
+    var deleted = notifs.find(function(n) { return n.id === notifId; });
+    blogNotifState.notifications = notifs.filter(function(n) { return n.id !== notifId; });
+    if (deleted && !deleted.read) {
+      blogNotifState.unreadCount = Math.max(0, blogNotifState.unreadCount - 1);
+    }
+    blogRenderSidebarNotifications();
+    var dot = document.getElementById('actBarBlogDot');
+    if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
+    toast('已删除');
+  } catch(e) {
+    toast('删除失败', 'error');
+  }
+}
+
+// 清除所有已读通知
+async function blogDeleteReadNotifications() {
+  try {
+    await api('/api/blog/notifications', { method: 'POST', body: JSON.stringify({ action: 'delete_read' }) });
+    blogNotifState.notifications = (blogNotifState.notifications || []).filter(function(n) { return !n.read; });
+    blogRenderSidebarNotifications();
+    toast('已清除已读通知');
+  } catch(e) {
+    toast('操作失败', 'error');
+  }
 }
 
 // 跳转到博客文章评论
@@ -3033,9 +3119,12 @@ async function blogJumpToComment(postId, commentId, notifId) {
   var dot = document.getElementById('actBarBlogDot');
   if (dot) dot.style.display = blogNotifState.unreadCount > 0 ? '' : 'none';
 
-  // 跳转到文章
+  // 跳转到文章（保存当前滚动位置以防跳转后界面上移）
+  var savedScrollY = window.scrollY;
   blogJumpTargetComment = commentId;
   blogShowPost(blogState.container, postId);
+  // 防止跳转导致页面上移
+  window.scrollTo(0, savedScrollY);
 }
 
 // 标记所有通知为已读
@@ -3150,7 +3239,7 @@ function blogShowEditor(container, postId) {
         '<div style="flex:1;min-width:200px">' +
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">封面图片URL（可选）</label>' +
           '<input id="blogCoverInput" type="text" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px">' +
-          '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">💡 建议先上传到图床（如 <a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
+          '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">💡 建议先上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -3161,7 +3250,7 @@ function blogShowEditor(container, postId) {
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文 ' +
         '<span style="font-size:11px;font-weight:400;color:var(--text-faint)">（支持 LaTeX：用 $...$ 行内公式，$$...$$ 独立公式）</span>' +
         '</label>' +
-        '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px">📷 <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
+        '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px">📷 <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
         '<textarea id="blogContentTextarea" style="width:100%;height:400px;display:none"></textarea>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -3220,7 +3309,7 @@ function blogShowEditor(container, postId) {
       imageWidthLimit: 800,
       onImageUpload: function(files, info, core) {
         // 阻止本地文件上传，提示用户使用图床
-        toast('请勿直接上传图片。请先上传到图床（如路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
+        toast('请勿直接上传图片。请先上传到图床（如 Nickyam、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
         if (window.__blogSunEditor && window.__blogSunEditor.core) {
           try { window.__blogSunEditor.core.initImageSelect(); } catch(e) {}
         }
@@ -3464,7 +3553,8 @@ async function blogLoadComments(postId) {
       setTimeout(function() {
         var commentEl = document.getElementById('blogComment_' + targetId);
         if (commentEl) {
-          commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // 使用 nearest 避免整个页面上移，仅在有需要时滚动
+          commentEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           // 高亮闪烁
           var bubble = commentEl.querySelector('div[style*="border-radius"]');
           if (bubble) {
@@ -3479,7 +3569,7 @@ async function blogLoadComments(postId) {
           }
         } else {
           // 评论可能已被删除，滚动到评论区底部
-          section.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       }, 500);
     }
@@ -3557,7 +3647,7 @@ async function blogSubmitReply(parentId, postId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ post_id: postId, content: content, parent_id: parentId })
     });
-    if (res.success) { toast('回复已发表'); blogLoadComments(postId); }
+    if (res.success) { toast('回复已发表'); blogLoadComments(postId); blogPollNotifications(); }
     else toast(res.error || '回复失败', 'error');
   } catch(e) { toast('回复失败', 'error'); }
 }
@@ -3574,7 +3664,7 @@ async function blogAddComment(postId, parentId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ post_id: postId, content: content, parent_id: parentId || 0 })
     });
-    if (res.success) { input.value = ''; toast('评论已发表'); blogLoadComments(postId); }
+    if (res.success) { input.value = ''; toast('评论已发表'); blogLoadComments(postId); blogPollNotifications(); }
     else toast(res.error || '评论失败', 'error');
   } catch(e) { toast('评论失败', 'error'); }
 }
@@ -6053,20 +6143,27 @@ function openChat() {
 
 async function openChatWith(friendId, friendName) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
-  // 检查是否为好友（已有的临时私聊仍允许打开）
-  var existingRoom = (chatState.rooms || []).find(function(r) {
-    return r.type === 'private' && r.other && r.other.id === friendId;
-  });
-  if (!existingRoom) {
-    var isFriend = false;
+  // 检查是否为好友
+  var isFriend = false;
+  try {
+    var res = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
+    if (res && res.success && res.data) {
+      isFriend = res.data.some(function(f) { return (f.friend_id || (f.friend && f.friend.id) || f.id) === friendId; });
+    }
+  } catch(e) {}
+  // 非好友时检查对方隐私设置
+  if (!isFriend) {
+    var otherUserInfo = null;
     try {
-      var res = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
-      if (res && res.success && res.data) {
-        isFriend = res.data.some(function(f) { return (f.friend_id || (f.friend && f.friend.id) || f.id) === friendId; });
-      }
+      var ures = await api('/api/users/' + friendId);
+      if (ures && ures.success) otherUserInfo = ures.data;
     } catch(e) {}
-    if (!isFriend) {
-      toast('请先添加对方为好友后再发起私聊', 'info');
+    if (otherUserInfo && (otherUserInfo.privacy_setting === 'stealth' || otherUserInfo.privacy_setting === 'punished_stealth')) {
+      toast('对方处于隐身模式，无法发起私聊', 'info');
+      return;
+    }
+    if (otherUserInfo && (otherUserInfo.privacy_setting === 'whitelist' || otherUserInfo.privacy_setting === 'punished_whitelist')) {
+      toast('对方只接受好友私聊，请先发送好友请求', 'info');
       return;
     }
   }
@@ -6076,7 +6173,7 @@ async function openChatWith(friendId, friendName) {
   }
   // 等待 DOM 渲染完成
   await new Promise(function(r) { setTimeout(r, 100); });
-  openPrivateChatInFriends(friendId, friendName);
+  openPrivateChatInFriends(friendId, friendName, isFriend);
 }
 
 function closeChat() {
@@ -7336,6 +7433,24 @@ async function sendChatMsg() {
   input.value = ''; autoChatResize(input);
   const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
+  // 非好友私聊限制：对方回复前只能发一条
+  if (chatState._isNonFriendChat && chatState._nonFriendOtherId) {
+    var otherId = chatState._nonFriendOtherId;
+    var msgs = chatState.messages[chatState.currentRoomId] || [];
+    // 检查是否已有我发的消息且对方未回复
+    var lastOtherMsg = -1;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].sender_id === otherId) { lastOtherMsg = i; break; }
+    }
+    var myMsgsAfterOther = msgs.filter(function(m, idx) {
+      return m.sender_id === currentUser.id && idx > lastOtherMsg;
+    });
+    if (myMsgsAfterOther.length > 0) {
+      toast('对方还未回复，请等待对方回复后再发送消息', 'info');
+      btn.disabled = false;
+      return;
+    }
+  }
   const { error } = await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
     sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
@@ -7390,6 +7505,22 @@ async function uploadImageToPicgo(file) {
       else if (sRes && sRes.error) errors.push('img.scdn.io: ' + sRes.error);
       else errors.push('img.scdn.io: 响应异常');
     } catch(e) { errors.push('img.scdn.io: ' + e.message); console.warn('img.scdn.io upload failed:', e); }
+  }
+
+  // 1.5. img.nickyam.com（基于 Telegraph 的免费图床，前端直连，无需 API Key）
+  if (!url && file.type.startsWith('image/')) {
+    try {
+      var nyForm = new FormData();
+      nyForm.append('file', file);
+      var nyRes = await fetch('https://img.nickyam.com/upload', { method: 'POST', body: nyForm }).then(safeJsonParse);
+      if (nyRes && Array.isArray(nyRes) && nyRes[0] && nyRes[0].src) {
+        url = 'https://img.nickyam.com' + nyRes[0].src;
+      } else if (nyRes && nyRes.error) {
+        errors.push('img.nickyam.com: ' + (typeof nyRes.error === 'string' ? nyRes.error : '上传失败'));
+      } else {
+        errors.push('img.nickyam.com: 响应异常');
+      }
+    } catch(e) { errors.push('img.nickyam.com: ' + e.message); console.warn('img.nickyam.com upload failed:', e); }
   }
 
   // 2. picgo.net 备选（通过 Cloudflare Function 服务端转发）
@@ -7612,6 +7743,10 @@ async function pollNewMessages() {
         if (newMsgs.length > 0 || contentChanged) {
           chatState.messages[roomId] = existingMsgs.concat(newMsgs).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
           if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
+          // 非好友私聊：对方回复后解除限制
+          if (roomId === chatState.currentRoomId && chatState._isNonFriendChat) {
+            updateNonFriendChatStatus(roomId);
+          }
           if (!chatState._openingChat) { loadRoomList(); }
           gotNew = true;
         }

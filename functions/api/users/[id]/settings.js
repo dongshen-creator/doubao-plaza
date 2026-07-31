@@ -28,6 +28,30 @@ async function hashPassword(password) {
     Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// 昵称规范化：去除零宽字符、不可见字符，NFC 归一化，折叠空白，转小写
+function normalizeName(name) {
+  if (!name) return '';
+  let s = name.replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u200E\u200F\u202A-\u202E\u2061-\u2064]/g, '');
+  s = s.normalize('NFC');
+  s = s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
+  s = s.trim();
+  return s.toLowerCase();
+}
+
+// 昵称合法性检查
+function validateName(name) {
+  if (!name) return { valid: false, error: '昵称不能为空' };
+  const trimmed = String(name).trim();
+  if (trimmed.length === 0) return { valid: false, error: '昵称不能为空' };
+  if (trimmed.length > 20) return { valid: false, error: '昵称长度不能超过20位' };
+  const normalized = normalizeName(trimmed);
+  if (normalized.length === 0) return { valid: false, error: '昵称不能仅包含不可见字符' };
+  if (/^[\s\p{P}\p{S}]+$/u.test(trimmed)) {
+    return { valid: false, error: '昵称不能仅包含标点符号或空白' };
+  }
+  return { valid: true, normalized };
+}
+
 export async function onRequestGet(context) {
   // 首先检查环境变量
   if (!context.env.DB) {
@@ -124,12 +148,20 @@ export async function onRequestPut(context) {
       const updates = [];
       const binds = [];
       if (name !== undefined) {
-        const trimmedName = String(name).trim();
-        if (trimmedName.length === 0 || trimmedName.length > 20) {
-          return Response.json({ success: false, error: '昵称长度必须为1-20位' });
+        const nameCheck = validateName(name);
+        if (!nameCheck.valid) {
+          return Response.json({ success: false, error: nameCheck.error });
         }
-        if (trimmedName === curUser.name) {
+        const trimmedName = String(name).trim();
+        if (nameCheck.normalized === normalizeName(curUser.name)) {
           return Response.json({ success: false, error: '新昵称与当前昵称相同' });
+        }
+        // 检查昵称是否与其他用户重复（规范化比较）
+        const allUsers = await env.DB.prepare(`SELECT id, name FROM users WHERE id != ?`).bind(userId).all();
+        for (const other of (allUsers.results || [])) {
+          if (normalizeName(other.name) === nameCheck.normalized) {
+            return Response.json({ success: false, error: '该昵称已被使用，请换一个' });
+          }
         }
         // 检查冷却
         if (curUser.name_changed_at) {
