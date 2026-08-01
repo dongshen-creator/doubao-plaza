@@ -247,10 +247,10 @@ export async function onRequestDelete(context) {
       return jsonResponse({ success: false, error: '无权操作，仅评论作者、博客作者或开发者可删除评论' }, 403);
     }
 
-    // 删除评论
+    // 删除评论及其所有子回复（级联删除，避免残留孤儿回复）
     await env.DB.prepare(
-      `DELETE FROM blog_comments WHERE id = ?`
-    ).bind(commentId).run();
+      `DELETE FROM blog_comments WHERE id = ? OR parent_id = ?`
+    ).bind(commentId, commentId).run();
 
     return jsonResponse({ success: true, message: '评论已删除' });
   } catch (e) {

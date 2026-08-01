@@ -20,22 +20,41 @@
   <!-- SunEditor 富文本编辑器 -->
   <link href="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/css/suneditor.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.js"></script>
-  <!-- KaTeX LaTeX 渲染（多CDN回退 + 动态加载） -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" onerror="this.href='https://unpkg.com/katex@0.16.9/dist/katex.min.css'">
+  <!-- KaTeX LaTeX 渲染（多CDN回退 + 动态加载 + 国内CDN） -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <script>
-  // KaTeX 多CDN动态加载（jsdelivr → unpkg → cdnjs）
+  // KaTeX 多CDN动态加载（jsdelivr → unpkg → staticfile → bootcdn → cdnjs）
   (function() {
+    // CSS 样式表多源回退（jsdelivr → unpkg → staticfile → bootcdn）
+    var katexCssLink = document.querySelector('link[href*="katex@0.16.9/dist/katex.min.css"]');
+    if (katexCssLink) {
+      var cssFallbacks = [
+        'https://unpkg.com/katex@0.16.9/dist/katex.min.css',
+        'https://cdn.staticfile.net/katex/0.16.9/katex.min.css',
+        'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.css',
+        'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'
+      ];
+      var cssIdx = 0;
+      katexCssLink.addEventListener('error', function() {
+        if (cssIdx < cssFallbacks.length) { katexCssLink.href = cssFallbacks[cssIdx++]; }
+      });
+    }
     var katexCDNs = [
       'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
       'https://unpkg.com/katex@0.16.9/dist/katex.min.js',
+      'https://cdn.staticfile.net/katex/0.16.9/katex.min.js',
+      'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.js',
       'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'
     ];
     var autoRenderCDNs = [
       'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
       'https://unpkg.com/katex@0.16.9/dist/contrib/auto-render.min.js',
+      'https://cdn.staticfile.net/katex/0.16.9/contrib/auto-render.min.js',
+      'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js',
       'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js'
     ];
     window.__katexReady = false;
+    window.__katexFailed = false;
     window.__katexCallbacks = [];
 
     function loadScript(url, onSuccess, onError) {
@@ -54,7 +73,23 @@
     }
 
     tryLoadCDN(katexCDNs, 0, function(katexOk) {
-      if (!katexOk) { console.error('[LaTeX] KaTeX 主库所有CDN加载失败'); return; }
+      if (!katexOk) {
+        console.error('[LaTeX] KaTeX 主库所有CDN加载失败');
+        // 兜底：标记失败，强制执行等待中的回调，避免回调永久排队
+        window.__katexFailed = true;
+        window.__katexReady = true;
+        var cbs = window.__katexCallbacks;
+        window.__katexCallbacks = [];
+        cbs.forEach(function(cb) { try { cb(); } catch(e) {} });
+        setTimeout(function() {
+          try {
+            if (typeof toast === 'function') {
+              toast('公式渲染组件加载失败，LaTeX 公式将以源码显示', 'error');
+            }
+          } catch(e) {}
+        }, 1500);
+        return;
+      }
       console.log('[LaTeX] KaTeX 主库加载成功');
       tryLoadCDN(autoRenderCDNs, 0, function(renderOk) {
         if (!renderOk) { console.error('[LaTeX] auto-render 所有CDN加载失败'); return; }
@@ -966,6 +1001,8 @@ function renderRichContent(content) {
 // 在指定元素上渲染LaTeX（KaTeX auto-render）
 function renderLatexInElement(el) {
   if (!el) return;
+  // CDN 全部加载失败：保留原始 $...$ 源码，不再排队等待
+  if (window.__katexFailed) return;
   if (typeof renderMathInElement !== 'function') {
     // KaTeX 尚未加载，注册回调稍后重试
     if (typeof onKatexReady === 'function') {
@@ -2785,7 +2822,7 @@ function weatherCodeToText(code) {
 }
 
 // ===== 小肥羊讲堂（博客系统）=====
-var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null, currentCategory: null, categories: [], editorState: null };
+var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null, currentCategory: null, categories: [], editorState: null, listPage: 1, listHasMore: false, listLoading: false };
 
 // 博客独立视图渲染（左侧导航栏入口）
 function renderBlogView(sidebar, main) {
@@ -2981,23 +3018,64 @@ async function blogLoadAnnouncements() {
   } catch(e) {}
 }
 
-// --- 加载博客列表 ---
-async function blogLoadList() {
+// --- 博客列表卡片渲染 ---
+function blogRenderCard(p, isDev) {
+  var tags = blogParseTags(p.tags);
+  var isAuthor = currentUser && p.author_id == currentUser.id;
+  var canSeeStatus = isAuthor || isDev;
+  var statusBadge = '';
+  if (canSeeStatus && p.status === 'pending') {
+    statusBadge = '<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px">⏳ 待审核</span>';
+  } else if (canSeeStatus && p.status === 'rejected') {
+    statusBadge = '<span style="background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px">❌ 已驳回</span>';
+  }
+  var catName = p.category_name || blogCategoryName(p.category_id);
+  var catBadge = catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px">🏷 ' + esc(catName) + '</span>' : '';
+  return '<div class="card blog-list-card" style="margin-bottom:12px;cursor:pointer;padding:16px" onclick="blogShowPost(blogState.container,' + p.id + ')">' +
+    (p.cover_image ? '<div style="margin-bottom:12px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
+      '<span style="font-size:13px;font-weight:600;color:var(--text-secondary)">' + esc(p.author_name) + '</span>' +
+      '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
+      statusBadge +
+    '</div>' +
+    '<h4 style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--text-primary)">' + esc(p.title) + '</h4>' +
+    (p.summary ? '<p style="font-size:13px;color:var(--text-faint);line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + esc(p.summary) + '</p>' : '') +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-faint)">' +
+      catBadge +
+      (tags.length > 0 ? '<span>' + tags.map(function(t) { return '<span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px">' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
+      '<span>👁 ' + (p.views || 0) + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+// --- 加载博客列表（支持分页加载更多）---
+async function blogLoadList(loadMore) {
   var searchInput = document.getElementById('blogSearchInput');
   var search = searchInput ? searchInput.value.trim() : '';
   var area = document.getElementById('blogListArea');
   if (!area) return;
-  area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
   var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+  // 加载更多时防止重复请求
+  if (loadMore && (blogState.listLoading || !blogState.listHasMore)) return;
+  var page = loadMore ? blogState.listPage + 1 : 1;
+  var moreEl = document.getElementById('blogListLoadMore');
+  if (loadMore) {
+    blogState.listLoading = true;
+    if (moreEl) moreEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-faint);font-size:13px">加载中...</div>';
+  } else {
+    area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
+  }
   try {
-    var url = '/api/blog?page=1&page_size=20';
+    var url = '/api/blog?page=' + page + '&page_size=20';
     if (blogState.currentCategory) url += '&category_id=' + encodeURIComponent(blogState.currentCategory);
     if (search) url += '&search=' + encodeURIComponent(search);
     var res = await api(url);
     var posts = (res.success && res.data) ? res.data : [];
+    var pagination = res.pagination || null;
 
-    // 开发者额外合并待审核文章，便于在列表中一并查看
-    if (isDev) {
+    // 开发者额外合并待审核文章（仅第一页，避免分页时重复）
+    if (isDev && page === 1) {
       try {
         var pUrl = '/api/blog?page=1&page_size=20&status=pending';
         if (blogState.currentCategory) pUrl += '&category_id=' + encodeURIComponent(blogState.currentCategory);
@@ -3010,49 +3088,57 @@ async function blogLoadList() {
       } catch(e2) {}
     }
 
-    if (posts.length === 0) {
-      area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">' + (search ? '没有找到相关文章' : '还没有文章，快来写第一篇吧！') + '</div>';
-      return;
+    if (page === 1) {
+      if (posts.length === 0) {
+        area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">' + (search ? '没有找到相关文章' : '还没有文章，快来写第一篇吧！') + '</div>';
+        blogState.listPage = 1;
+        blogState.listHasMore = false;
+        return;
+      }
+      // 按创建时间倒序（合并待审核后顺序可能被打乱）
+      posts.sort(function(a, b) {
+        var ta = new Date((a.created_at || '').replace(' ', 'T')).getTime() || 0;
+        var tb = new Date((b.created_at || '').replace(' ', 'T')).getTime() || 0;
+        return tb - ta;
+      });
+      area.innerHTML = posts.map(function(p) { return blogRenderCard(p, isDev); }).join('');
+    } else {
+      // 追加渲染：插入到加载更多区域之前
+      var cardsHtml = posts.map(function(p) { return blogRenderCard(p, isDev); }).join('');
+      if (moreEl) moreEl.insertAdjacentHTML('beforebegin', cardsHtml);
+      else area.insertAdjacentHTML('beforeend', cardsHtml);
     }
 
-    // 按创建时间倒序
-    posts.sort(function(a, b) {
-      var ta = new Date((a.created_at || '').replace(' ', 'T')).getTime() || 0;
-      var tb = new Date((b.created_at || '').replace(' ', 'T')).getTime() || 0;
-      return tb - ta;
-    });
+    blogState.listPage = page;
+    // hasMore：以服务端分页信息为准，缺失时按返回条数兜底判断
+    var hasMore = false;
+    if (pagination && pagination.total_pages) {
+      hasMore = pagination.total_pages > page;
+    } else {
+      hasMore = posts.length >= 20;
+    }
+    blogState.listHasMore = hasMore;
 
-    area.innerHTML = posts.map(function(p) {
-      var tags = blogParseTags(p.tags);
-      var isAuthor = currentUser && p.author_id == currentUser.id;
-      var canSeeStatus = isAuthor || isDev;
-      var statusBadge = '';
-      if (canSeeStatus && p.status === 'pending') {
-        statusBadge = '<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px">⏳ 待审核</span>';
-      } else if (canSeeStatus && p.status === 'rejected') {
-        statusBadge = '<span style="background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px">❌ 已驳回</span>';
-      }
-      var catName = p.category_name || blogCategoryName(p.category_id);
-      var catBadge = catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px">🏷 ' + esc(catName) + '</span>' : '';
-      return '<div class="card blog-list-card" style="margin-bottom:12px;cursor:pointer;padding:16px" onclick="blogShowPost(blogState.container,' + p.id + ')">' +
-        (p.cover_image ? '<div style="margin-bottom:12px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'"></div>' : '') +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-          '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
-          '<span style="font-size:13px;font-weight:600;color:var(--text-secondary)">' + esc(p.author_name) + '</span>' +
-          '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
-          statusBadge +
-        '</div>' +
-        '<h4 style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--text-primary)">' + esc(p.title) + '</h4>' +
-        (p.summary ? '<p style="font-size:13px;color:var(--text-faint);line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + esc(p.summary) + '</p>' : '') +
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-faint)">' +
-          catBadge +
-          (tags.length > 0 ? '<span>' + tags.map(function(t) { return '<span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px">' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
-          '<span>👁 ' + (p.views || 0) + '</span>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+    var moreHtml = hasMore
+      ? '<button class="btn btn-gray" style="padding:8px 24px;font-size:13px" onclick="blogLoadList(true)">加载更多</button>'
+      : '<div style="color:var(--text-faint);font-size:12px">—— 已加载全部 ——</div>';
+    if (moreEl) {
+      moreEl.innerHTML = moreHtml;
+    } else {
+      var div = document.createElement('div');
+      div.id = 'blogListLoadMore';
+      div.style.cssText = 'text-align:center;padding:16px';
+      div.innerHTML = moreHtml;
+      area.appendChild(div);
+    }
   } catch(e) {
-    area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger)">加载失败: ' + esc(e.message) + '</div>';
+    if (page === 1) {
+      area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger)">加载失败: ' + esc(e.message) + '</div>';
+    } else if (moreEl) {
+      moreEl.innerHTML = '<span style="color:var(--danger);font-size:13px">加载失败，<a href="javascript:void(0)" onclick="blogLoadList(true)" style="color:var(--accent)">点击重试</a></span>';
+    }
+  } finally {
+    blogState.listLoading = false;
   }
 }
 
@@ -3147,7 +3233,7 @@ function blogRenderSidebarNotifications() {
     var latest = g.items[0]; // items 已按时间倒序，第一条最新
     var timeStr = blogFormatDate(g.latestTs);
     var avatarHtml = latest.sender_avatar
-      ? '<img src="' + esc(latest.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover">'
+      ? '<img src="' + esc(latest.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
       : '<span style="font-size:10px">👤</span>';
     var unreadStyle = g.unreadCount > 0 ? 'font-weight:600;' : '';
     var unreadDot = g.unreadCount > 0 ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>' : '';
@@ -3310,10 +3396,10 @@ async function blogShowPost(container, postId) {
         '</div>' : '<div></div>') +
       '</div>' +
       statusBanner +
-      (p.cover_image ? '<div style="margin-bottom:16px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px" onerror="this.style.display=\'none\'"></div>' : '') +
+      (p.cover_image ? '<div style="margin-bottom:16px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
       '<h1 style="font-size:26px;font-weight:700;margin-bottom:16px;color:var(--text-primary);line-height:1.3">' + esc(p.title) + '</h1>' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">' +
-        '<div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
         '<div>' +
           '<div style="font-size:14px;font-weight:600">' + esc(p.author_name) + '</div>' +
           '<div style="font-size:12px;color:var(--text-faint)">' + blogFormatDate(p.created_at) + ' · 👁 ' + (p.views || 0) + ' 次阅读</div>' +
@@ -3352,6 +3438,10 @@ function blogShowEditor(container, postId) {
   container.innerHTML =
     '<div style="max-width:100%;margin:0 auto">' +
       '<h3 style="font-size:18px;font-weight:700;margin-bottom:20px">' + (isEdit ? '编辑文章' : '写文章') + '</h3>' +
+      '<div id="blogDraftBar" style="display:none;margin-bottom:16px;padding:10px 14px;background:#FEF3C7;color:#92400E;border-radius:8px;font-size:13px">' +
+        '💾 已恢复本地草稿（保存于 <span class="blog-draft-time"></span>）' +
+        '<span style="float:right;cursor:pointer;color:var(--danger);font-size:12px;margin-left:12px" onclick="blogDiscardDraft()">清除草稿</span>' +
+      '</div>' +
       '<div style="margin-bottom:16px">' +
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">标题</label>' +
         '<input id="blogTitleInput" type="text" placeholder="给文章起个标题..." style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:15px">' +
@@ -3385,7 +3475,7 @@ function blogShowEditor(container, postId) {
       '<div style="display:flex;gap:12px">' +
         '<button class="btn btn-orange" style="flex:1;padding:12px;font-size:14px" onclick="blogSavePost()">' + (isEdit ? '更新文章' : '发布文章') + '</button>' +
         '<button class="btn btn-gray" style="padding:12px 20px;font-size:14px" onclick="blogShowLatexPreview()">👁 预览</button>' +
-        '<button class="btn btn-gray" style="padding:12px 20px;font-size:14px" onclick="blogShowList(blogState.container)">取消</button>' +
+        '<button class="btn btn-gray" style="padding:12px 20px;font-size:14px" onclick="blogSaveDraftNow();blogShowList(blogState.container)">取消</button>' +
       '</div>' +
     '</div>';
 
@@ -3432,6 +3522,7 @@ function blogShowEditor(container, postId) {
       imageResizing: true,
       imageHeightLimit: 500,
       imageWidthLimit: 800,
+      onChange: function() { blogScheduleDraftSave(); },
       onImageUpload: function(files, info, core) {
         // 阻止本地文件上传，提示用户使用图床
         toast('请勿直接上传图片。请先上传到图床（如 Nickyam、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
@@ -3458,6 +3549,7 @@ function blogShowEditor(container, postId) {
     textarea.style.resize = 'vertical';
     textarea.style.fontFamily = 'inherit';
     textarea.placeholder = '编辑器加载中...如果长时间无响应请刷新页面';
+    textarea.addEventListener('input', blogScheduleDraftSave);
     // 降级模式下 getContents/setContents 使用 textarea.value
     window.__blogSunEditor = {
       getContents: function() { return textarea.value; },
@@ -3467,8 +3559,140 @@ function blogShowEditor(container, postId) {
     };
   }
 
+  // 表单字段变化时自动保存草稿（防抖 2s）
+  ['blogTitleInput', 'blogCoverInput', 'blogSummaryInput', 'blogTagsInput'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', blogScheduleDraftSave);
+  });
+  var catSel = document.getElementById('blogCategorySelect');
+  if (catSel) catSel.addEventListener('change', blogScheduleDraftSave);
+  // 页面关闭/刷新前立即保存草稿（仅注册一次）
+  if (!window.__blogDraftBeforeUnloadBound) {
+    window.__blogDraftBeforeUnloadBound = true;
+    window.addEventListener('beforeunload', blogSaveDraftNow);
+  }
+
   blogLoadCategoriesForEditor();
-  if (isEdit) blogLoadPostForEdit(postId);
+  // 优先恢复本地草稿；无匹配草稿且为编辑模式时才加载原文章
+  var draft = blogGetUsableDraft(postId);
+  if (draft) {
+    blogLoadCategoriesForEditor().then(function() { blogApplyDraftToForm(draft); });
+  } else if (isEdit) {
+    blogLoadPostForEdit(postId);
+  }
+}
+
+// --- 编辑器草稿暂存（localStorage）---
+var BLOG_DRAFT_KEY = 'blog_editor_draft';
+var blogDraftTimer = null;
+
+// 读取本地草稿（不校验用户/文章匹配）
+function blogGetDraft() {
+  try {
+    var raw = localStorage.getItem(BLOG_DRAFT_KEY);
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    if (!d || typeof d !== 'object' || !d.savedAt) return null;
+    return d;
+  } catch(e) { return null; }
+}
+
+// 获取当前用户、当前文章可用的草稿
+function blogGetUsableDraft(postId) {
+  var d = blogGetDraft();
+  if (!d) return null;
+  if (!currentUser || d.userId != currentUser.id) return null;
+  var targetId = postId || null;
+  if ((d.postId || null) !== targetId) return null;
+  return d;
+}
+
+// 收集编辑器当前所有字段
+function blogCollectDraftData() {
+  var titleEl = document.getElementById('blogTitleInput');
+  if (!titleEl) return null;
+  var coverEl = document.getElementById('blogCoverInput');
+  var summaryEl = document.getElementById('blogSummaryInput');
+  var tagsEl = document.getElementById('blogTagsInput');
+  var catSel = document.getElementById('blogCategorySelect');
+  var content = (window.__blogSunEditor && typeof window.__blogSunEditor.getContents === 'function')
+    ? window.__blogSunEditor.getContents()
+    : (((document.getElementById('blogContentTextarea') || {}).value) || '');
+  return {
+    userId: currentUser ? currentUser.id : null,
+    postId: blogState.currentPostId || null,
+    title: titleEl.value,
+    cover: coverEl ? coverEl.value : '',
+    summary: summaryEl ? summaryEl.value : '',
+    tags: tagsEl ? tagsEl.value : '',
+    categoryId: catSel ? (catSel.value || '') : '',
+    content: content,
+    savedAt: new Date().toISOString()
+  };
+}
+
+// 立即保存草稿
+function blogSaveDraftNow() {
+  var d = blogCollectDraftData();
+  if (!d) return;
+  // 全部为空且尚未有草稿时不写入，避免残留空草稿
+  var isEmpty = !d.title.trim() && !d.content.trim() && !d.cover.trim() && !d.summary.trim() && !d.tags.trim();
+  if (isEmpty && !blogGetDraft()) return;
+  try {
+    localStorage.setItem(BLOG_DRAFT_KEY, JSON.stringify(d));
+  } catch(e) {}
+}
+
+// 防抖保存草稿
+function blogScheduleDraftSave() {
+  if (blogDraftTimer) clearTimeout(blogDraftTimer);
+  blogDraftTimer = setTimeout(blogSaveDraftNow, 2000);
+}
+
+// 清除本地草稿
+function blogClearDraft() {
+  try { localStorage.removeItem(BLOG_DRAFT_KEY); } catch(e) {}
+  var bar = document.getElementById('blogDraftBar');
+  if (bar) bar.style.display = 'none';
+}
+
+// 将草稿应用到编辑器表单
+function blogApplyDraftToForm(d) {
+  var setVal = function(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.value = val || '';
+  };
+  setVal('blogTitleInput', d.title);
+  setVal('blogCoverInput', d.cover);
+  setVal('blogSummaryInput', d.summary);
+  setVal('blogTagsInput', d.tags);
+  if (window.__blogSunEditor && typeof window.__blogSunEditor.setContents === 'function') {
+    window.__blogSunEditor.setContents(d.content || '');
+  } else {
+    setVal('blogContentTextarea', d.content);
+  }
+  if (d.categoryId) {
+    var catSel = document.getElementById('blogCategorySelect');
+    if (catSel) catSel.value = d.categoryId;
+  }
+  // 显示草稿提示条
+  var bar = document.getElementById('blogDraftBar');
+  if (bar) {
+    var timeStr = '';
+    try { timeStr = new Date(d.savedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch(e) {}
+    var timeSpan = bar.querySelector('.blog-draft-time');
+    if (timeSpan) timeSpan.textContent = timeStr;
+    bar.style.display = '';
+  }
+  toast('已恢复本地草稿');
+}
+
+// 用户主动清除草稿并重载编辑器
+function blogDiscardDraft() {
+  if (!confirm('清除本地草稿？此操作不可恢复。')) return;
+  blogClearDraft();
+  var pid = blogState.currentPostId;
+  blogShowEditor(blogState.container, pid);
 }
 
 // --- LaTeX 预览弹窗 ---
@@ -3534,6 +3758,9 @@ async function blogLoadCategoriesForEditor() {
       html += '<option value="' + c.id + '">' + esc(c.name) + '</option>';
     });
     sel.innerHTML = html;
+    // 若存在待恢复的草稿，将草稿分类应用到下拉框
+    var draft = blogGetUsableDraft(blogState.currentPostId);
+    if (draft && draft.categoryId && sel.value !== draft.categoryId) sel.value = draft.categoryId;
   } catch(e) {
     sel.innerHTML = '<option value="">无分类</option>';
   }
@@ -3593,6 +3820,7 @@ async function blogSavePost() {
       body: JSON.stringify(body)
     });
     if (res.success) {
+      blogClearDraft();
       var newId = (res.data && res.data.id) ? res.data.id : blogState.currentPostId;
       var status = res.data && res.data.status ? res.data.status : null;
       if (status === 'pending') {
@@ -3632,15 +3860,35 @@ async function blogLoadComments(postId) {
     // 构建嵌套评论树
     var topComments = comments.filter(function(c) { return !c.parent_id || c.parent_id === 0; });
     var replyMap = {};
+    var parentIds = {};
+    comments.forEach(function(c) { parentIds[c.id] = true; });
     comments.forEach(function(c) {
       if (c.parent_id && c.parent_id !== 0) {
         if (!replyMap[c.parent_id]) replyMap[c.parent_id] = [];
         replyMap[c.parent_id].push(c);
       }
     });
+    // 兜底：父评论已被删除的孤儿回复提升为顶层，避免计数显示却无法查看/删除
+    var orphanReplies = comments.filter(function(c) {
+      return c.parent_id && c.parent_id !== 0 && !parentIds[c.parent_id];
+    });
+    orphanReplies.forEach(function(c) {
+      topComments.push(c);
+      // 移除其在 replyMap 中的引用（不再作为任何已渲染评论的子级）
+      if (replyMap[c.parent_id]) delete replyMap[c.parent_id];
+      c._orphan = true;
+    });
+    // 孤儿回复按创建时间排序，追加到顶层列表末尾
+    if (orphanReplies.length > 0) {
+      topComments.sort(function(a, b) {
+        if (a._orphan && !b._orphan) return 1;
+        if (!a._orphan && b._orphan) return -1;
+        return 0;
+      });
+    }
 
     var userAvatar = (currentUser && currentUser.avatar)
-      ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">'
+      ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
       : '<span style="font-size:16px">👤</span>';
 
     var html = '<div style="margin-top:36px;padding-top:28px;border-top:2px solid var(--border)">' +
@@ -3714,14 +3962,14 @@ function blogRenderComment(c, isDev, depth, replyMap) {
 
   var html = '<div style="' + indentStyle + '">' +
     '<div style="display:flex;gap:10px;align-items:flex-start" id="blogComment_' + c.id + '">' +
-      '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:' + (isReply ? 12 : 14) + 'px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+      '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:' + (isReply ? 12 : 14) + 'px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="' + (isReply ? 'background:var(--bg-hover);' : 'background:var(--bg-card);border:1px solid var(--border);') + 'border-radius:12px;padding:10px 14px;transition:background 0.15s">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
             '<span style="font-size:' + (isReply ? 12 : 13) + 'px;font-weight:600;color:var(--text-primary)">' + esc(c.user_name) + '</span>' +
             (isReply ? '<span style="font-size:11px;color:var(--text-faint);padding:1px 6px;background:var(--bg-tertiary);border-radius:4px">回复</span>' : '') +
             '<span style="font-size:11px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
-            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 8px;border-radius:4px;opacity:0;transition:opacity 0.2s" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=0">删除</button>' : '') +
+            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 8px;border-radius:4px;opacity:0.55;transition:opacity 0.2s" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=0.55">删除</button>' : '') +
           '</div>' +
           '<div class="dp-rich-content" style="font-size:' + (isReply ? 12 : 13) + 'px;color:var(--text-secondary);word-break:break-word;line-height:1.6">' + renderRichContent(c.content) + '</div>' +
         '</div>' +
@@ -3731,7 +3979,7 @@ function blogRenderComment(c, isDev, depth, replyMap) {
         '</div>' +
         '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:8px">' +
           '<div style="display:flex;gap:8px;align-items:flex-start">' +
-            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
             '<div style="flex:1;min-width:0">' +
               '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:42px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:all 0.2s;outline:none" onfocus="this.style.borderColor=\'var(--accent)\';this.style.boxShadow=\'0 0 0 2px var(--accent-bg)\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'"></textarea>' +
               '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">' +
