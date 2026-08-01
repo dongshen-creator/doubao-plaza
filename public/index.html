@@ -96,6 +96,10 @@
             var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
             if (payload.exp) {
               window.__sbTokenExp = payload.exp * 1000; // 转为毫秒
+              if (window.__sbTokenExp <= Date.now()) {
+                console.warn('[SB] 拒绝设置已过期 JWT');
+                return;
+              }
             }
           }
           await window.__SB.auth.setSession({
@@ -115,24 +119,30 @@
         // 防止并发刷新
         if (window.__sbRefreshPromise) return window.__sbRefreshPromise;
         window.__sbRefreshPromise = (async function() {
+          var controller = new AbortController();
+          var timer = setTimeout(function() { controller.abort(); }, 8000);
           try {
             var res = await fetch('/api/refresh-supabase-token', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + sessionToken
-              }
+              },
+              signal: controller.signal
             });
-            if (res.ok) {
-              var data = await res.json();
-              if (data.success && data.supabase_token) {
-                await window.__setSupabaseSession(data.supabase_token);
-                console.log('[SB] JWT 已自动刷新');
-              }
+            var data = res.ok ? await res.json() : null;
+            if (data && data.success && data.supabase_token) {
+              await window.__setSupabaseSession(data.supabase_token);
+              console.log('[SB] JWT 已自动刷新');
+            } else {
+              await window.__clearSupabaseSession();
+              console.warn('[SB] JWT 刷新失败(' + res.status + ')，已清除 Supabase 会话');
             }
           } catch(e) {
+            await window.__clearSupabaseSession();
             console.warn('[SB] JWT 刷新失败:', e);
           } finally {
+            clearTimeout(timer);
             window.__sbRefreshPromise = null;
           }
         })();
@@ -512,7 +522,7 @@ function closeModal(name) {
 function avatarHTML(user, small = false, clickable = false) {
   const cls = small ? 'avatar avatar-sm' : 'avatar';
   const style = clickable ? 'cursor:pointer' : '';
-  const onclick = clickable && user ? ' onclick="event.stopPropagation();showUserPopup(\'' + esc(user.id || '') + '\',\'' + esc(user.name || '') + '\',\'' + esc(user.avatar || '') + '\',\'' + esc(user.doubao_id || '') + '\')"' : '';
+  const onclick = clickable && user ? ' onclick="event.stopPropagation();showUserPopup(\'' + escAttr(user.id || '') + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')"' : '';
   if (user?.avatar) return `<div class="${cls}" style="${style}"${onclick}><img src="${esc(user.avatar)}" alt="" onerror="this.style.display='none'"></div>`;
   return `<div class="${cls}" style="${style}"${onclick}>${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
 }
@@ -1654,7 +1664,7 @@ async function showOnlineUsers() {
         else if (diff < 300000) timeStr = Math.floor(diff / 60000) + '分钟前活跃';
         else timeStr = '5分钟内活跃';
       }
-      return '<div class="list-item" style="cursor:pointer;padding:8px 12px;border-radius:8px;margin-bottom:4px" onclick="showUserPopup(\'' + esc(u.id) + '\',\'' + escAttr(u.name || '') + '\',\'' + escAttr(u.avatar || '') + '\',\'' + escAttr(u.doubao_id || '') + '\');document.getElementById(\'onlineUsersModal\').remove()">'
+      return '<div class="list-item" style="cursor:pointer;padding:8px 12px;border-radius:8px;margin-bottom:4px" onclick="showUserPopup(\'' + escAttr(u.id) + '\',\'' + escAttr(u.name || '') + '\',\'' + escAttr(u.avatar || '') + '\',\'' + escAttr(u.doubao_id || '') + '\');document.getElementById(\'onlineUsersModal\').remove()">'
         + '<div style="display:flex;align-items:center;gap:10px">'
         + avatarHTML(u, true, true)
         + '<div style="flex:1;min-width:0">'
@@ -1892,7 +1902,7 @@ async function loadTempChats() {
     var name = r.other ? (r.other.name || '未知用户') : '未知用户';
     var avatar = r.other && r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
     var unreadBadge = r.unread > 0 ? '<span class="chat-room-unread">' + r.unread + '</span>' : '';
-    return '<div class="friend-item" style="position:relative" onclick="openChatWith(\'' + (r.other ? r.other.id : '') + '\',\'' + esc(name) + '\')">' +
+    return '<div class="friend-item" style="position:relative" onclick="openChatWith(\'' + escAttr(r.other ? r.other.id : '') + '\',\'' + escAttr(name) + '\')">' +
       '<div class="friend-item-avatar">' + avatar + '</div>' +
       '<div class="friend-item-info"><div class="friend-item-name">' + esc(name) + '</div></div>' +
       unreadBadge +
@@ -2206,8 +2216,8 @@ async function loadChannelJoinRequests() {
     var avatarHTML = user.avatar ? '<img src="' + esc(user.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'">' : esc(user.name ? user.name[0] : '?');
     var displayName = user.name || req.user_id.substring(0, 8);
     return '<div class="friend-request-item">' +
-      '<div class="avatar avatar-sm" style="cursor:pointer" onclick="showUserPopup(\'' + esc(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')">' + avatarHTML + '</div>' +
-      '<div class="friend-request-info" style="cursor:pointer" onclick="showUserPopup(\'' + esc(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')">' +
+      '<div class="avatar avatar-sm" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')">' + avatarHTML + '</div>' +
+      '<div class="friend-request-info" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')">' +
         '<div class="friend-request-name">' + esc(displayName) + '</div>' +
         '<div class="friend-request-id">→ ' + esc(roomName) + '</div>' +
       '</div>' +
@@ -2253,7 +2263,7 @@ async function renderChannelJoinBanner(roomId) {
   requests.forEach(function(req, i) {
     var user = users[i] || {};
     var name = user.name || req.user_id.substring(0, 8);
-    var _popupCall = 'showUserPopup(\'' + esc(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')';
+    var _popupCall = 'showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')';
     var avatar = user.avatar ? '<img src="' + esc(user.avatar) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="' + _popupCall + '">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer" onclick="' + _popupCall + '">' + esc(name.charAt(0) || '?') + '</div>';
     inner += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">' +
       avatar +
@@ -2306,7 +2316,7 @@ async function loadAnnouncementsSidebarList() {
     el.innerHTML = res.data.map(function(a) {
       var ts = getAnnouncementTimestamp(a);
       var isUnread = ts > lastRead;
-      return '<div class="sidebar-item" onclick="scrollToAnnouncement(\'' + (a.id || '') + '\')"><span class="sidebar-item-icon">' + (a.is_system ? '📌' : '📢') + '</span><span class="sidebar-item-text">' + esc(a.title || '未命名') + '</span>' + (isUnread ? '<span class="sidebar-item-dot"></span>' : '') + '</div>';
+      return '<div class="sidebar-item" onclick="scrollToAnnouncement(\'' + escAttr(a.id || '') + '\')"><span class="sidebar-item-icon">' + (a.is_system ? '📌' : '📢') + '</span><span class="sidebar-item-text">' + esc(a.title || '未命名') + '</span>' + (isUnread ? '<span class="sidebar-item-dot"></span>' : '') + '</div>';
     }).join('');
   } catch(e) {}
 }
@@ -2357,7 +2367,7 @@ async function loadFeaturesSidebarList() {
     }
     el.innerHTML = res.data.map(function(f) {
       if (f.tool_type) {
-        return '<div class="sidebar-item" style="cursor:pointer" onclick="openToolPanel(\'' + esc(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon">🛠️</span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
+        return '<div class="sidebar-item" style="cursor:pointer" onclick="openToolPanel(\'' + escAttr(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon">🛠️</span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
       }
       return '<a href="' + esc(f.link_url) + '" target="_blank" rel="noopener" class="sidebar-item" style="text-decoration:none"><span class="sidebar-item-icon">' + (f.icon_url ? '🖼️' : '🔗') + '</span><span class="sidebar-item-text">' + esc(f.title) + '</span></a>';
     }).join('');
@@ -2411,7 +2421,7 @@ async function loadFeatures() {
                   ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${isTool ? '🛠️' : '🔗'}'">`
                   : (isTool ? '🛠️' : '🔗');
                 if (isTool) {
-                  return `<div style="cursor:pointer" onclick="openToolPanel('${esc(f.tool_type)}','${escAttr(f.title)}')">
+                  return `<div style="cursor:pointer" onclick="openToolPanel('${escAttr(f.tool_type)}','${escAttr(f.title)}')">
                     <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
                     <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
                   </div>`;
@@ -4256,7 +4266,7 @@ function userCardHTML(user, index) {
       <div class="user-card-compact-actions">
         ${user.agent_url ? `<a href="${esc(user.agent_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-orange btn-sm" style="flex:1">🔗 主页</a>` : '<div style="flex:1"></div>'}
         ${!isSelf ? `<button class="btn btn-blue btn-sm" onclick="addFriend('${user.id}',this)">➕ 加好友</button>` : ''}
-        ${!isSelf ? `<button class="btn btn-green btn-sm" onclick="openChatWith('${user.id}','${esc(user.name)}')">💬</button>` : ''}
+        ${!isSelf ? `<button class="btn btn-green btn-sm" onclick="openChatWith('${escAttr(user.id)}','${escAttr(user.name)}')">💬</button>` : ''}
         ${!isSelf ? `<button class="btn btn-gray btn-sm" onclick="blockUser('${user.id}',this)" title="拉黑" aria-label="拉黑">🚫</button>` : ''}
         ${!isSelf ? `<button class="btn btn-red btn-sm" onclick="showReportModal('${user.id}')" title="举报" aria-label="举报">🚨</button>` : ''}
       </div>
@@ -4425,7 +4435,7 @@ async function loadMyFriends() {
       groupHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">' +
         '<button class="btn btn-sm ' + (!_filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="_filterGroup=\'\';loadMyFriends()">全部</button>' +
         groupNames.map(function(n) {
-          return '<button class="btn btn-sm ' + (_filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="_filterGroup=\'' + esc(n) + '\';loadMyFriends()">' + esc(n) + '</button>';
+          return '<button class="btn btn-sm ' + (_filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="_filterGroup=\'' + escAttr(n) + '\';loadMyFriends()">' + esc(n) + '</button>';
         }).join('') +
         '</div>';
     }
@@ -4445,7 +4455,7 @@ async function loadMyFriends() {
               var _pRoom = (chatState.rooms || []).find(function(r) { return r.type === 'private' && r.other && r.other.id === f.friend.id; });
               if (_pRoom && _pRoom.unread > 0) _unreadBadge = '<span class="chat-room-unread" style="position:absolute;right:36px;top:50%;transform:translateY(-50%)">' + (_pRoom.unread > 99 ? '99+' : _pRoom.unread) + '</span>';
               return `
-              <div class="friend-item" style="position:relative" onclick="openChatWith('${f.friend.id}','${esc(f.friend.name)}')">
+              <div class="friend-item" style="position:relative" onclick="openChatWith('${escAttr(f.friend.id)}','${escAttr(f.friend.name)}')">
                 <div class="friend-item-avatar">${avatarHTML(f.friend, true, true)}</div>
                 <div class="friend-item-info">
                   <div class="friend-item-name">${esc(f.friend?.name)}</div>
@@ -4454,7 +4464,7 @@ async function loadMyFriends() {
                 </div>
                 ${_unreadBadge}
                 <div class="friend-item-actions">
-                  <button class="friend-item-chat" onclick="event.stopPropagation();openChatWith('${f.friend.id}','${esc(f.friend.name)}')" title="聊天" aria-label="聊天">💬</button>
+                  <button class="friend-item-chat" onclick="event.stopPropagation();openChatWith('${escAttr(f.friend.id)}','${escAttr(f.friend.name)}')" title="聊天" aria-label="聊天">💬</button>
                   ${f.friend?.agent_url ? '<a href="' + esc(f.friend.agent_url) + '" target="_blank" class="friend-item-link" onclick="event.stopPropagation()" title="主页">🔗</a>' : ''}
                   <button class="friend-item-remove" onclick="event.stopPropagation();removeFriend('${f.id}')" title="移除" aria-label="移除好友">✕</button>
                 </div>
@@ -5087,6 +5097,7 @@ async function showModal(name) {
           sessionToken = auto.token || existingToken;
           localStorage.setItem('dp_token', sessionToken);
           saveDeviceLogin(currentUser);
+          if (auto.supabase_token) await window.__setSupabaseSession(auto.supabase_token);
           updateNavbar();
           renderContent();
           toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
@@ -6076,7 +6087,7 @@ async function devLoadFileList(pageId) {
         '<div class="dev-file-item-meta">' + size + (f.created_at ? ' · ' + new Date(f.created_at).toLocaleString('zh-CN') : '') + '</div>' +
         '</div>' +
         '<a href="' + url + '" target="_blank" class="btn btn-green btn-sm">查看</a>' +
-        '<button class="btn btn-red btn-sm" onclick="devDeleteFile(\'' + pageId + '\',\'' + esc(f.name) + '\')">删除</button>' +
+        '<button class="btn btn-red btn-sm" onclick="devDeleteFile(\'' + escAttr(pageId) + '\',\'' + escAttr(f.name) + '\')">删除</button>' +
         '</div>';
     }).join('');
   } catch (e) {
@@ -6723,7 +6734,7 @@ async function renderChatContextPanel(room) {
 
   // 加载频道设置数据
   var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
-  var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', room.id).maybeSingle();
+  var { data: sData } = await __SB.from('chat_channel_settings').select('topic, avatar_url, admission, admission_mode, guest_mode').eq('room_id', room.id).maybeSingle();
   if (sData) { currentTopic = sData.topic || ''; currentAdmission = getAdmissionMode(sData); currentAvatar = sData.avatar_url || ''; room.guest_mode = sData.guest_mode || false; }
 
   panel.innerHTML = `
@@ -7172,7 +7183,7 @@ function renderReplyBlock(eventId, roomId) {
   } else {
     preview = renderRichText(t.length > 80 ? t.slice(0,80) + '…' : t);
   }
-  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=&quot;\'' + esc(eventId) + '&quot;]\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
+  return '<div class="chat-msg-reply" onclick="document.querySelector(\'[data-eid=&quot;\'' + escAttr(eventId) + '&quot;]\')?.scrollIntoView({behavior:\'smooth\'})">' + esc(ref.sender) + ': ' + preview + '</div>';
 }
 
 function subscribeToRoom(roomId) {
@@ -7576,6 +7587,17 @@ async function sendChatMsg() {
     content, reply_to: replyToSave || null, ts: Date.now()
   });
   if (error) {
+    var authMsg = (error.message || '').toLowerCase();
+    var isAuthErr = error.code === 'PGRST301' || error.status === 401 || error.status === 403
+      || authMsg.indexOf('row-level security') >= 0 || authMsg.indexOf('jwt') >= 0 || authMsg.indexOf('permission') >= 0;
+    if (isAuthErr) {
+      await window.__clearSupabaseSession();
+      chatState.messages[chatState.currentRoomId] = prevMsgs;
+      renderMessages(chatState.currentRoomId);
+      toast('登录状态已失效，请重新登录后重试', 'error');
+      btn.disabled = false;
+      return;
+    }
     toast('发送失败: ' + error.message, 'error');
     chatState.messages[chatState.currentRoomId] = prevMsgs;
     renderMessages(chatState.currentRoomId);
@@ -8400,7 +8422,7 @@ async function showRoomSettings() {
   if (!room) return;
   const canManage = await checkChannelPermission(chatState.currentRoomId);
   var currentTopic = '', currentAdmission = 'open', currentAvatar = '';
-  var { data: sData } = await __SB.from('chat_channel_settings').select('*').eq('room_id', chatState.currentRoomId).maybeSingle();
+  var { data: sData } = await __SB.from('chat_channel_settings').select('topic, avatar_url, admission, admission_mode').eq('room_id', chatState.currentRoomId).maybeSingle();
   if (sData) { currentTopic = sData.topic || ''; currentAdmission = getAdmissionMode(sData); currentAvatar = sData.avatar_url || ''; }
   let html = '<div class="modal-overlay" id="roomSettingsModal" style="display:flex"><div class="modal modal-lg">';
   html += '<div class="modal-header"><div class="modal-title">频道设置</div><button class="modal-close" onclick="document.getElementById(\'roomSettingsModal\').remove()">✕</button></div>';
@@ -9340,7 +9362,7 @@ async function openToolPanel(toolId, roomId) {
   var overlay = document.createElement('div');
   overlay.id = 'toolPanelOverlay';
   overlay.className = 'tool-panel-overlay';
-  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span><button class="btn btn-sm btn-gray" style="font-size:11px;flex-shrink:0" onclick="shareToolToChannel(\'' + tool.id + '\',\'' + (tool.tool_type||'link') + '\',\'' + escAttr(tool.icon||meta.icon) + '\',\'' + escAttr(tool.title) + '\')">📤 分享到频道</button></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
+  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span><button class="btn btn-sm btn-gray" style="font-size:11px;flex-shrink:0" onclick="shareToolToChannel(\'' + escAttr(tool.id) + '\',\'' + escAttr(tool.tool_type||'link') + '\',\'' + escAttr(tool.icon||meta.icon) + '\',\'' + escAttr(tool.title) + '\')">📤 分享到频道</button></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
   center.appendChild(overlay);
   ['chatMsgs', 'chatViewInput', 'chatReplyBar', 'chatMutedBanner'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -9531,9 +9553,8 @@ async function toggleGuestMode(roomId) {
   if (room) room.guest_mode = newValue;
 }
 
-function showQuestionnaireModal(roomId, settings, context) {
-  var questions;
-  try { questions = typeof settings.admission_questionnaire === 'string' ? JSON.parse(settings.admission_questionnaire) : settings.admission_questionnaire; } catch(e) { questions = []; }
+function showQuestionnaireModal(roomId, questions, context) {
+  // questions 已由 get_admission_questions RPC 脱敏（不含 correct_answer），直接渲染
   if (!questions || !questions.length) { toast('问卷配置错误', 'error'); return; }
 
   var html = '<div class="modal-overlay" id="questionnaireModal" style="display:flex"><div class="modal modal-lg">';
@@ -9552,16 +9573,15 @@ function showQuestionnaireModal(roomId, settings, context) {
     html += '</div>';
   });
   html += '</div>';
-  html += '<button class="btn btn-orange btn-full" onclick="submitQuestionnaireV2(\'' + esc(roomId) + '\',' + JSON.stringify(questions).replace(/"/g, '&quot;') + ',\'' + (context||'join') + '\')">提交</button>';
+  html += '<button class="btn btn-orange btn-full" onclick="submitQuestionnaireV2(\'' + escAttr(roomId) + '\',' + JSON.stringify(questions).replace(/"/g, '&quot;').replace(/'/g, '&#39;') + ',\'' + escAttr(context||'join') + '\')">提交</button>';
   html += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
 async function submitQuestionnaireV2(roomId, questionsJson, context) {
   var questions = typeof questionsJson === 'string' ? JSON.parse(questionsJson.replace(/&quot;/g, '"')) : questionsJson;
-  var allCorrect = true;
-  var allFillStandardCorrect = true;
   var fillOpenAnswers = [];
+  var answers = []; // [{index, value}] 客观题答案，提交服务端校验
 
   for (var i = 0; i < questions.length; i++) {
     var q = questions[i];
@@ -9570,32 +9590,37 @@ async function submitQuestionnaireV2(roomId, questionsJson, context) {
       fillOpenAnswers.push({ question: q.question, answer: ta ? ta.value : '' });
       continue;
     }
+    var selected = document.querySelectorAll('[data-q="' + i + '"]:checked');
+    var vals = [];
+    selected.forEach(function(s) { vals.push(parseInt(s.value)); });
+    var value = '';
     if (q.type === 'fill_standard') {
       var ta2 = document.querySelector('textarea[data-q="' + i + '"]');
-      var userAnswer = (ta2 ? ta2.value : '').trim().toLowerCase();
-      var correctAnswer = (q.correct_answer || '').trim().toLowerCase();
-      if (userAnswer !== correctAnswer) { allFillStandardCorrect = false; }
-      continue;
+      value = ta2 ? ta2.value : '';
+    } else if (vals.length > 1) {
+      value = JSON.stringify(vals);
+    } else if (vals.length === 1) {
+      value = String(vals[0]);
     }
-    var correctSet = new Set(q.correct_answer || []);
-    var userAnswers = [];
-    var selected = document.querySelectorAll('[data-q="' + i + '"]:checked');
-    selected.forEach(function(s) { userAnswers.push(parseInt(s.value)); });
-    var userSet = new Set(userAnswers);
-    if (correctSet.size !== userSet.size) { allCorrect = false; break; }
-    for (var val of correctSet) { if (!userSet.has(val)) { allCorrect = false; break; } }
-    if (!allCorrect) break;
+    answers.push({ index: i, value: value });
   }
-
-  if (allCorrect && !allFillStandardCorrect) allCorrect = false;
 
   document.getElementById('questionnaireModal')?.remove();
 
+  // 服务端校验（正确答案与标准答案全部在 RPC 内完成，前端不可见）
+  var { data: vRes, error: vErr } = await __SB.rpc('verify_admission', { p_room_id: roomId, p_answers: answers });
+  if (vErr) { toast('校验失败: ' + vErr.message, 'error'); return; }
+  if (vRes && vRes.need_password) {
+    var pwd = prompt('请输入入群密码:');
+    if (!pwd) return;
+    var { data: vRes2, error: vErr2 } = await __SB.rpc('verify_admission', { p_room_id: roomId, p_password: pwd, p_answers: answers });
+    if (vErr2 || !vRes2 || !vRes2.ok) { toast((vRes2 && vRes2.error) || '密码错误', 'error'); return; }
+  } else if (!vRes || !vRes.ok) {
+    toast((vRes && vRes.error) || '未通过测试，请重新尝试', 'error');
+    return;
+  }
+
   if (fillOpenAnswers.length > 0) {
-    if (context === 'composite' && !allCorrect) {
-      toast('选择题或标准填空题未通过，无法提交开放填空审核', 'error');
-      return;
-    }
     var reqId = 'req_' + Date.now().toString(36);
     var { error: reqErr } = await __SB.from('channel_join_requests').insert({
       id: reqId, room_id: roomId, user_id: currentUser.id, status: 'pending',
@@ -9606,22 +9631,8 @@ async function submitQuestionnaireV2(roomId, questionsJson, context) {
     return;
   }
 
-  if (allCorrect) {
-    if (context === 'composite') {
-      toast('测试通过！继续验证...', 'success');
-      var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
-      if (settings && settings.admission_password) {
-        var pwd = prompt('请输入入群密码:');
-        if (!pwd || pwd !== settings.admission_password) { toast('密码错误', 'error'); return; }
-      }
-      await doJoinChannel(roomId);
-    } else {
-      await doJoinChannel(roomId);
-      toast('测试通过，已加入频道', 'success');
-    }
-  } else {
-    toast('未通过测试，请重新尝试', 'error');
-  }
+  await doJoinChannel(roomId);
+  toast('测试通过，已加入频道', 'success');
 }
 
 async function submitQuestionnaire(roomId, totalQuestions) {
@@ -9639,8 +9650,10 @@ async function showAdmissionManagement() {
 
 async function loadAndShowAdmissionPanel(myLevel) {
   var roomId = chatState.currentRoomId;
-  var { data: settings } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
-  if (!settings) settings = {};
+  // 完整设置（含密码/问卷）通过 RPC 读取——列级权限已撤销，前端不可直接 SELECT
+  var { data: admData, error: admErr } = await __SB.rpc('get_admission_settings', { p_room_id: roomId });
+  if (admErr || !admData || !admData.ok) { toast((admData && admData.error) || '读取准入设置失败', 'error'); return; }
+  var settings = admData.settings || {};
   var currentMode = getAdmissionMode(settings);
   var currentPassword = settings.admission_password || '';
   var currentCustomPageId = settings.admission_custom_page_id || '';
@@ -10065,7 +10078,7 @@ async function joinChannel(roomId) {
   if (!currentUser) { toast('请先登录', 'warning'); return; }
   toast('正在处理...', 'info');
   try {
-    var { data: settings, error: setErr } = await __SB.from('chat_channel_settings').select('*').eq('room_id', roomId).maybeSingle();
+    var { data: settings, error: setErr } = await __SB.from('chat_channel_settings').select('room_id, admission, admission_mode, admission_custom_page_id').eq('room_id', roomId).maybeSingle();
     if (setErr) { console.warn('load settings:', setErr); }
     if (!settings) { settings = {}; }
     // 优先使用 admission 字段，防止 admission_mode DEFAULT 'open' 覆盖
@@ -10102,10 +10115,8 @@ async function joinChannel(roomId) {
     if (mode === 'invite') {
       var code = prompt('请输入邀请码:');
       if (!code) return;
-      var { data: invite } = await __SB.from('channel_invites').select('*').eq('invite_code', code).eq('room_id', roomId).maybeSingle();
-      if (!invite) { toast('邀请码无效', 'error'); return; }
-      if (invite.max_uses > 0 && invite.used_count >= invite.max_uses) { toast('邀请码已达使用上限', 'error'); return; }
-      await __SB.from('channel_invites').update({ used_count: (invite.used_count || 0) + 1 }).eq('id', invite.id);
+      var { data: redeemRes, error: redeemErr } = await __SB.rpc('redeem_invite', { p_invite_code: code, p_room_id: roomId });
+      if (redeemErr || !redeemRes || !redeemRes.ok) { toast((redeemRes && redeemRes.error) || '邀请码无效', 'error'); return; }
       await doJoinChannel(roomId);
       return;
     }
@@ -10146,12 +10157,16 @@ async function joinChannel(roomId) {
     }
     if (mode === 'password') {
       var pwd = prompt('请输入入群密码:');
-      if (!pwd || pwd !== settings.admission_password) { toast('密码错误', 'error'); return; }
+      if (!pwd) return;
+      var { data: vRes, error: vErr } = await __SB.rpc('verify_admission', { p_room_id: roomId, p_password: pwd });
+      if (vErr || !vRes || !vRes.ok) { toast((vRes && vRes.error) || '密码错误', 'error'); return; }
       await doJoinChannel(roomId);
       return;
     }
     if (mode === 'questionnaire') {
-      showQuestionnaireModal(roomId, settings);
+      var { data: qList } = await __SB.rpc('get_admission_questions', { p_room_id: roomId });
+      if (!qList || !qList.length) { toast('问卷配置错误', 'error'); return; }
+      showQuestionnaireModal(roomId, qList, 'join');
       return;
     }
     if (mode === 'custom_page') {
@@ -10164,13 +10179,20 @@ async function joinChannel(roomId) {
       return;
     }
     if (mode === 'composite') {
-      if (settings.admission_questionnaire && settings.admission_questionnaire.length > 0) {
-        showQuestionnaireModal(roomId, settings, 'composite');
+      var { data: qList2 } = await __SB.rpc('get_admission_questions', { p_room_id: roomId });
+      if (qList2 && qList2.length > 0) {
+        showQuestionnaireModal(roomId, qList2, 'composite');
         return;
       }
-      if (settings.admission_password) {
+      // 无问卷：密码 + 自定义页
+      var { data: vC1 } = await __SB.rpc('verify_admission', { p_room_id: roomId, p_password: null });
+      if (vC1 && vC1.need_password) {
         var pwd2 = prompt('请输入入群密码:');
-        if (!pwd2 || pwd2 !== settings.admission_password) { toast('密码错误', 'error'); return; }
+        if (!pwd2) return;
+        var { data: vC2 } = await __SB.rpc('verify_admission', { p_room_id: roomId, p_password: pwd2 });
+        if (!vC2 || !vC2.ok) { toast((vC2 && vC2.error) || '密码错误', 'error'); return; }
+      } else if (!vC1 || !vC1.ok) {
+        toast((vC1 && vC1.error) || '校验失败', 'error'); return;
       }
       if (settings.admission_custom_page_id) {
         window.open('/pages/' + settings.admission_custom_page_id, '_blank');
@@ -10381,7 +10403,7 @@ renderRoomList = function() {
         channelHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
           '<button class="btn btn-sm ' + (!channelFilterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
           channelGroupNames.map(function(n) {
-            return '<button class="btn btn-sm ' + (channelFilterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+            return '<button class="btn btn-sm ' + (channelFilterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
           }).join('') +
           '</div>';
       }
@@ -10436,7 +10458,7 @@ renderRoomList = function() {
         privateHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
           '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
           friendGroupNames.map(function(n) {
-            return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + esc(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+            return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
           }).join('') +
           '</div>';
       }
@@ -10499,7 +10521,7 @@ function roomItemHTML(r) {
     '<div class="chat-room-actions">' +
     '<button class="chat-room-act" onclick="event.stopPropagation();togglePinChannel(\'' + r.id + '\');loadRoomList()" title="置顶" aria-label="置顶">📌</button>' +
     (canDelete ? '<button class="chat-room-act danger" onclick="event.stopPropagation();deleteConversation(\'' + r.id + '\')" title="删除对话" aria-label="删除对话">🗑</button>' : '') +
-    '<button class="chat-room-act" onclick="event.stopPropagation();promptChannelGroup(\'' + r.id + '\',\'' + esc(name) + '\')" title="分组" aria-label="分组">📁</button>' +
+    '<button class="chat-room-act" onclick="event.stopPropagation();promptChannelGroup(\'' + escAttr(r.id) + '\',\'' + escAttr(name) + '\')" title="分组" aria-label="分组">📁</button>' +
     '<button class="chat-room-act" onclick="event.stopPropagation();hideChannel(\'' + r.id + '\')" title="隐藏会话" aria-label="隐藏会话">🙈</button>' +
     '</div>' +
     '</div>';
@@ -10550,7 +10572,7 @@ function showChannelGroupManager() {
     html += names.map(function(n) {
       var count = (groups[n] || []).length;
       return '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(n) + '</div><div class="list-item-email">' + count + ' 个频道</div></div>' +
-        '<button class="btn btn-red btn-sm" onclick="deleteChannelGroup(\'' + esc(n) + '\')">删除</button></div>';
+        '<button class="btn btn-red btn-sm" onclick="deleteChannelGroup(\'' + escAttr(n) + '\')">删除</button></div>';
     }).join('');
   }
   html += '</div></div>';
@@ -10611,7 +10633,7 @@ function addFriendGroupsUI(friends) {
     html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
       groupNames.map(function(n) {
         return '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-hover);border-radius:8px;font-size:12px">' + esc(n) +
-          '<button onclick="deleteFriendGroup(\'' + esc(n) + '\')" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px">✕</button></span>';
+          '<button onclick="deleteFriendGroup(\'' + escAttr(n) + '\')" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px">✕</button></span>';
       }).join('') + '</div>';
   }
   html += '</div><div class="section-label">👥 好友列表</div>';
@@ -10773,7 +10795,7 @@ async function loadFriendsWithGroups(el) {
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
         '<span class="tag ' + (_filterGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
         groupNames.map(function(n) {
-          return '<span class="tag ' + (_filterGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'' + esc(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+          return '<span class="tag ' + (_filterGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
         }).join('') + '</div>';
     }
     var filteredFriends = _filterGroup ? friends.filter(function(f) {
@@ -10815,7 +10837,7 @@ function showFriendGroupManager() {
   } else {
     html += names.map(function(n) {
       return '<div class="list-item"><div class="list-item-info"><div class="list-item-name">' + esc(n) + '</div></div>' +
-        '<button class="btn btn-red btn-sm" onclick="if(confirm(\'删除分组？\')){deleteFriendGroup(\'' + esc(n) + '\')}">删除</button></div>';
+        '<button class="btn btn-red btn-sm" onclick="if(confirm(\'删除分组？\')){deleteFriendGroup(\'' + escAttr(n) + '\')}">删除</button></div>';
     }).join('');
   }
   html += '</div></div>';
@@ -10868,7 +10890,7 @@ async function loadChannelsWithGroups(el) {
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
         '<span class="tag ' + (_filterChannelGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
         groupNames.map(function(n) {
-          return '<span class="tag ' + (_filterChannelGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'' + esc(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+          return '<span class="tag ' + (_filterChannelGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
         }).join('') + '</div>';
     }
     var filteredChannels = _filterChannelGroup ? channels.filter(function(c) {
