@@ -192,8 +192,8 @@
     })();
   </script>
   <link rel="stylesheet" href="style.css?v=47">
-  <!-- V11 修复：Cloudflare Turnstile 人机验证脚本 -->
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <!-- V11 修复：Cloudflare Turnstile 人机验证脚本（站点密钥为空时无需加载，避免脚本被外网环境拦截产生报错；启用时取消注释并填入 TURNSTILE_SITE_KEY） -->
+  <!-- <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> -->
   <script>
     // V11 修复：Turnstile 站点密钥（从 Cloudflare Dashboard 获取，公开密钥安全嵌入前端）
     // 配置步骤：Cloudflare Dashboard → Turnstile → 创建站点 → 复制 Site Key 填入下方
@@ -900,6 +900,10 @@ function sanitizeHtml(html) {
         child.setAttribute('target', '_blank');
         child.setAttribute('rel', 'noopener noreferrer');
       }
+      // img 加载失败（外链图床被拦截/失效）时隐藏自身，避免显示破图图标
+      if (tag === 'img') {
+        child.setAttribute('onerror', "this.style.display='none'");
+      }
       // 递归清理子节点
       cleanNode(child);
     }
@@ -1562,7 +1566,8 @@ async function sendPresenceHeartbeat() {
       if (error.code === 'PGRST205') {
         console.warn('user_presence 表不存在，请在 Supabase SQL Editor 中执行 supabase-migration.sql 创建该表');
         __presenceTableMissing = true;
-      } else {
+      } else if (error.code !== 401) {
+        // 401（会话未认证/已失效）为预期噪音，静默处理
         console.warn('presence heartbeat error:', error);
       }
     }
@@ -1595,6 +1600,7 @@ async function getOnlineUserCount() {
       .gte('last_seen', fiveMinAgo);
     if (error) {
       if (error.code === 'PGRST205') { __presenceTableMissing = true; return 0; }
+      if (error.code === 401) return 0; // 会话未认证/失效，静默
       console.warn('getOnlineCount error:', error); return 0;
     }
     return count || 0;
@@ -1666,6 +1672,11 @@ async function showOnlineUsers() {
       if (presenceErr.code === 'PGRST205') {
         __presenceTableMissing = true;
         document.getElementById('onlineUsersList').innerHTML = '<div style="color:var(--text-faint)">在线状态功能未启用</div>';
+        return;
+      }
+      if (presenceErr.code === 401) {
+        // 会话未认证/失效，静默显示空列表
+        document.getElementById('onlineUsersList').innerHTML = '<div style="color:var(--text-faint)">当前没有在线用户</div>';
         return;
       }
       throw presenceErr;
