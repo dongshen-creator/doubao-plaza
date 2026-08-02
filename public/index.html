@@ -1560,6 +1560,8 @@ async function sendPresenceHeartbeat() {
   if (!currentUser || !window.__SB || __presenceTableMissing) return;
   try {
     await window.__ensureSupabaseSession();
+    var { data: { session } } = await __SB.auth.getSession();
+    if (!session) return; // 无 Supabase 会话（未登录），不发心跳避免 401
     var { error } = await __SB.from('user_presence')
       .upsert({ user_id: currentUser.id, last_seen: new Date().toISOString(), status: 'online' });
     if (error) {
@@ -1594,6 +1596,8 @@ function sendBeaconPresence(status) {
 async function getOnlineUserCount() {
   if (!window.__SB || __presenceTableMissing) return 0;
   try {
+    var { data: { session } } = await __SB.auth.getSession();
+    if (!session) return 0; // 未登录，静默
     var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     var { count, error } = await __SB.from('user_presence')
       .select('*', { count: 'exact', head: true })
@@ -1660,6 +1664,12 @@ async function showOnlineUsers() {
   document.body.appendChild(modal);
 
   try {
+    // 0. 无 Supabase 会话（未登录）时直接显示空列表，避免 401
+    var { data: { session } } = await __SB.auth.getSession();
+    if (!session) {
+      document.getElementById('onlineUsersList').innerHTML = '<div style="color:var(--text-faint)">当前没有在线用户</div>';
+      return;
+    }
     // 1. 从 Supabase 获取在线用户ID列表（5分钟内有活动）
     var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     var { data: presenceData, error: presenceErr } = await __SB.from('user_presence')
@@ -1948,7 +1958,7 @@ async function loadTempChats() {
 
   listEl.innerHTML = tempChats.map(function(r) {
     var name = r.other ? (r.other.name || '未知用户') : '未知用户';
-    var avatar = r.other && r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
+    var avatar = r.other && r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
     var unreadBadge = r.unread > 0 ? '<span class="chat-room-unread">' + r.unread + '</span>' : '';
     return '<div class="friend-item" style="position:relative" onclick="openChatWith(\'' + escAttr(r.other ? r.other.id : '') + '\',\'' + escAttr(name) + '\')">' +
       '<div class="friend-item-avatar">' + avatar + '</div>' +
