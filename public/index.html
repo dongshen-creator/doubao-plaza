@@ -201,6 +201,38 @@
     var TURNSTILE_SITE_KEY = ''; // 留空则跳过验证（向后兼容）
     var _turnstileWidgetId = null;
 
+    // ===== 外部图片代理 =====
+    // 外链图片统一改走本站 /api/img-proxy（Cloudflare 后端转发），
+    // 规避浏览器 Private Network Access (PNA) / CORS 对跨域图片的拦截
+    function imgProxyUrl(src) {
+      if (!src) return src;
+      if (src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) return src;
+      if (src.indexOf('/api/img-proxy?') === 0) return src; // 已是代理地址
+      if (src.charAt(0) === '/' && src.charAt(1) !== '/') return src; // 站内相对路径直连
+      if (/^https?:\/\//i.test(src)) {
+        try {
+          var u = new URL(src, location.origin);
+          if (u.origin === location.origin) return src; // 同源直连
+        } catch (e) { return src; }
+        return '/api/img-proxy?url=' + encodeURIComponent(src);
+      }
+      return src;
+    }
+
+    // 兜底：任何图片直连失败（PNA/防盗链/临时故障）时自动改走代理重试一次；
+    // 代理也失败则放行给图片原有的 onerror 回退（隐藏/占位）
+    document.addEventListener('error', function(e) {
+      var t = e.target;
+      if (!t || t.tagName !== 'IMG') return;
+      if (t.__proxyTried) return; // 已重试过，交给原 onerror 回退
+      var src = t.getAttribute('src');
+      if (!src || src.indexOf('/api/img-proxy?') === 0 || src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) return;
+      if (src.charAt(0) === '/' && src.charAt(1) !== '/') return; // 站内相对路径，无代理必要
+      t.__proxyTried = true;
+      e.stopPropagation(); // 阻止内联 onerror 隐藏图片，改为代理重试
+      t.setAttribute('src', imgProxyUrl(src));
+    }, true);
+
     function renderTurnstile() {
       if (!TURNSTILE_SITE_KEY || !window.turnstile) {
         // 未配置或脚本未加载，隐藏容器
@@ -558,7 +590,7 @@ function avatarHTML(user, small = false, clickable = false) {
   const cls = small ? 'avatar avatar-sm' : 'avatar';
   const style = clickable ? 'cursor:pointer' : '';
   const onclick = clickable && user ? ' onclick="event.stopPropagation();showUserPopup(\'' + escAttr(user.id || '') + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')"' : '';
-  if (user?.avatar) return `<div class="${cls}" style="${style}"${onclick}><img src="${esc(user.avatar)}" alt="" onerror="this.style.display='none'"></div>`;
+  if (user?.avatar) return `<div class="${cls}" style="${style}"${onclick}><img src="${imgProxyUrl(esc(user.avatar))}" alt="" onerror="this.style.display='none'"></div>`;
   return `<div class="${cls}" style="${style}"${onclick}>${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
 }
 
@@ -900,8 +932,10 @@ function sanitizeHtml(html) {
         child.setAttribute('target', '_blank');
         child.setAttribute('rel', 'noopener noreferrer');
       }
-      // img 加载失败（外链图床被拦截/失效）时隐藏自身，避免显示破图图标
+      // img：外链图片统一改走本站代理（规避浏览器 PNA/CORS 拦截），加载失败时隐藏自身避免破图
       if (tag === 'img') {
+        var _s = child.getAttribute('src');
+        if (_s) child.setAttribute('src', imgProxyUrl(_s));
         child.setAttribute('onerror', "this.style.display='none'");
       }
       // 递归清理子节点
