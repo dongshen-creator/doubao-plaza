@@ -665,7 +665,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   html += '<button class="modal-close" onclick="document.getElementById(\'userPopupModal\').remove()">✕</button></div>';
   html += '<div style="text-align:center;margin-bottom:12px">';
   if (userAvatar) {
-    html += '<img src="' + esc(userAvatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">';
+    html += '<img src="' + imgProxyUrl(esc(userAvatar)) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">';
   } else {
     html += '<div style="width:64px;height:64px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700;margin:0 auto">' + esc(userName.charAt(0).toUpperCase()) + '</div>';
   }
@@ -1994,7 +1994,7 @@ async function loadTempChats() {
 
   listEl.innerHTML = tempChats.map(function(r) {
     var name = r.other ? (r.other.name || '未知用户') : '未知用户';
-    var avatar = r.other && r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
+    var avatar = r.other && r.other.avatar ? '<img src="' + imgProxyUrl(esc(r.other.avatar)) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">' : '<div class="avatar avatar-sm">' + esc(name[0] || '?') + '</div>';
     var unreadBadge = r.unread > 0 ? '<span class="chat-room-unread">' + r.unread + '</span>' : '';
     return '<div class="friend-item" style="position:relative" onclick="openChatWith(\'' + escAttr(r.other ? r.other.id : '') + '\',\'' + escAttr(name) + '\')">' +
       '<div class="friend-item-avatar">' + avatar + '</div>' +
@@ -2307,7 +2307,7 @@ async function loadChannelJoinRequests() {
   listEl.innerHTML = requests.map(function(req) {
     var user = userMap[req.user_id] || {};
     var roomName = roomMap[req.room_id] || '未知频道';
-    var avatarHTML = user.avatar ? '<img src="' + esc(user.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'">' : esc(user.name ? user.name[0] : '?');
+    var avatarHTML = user.avatar ? '<img src="' + imgProxyUrl(esc(user.avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'">' : esc(user.name ? user.name[0] : '?');
     var displayName = user.name || req.user_id.substring(0, 8);
     return '<div class="friend-request-item">' +
       '<div class="avatar avatar-sm" style="cursor:pointer" onclick="showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')">' + avatarHTML + '</div>' +
@@ -2358,7 +2358,7 @@ async function renderChannelJoinBanner(roomId) {
     var user = users[i] || {};
     var name = user.name || req.user_id.substring(0, 8);
     var _popupCall = 'showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')';
-    var avatar = user.avatar ? '<img src="' + esc(user.avatar) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="' + _popupCall + '">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer" onclick="' + _popupCall + '">' + esc(name.charAt(0) || '?') + '</div>';
+    var avatar = user.avatar ? '<img src="' + imgProxyUrl(esc(user.avatar)) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="' + _popupCall + '">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer" onclick="' + _popupCall + '">' + esc(name.charAt(0) || '?') + '</div>';
     inner += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">' +
       avatar +
       '<span style="font-size:12px;flex:1;color:var(--text-primary);cursor:pointer" onclick="' + _popupCall + '">' + esc(name) + '</span>' +
@@ -2512,7 +2512,7 @@ async function loadFeatures() {
               ${visibleFeatures.map(f => {
                 const isTool = !!f.tool_type;
                 const iconHtml = f.icon_url
-                  ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${isTool ? '🛠️' : '🔗'}'">`
+                  ? `<img src="${imgProxyUrl(esc(f.icon_url))}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${isTool ? '🛠️' : '🔗'}'">`
                   : (isTool ? '🛠️' : '🔗');
                 if (isTool) {
                   return `<div style="cursor:pointer" onclick="openToolPanel('${escAttr(f.tool_type)}','${escAttr(f.title)}')">
@@ -2763,7 +2763,7 @@ async function executeDirectUrlTool(tool, params, resultArea) {
     url = url.replace(matches[i], encodeURIComponent(val));
   }
   if (tool.result_type === 'image') {
-    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + esc(url) + '" style="max-width:100%;border-radius:8px" onerror="this.parentElement.textContent=\'图片加载失败\'"></div>';
+    resultArea.innerHTML = '<div class="tool-result-card" style="text-align:center"><img src="' + imgProxyUrl(esc(url)) + '" style="max-width:100%;border-radius:8px" onerror="this.parentElement.textContent=\'图片加载失败\'"></div>';
   } else {
     resultArea.innerHTML = '<div class="tool-result-card"><a href="' + esc(url) + '" target="_blank" class="btn btn-orange">打开结果</a></div>';
   }
@@ -2861,7 +2861,7 @@ function renderToolResult(tool, data) {
   }
   // 图片
   else if (tool.result_type === 'image' && typeof data === 'string') {
-    html += '<img src="' + esc(data) + '" style="max-width:100%;border-radius:8px">';
+    html += '<img src="' + imgProxyUrl(esc(data)) + '" style="max-width:100%;border-radius:8px">';
   }
   // 默认 JSON
   else {
@@ -3089,9 +3089,9 @@ function blogRenderCard(p, isDev) {
   var catName = p.category_name || blogCategoryName(p.category_id);
   var catBadge = catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px">🏷 ' + esc(catName) + '</span>' : '';
   return '<div class="card blog-list-card" style="margin-bottom:12px;cursor:pointer;padding:16px" onclick="blogShowPost(blogState.container,' + p.id + ')">' +
-    (p.cover_image ? '<div style="margin-bottom:12px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
+    (p.cover_image ? '<div style="margin-bottom:12px"><img src="' + imgProxyUrl(esc(p.cover_image)) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-      '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
+      '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
       '<span style="font-size:13px;font-weight:600;color:var(--text-secondary)">' + esc(p.author_name) + '</span>' +
       '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
       statusBadge +
@@ -3290,7 +3290,7 @@ function blogRenderSidebarNotifications() {
     var latest = g.items[0]; // items 已按时间倒序，第一条最新
     var timeStr = blogFormatDate(g.latestTs);
     var avatarHtml = latest.sender_avatar
-      ? '<img src="' + esc(latest.sender_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
+      ? '<img src="' + imgProxyUrl(esc(latest.sender_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
       : '<span style="font-size:10px">👤</span>';
     var unreadStyle = g.unreadCount > 0 ? 'font-weight:600;' : '';
     var unreadDot = g.unreadCount > 0 ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>' : '';
@@ -3453,10 +3453,10 @@ async function blogShowPost(container, postId) {
         '</div>' : '<div></div>') +
       '</div>' +
       statusBanner +
-      (p.cover_image ? '<div style="margin-bottom:16px"><img src="' + esc(p.cover_image) + '" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
+      (p.cover_image ? '<div style="margin-bottom:16px"><img src="' + imgProxyUrl(esc(p.cover_image)) + '" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
       '<h1 style="font-size:26px;font-weight:700;margin-bottom:16px;color:var(--text-primary);line-height:1.3">' + esc(p.title) + '</h1>' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">' +
-        '<div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden">' + (p.author_avatar ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
         '<div>' +
           '<div style="font-size:14px;font-weight:600">' + esc(p.author_name) + '</div>' +
           '<div style="font-size:12px;color:var(--text-faint)">' + blogFormatDate(p.created_at) + ' · 👁 ' + (p.views || 0) + ' 次阅读</div>' +
@@ -3945,7 +3945,7 @@ async function blogLoadComments(postId) {
     }
 
     var userAvatar = (currentUser && currentUser.avatar)
-      ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
+      ? '<img src="' + imgProxyUrl(esc(currentUser.avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">'
       : '<span style="font-size:16px">👤</span>';
 
     var html = '<div style="margin-top:36px;padding-top:28px;border-top:2px solid var(--border)">' +
@@ -4019,7 +4019,7 @@ function blogRenderComment(c, isDev, depth, replyMap) {
 
   var html = '<div style="' + indentStyle + '">' +
     '<div style="display:flex;gap:10px;align-items:flex-start" id="blogComment_' + c.id + '">' +
-      '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:' + (isReply ? 12 : 14) + 'px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
+      '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:' + (isReply ? 12 : 14) + 'px;overflow:hidden;flex-shrink:0">' + (c.user_avatar ? '<img src="' + imgProxyUrl(esc(c.user_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="' + (isReply ? 'background:var(--bg-hover);' : 'background:var(--bg-card);border:1px solid var(--border);') + 'border-radius:12px;padding:10px 14px;transition:background 0.15s">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
@@ -4036,7 +4036,7 @@ function blogRenderComment(c, isDev, depth, replyMap) {
         '</div>' +
         '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:8px">' +
           '<div style="display:flex;gap:8px;align-items:flex-start">' +
-            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
+            '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0">' + (currentUser && currentUser.avatar ? '<img src="' + imgProxyUrl(esc(currentUser.avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'👤\'">' : '👤') + '</div>' +
             '<div style="flex:1;min-width:0">' +
               '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:42px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:all 0.2s;outline:none" onfocus="this.style.borderColor=\'var(--accent)\';this.style.boxShadow=\'0 0 0 2px var(--accent-bg)\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'"></textarea>' +
               '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">' +
@@ -4195,7 +4195,7 @@ async function blogShowReviewPanel(container) {
       var catName = p.category_name || blogCategoryName(p.category_id);
       return '<div class="card" style="margin-bottom:12px;padding:16px">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
-          '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + esc(p.author_avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
+          '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" style="width:100%;height:100%;object-fit:cover">' : '👤') + '</div>' +
           '<span style="font-size:13px;font-weight:600">' + esc(p.author_name) + '</span>' +
           '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
           (catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px">🏷 ' + esc(catName) + '</span>' : '') +
@@ -4827,7 +4827,7 @@ async function loadSettings() {
   
   // 先渲染个人信息（不依赖API）
   document.getElementById('settingsAvatar').innerHTML = currentUser.avatar
-    ? `<img src="${esc(currentUser.avatar)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
+    ? `<img src="${imgProxyUrl(esc(currentUser.avatar))}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
     : currentUser.name.charAt(0).toUpperCase();
   document.getElementById('settingsName').textContent = currentUser.name;
   document.getElementById('settingsId').textContent = currentUser.doubao_id ? `@${currentUser.doubao_id}` : (currentUser.agent_url || '未设置豆包号');
@@ -4883,7 +4883,7 @@ async function switchSettingsTab(tab, btnEl) {
         <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px">👤 个人信息</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
           <div style="width:64px;height:64px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:600;overflow:hidden;flex-shrink:0">
-            ${currentUser.avatar ? `<img src="${esc(currentUser.avatar)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='${currentUser.name.charAt(0).toUpperCase()}'">` : currentUser.name.charAt(0).toUpperCase()}
+            ${currentUser.avatar ? `<img src="${imgProxyUrl(esc(currentUser.avatar))}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='${currentUser.name.charAt(0).toUpperCase()}'">` : currentUser.name.charAt(0).toUpperCase()}
           </div>
           <div style="flex:1">
             <div style="font-size:16px;font-weight:600;color:var(--text-primary)">${esc(currentUser.name)}</div>
@@ -5436,7 +5436,7 @@ function showRecoveryAccounts() {
   }
   listEl.innerHTML = list.map(function(u) {
     var avatar = u.avatar
-      ? '<img src="' + esc(u.avatar) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + imgProxyUrl(esc(u.avatar)) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
       : '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">' + esc((u.name || '?').charAt(0)) + '</div>';
     return '<div class="chat-room-item" onclick="selectRecoveryAccount(\'' + escAttr(u.id) + '\')" style="cursor:pointer">' +
       '<div class="chat-room-avatar">' + avatar + '</div>' +
@@ -5459,7 +5459,7 @@ async function selectRecoveryAccount(userId) {
     // 显示用户信息
     var userInfoEl = document.getElementById('recoverUserInfo');
     var avatar = data.avatar
-      ? '<img src="' + esc(data.avatar) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + imgProxyUrl(esc(data.avatar)) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'">'
       : '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">' + esc((data.name || '?').charAt(0)) + '</div>';
     userInfoEl.innerHTML = avatar + '<div><div style="font-weight:600;font-size:14px">' + esc(data.name) + '</div>' + (data.doubao_id ? '<div style="font-size:12px;color:var(--text-faint)">@' + esc(data.doubao_id) + '</div>' : '') + '</div>';
     // 显示密保问题
@@ -5984,7 +5984,7 @@ async function loadFeaturesManager() {
             <div class="card" style="padding:12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                 <div style="width:36px;height:36px;border-radius:8px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-                  ${f.icon_url ? `<img src="${esc(f.icon_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${f.tool_type ? '🛠️' : '🔗'}'">` : (f.tool_type ? '🛠️' : '🔗')}
+                  ${f.icon_url ? `<img src="${imgProxyUrl(esc(f.icon_url))}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${f.tool_type ? '🛠️' : '🔗'}'">` : (f.tool_type ? '🛠️' : '🔗')}
                 </div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:13px;font-weight:600;color:var(--text-primary);word-break:break-all">${esc(f.title)}</div>
@@ -6869,7 +6869,7 @@ function renderRoomList() {
     } else {
       privateEl.innerHTML = privates.map(function(r) {
         var active = r.id === chatState.currentRoomId;
-        var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : '💬';
+        var avatar = r.other ? (r.other.avatar ? '<img src="' + imgProxyUrl(esc(r.other.avatar)) + '" alt="">' : esc(r.other.name.charAt(0))) : '💬';
         var name = r.other ? esc(r.other.name) : esc(r.name);
         // 生成最后消息预览
         var preview = '私聊';
@@ -6926,7 +6926,7 @@ async function switchRoom(roomId) {
     if (room && room.type === 'channel') {
       headerAvatar = channelAvatarHTML(room, 28);
     } else if (room && room.other && room.other.avatar) {
-      headerAvatar = '<img src="' + esc(room.other.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
+      headerAvatar = '<img src="' + imgProxyUrl(esc(room.other.avatar)) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover">';
     } else {
       headerAvatar = '👤';
     }
@@ -7068,7 +7068,7 @@ async function renderChatContextPanel(room) {
         <div style="margin-bottom:8px">
           <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像预览</div>
           <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1px solid var(--border-color)">
-            ${currentAvatar ? '<img src="' + esc(currentAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">💬</div>'}
+            ${currentAvatar ? '<img src="' + imgProxyUrl(esc(currentAvatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">💬</div>'}
           </div>
         </div>
         <div style="margin-bottom:8px">
@@ -7361,9 +7361,9 @@ function renderMsgHTML(m, roomId) {
   if (m.recalled) {
     contentHtml = '<em style="color:var(--text-faint);font-size:12px">消息已撤回</em>';
   } else if (text.startsWith('img:')) {
-    contentHtml = '<img src="' + esc(text.slice(4)) + '" loading="lazy" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:zoom-in" onclick="openMediaViewer(\'image\',\'' + escAttr(text.slice(4)) + '\')" onerror="this.outerHTML=\'<div style=&quot;background:var(--bg-hover);border-radius:8px;padding:12px;color:var(--text-faint);font-size:12px;max-width:240px&quot;>图片加载失败</div>\'">';
+    contentHtml = '<img src="' + imgProxyUrl(esc(text.slice(4))) + '" loading="lazy" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:zoom-in" onclick="openMediaViewer(\'image\',\'' + escAttr(text.slice(4)) + '\')" onerror="this.outerHTML=\'<div style=&quot;background:var(--bg-hover);border-radius:8px;padding:12px;color:var(--text-faint);font-size:12px;max-width:240px&quot;>图片加载失败</div>\'">';
   } else if (text.startsWith('video:')) {
-    contentHtml = '<video src="' + esc(text.slice(6)) + '" controls preload="metadata" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:zoom-in" onclick="openMediaViewer(\'video\',\'' + escAttr(text.slice(6)) + '\')"></video>';
+    contentHtml = '<video src="' + imgProxyUrl(esc(text.slice(6))) + '" controls preload="metadata" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:zoom-in" onclick="openMediaViewer(\'video\',\'' + escAttr(text.slice(6)) + '\')"></video>';
   } else if (text.startsWith('file:')) {
     const fc = text.slice(5);
     const lc = fc.lastIndexOf(':');
@@ -7372,7 +7372,7 @@ function renderMsgHTML(m, roomId) {
     // tmpfile.link 文件支持 iframe 预览嵌入
     if (furl.indexOf('tmpfile.link') >= 0) {
       contentHtml = '<div style="border:1px solid var(--border-color);border-radius:8px;overflow:hidden;margin:4px 0;max-width:320px">' +
-        '<iframe src="' + esc(furl) + '" style="width:100%;height:200px;border:none" loading="lazy" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>' +
+        '<iframe src="' + imgProxyUrl(esc(furl)) + '" style="width:100%;height:200px;border:none" loading="lazy" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>' +
         '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary);padding:6px 8px;border-top:1px solid var(--border-color);font-size:13px">📎 ' + esc(fname || '文件') + '</a>' +
         '</div>';
     } else {
@@ -7397,7 +7397,7 @@ function renderMsgHTML(m, roomId) {
     var cName = decodeURIComponent(cardParts[1] || '用户');
     var cAvatar = decodeURIComponent(cardParts[2] || '');
     var cDoubao = decodeURIComponent(cardParts[3] || '');
-    var avatarInner = cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
+    var avatarInner = cAvatar ? '<img src="' + imgProxyUrl(esc(cAvatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'👤\'">' : '👤';
     contentHtml = '<div onclick="showUserPopup(\'' + escAttr(cUid) + '\',\'' + escAttr(cName) + '\',\'' + escAttr(cAvatar) + '\',\'' + escAttr(cDoubao) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border-strong);box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all .2s;max-width:320px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.15)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.1)\';this.style.borderColor=\'var(--border-strong)\'">' +
       '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
       '<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:22px;flex-shrink:0;border:2px solid var(--accent)">' + avatarInner + '</div>' +
@@ -7410,7 +7410,7 @@ function renderMsgHTML(m, roomId) {
     var chRid = decodeURIComponent(chParts[0] || '');
     var chName = decodeURIComponent(chParts[1] || '频道');
     var chAvatar = decodeURIComponent(chParts[2] || '');
-    var chAvatarInner = chAvatar ? '<img src="' + esc(chAvatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
+    var chAvatarInner = chAvatar ? '<img src="' + imgProxyUrl(esc(chAvatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'💬\'">' : '💬';
     contentHtml = '<div onclick="joinSharedChannel(\'' + escAttr(chRid) + '\',\'' + escAttr(chName) + '\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border-strong);box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all .2s;max-width:320px;position:relative;overflow:hidden" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.15)\';this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.1)\';this.style.borderColor=\'var(--border-strong)\'">' +
       '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
       '<div style="width:44px;height:44px;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:20px;flex-shrink:0">' + chAvatarInner + '</div>' +
@@ -7441,10 +7441,10 @@ function renderMsgHTML(m, roomId) {
   var avatarHtml;
   if (isMine) {
     avatarHtml = currentUser.avatar
-      ? '<img class="chat-msg-avatar" src="' + esc(currentUser.avatar) + '" onerror="this.style.display=\'none\'" alt="">'
+      ? '<img class="chat-msg-avatar" src="' + imgProxyUrl(esc(currentUser.avatar)) + '" onerror="this.style.display=\'none\'" alt="">'
       : '<div class="chat-msg-avatar" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(currentUser.name.charAt(0)) + '</div>';
   } else if (m.sender_avatar) {
-    avatarHtml = '<img class="chat-msg-avatar" src="' + esc(m.sender_avatar) + '" onerror="this.style.display=\'none\'" alt="">';
+    avatarHtml = '<img class="chat-msg-avatar" src="' + imgProxyUrl(esc(m.sender_avatar)) + '" onerror="this.style.display=\'none\'" alt="">';
   } else {
     avatarHtml = '<div class="chat-msg-avatar" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(m.sender.charAt(0)) + '</div>';
   }
@@ -7472,7 +7472,7 @@ function renderReplyBlock(eventId, roomId) {
   let preview = '';
   const t = ref.content || '';
   if (t.startsWith('img:')) {
-    preview = '<img src="' + esc(t.slice(4)) + '" loading="lazy" style="max-width:80px;max-height:60px;border-radius:4px;display:block;margin-top:2px">';
+    preview = '<img src="' + imgProxyUrl(esc(t.slice(4))) + '" loading="lazy" style="max-width:80px;max-height:60px;border-radius:4px;display:block;margin-top:2px">';
   } else if (t.startsWith('file:')) {
     const fc = t.slice(5); const lc = fc.lastIndexOf(':');
     preview = '📎 ' + esc(lc > 0 ? fc.substring(0, lc) : fc || '文件');
@@ -8088,9 +8088,9 @@ function openMediaViewer(type, url) {
   var content = document.getElementById('mediaViewerContent');
   if (!overlay || !content) return;
   if (type === 'video') {
-    content.innerHTML = '<video src="' + esc(url) + '" controls autoplay style="max-width:90vw;max-height:90vh;border-radius:8px"></video>';
+    content.innerHTML = '<video src="' + imgProxyUrl(esc(url)) + '" controls autoplay style="max-width:90vw;max-height:90vh;border-radius:8px"></video>';
   } else {
-    content.innerHTML = '<img src="' + esc(url) + '" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px" alt="">';
+    content.innerHTML = '<img src="' + imgProxyUrl(esc(url)) + '" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px" alt="">';
   }
   overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -9539,7 +9539,7 @@ async function showShareCardPicker() {
   var listEl = document.getElementById('shareCardList');
   var html = '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">选择要分享的名片：</div>';
   // 自己
-  html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(currentUser.id) + '\',\'' + escAttr(currentUser.name) + '\',\'' + escAttr(currentUser.avatar||'') + '\',\'' + escAttr(currentUser.doubao_id||'') + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(currentUser.name) + ' (我)</span><span class="tool-card-type-badge">自己</span></div>';
+  html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(currentUser.id) + '\',\'' + escAttr(currentUser.name) + '\',\'' + escAttr(currentUser.avatar||'') + '\',\'' + escAttr(currentUser.doubao_id||'') + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (currentUser.avatar ? '<img src="' + imgProxyUrl(esc(currentUser.avatar)) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(currentUser.name) + ' (我)</span><span class="tool-card-type-badge">自己</span></div>';
   // 好友列表
   try {
     var fRes = await api('/api/friends?user_id=' + currentUser.id + '&status=accepted');
@@ -9549,7 +9549,7 @@ async function showShareCardPicker() {
         var fname = (f.friend && f.friend.name) || f.friend_name || '好友';
         var favatar = (f.friend && f.friend.avatar) || '';
         var fdoubao = (f.friend && f.friend.doubao_id) || '';
-        html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(fid) + '\',\'' + escAttr(fname) + '\',\'' + escAttr(favatar) + '\',\'' + escAttr(fdoubao) + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (favatar ? '<img src="' + esc(favatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(fname) + '</span><span class="tool-card-type-badge">好友</span></div>';
+        html += '<div class="tool-card-item" onclick="sendShareCard(\'' + escAttr(fid) + '\',\'' + escAttr(fname) + '\',\'' + escAttr(favatar) + '\',\'' + escAttr(fdoubao) + '\')"><div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (favatar ? '<img src="' + imgProxyUrl(esc(favatar)) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') + '</div><span class="tool-card-name">' + esc(fname) + '</span><span class="tool-card-type-badge">好友</span></div>';
       });
     }
   } catch(e) {}
@@ -9603,7 +9603,7 @@ async function showShareChannelPicker() {
   if (settings) { settings.forEach(function(s) { avatarMap[s.room_id] = s.avatar_url || ''; }); }
   channels.forEach(function(c) {
     var cAvatar = avatarMap[c.id] || '';
-    html += '<div class="tool-card-item" onclick="sendShareChannel(\'' + escAttr(c.id) + '\',\'' + escAttr(c.name||'频道') + '\',\'' + escAttr(cAvatar) + '\')"><div style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (cAvatar ? '<img src="' + esc(cAvatar) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">💬</div>') + '</div><span class="tool-card-name">' + esc(c.name || '频道') + '</span><span class="tool-card-type-badge">频道</span></div>';
+    html += '<div class="tool-card-item" onclick="sendShareChannel(\'' + escAttr(c.id) + '\',\'' + escAttr(c.name||'频道') + '\',\'' + escAttr(cAvatar) + '\')"><div style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg-hover)">' + (cAvatar ? '<img src="' + imgProxyUrl(esc(cAvatar)) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">💬</div>') + '</div><span class="tool-card-name">' + esc(c.name || '频道') + '</span><span class="tool-card-type-badge">频道</span></div>';
   });
   listEl.innerHTML = html;
 }
@@ -9699,7 +9699,7 @@ function renderEmbedTool(tool) {
   if (!content) return;
   var url = tool.url || (tool.config && tool.config.url) || '';
   if (!url) { content.innerHTML = '<div class="card-empty">未配置网页地址</div>'; return; }
-  content.innerHTML = '<div class="embed-frame-container"><iframe class="embed-frame" src="' + esc(url) + '" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy">不支持 iframe</iframe></div>';
+  content.innerHTML = '<div class="embed-frame-container"><iframe class="embed-frame" src="' + imgProxyUrl(esc(url)) + '" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy">不支持 iframe</iframe></div>';
 }
 
 // ═══ API工具 ═══
@@ -9808,7 +9808,7 @@ async function renderChainTool(tool) {
   if (chains.length === 0) { html += '<div class="card-empty">还没有人参与接龙，快来第一个参与吧！</div>'; }
   else {
     chains.forEach(function(c) {
-      var avatarHTML = c.user_avatar ? '<img src="' + esc(c.user_avatar) + '" onerror="this.parentElement.innerHTML=\'<div class=&quot;chain-item-avatar-placeholder&quot;>👤</div>\'">' : '<div class="chain-item-avatar-placeholder">👤</div>';
+      var avatarHTML = c.user_avatar ? '<img src="' + imgProxyUrl(esc(c.user_avatar)) + '" onerror="this.parentElement.innerHTML=\'<div class=&quot;chain-item-avatar-placeholder&quot;>👤</div>\'">' : '<div class="chain-item-avatar-placeholder">👤</div>';
       html += '<div class="chain-item"><div class="chain-item-avatar">' + avatarHTML + '</div><div class="chain-item-body">';
       html += '<div class="chain-item-header"><span class="chain-item-seq">#' + c.seq + '</span><span class="chain-item-name">' + esc(c.user_name || '匿名') + '</span></div>';
       html += '<div class="chain-item-content">' + esc(c.content) + '</div></div></div>';
@@ -10329,7 +10329,7 @@ async function showBrowseChannels(query) {
   } else {
     var listHtml = '';
     channels.forEach(function(c) {
-      var avatarHTML = c.avatar_url ? '<img src="' + esc(c.avatar_url) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💬</div>';
+      var avatarHTML = c.avatar_url ? '<img src="' + imgProxyUrl(esc(c.avatar_url)) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💬</div>';
       listHtml += '<div class="list-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:default">';
       listHtml += avatarHTML;
       listHtml += '<div style="flex:1"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:var(--text-faint)">' + (c.member_count || 0) + ' 位成员</div></div>';
@@ -10371,7 +10371,7 @@ function channelAvatarHTML(room, size) {
   if (room && room.avatar_url) {
     // 使用 wrapper div + 备用 emoji，onerror 不再销毁父元素
     return '<div style="width:' + size + 'px;height:' + size + 'px;position:relative;flex-shrink:0">' +
-      '<img src="' + esc(room.avatar_url) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block" ' +
+      '<img src="' + imgProxyUrl(esc(room.avatar_url)) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block" ' +
       'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
       '<div style="display:none;width:100%;height:100%;border-radius:50%;align-items:center;justify-content:center;background:var(--accent-bg);font-size:' + fontSize + 'px;position:absolute;top:0;left:0">💬</div>' +
       '</div>';
@@ -10788,7 +10788,7 @@ renderRoomList = function() {
       if (chatState._showHidden) {
         hiddenRoomsData.forEach(function(r) {
           var name = r.other ? esc(r.other.name) : esc(r.name);
-          var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
+          var avatar = r.other ? (r.other.avatar ? '<img src="' + imgProxyUrl(esc(r.other.avatar)) + '">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
           hideHtml += '<div class="chat-room-item" onclick="unhideChannel(\'' + r.id + '\');switchRoom(\'' + r.id + '\')">' +
             '<div class="chat-room-avatar">' + avatar + '</div>' +
             '<div class="chat-room-info"><div class="chat-room-name">' + name + '</div>' +
@@ -10805,7 +10805,7 @@ renderRoomList = function() {
 
 function roomItemHTML(r) {
   var active = r.id === chatState.currentRoomId;
-  var avatar = r.other ? (r.other.avatar ? '<img src="' + esc(r.other.avatar) + '" alt="">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
+  var avatar = r.other ? (r.other.avatar ? '<img src="' + imgProxyUrl(esc(r.other.avatar)) + '" alt="">' : esc(r.other.name.charAt(0))) : channelAvatarHTML(r, 32);
   var name = r.other ? esc(r.other.name) : esc(r.name);
   var isPinned = getPinnedChannels().indexOf(r.id) >= 0;
   var canDelete = r.type !== 'channel' || r.created_by === currentUser.id || r.is_admin || isDeveloper();
@@ -11002,7 +11002,7 @@ function settingsAccountHTML() {
     '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px">👤 个人信息</div>' +
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">' +
     '<div style="width:64px;height:64px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:600;overflow:hidden;flex-shrink:0">' +
-    (currentUser.avatar ? '<img src="' + esc(currentUser.avatar) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + currentUser.name.charAt(0).toUpperCase() + '\'">' : currentUser.name.charAt(0).toUpperCase()) +
+    (currentUser.avatar ? '<img src="' + imgProxyUrl(esc(currentUser.avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + currentUser.name.charAt(0).toUpperCase() + '\'">' : currentUser.name.charAt(0).toUpperCase()) +
     '</div><div style="flex:1"><div style="font-size:16px;font-weight:600;color:var(--text-primary)">' + esc(currentUser.name) + '</div>' +
     '<div style="font-size:13px;color:var(--text-faint)">' + (currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')) + '</div>' +
     (currentUser.bio ? renderBio(currentUser.bio) : '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">暂无简介</div>') + '</div></div></div>' +
