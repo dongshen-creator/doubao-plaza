@@ -206,6 +206,8 @@
     // 规避浏览器 Private Network Access (PNA) / CORS 对跨域图片的拦截
     function imgProxyUrl(src) {
       if (!src) return src;
+      // HTML 属性值中的实体还原（&amp; → &），避免传给后端时 URL 失真
+      src = src.replace(/&amp;/gi, '&');
       if (src.indexOf('data:') === 0 || src.indexOf('blob:') === 0) return src;
       if (src.indexOf('/api/img-proxy?') === 0) return src; // 已是代理地址
       if (src.charAt(0) === '/' && src.charAt(1) !== '/') return src; // 站内相对路径直连
