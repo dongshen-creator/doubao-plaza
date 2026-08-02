@@ -6,6 +6,8 @@
 // 无 token 时用 document.write 完全替换页面，阻止任何外部资源加载
 // 有 token 时页面正常渲染（0 网络开销）
 function loginWallHead() {
+  // 登录墙完整 HTML；返回时经 JSON.stringify 序列化为 document.write 的字符串参数
+  var wallHtml = "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>请先登录 · 逗包用户广场</title>\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\nbody{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#12121f;font-family:-apple-system,BlinkMacSystemFont,\"PingFang SC\",\"Microsoft YaHei\",sans-serif;color:#fff;overflow:hidden;position:relative}\nbody::before{content:'';position:fixed;width:620px;height:620px;border-radius:50%;background:radial-gradient(circle,rgba(255,107,53,.22),transparent 70%);top:-220px;right:-140px}\nbody::after{content:'';position:fixed;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(22,93,255,.18),transparent 70%);bottom:-200px;left:-140px}\n.hp-card{position:relative;z-index:1;width:min(92vw,420px);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:48px 40px;text-align:center;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 24px 64px rgba(0,0,0,.45)}\n.hp-icon{width:72px;height:72px;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;border-radius:20px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);box-shadow:0 8px 24px rgba(255,107,53,.35)}\n.hp-icon svg{width:34px;height:34px;fill:#fff}\n.hp-title{font-size:22px;font-weight:700;letter-spacing:.5px;margin-bottom:8px}\n.hp-sub{font-size:14px;color:rgba(255,255,255,.55);line-height:1.8;margin-bottom:32px}\n.hp-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;text-decoration:none;font-size:15px;font-weight:600;transition:all .25s;box-shadow:0 6px 20px rgba(255,107,53,.3)}\n.hp-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(255,107,53,.45)}\n.hp-btn svg{width:18px;height:18px;fill:#fff}\n.hp-foot{margin-top:22px;font-size:12px;color:rgba(255,255,255,.35);letter-spacing:1px}\n</style>\n</head>\n<body>\n<div class=\"hp-card\">\n  <div class=\"hp-icon\">\n    <svg viewBox=\"0 0 24 24\"><path d=\"M12 2C8.13 2 5 5.13 5 9v2c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2V9c0-3.87-3.13-7-7-7zm-3 9V9c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9z\"/></svg>\n  </div>\n  <div class=\"hp-title\">请先登录</div>\n  <div class=\"hp-sub\">访问此页面需要登录逗包用户广场账号<br>登录后即可畅享酒馆角色聊天体验</div>\n  <a href=\"/\" class=\"hp-btn\">\n    <svg viewBox=\"0 0 24 24\"><path d=\"M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z\"/></svg>\n    前往主页登录\n  </a>\n  <div class=\"hp-foot\">逗包用户广场 · Doubao Plaza</div>\n</div>\n</body>\n</html>";
   return '<script id="hp-login">' +
   '(function(){' +
   'var t=typeof localStorage!="undefined"?localStorage.getItem("dp_token"):null;' +
@@ -13,10 +15,16 @@ function loginWallHead() {
   // token 存在，页面正常渲染
   'window._hpToken=t;' +
   '}else{' +
-  // 无 token → 立即终止原始页面，document.write 登录提示
+  // 无 token：先整体隐藏（防闪烁），解析完成后完全替换为登录墙。
+  // 注意：解析期间调用 document.open() 不会中止解析器，会把墙内容插入当前
+  // 解析位置导致「墙 + 原页面」合并，故必须等 DOMContentLoaded 后再替换。
+  'window._hpWallPlanned=true;' +
+  'document.documentElement.style.display="none";' +
+  'window.addEventListener("DOMContentLoaded",function(){' +
   'document.open();' +
-  'document.write("<!DOCTYPE html><html lang=\\"zh-CN\\"><head><meta charset=\\"UTF-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>\\u8BF7\\u5148\\u767B\\u5F55</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#F7F8FC;font-family:-apple-system,BlinkMacSystemFont,\\"PingFang SC\\",\\"Microsoft YaHei\\",sans-serif;text-align:center}.hp-c{padding:32px}.hp-i{font-size:64px;margin-bottom:24px}.hp-h{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:12px}.hp-p{color:#9ca3af;margin-bottom:28px;font-size:14px;line-height:1.6}.hp-a{display:inline-flex;align-items:center;gap:6px;padding:12px 32px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#FF8F5E);color:#fff;text-decoration:none;font-size:15px;font-weight:600;transition:all .25s}.hp-a:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(255,107,53,.35)}</style></head><body><div class=\\"hp-c\\"><div class=\\"hp-i\\">\\uD83D\\uDD12</div><div class=\\"hp-h\\">\\u8BF7\\u5148\\u767B\\u5F55</div><div class=\\"hp-p\\">\\u8BBF\\u95EE\\u6B64\\u9875\\u9762\\u9700\\u8981\\u767B\\u5F55\\u9017\\u5305\\u7528\\u6237\\u5E7F\\u573A\\u8D26\\u53F7</div><a href=\\"/\\" class=\\"hp-a\\">\\uD83C\\uDFE0 \\u524D\\u5F80\\u4E3B\\u9875\\u767B\\u5F55</a></div></body></html>");' +
+  'document.write(' + JSON.stringify(wallHtml) + ');' +
   'document.close();' +
+  '});' +
   '}' +
   '})();' +
   '</script>';
