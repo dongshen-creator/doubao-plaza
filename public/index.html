@@ -2473,6 +2473,10 @@ async function loadFeaturesSidebarList() {
       if (f.tool_type) {
         return '<div class="sidebar-item" style="cursor:pointer" onclick="openToolPanel(\'' + escAttr(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon">🛠️</span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
       }
+      // 本地页面（同源 /pages/... 等）站内嵌入打开，外部链接保持新窗口
+      if (f.link_url && f.link_url.indexOf('/pages/') === 0) {
+        return '<div class="sidebar-item" style="cursor:pointer" onclick="openEmbeddedPage(\'' + escAttr(f.link_url) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon">📄</span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
+      }
       return '<a href="' + esc(f.link_url) + '" target="_blank" rel="noopener" class="sidebar-item" style="text-decoration:none"><span class="sidebar-item-icon">' + (f.icon_url ? '🖼️' : '🔗') + '</span><span class="sidebar-item-text">' + esc(f.title) + '</span></a>';
     }).join('');
   } catch(e) {}
@@ -2526,6 +2530,13 @@ async function loadFeatures() {
                   : (isTool ? '🛠️' : '🔗');
                 if (isTool) {
                   return `<div style="cursor:pointer" onclick="openToolPanel('${escAttr(f.tool_type)}','${escAttr(f.title)}')">
+                    <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
+                    <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
+                  </div>`;
+                }
+                // 本地页面（同源 /pages/... 等）站内嵌入打开，外部链接保持新窗口
+                if (f.link_url && f.link_url.indexOf('/pages/') === 0) {
+                  return `<div style="cursor:pointer" onclick="openEmbeddedPage('${escAttr(f.link_url)}','${escAttr(f.title)}')">
                     <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
                     <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
                   </div>`;
@@ -9687,26 +9698,87 @@ async function joinSharedChannel(roomId, roomName) {
   }
 }
 
+// ═══ 嵌入页（iframe 原生融入主站界面，顶栏/返回/主题统一由主站提供）═══
+function openEmbeddedPage(url, title, kind) {
+  var sb = document.getElementById('appSidebar');
+  if (sb) sb.classList.remove('has-content');
+  var main = document.getElementById('mainContent');
+  main.dataset.tavernFullscreen = '1';
+  main.style.padding = '0';
+  main.style.overflow = 'hidden';
+
+  // 新窗口按钮应打开原始 URL（不带 embed 标记）
+  var openUrl = url;
+
+  // 同源页面追加 embed 标记，让页面（如 tavern.html）识别并隐藏自带的顶栏
+  if (kind !== 'external' && url.indexOf('/') === 0 && url.indexOf('embed=') === -1) {
+    url += (url.indexOf('?') === -1 ? '?' : '&') + 'embed=1';
+  }
+
+  var actions = '';
+  if (kind === 'tavern') {
+    actions = [
+      ['menuToggle', '☰', '角色列表', 'tavern-menu-btn'],
+      ['newCharBtn', '＋ 角色', '新建角色', ''],
+      ['importBtn', '导入', '导入数据', ''],
+      ['urlImportHeaderBtn', '链接', '链接导入', ''],
+      ['buildBtn', '构建', '构建角色卡', ''],
+      ['exportBtn', '导出', '导出数据', ''],
+      ['settingsBtn', '设置', '全局设置', ''],
+      ['personaBtn', '人格', '人格管理', ''],
+      ['', '主题', '切换主题', '']
+    ].map(function(a) {
+      if (a[0] === '') return '<button class="btn btn-sm btn-gray embed-act" title="' + a[2] + '" onclick="toggleTheme()">' + a[1] + '</button>';
+      return '<button class="btn btn-sm btn-gray embed-act' + (a[3] ? ' ' + a[3] : '') + '" title="' + a[2] + '" onclick="tavernAction(\'' + a[0] + '\')">' + a[1] + '</button>';
+    }).join('');
+  } else {
+    actions = '<button class="btn btn-sm btn-gray" title="新窗口打开" onclick="window.open(\'' + escAttr(openUrl) + '\',\'_blank\')">↗ 新窗口</button>';
+  }
+
+  main.innerHTML =
+    '<div class="view-header-bar embed-header">' +
+      '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
+      '<span style="font-size:15px;font-weight:600">' + esc(title) + '</span>' +
+      '<div style="flex:1"></div>' + actions +
+    '</div>' +
+    '<div id="tavernFrameWrap" style="flex:1;min-height:0;display:flex">' +
+      '<iframe id="tavernFrame" src="' + escAttr(url) + '" style="flex:1;width:100%;border:0;display:block;background:transparent" title="' + esc(title) + '" allow="clipboard-write"></iframe>' +
+    '</div>';
+  main.style.display = 'flex';
+  main.style.flexDirection = 'column';
+
+  if (kind === 'tavern') {
+    var f = document.getElementById('tavernFrame');
+    f.addEventListener('load', syncTavernTheme);
+  }
+}
+
+// 转发点击到同源 iframe 内的按钮（tavern.html 与主站同源，可直连 DOM）
+function tavernAction(btnId) {
+  var f = document.getElementById('tavernFrame');
+  if (!f || !f.contentDocument) return;
+  var btn = f.contentDocument.getElementById(btnId);
+  if (btn) btn.click();
+}
+
+// 主站主题同步到嵌入页（tavern 用 documentElement.classList 'dark' 控制；同源可直调 applyDark 保持其配置一致）
+function syncTavernTheme() {
+  var f = document.getElementById('tavernFrame');
+  if (!f || !f.contentWindow || !f.contentDocument) return;
+  var dark = document.body.classList.contains('dark');
+  try {
+    if (typeof f.contentWindow.applyDark === 'function') { f.contentWindow.applyDark(dark); return; }
+  } catch(e) {}
+  if (f.contentDocument.documentElement) {
+    f.contentDocument.documentElement.classList.toggle('dark', dark);
+  }
+}
+
 // ═══ 工具面板覆盖层 ═══
 async function openToolPanel(toolId, roomId) {
-  // === 页面类工具：Tavern 角色酒馆以 iframe 全屏嵌入（保留最左侧活动栏）===
+  // === 页面类工具：Tavern 角色酒馆以 iframe 嵌入（保留最左侧活动栏，顶栏统一由主站提供）===
   if (toolId === 'tavern') {
-    var sbTavern = document.getElementById('appSidebar');
-    if (sbTavern) sbTavern.classList.remove('has-content');
-    var mainTavern = document.getElementById('mainContent');
-    mainTavern.dataset.tavernFullscreen = '1';
-    mainTavern.style.padding = '0';
-    mainTavern.style.overflow = 'hidden';
-    mainTavern.innerHTML =
-      '<div class="view-header-bar" style="padding:8px 12px;margin:0;border-bottom:1px solid var(--border-color)">' +
-        '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
-        '<span style="font-size:15px;font-weight:600">🏮 ' + esc(roomId || '角色酒馆') + '</span>' +
-      '</div>' +
-      '<div id="tavernFrameWrap" style="flex:1;min-height:0;display:flex">' +
-        '<iframe id="tavernFrame" src="/tavern.html" style="flex:1;width:100%;border:0;display:block;background:#12121f" title="角色酒馆" allow="clipboard-write"></iframe>' +
-      '</div>';
-    mainTavern.style.display = 'flex';
-    mainTavern.style.flexDirection = 'column';
+    openEmbeddedPage('/tavern.html?embed=1', '🏮 ' + (roomId || '角色酒馆'), 'tavern');
     return;
   }
   var { data: tool } = await __SB.from('chat_channel_tools').select('*').eq('id', toolId).maybeSingle();
@@ -11320,6 +11392,8 @@ function toggleTheme() {
   const isDark = document.body.classList.toggle('dark');
   localStorage.setItem('dp_theme', isDark ? 'dark' : 'light');
   updateThemeIcon();
+  // 同步嵌入页（Tavern 等）主题
+  if (typeof syncTavernTheme === 'function') syncTavernTheme();
 }
 
 function updateThemeIcon() {

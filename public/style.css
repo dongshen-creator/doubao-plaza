@@ -177,6 +177,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 }
 .sidebar-toggle-btn:hover { color: var(--text-primary); }
 
+/* ── 嵌入页（自定义页面 / Tavern 在站内 iframe 打开）── */
+.embed-header {
+  padding: 8px 12px;
+  margin: 0;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.embed-header .embed-act {
+  padding: 4px 10px;
+  font-size: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.embed-header .tavern-menu-btn { display: none; }
+@media (max-width: 767px) {
+  .embed-header .tavern-menu-btn { display: inline-flex; }
+}
+
 /* ── 活动栏 ── */
 .activity-bar {
   width: 48px;
