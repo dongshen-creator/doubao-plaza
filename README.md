@@ -45,6 +45,7 @@ doubao-plaza/
 │   │   ├── tools/registry.js      # 工具注册表（所有工具定义，含 page 类型）
 │   │   ├── tools/ai.js            # AI 工具端点（对话/翻译/总结/画图）
 │   │   ├── tools/proxy.js         # 免费 API 代理转发
+│   │   ├── tools/fetch.js         # 统一内容获取端点（SSRF 防护，tavern 链接导入/下载）
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
 │   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
 │   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
@@ -428,6 +429,16 @@ Tavern 依赖 `functions/api/proxy.js` 作为 CORS 代理，用于转发不支�
 - **标准 API 转发**：通过 `X-Target-URL` 请求头指定目标地址，转发 `Authorization` 头
 - **Coze Cookie 认证**：通过 `X-Coze-Session` 请求头传入 session token，代理自动转为 `Cookie: db_session=<token>` 转发；登录响应中的 `Set-Cookie` 自动提取为 `X-Set-Session` 响应头返回
 - **SSE 流式透传**：保持 `text/event-stream` 的流式特性
+
+### 统一转接层（内容获取）
+
+Tavern 的链接导入/下载（角色卡 JSON、ZIP 等）优先走 `functions/api/tools/fetch.js`（`GET /api/tools/fetch?url=...`），替代第三方公共 CORS 代理，降低对 allorigins 的依赖。该端点：
+
+- **SSRF 防护**：拒绝内网/保留地址（复用与 `/api/img-proxy` 相同的 `isPrivateHost` 检测）
+- **大小限制**：最大转发 20MB
+- **超时控制**：15 秒未响应自动中止
+- **CORS 透传**：附加 `Access-Control-Allow-Origin: *`，跨域可用
+- 失败时自动回退到 allorigins → 直连
 
 ### 部署方式
 

@@ -1,8 +1,11 @@
-// 图片代理：浏览器端外部图片统一走本站域名（/api/img-proxy?url=...），
-// 规避浏览器 Private Network Access (PNA) / CORS 对外部图片的拦截。
+// 统一内容获取端点：浏览器端任意 HTTP(S) 内容统一走本站域名（/api/tools/fetch?url=...），
+// 规避浏览器跨域限制，替代第三方公共 CORS 代理（如 allorigins）与无防护的 /api/proxy GET 转发。
+// 带 SSRF 防护（拒绝内网地址）、大小限制与超时控制。
 // 部署在 Cloudflare Pages Functions，fetch 从 Cloudflare 网络发起，不受客户端 DNS/代理影响。
+// 用法：GET /api/tools/fetch?url=<编码后的目标地址>
 
-const MAX_BYTES = 10 * 1024 * 1024; // 最大转发 10MB
+const MAX_BYTES = 20 * 1024 * 1024; // 最大转发 20MB（角色卡 ZIP / base64 内嵌图片足够）
+const TIMEOUT_MS = 15000;
 
 // IPv4 私网/保留段判定（纯 IPv4 点分格式）
 function isPrivateV4(host) {
@@ -45,33 +48,47 @@ function isPrivateHost(host) {
   return isPrivateV4(h);
 }
 
+export async function onRequestOptions(context) {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400'
+    }
+  });
+}
+
 export async function onRequestGet(context) {
   const { request } = context;
   const url = new URL(request.url);
   const target = url.searchParams.get('url');
+  const cors = { 'Access-Control-Allow-Origin': '*' };
+
   if (!target) {
-    return Response.json({ error: '缺少 url 参数。用法: /api/img-proxy?url=<编码后的图片地址>' }, { status: 400 });
+    return Response.json({ error: '缺少 url 参数。用法: /api/tools/fetch?url=<编码后的目标地址>' }, { status: 400, headers: cors });
   }
 
   let parsed;
   try {
     parsed = new URL(target);
   } catch {
-    return Response.json({ error: '无效的 url' }, { status: 400 });
+    return Response.json({ error: '无效的 url' }, { status: 400, headers: cors });
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return Response.json({ error: '仅支持 http/https 协议' }, { status: 400 });
+    return Response.json({ error: '仅支持 http/https 协议' }, { status: 400, headers: cors });
   }
   if (isPrivateHost(parsed.hostname)) {
-    return Response.json({ error: '禁止访问内网地址' }, { status: 403 });
+    return Response.json({ error: '禁止访问内网地址' }, { status: 403, headers: cors });
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const resp = await fetch(target, {
       method: 'GET',
-      // 不带 Referer（绕过部分图床防盗链）；带常见 UA
+      // 不带 Referer（绕过部分站点防盗链）；带常见 UA
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36' },
       redirect: 'follow',
       signal: controller.signal
@@ -79,28 +96,24 @@ export async function onRequestGet(context) {
     clearTimeout(timer);
 
     if (!resp.ok) {
-      return new Response('上游返回 ' + resp.status, { status: 502 });
+      return new Response('上游返回 ' + resp.status, { status: 502, headers: cors });
     }
-    const ctype = resp.headers.get('Content-Type') || '';
-    // 只转发图片内容（部分图床用 octet-stream，一并放行；img 解码失败会自行触发 onerror 回退）
-    if (!ctype.startsWith('image/') && ctype !== 'application/octet-stream') {
-      return new Response('非图片内容', { status: 502 });
-    }
+    const ctype = resp.headers.get('Content-Type') || 'application/octet-stream';
     const len = parseInt(resp.headers.get('Content-Length') || '0', 10);
     if (len > MAX_BYTES) {
-      return new Response('图片过大', { status: 413 });
+      return new Response('内容过大', { status: 413, headers: cors });
     }
 
     const headers = new Headers();
     headers.set('Content-Type', ctype);
-    headers.set('Cache-Control', 'public, max-age=86400'); // CDN 缓存 1 天，减少重复转发
     headers.set('Access-Control-Allow-Origin', '*');
+    // 不缓存：目标内容可能动态变化（角色卡/配置 JSON）
     return new Response(resp.body, { status: 200, headers });
   } catch (err) {
     clearTimeout(timer);
     if (err.name === 'AbortError') {
-      return new Response('上游响应超时', { status: 504 });
+      return new Response('上游响应超时', { status: 504, headers: cors });
     }
-    return new Response('代理失败: ' + (err.message || '未知错误'), { status: 502 });
+    return new Response('代理失败: ' + (err.message || '未知错误'), { status: 502, headers: cors });
   }
 }

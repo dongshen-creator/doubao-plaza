@@ -9718,7 +9718,6 @@ function openEmbeddedPage(url, title, kind) {
   var actions = '';
   if (kind === 'tavern') {
     actions = [
-      ['menuToggle', '☰', '角色列表', 'tavern-menu-btn'],
       ['newCharBtn', '＋ 角色', '新建角色', ''],
       ['importBtn', '导入', '导入数据', ''],
       ['urlImportHeaderBtn', '链接', '链接导入', ''],
@@ -9735,9 +9734,14 @@ function openEmbeddedPage(url, title, kind) {
     actions = '<button class="btn btn-sm btn-gray" title="新窗口打开" onclick="window.open(\'' + escAttr(openUrl) + '\',\'_blank\')">↗ 新窗口</button>';
   }
 
+  // 顶栏左侧：tavern 用 ☰ 打开角色列表抽屉（桌面活动栏/移动底栏负责切换视图，无需返回键）；其他页面保留返回
+  var leftBtn = kind === 'tavern'
+    ? '<button class="sidebar-toggle-btn tavern-menu-btn" onclick="tavernAction(\'menuToggle\')" title="角色列表">☰</button>'
+    : '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>';
+
   main.innerHTML =
     '<div class="view-header-bar embed-header">' +
-      '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
+      leftBtn +
       '<span style="font-size:15px;font-weight:600">' + esc(title) + '</span>' +
       '<div style="flex:1"></div>' + actions +
     '</div>' +

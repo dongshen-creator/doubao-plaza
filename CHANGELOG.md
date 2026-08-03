@@ -4,6 +4,42 @@
 
 ---
 
+## v4.9 — 2026-08-04
+
+### Tavern 体验升级：云盘导入助手 + 主题色对齐 + 背景/质感 + 统一转接层
+
+#### 新增功能
+
+##### 1. 飞书云盘链接导入助手
+- tavern 粘贴链接时自动检测飞书云盘链接（`feishu.doubao.com/drive/file/...`），弹出导入助手弹窗
+- 助手内 iframe 匿名渲染云盘 JSON 内容（解决跨域只读限制），用户复制后粘贴 JSON 一键解析导入角色卡
+- 支持 `chara_card_v2` 标准格式解析
+
+##### 2. 统一转接层（tavern 网络工具封装）
+- 新增 `functions/api/tools/fetch.js` — 统一内容获取端点（`GET /api/tools/fetch?url=...`）：
+  - **SSRF 防护**：复用 `/api/img-proxy` 的 `isPrivateHost` 检测，拒绝内网/保留地址
+  - **大小限制**：最大转发 20MB
+  - **超时控制**：15 秒未响应自动中止（AbortController）
+  - **CORS 透传**：附加 `Access-Control-Allow-Origin: *`，跨域可用
+- tavern 链接导入策略1 从无防护的 `/api/proxy?url=`（AI API 专用，含密钥注入）切换到统一转接层，失败时仍回退 allorigins → 直连
+
+#### 修改/新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `functions/api/tools/fetch.js` | **新增** — 统一内容获取端点（SSRF 防护 + 20MB + 15s 超时） |
+| `public/tavern.html` | 云盘链接检测 + 导入助手弹窗；导入策略切换至 `/api/tools/fetch`；主题色全量对齐平台橙色（`#165DFF`→`#FF6B35`、`#3b82f6`/`#93c5fd`/`#60a5fa`→`#FF8F5E`、`#eff6ff`/`#f0f5ff`→`#FFF1E8` 等 68 处）；主按钮渐变质感（`linear-gradient(135deg,#FF6B35,#FF8F5E)` + 悬浮动效）；背景设置实测确认（默认/纯黑/纯白/自定义 URL + 图床三级回退） |
+| `README.md` | 项目结构新增 `tools/fetch.js`；Tavern 章节新增「统一转接层（内容获取）」说明 |
+
+#### 验证记录
+- 飞书云盘导入助手：Playwright 实测粘贴 `chara_card_v2` JSON → 解析导入 → 角色列表新增成功
+- 主题色：亮/暗/hover 三态全橙、蓝色残留 0、JS 7/7 `node --check` 通过
+- 背景设置：纯黑 → `rgb(0,0,0)`、自定义 URL → `backgroundImage` 均实测生效
+- UI 质感：11 个主按钮渐变生效，消息气泡/顶栏/进度条保持纯色不受影响
+- 统一转接层：`node --check` 语法通过
+
+---
+
 ## v4.8 — 2026-07-29
 
 ### 小肥羊讲堂（博客系统）+ 工具框架升级 + IP注册限制
