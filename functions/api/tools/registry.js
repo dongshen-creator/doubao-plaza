@@ -263,6 +263,21 @@ export const TOOL_REGISTRY = [
     result_type: 'page',
     max_tokens: 0,
     supports_history: false
+  },
+  {
+    id: 'tavern',
+    name: '角色酒馆',
+    icon: '🏮',
+    category: 'independent',
+    description: 'AI 角色扮演聊天工具，灵感来自 SillyTavern，支持多 AI 提供商、人格系统、世界书、滑动分支等',
+    api_type: 'page',
+    page_handler: 'renderTavernPage',
+    model: null,
+    system_prompt: null,
+    input_fields: [],
+    result_type: 'page',
+    max_tokens: 0,
+    supports_history: false
   }
 ];
 

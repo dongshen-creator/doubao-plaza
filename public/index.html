@@ -1862,6 +1862,16 @@ function switchView(view) {
   _currentView = view;
   _prevView = view;
 
+  // 恢复主内容区默认样式（Tavern 全屏嵌入时会临时修改 padding/display/overflow）
+  var mainReset = document.getElementById('mainContent');
+  if (mainReset && mainReset.dataset.tavernFullscreen) {
+    mainReset.style.padding = '';
+    mainReset.style.overflow = '';
+    mainReset.style.display = '';
+    mainReset.style.flexDirection = '';
+    delete mainReset.dataset.tavernFullscreen;
+  }
+
   // 移动端切换视图时关闭所有抽屉
   closeMobilePanels();
 
@@ -2598,6 +2608,27 @@ async function openToolPanel(toolId, title) {
   // === 页面类工具：博客直接切换到独立视图 ===
   if (tool.api_type === 'page' && tool.page_handler === 'renderBlogPage') {
     switchView('blog');
+    return;
+  }
+
+  // === 页面类工具：Tavern 角色酒馆以 iframe 全屏嵌入（保留最左侧活动栏）===
+  if (tool.api_type === 'page' && tool.page_handler === 'renderTavernPage') {
+    var sbTavern = document.getElementById('appSidebar');
+    if (sbTavern) sbTavern.classList.remove('has-content');
+    var mainTavern = document.getElementById('mainContent');
+    mainTavern.dataset.tavernFullscreen = '1';
+    mainTavern.style.padding = '0';
+    mainTavern.style.overflow = 'hidden';
+    mainTavern.innerHTML =
+      '<div class="view-header-bar" style="padding:8px 12px;margin:0;border-bottom:1px solid var(--border-color)">' +
+        '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
+        '<span style="font-size:15px;font-weight:600">🏮 ' + esc(title) + '</span>' +
+      '</div>' +
+      '<div id="tavernFrameWrap" style="flex:1;min-height:0;display:flex">' +
+        '<iframe id="tavernFrame" src="/tavern.html" style="flex:1;width:100%;border:0;display:block;background:#12121f" title="角色酒馆" allow="clipboard-write"></iframe>' +
+      '</div>';
+    mainTavern.style.display = 'flex';
+    mainTavern.style.flexDirection = 'column';
     return;
   }
 
