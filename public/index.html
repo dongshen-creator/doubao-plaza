@@ -9689,6 +9689,26 @@ async function joinSharedChannel(roomId, roomName) {
 
 // ═══ 工具面板覆盖层 ═══
 async function openToolPanel(toolId, roomId) {
+  // === 页面类工具：Tavern 角色酒馆以 iframe 全屏嵌入（保留最左侧活动栏）===
+  if (toolId === 'tavern') {
+    var sbTavern = document.getElementById('appSidebar');
+    if (sbTavern) sbTavern.classList.remove('has-content');
+    var mainTavern = document.getElementById('mainContent');
+    mainTavern.dataset.tavernFullscreen = '1';
+    mainTavern.style.padding = '0';
+    mainTavern.style.overflow = 'hidden';
+    mainTavern.innerHTML =
+      '<div class="view-header-bar" style="padding:8px 12px;margin:0;border-bottom:1px solid var(--border-color)">' +
+        '<button class="sidebar-toggle-btn" onclick="switchView(\'features\')">←</button>' +
+        '<span style="font-size:15px;font-weight:600">🏮 ' + esc(roomId || '角色酒馆') + '</span>' +
+      '</div>' +
+      '<div id="tavernFrameWrap" style="flex:1;min-height:0;display:flex">' +
+        '<iframe id="tavernFrame" src="/tavern.html" style="flex:1;width:100%;border:0;display:block;background:#12121f" title="角色酒馆" allow="clipboard-write"></iframe>' +
+      '</div>';
+    mainTavern.style.display = 'flex';
+    mainTavern.style.flexDirection = 'column';
+    return;
+  }
   var { data: tool } = await __SB.from('chat_channel_tools').select('*').eq('id', toolId).maybeSingle();
   if (!tool) { toast('工具不存在', 'error'); return; }
   closeToolPanel();
