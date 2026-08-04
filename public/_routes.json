@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "include": ["/api/*", "/pages/*", "/chat/*", "/cdn-assets/*", "/tavern.html"],
+  "include": ["/api/*", "/pages/*", "/chat/*", "/cdn-assets/*"],
   "exclude": [
     "/style.css",
     "/supabase-sdk.js",

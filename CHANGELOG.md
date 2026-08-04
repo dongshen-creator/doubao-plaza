@@ -16,9 +16,11 @@
 - `syncEmbeddedFromParent` 接收主站 `themeColor` 并应用；主站 `syncTavernPrefs` 发送 `dp_theme_color`（默认 orange）——嵌入时主题色与主站完全一致
 
 ##### 2. Tavern 嵌入时 CSP 阻断外部 AI API（智谱 / NVIDIA / 站内对话）
-- **方案变更**：`_headers` 的 `/tavern.html` 路径规则经线上验证**不生效**——Cloudflare `_headers` 对同一 header 在多个匹配规则中采用「值逗号拼接」合并语义，多 CSP 策略被浏览器同时强制执行 = 取交集 = 最严格策略仍生效，无法单独放宽；且 `_headers` 不适用于 Pages Function 响应
-- 改为**新增 `functions/tavern.html.js`**：用 `env.ASSETS.fetch()` 取回静态 tavern.html，在函数内覆写 `Content-Security-Policy` 为 `connect-src 'self' https: wss:` 的独立宽松策略（其余安全头同步补全）——智谱直连、NVIDIA 代理、站内 `/api/tools/ai` 均不再被 CSP 拦截
-- `public/_routes.json` include 加入 `/tavern.html` 使请求进入该 Function
+- **结论（v4.11.1 回滚）**：Cloudflare Pages 在静态文件层面**无法对单个文件单独放宽 CSP**——
+  - `_headers` 的 `/tavern.html` 路径规则线上验证**不生效**：`_headers` 对同一 header 在多个匹配规则中采用「值逗号拼接」合并语义，多 CSP 策略被浏览器同时强制执行 = 取交集 = 最严格策略仍生效，无法单独放宽
+  - 尝试 `functions/tavern.html.js`（`env.ASSETS.fetch()` 取回静态资源后在函数内覆写 CSP，`_routes.json` include 加入 `/tavern.html`）→ **上线后该路径返回 404**：路径一旦被 Function 路由接管，`env.ASSETS.fetch()` 无法再取回同名静态资源，页面直接打不开
+  - **已回滚**：删除 Function、还原 `_routes.json`，tavern.html 恢复为纯静态托管，继续使用全局 CSP
+- **最终影响**：嵌入模式下**站内 AI（`st:ai_chat`，同源 `/api/tools/ai`）不受影响**，可正常使用；仅「外部 AI 直连」（SiliconFlow / OpenRouter 等跨域 API）在嵌入时仍被全局 CSP 的 `connect-src` 拦截，属已知限制——需跨域调用时请使用可 CORS 直连的提供商或改走站内 AI
 
 ##### 3. 新增「站内 AI」提供商（免密钥）
 - gmModel 下拉最前新增 `⚡ 站内AI（本站·免密钥·推荐）` → `st:ai_chat`
@@ -37,9 +39,9 @@
 |------|------|
 | `public/tavern.html` | 主题变量 / 站内 AI 提供商 / 人格 UI / onVirtualScroll 残留清理 |
 | `public/index.html` | `syncTavernPrefs` 发送 themeColor |
-| `functions/tavern.html.js` | 新增 tavern 专属 CSP 改写 Function（替代失效的 `_headers` 规则） |
-| `public/_routes.json` | include 加入 `/tavern.html` |
 | `CHANGELOG.md` | 本记录 |
+
+> **v4.11.1（已回滚）**：曾新增 `functions/tavern.html.js` 并在 `_routes.json` include 加入 `/tavern.html` 以放宽 tavern 的 CSP，上线后该路径 404（Function 路由接管后 `env.ASSETS.fetch()` 无法取回同名静态资源），已删除并还原 `_routes.json`，详见上方「结论（v4.11.1 回滚）」。
 
 ---
 
