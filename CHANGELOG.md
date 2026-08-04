@@ -4,6 +4,112 @@
 
 ---
 
+## v5.0 — 2026-08-04
+
+### 综合修复：聊天频道发送失败 / Tavern TTS·STT / 自定义 AI API 直连失败 / 站内 Workers AI 未连接 / 主题适配
+
+#### 修复 1：聊天频道发不出消息（会话瞬时失效后永久卡死 + 公开频道 RLS 过严）
+
+- **根因 A（前端）**：`sendChatMsg` 在 Supabase 插入报权限错误时直接 `__clearSupabaseSession()` 并提示「登录状态已失效」——若页面加载时首次 `setSession` 因网络波动瞬时失败（如浏览器 PNA/DNS 干扰），后续所有发送都会命中该分支，且无自动恢复，表现为「聊天频道发不了对话」
+- **修复**：`__ensureSupabaseSession(force)` 新增强制刷新参数；`sendChatMsg` 遇到 RLS/权限错误时**先强制刷新会话并重试一次插入**，仍失败才清会话并给出具体错误提示
+- **根因 B（RLS）**：`chat_messages_insert` 策略要求 `chat_room_members` 必有成员记录，而读取策略允许公开频道（`is_channel_public`）免成员读取——成员记录缺失时（加入流程中断等）能读不能发
+- **修复**：`supabase-migration.sql` 中 `chat_messages_insert` 放宽为「本人 +（公开频道 OR 成员记录）」，与读取策略对齐；**已同步应用到线上 Supabase**
+
+#### 修复 2：Tavern TTS 无法播放 + STT 麦克风被禁
+
+- **根因**：全局 CSP 未声明 `media-src`，blob: 音频被 `default-src 'self'` 兜底拦截（控制台：`Loading media from blob:... violates CSP`）；`Permissions-Policy: microphone=()` 全局禁用了麦克风
+- **修复**（`public/_headers`）：CSP 增加 `media-src 'self' blob: data: https:`、`img-src` 增加 `blob:`；`Permissions-Policy` 改为 `camera=(), geolocation=(), microphone=(self)`（仅同源页面可用麦克风，camera/geolocation 仍禁用）
+
+#### 修复 3：Tavern 自定义 API / 智谱 / DeepSeek 直连失败（PNA/CORS）
+
+- **根因**：浏览器 Private Network Access (PNA) 拦截——本机代理/DNS 把 `api.deepseek.com` 等 AI 域名解析成内网地址时，浏览器直接 fetch 报 `Permission was denied for this request to access the local address space`；智谱等渠道本身也无 CORS 响应头
+- **修复**（`public/tavern.html`）：新增 `fetchRemoteApi()` 统一请求入口——直连失败（网络/CORS/PNA 错误）时**自动回退站内 `/api/proxy` 转发**（Cloudflare 后端发起请求，不受客户端 DNS 影响）；接入 `sendMessage` / `regenerateSwipe` / `continueGenerate` 三处远程 API 路径
+
+#### 修复 4：站内 Workers AI（`cf:` / 站内 AI）未连接 + 模型收敛为便宜小模型
+
+- **根因**：Cloudflare Pages 项目**未绑定 AI**（`ai_bindings: null`，API 实测确认），`/api/tools/ai` 返回 503「AI 服务未绑定」
+- **修复（配置操作，非代码）**：Dashboard → doubao-plaza → Settings → Functions → **Bindings → Add → Workers AI**，变量名填 `AI`，保存后重新部署。可选：同时补 R2 绑定（`PAGES_BUCKET`，聊天上传兜底存储）
+  - 注：已实测 REST API（`PATCH /pages/projects`）与 wrangler CLI 均无法添加 Workers AI 绑定（该接口仅支持已废弃的 Constellation 格式），必须在 Dashboard 操作
+- **模型收敛（V5.0）**：站内 AI 相关模型统一改为便宜小模型，控制成本：
+  - `functions/api/tools/ai.js` CF 白名单：移除 `@cf/deepseek/deepseek-r1-distill-qwen-32b`（32B 推理模型，成本高），保留 Llama 3.2-1B / 3B / Llama 3.1-8B-FP8，新增 `@cf/ibm-granite/granite-4.0-h-micro`
+  - `functions/api/tools/registry.js`：AI对话默认模型 `@cf/zai-org/glm-4.7-flash` → `@cf/meta/llama-3.2-3b-instruct`（AI翻译保持 1B、AI总结保持 Granite Micro；AI画图保持 flux-1-schnell 为图片工具）
+  - `public/tavern.html`：cf: 模型下拉移除 DeepSeek 32B、新增 Granite Micro；站内 AI 文案同步更新
+
+#### 修复 5：聊天视频消息无法播放（img-proxy 拒绝视频）
+
+- **根因**：`/api/img-proxy` 只放行 `image/*`，`video:` 消息的 `<video src>` 经代理转发后返回 502「非图片内容」
+- **修复**（`functions/api/img-proxy.js`）：放行 `video/*` 与 `audio/*`；超时 15s→10s（坏图更快触发前端占位兜底）
+
+#### 修复 6：Tavern 图床上传 403/401（img.remit.ee / sm.ms 停服）
+
+- **根因**：img.remit.ee（403）与 sm.ms（401）已停止匿名/代理上传；`IMG_PROXY` 硬编码了绝对域名
+- **修复**（`public/tavern.html` `uploadToImageHost`）：新增「站内上传」优先通道（`/api/upload/tmpfile` 服务端转发，登录 dp_token 即可）；代理地址改相对路径 `/api/proxy`；失效图床降级为兜底自动跳过
+
+#### 修复 7：Tavern 主题色适配（结构性颜色变量化 + 嵌入跟随主站实际配色）
+
+- 新增语义结构变量层 `--tv-page/--tv-panel/--tv-deep/--tv-hover/--tv-soft/--tv-ink/--tv-muted`（亮/暗双态默认值与原观感一致），自定义 CSS 中的暗色面板色（#2a2a3e/#1e1e2e/#3a3a4e 等）与蓝色残留 rgba(22,93,255,α) 全部改为变量 / `color-mix(in srgb, var(--acc) N%, transparent)`
+- 预编译 Tailwind 的任意值类（`dark:bg-[#1e1e2e]` / `dark:bg-[#2a2a3e]` / `dark:bg-[#1a1a2e]`，共 40+ 处，含 JS 模板字符串）用高特异性规则 `html.dark .dark\:bg-[...]` 统一接管（文档中存在两份 bundle，同权重按序会压过覆盖块，故提升特异性）
+- 嵌入模式跟随主站实际配色：主站 `syncTavernPrefs` 增推 `dark` 与 `palette`（读取 body 计算样式中的 `--bg-primary/--bg-secondary/--bg-tertiary/--bg-hover/--text-primary/--text-muted`）；tavern `syncEmbeddedFromParent` 接收后写 `--tv-*` 变量，暗色下面板色与主站完全一致（实测：#0f172a/#1e293b 系列生效）；`toggleTheme` 同步补调 `syncTavernPrefs`
+- Tailwind Play CDN 生产警告静默（bundle 内 `console.warn` 文案替换）
+
+#### 修复 8：Tavern 人格管理 UI 重做（原交互反人类）
+
+- **编辑区上置**：编辑/新建表单从列表底部移到列表上方，打开时自动 `scrollIntoView` 滚入视野，并显示标题（「编辑人格：xxx」/「新建人格」）
+- **头像快捷选择**：新增 22 个常用表情一键选择 + 实时预览框（输入框输入即时同步预览），不再要求手输 emoji
+- **删除确认**：删除人格前弹 `confirm` 确认，避免误删；列表行头像改为圆角方块展示
+- **当前人格指示**：弹窗头部新增「当前：xxx」徽标；使用中的人格行显示「使用中」标签（去掉暗色下蓝色残留 `dark:text-blue-400`）
+- **交互增强**：Esc / 点击遮罩关闭弹窗；名称输入框回车直接保存；切换人格 toast 显示新人格名
+
+#### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `public/_headers` | CSP `media-src`/`img-src` blob + `Permissions-Policy` microphone=(self) |
+| `public/index.html` | `__ensureSupabaseSession(force)` + `sendChatMsg` 失败重试；`syncTavernPrefs` 推送 dark/palette；`toggleTheme` 补调 |
+| `public/tavern.html` | `fetchRemoteApi` 代理回退 ×3；`uploadToImageHost` 站内优先；`--tv-*` 主题变量层 + 嵌入调色板同步；模型下拉收敛；Tailwind 警告静默 |
+| `supabase-migration.sql` | `chat_messages_insert` 公开频道免成员记录（已同步线上） |
+| `functions/api/img-proxy.js` | 放行 video/audio；超时 10s |
+| `functions/api/tools/ai.js` | CF 模型白名单收敛为便宜小模型 |
+| `functions/api/tools/registry.js` | AI对话默认模型改 Llama 3.2-3B |
+| `TOOL_FRAMEWORK_GUIDE.md` | 示例模型同步更新 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] JWT 全链路线上实测：D1 session → `/api/refresh-supabase-token` → Edge Function `sign-jwt` → ES256 token（含 `app_metadata.d1_user_id`）200 通过
+- [x] 浏览器端到端实测：加入公开频道 → 发送消息成功入库（测试账号/消息已清理）；页面加载时首次 `setSession` 瞬时失败场景可复现，重试逻辑已覆盖
+- [x] 主题适配 Playwright 本地实测：暗色 + 模拟主站调色板推送 → chatHeader/moreMenu/sidePanel/.modal 计算样式分别为 #0f172a/#1e293b（与主站一致）；默认（无父页面）回退原 #1e1e2e/#2a2a3e 观感不变
+- [x] 全部改动文件内联 `<script>` / Functions 文件 `node --check` 语法通过（tavern 7/7、index 5/5、后端 5/5）
+- [ ] 部署后浏览器实测：TTS 播放、STT 麦克风、自定义 API 直连失败回退代理、主题色跟随（部署后补）
+
+---
+
+## v4.13 — 2026-08-04
+
+### Tavern Cloudflare 模型免密钥（改走站内 Workers AI 端点）
+
+#### 变更
+
+1. **Cloudflare 模型不再需要 Account ID / CORS 代理**：此前 tavern 的 `cf:` 模型需填写 Cloudflare Account ID 并拼 `{ACCOUNT_ID}/ai/run/...` 远程地址；现改为由本站后端 `/api/tools/ai`（`env.AI` Workers AI 绑定）直接提供，登录逗包广场（`dp_token`）即可使用，无需填写任何密钥或 Account ID
+2. **后端 `/api/tools/ai` 新增模型覆盖参数**：`ai.js` 增加 CF 模型白名单校验，支持 `model`（覆盖默认模型）、`messages`（消息数组直传，替代原 message/history 二参数）、`max_tokens` 透传；非白名单模型走原站内 AI 路径保持兼容
+3. **tavern 三处请求路径接入新端点**：`sendMessage` / `regenerateSwipe` / `continueGenerate` 新增 `provider === 'cloudflare'` 分支，POST `/api/tools/ai` 携带 `dp_token` + `model` + `messages` + `max_tokens`，流式解析复用站内 AI 的 `{text}` 格式
+4. **设置面板 UI 更新**：`gmCloudflareWrap` 改为免密钥说明（移除 Account ID 输入字段）；`needsProxy` 仅 NVIDIA 需 CORS 代理（cloudflare 不再需要）；保存/读取对旧配置做判空兼容
+
+#### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `functions/api/tools/ai.js` | CF 模型白名单 + `model` / `messages` / `max_tokens` 参数支持（V4.13） |
+| `public/tavern.html` | `API_PROVIDERS.cloudflare` 免密钥化 + 设置面板说明 + 三处请求路径新增 cloudflare 分支 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [ ] `node --check` ai.js 语法通过
+- [ ] tavern 选择 `cf:` 模型 → 设置面板显示「本站提供 · 免密钥」，无 Account ID 输入框、无 CORS 代理框
+- [ ] tavern 登录后发送消息 / 重新生成 / 继续生成均走 `/api/tools/ai` 正常流式输出
+- [ ] 未登录使用 `cf:` 模型 → 提示「请先在逗包用户广场登录」
+
+---
+
 ## v4.12 — 2026-08-04
 
 ### 修复 Tavern 外部 AI API 被全局 CSP 拦截 + 主题色全面跟随主题变量

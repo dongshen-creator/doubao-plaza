@@ -1,6 +1,7 @@
 // AI 工具端点 - 统一处理所有 AI 类工具
 // POST /api/tools/ai — AI工具统一入口
-// Body: { tool_id, message, history?, stream? }
+// Body: { tool_id, message, history?, stream?, model?, messages?, max_tokens? }
+// V4.13 新增：model/messages/max_tokens 可选参数，供 tavern cf: 免密钥模型（站长后端 Workers AI）使用
 
 import { findTool } from './registry.js';
 
@@ -85,23 +86,42 @@ export async function onRequestPost(context) {
 
     // === AI 文本对话（ai_chat）===
     if (tool.api_type === 'ai_chat') {
-      const userContent = message || body.text || '';
-      if (!userContent) {
-        return Response.json({ success: false, error: '消息不能为空' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+      // V5.0 修复：cf: 免密钥模型白名单统一收敛为便宜小模型（移除 32B 推理大模型，控制成本）
+      const CF_MODEL_WHITELIST = [
+        '@cf/meta/llama-3.2-1b-instruct',
+        '@cf/meta/llama-3.2-3b-instruct',
+        '@cf/meta/llama-3.1-8b-instruct-fp8',
+        '@cf/ibm-granite/granite-4.0-h-micro'
+      ];
+      const runModel = body.model || tool.model;
+      if (body.model && !CF_MODEL_WHITELIST.includes(body.model)) {
+        return Response.json({ success: false, error: '不允许的模型: ' + body.model }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
       }
 
-      const messages = [
-        { role: 'system', content: tool.system_prompt || '你是逗包用户广场的AI助手。' },
-        ...(Array.isArray(history) ? history : []),
-        { role: 'user', content: userContent }
-      ];
+      // CF 免密钥路径：直传 tavern 构建的完整消息（含角色人设）；否则走注册表 system_prompt 构建
+      let messages;
+      let maxTokens = tool.max_tokens || 512;
+      if (body.model && Array.isArray(body.messages) && body.messages.length) {
+        messages = body.messages;
+        maxTokens = body.max_tokens || maxTokens;
+      } else {
+        const userContent = message || body.text || '';
+        if (!userContent) {
+          return Response.json({ success: false, error: '消息不能为空' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+        }
+        messages = [
+          { role: 'system', content: tool.system_prompt || '你是逗包用户广场的AI助手。' },
+          ...(Array.isArray(history) ? history : []),
+          { role: 'user', content: userContent }
+        ];
+      }
 
       if (stream !== false) {
         // 流式输出
-        const aiStream = await env.AI.run(tool.model, {
+        const aiStream = await env.AI.run(runModel, {
           messages,
           stream: true,
-          max_tokens: tool.max_tokens || 512
+          max_tokens: maxTokens
         });
 
         // 将 Workers AI 的 ReadableStream 包装为标准 SSE 格式
@@ -138,9 +158,9 @@ export async function onRequestPost(context) {
         });
       } else {
         // 非流式
-        const response = await env.AI.run(tool.model, {
+        const response = await env.AI.run(runModel, {
           messages,
-          max_tokens: tool.max_tokens || 512
+          max_tokens: maxTokens
         });
         const text = typeof response === 'string' ? response : (response.response || response.text || '');
         return Response.json({ success: true, data: { text } }, { headers: { 'Access-Control-Allow-Origin': '*' } });

@@ -10,7 +10,7 @@ export const TOOL_REGISTRY = [
     category: 'independent',
     description: '与AI助手进行智能对话，支持多轮上下文',
     api_type: 'ai_chat',
-    model: '@cf/zai-org/glm-4.7-flash',
+    model: '@cf/meta/llama-3.2-3b-instruct',
     system_prompt: '你是逗包用户广场的AI助手。请用简洁友好的中文回答用户问题。如果用户用其他语言提问，也用中文回答，除非用户明确要求用其他语言。',
     input_fields: [
       { name: 'message', type: 'textarea', label: '消息内容', placeholder: '输入你的问题...', required: true }

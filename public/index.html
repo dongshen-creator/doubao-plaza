@@ -145,12 +145,12 @@
           console.warn('[SB] setSession failed:', e);
         }
       };
-      // 检查 JWT 是否快过期（5 分钟内），如果是则自动刷新
-      window.__ensureSupabaseSession = async function() {
+      // 检查 JWT 是否快过期（5 分钟内），如果是则自动刷新；V5.0 修复：传 true 强制刷新（发送失败重试时用）
+      window.__ensureSupabaseSession = async function(force) {
         if (!window.__SB || !sessionToken) return;
         var now = Date.now();
-        // 如果 token 还有 5 分钟以上有效期，不需要刷新
-        if (window.__sbTokenExp - now > 5 * 60 * 1000) return;
+        // 如果 token 还有 5 分钟以上有效期，不需要刷新（强制刷新时跳过此检查）
+        if (!force && window.__sbTokenExp - now > 5 * 60 * 1000) return;
         // 防止并发刷新
         if (window.__sbRefreshPromise) return window.__sbRefreshPromise;
         window.__sbRefreshPromise = (async function() {
@@ -7945,10 +7945,22 @@ async function sendChatMsg() {
     var isAuthErr = error.code === 'PGRST301' || error.status === 401 || error.status === 403
       || authMsg.indexOf('row-level security') >= 0 || authMsg.indexOf('jwt') >= 0 || authMsg.indexOf('permission') >= 0;
     if (isAuthErr) {
+      // V5.0 修复：先强制刷新 Supabase 会话并重试一次插入，避免首次 setSession 瞬时失败后消息一直发不出
+      await window.__ensureSupabaseSession(true);
+      const retryRes = await __SB.from('chat_messages').insert({
+        event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
+        sender_name: currentUser.name, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
+        content, reply_to: replyToSave || null, ts: Date.now()
+      });
+      if (!retryRes.error) {
+        btn.disabled = false;
+        chatState.lastSendTime = Date.now();
+        return;
+      }
       await window.__clearSupabaseSession();
       chatState.messages[chatState.currentRoomId] = prevMsgs;
       renderMessages(chatState.currentRoomId);
-      toast('登录状态已失效，请重新登录后重试', 'error');
+      toast('发送失败，请刷新页面重新登录后重试（' + (retryRes.error.message || retryRes.error.code) + '）', 'error');
       btn.disabled = false;
       return;
     }
@@ -9797,8 +9809,21 @@ function syncTavernPrefs() {
     var prefs = {
       bgUrl: localStorage.getItem('dp_chat_bg') || '',
       fontFamily: (document.body && getComputedStyle(document.body).fontFamily) || '',
-      themeColor: localStorage.getItem('dp_theme_color') || 'orange'
+      themeColor: localStorage.getItem('dp_theme_color') || 'orange',
+      // V5.0 修复：推送暗色模式 + 主站实际调色板（tavern 结构色跟随）
+      dark: document.body.classList.contains('dark')
     };
+    if (prefs.dark) {
+      var pcs = getComputedStyle(document.body);
+      prefs.palette = {
+        page: (pcs.getPropertyValue('--bg-secondary') || '').trim(),
+        panel: (pcs.getPropertyValue('--bg-tertiary') || '').trim(),
+        deep: (pcs.getPropertyValue('--bg-primary') || '').trim(),
+        hover: (pcs.getPropertyValue('--bg-hover') || '').trim(),
+        ink: (pcs.getPropertyValue('--text-primary') || '').trim(),
+        muted: (pcs.getPropertyValue('--text-muted') || '').trim()
+      };
+    }
     f.contentWindow.syncEmbeddedFromParent(prefs);
   } catch(e) {}
 }
@@ -11423,6 +11448,8 @@ function toggleTheme() {
   updateThemeIcon();
   // 同步嵌入页（Tavern 等）主题
   if (typeof syncTavernTheme === 'function') syncTavernTheme();
+  // V5.0 修复：同时推送暗色模式与调色板，tavern 结构色跟随主站实际配色
+  if (typeof syncTavernPrefs === 'function') syncTavernPrefs();
 }
 
 function updateThemeIcon() {

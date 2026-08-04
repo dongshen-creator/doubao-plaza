@@ -84,7 +84,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
   https://github.com/postcss/autoprefixer#readme
   https://github.com/browserslist/browserslist#readme
 
-`))}gv.exports=Dr;function Dr(...r){let e;if(r.length===1&&V5(r[0])?(e=r[0],r=void 0):r.length===0||r.length===1&&!r[0]?r=void 0:r.length<=2&&(Array.isArray(r[0])||!r[0])?(e=r[1],r=r[0]):typeof r[r.length-1]=="object"&&(e=r.pop()),e||(e={}),e.browser)throw new Error("Change `browser` option to `overrideBrowserslist` in Autoprefixer");if(e.browserslist)throw new Error("Change `browserslist` option to `overrideBrowserslist` in Autoprefixer");e.overrideBrowserslist?r=e.overrideBrowserslist:e.browsers&&(typeof console!="undefined"&&console.warn&&(of.red?console.warn(of.red(mv.replace(/`[^`]+`/g,n=>of.yellow(n.slice(1,-1))))):console.warn(mv)),r=e.browsers);let t={ignoreUnknownVersions:e.ignoreUnknownVersions,stats:e.stats,env:e.env};function i(n){let s=hv,a=new F5(s.browsers,r,n,t),o=a.selected.join(", ")+JSON.stringify(e);return lf.has(o)||lf.set(o,new j5(s.prefixes,a,e)),lf.get(o)}return{postcssPlugin:"autoprefixer",prepare(n){let s=i({from:n.opts.from,env:e.env});return{OnceExit(a){H5(n,s),e.remove!==!1&&s.processor.remove(a,n),e.add!==!1&&s.processor.add(a,n)}}},info(n){return n=n||{},n.from=n.from||m.cwd(),U5(i(n))},options:e,browsers:r}}Dr.postcss=!0;Dr.data=hv;Dr.defaults=N5.defaults;Dr.info=()=>Dr().info()});var bv={};Ge(bv,{default:()=>W5});var W5,wv=P(()=>{u();W5=[]});var xv={};Ge(xv,{default:()=>G5});var vv,G5,kv=P(()=>{u();Xi();vv=pe(rn()),G5=St(vv.default.theme)});var Av={};Ge(Av,{default:()=>Q5});var Sv,Q5,Cv=P(()=>{u();Xi();Sv=pe(rn()),Q5=St(Sv.default)});u();"use strict";var Y5=vt(_y()),K5=vt($e()),X5=vt(yv()),Z5=vt((wv(),bv)),J5=vt((kv(),xv)),eP=vt((Cv(),Av)),tP=vt((Vs(),_f)),rP=vt((al(),sl)),iP=vt((sa(),sc));function vt(r){return r&&r.__esModule?r:{default:r}}console.warn("cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation");var Ns="tailwind",uf="text/tailwindcss",_v="/template.html",Yt,Ev=!0,Ov=0,ff=new Set,cf,Tv="",Rv=(r=!1)=>({get(e,t){return(!r||t==="config")&&typeof e[t]=="object"&&e[t]!==null?new Proxy(e[t],Rv()):e[t]},set(e,t,i){return e[t]=i,(!r||t==="config")&&pf(!0),!0}});window[Ns]=new Proxy({config:{},defaultTheme:J5.default,defaultConfig:eP.default,colors:tP.default,plugin:rP.default,resolveConfig:iP.default},Rv(!0));function Pv(r){cf.observe(r,{attributes:!0,attributeFilter:["type"],characterData:!0,subtree:!0,childList:!0})}new MutationObserver(async r=>{let e=!1;if(!cf){cf=new MutationObserver(async()=>await pf(!0));for(let t of document.querySelectorAll(`style[type="${uf}"]`))Pv(t)}for(let t of r)for(let i of t.addedNodes)i.nodeType===1&&i.tagName==="STYLE"&&i.getAttribute("type")===uf&&(Pv(i),e=!0);await pf(e)}).observe(document.documentElement,{attributes:!0,attributeFilter:["class"],childList:!0,subtree:!0});async function pf(r=!1){r&&(Ov++,ff.clear());let e="";for(let i of document.querySelectorAll(`style[type="${uf}"]`))e+=i.textContent;let t=new Set;for(let i of document.querySelectorAll("[class]"))for(let n of i.classList)ff.has(n)||t.add(n);if(document.body&&(Ev||t.size>0||e!==Tv||!Yt||!Yt.isConnected)){for(let n of t)ff.add(n);Ev=!1,Tv=e,self[_v]=Array.from(t).join(" ");let{css:i}=await(0,K5.default)([(0,Y5.default)({...window[Ns].config,_hash:Ov,content:{files:[_v],extract:{html:n=>n.split(" ")}},plugins:[...Z5.default,...Array.isArray(window[Ns].config.plugins)?window[Ns].config.plugins:[]]}),(0,X5.default)({remove:!1})]).process(`@tailwind base;@tailwind components;@tailwind utilities;${e}`);(!Yt||!Yt.isConnected)&&(Yt=document.createElement("style"),document.head.append(Yt)),Yt.textContent=i}}})();
+`))}gv.exports=Dr;function Dr(...r){let e;if(r.length===1&&V5(r[0])?(e=r[0],r=void 0):r.length===0||r.length===1&&!r[0]?r=void 0:r.length<=2&&(Array.isArray(r[0])||!r[0])?(e=r[1],r=r[0]):typeof r[r.length-1]=="object"&&(e=r.pop()),e||(e={}),e.browser)throw new Error("Change `browser` option to `overrideBrowserslist` in Autoprefixer");if(e.browserslist)throw new Error("Change `browserslist` option to `overrideBrowserslist` in Autoprefixer");e.overrideBrowserslist?r=e.overrideBrowserslist:e.browsers&&(typeof console!="undefined"&&console.warn&&(of.red?console.warn(of.red(mv.replace(/`[^`]+`/g,n=>of.yellow(n.slice(1,-1))))):console.warn(mv)),r=e.browsers);let t={ignoreUnknownVersions:e.ignoreUnknownVersions,stats:e.stats,env:e.env};function i(n){let s=hv,a=new F5(s.browsers,r,n,t),o=a.selected.join(", ")+JSON.stringify(e);return lf.has(o)||lf.set(o,new j5(s.prefixes,a,e)),lf.get(o)}return{postcssPlugin:"autoprefixer",prepare(n){let s=i({from:n.opts.from,env:e.env});return{OnceExit(a){H5(n,s),e.remove!==!1&&s.processor.remove(a,n),e.add!==!1&&s.processor.add(a,n)}}},info(n){return n=n||{},n.from=n.from||m.cwd(),U5(i(n))},options:e,browsers:r}}Dr.postcss=!0;Dr.data=hv;Dr.defaults=N5.defaults;Dr.info=()=>Dr().info()});var bv={};Ge(bv,{default:()=>W5});var W5,wv=P(()=>{u();W5=[]});var xv={};Ge(xv,{default:()=>G5});var vv,G5,kv=P(()=>{u();Xi();vv=pe(rn()),G5=St(vv.default.theme)});var Av={};Ge(Av,{default:()=>Q5});var Sv,Q5,Cv=P(()=>{u();Xi();Sv=pe(rn()),Q5=St(Sv.default)});u();"use strict";var Y5=vt(_y()),K5=vt($e()),X5=vt(yv()),Z5=vt((wv(),bv)),J5=vt((kv(),xv)),eP=vt((Cv(),Av)),tP=vt((Vs(),_f)),rP=vt((al(),sl)),iP=vt((sa(),sc));function vt(r){return r&&r.__esModule?r:{default:r}}console.warn("Tailwind Play CDN runtime is bundled for local rendering. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation");var Ns="tailwind",uf="text/tailwindcss",_v="/template.html",Yt,Ev=!0,Ov=0,ff=new Set,cf,Tv="",Rv=(r=!1)=>({get(e,t){return(!r||t==="config")&&typeof e[t]=="object"&&e[t]!==null?new Proxy(e[t],Rv()):e[t]},set(e,t,i){return e[t]=i,(!r||t==="config")&&pf(!0),!0}});window[Ns]=new Proxy({config:{},defaultTheme:J5.default,defaultConfig:eP.default,colors:tP.default,plugin:rP.default,resolveConfig:iP.default},Rv(!0));function Pv(r){cf.observe(r,{attributes:!0,attributeFilter:["type"],characterData:!0,subtree:!0,childList:!0})}new MutationObserver(async r=>{let e=!1;if(!cf){cf=new MutationObserver(async()=>await pf(!0));for(let t of document.querySelectorAll(`style[type="${uf}"]`))Pv(t)}for(let t of r)for(let i of t.addedNodes)i.nodeType===1&&i.tagName==="STYLE"&&i.getAttribute("type")===uf&&(Pv(i),e=!0);await pf(e)}).observe(document.documentElement,{attributes:!0,attributeFilter:["class"],childList:!0,subtree:!0});async function pf(r=!1){r&&(Ov++,ff.clear());let e="";for(let i of document.querySelectorAll(`style[type="${uf}"]`))e+=i.textContent;let t=new Set;for(let i of document.querySelectorAll("[class]"))for(let n of i.classList)ff.has(n)||t.add(n);if(document.body&&(Ev||t.size>0||e!==Tv||!Yt||!Yt.isConnected)){for(let n of t)ff.add(n);Ev=!1,Tv=e,self[_v]=Array.from(t).join(" ");let{css:i}=await(0,K5.default)([(0,Y5.default)({...window[Ns].config,_hash:Ov,content:{files:[_v],extract:{html:n=>n.split(" ")}},plugins:[...Z5.default,...Array.isArray(window[Ns].config.plugins)?window[Ns].config.plugins:[]]}),(0,X5.default)({remove:!1})]).process(`@tailwind base;@tailwind components;@tailwind utilities;${e}`);(!Yt||!Yt.isConnected)&&(Yt=document.createElement("style"),document.head.append(Yt)),Yt.textContent=i}}})();
 /*!
  * fill-range <https://github.com/jonschlinkert/fill-range>
  *
@@ -1566,7 +1566,7 @@ tailwind.config={
     overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0,0,0,.15);
   }
-  .dark .modal { background: #2a2a3e; color: #e5e7eb; }
+  .dark .modal { background: var(--tv-panel); color: var(--tv-ink-dark); }
   .modal-sm { max-width: 400px; }
   .modal-header {
     display: flex;
@@ -1587,7 +1587,7 @@ tailwind.config={
     transition: background .2s;
   }
   .modal-close:hover { background: #f3f4f6; color: #374151; }
-  .dark .modal-close:hover { background: #3a3a4e; }
+  .dark .modal-close:hover { background: var(--tv-hover); }
   .selected-char { background: color-mix(in srgb, var(--acc) 10%, transparent); border-color: var(--acc) !important; }
   .login-overlay {
     position: fixed;
@@ -1659,10 +1659,10 @@ tailwind.config={
   .export-char-item:hover { background: #f3f4f6; }
   .dark .export-char-item:hover { background: #374151; }
   .export-char-item.checked {
-    background: rgba(22,93,255,.08);
+    background: color-mix(in srgb, var(--acc) 8%, transparent);
     border-color: var(--acc);
   }
-  .dark .export-char-item.checked { background: rgba(22,93,255,.18); }
+  .dark .export-char-item.checked { background: color-mix(in srgb, var(--acc) 18%, transparent); }
   .export-char-item input[type="checkbox"] {
     width: 16px;
     height: 16px;
@@ -1688,8 +1688,8 @@ tailwind.config={
     color: #1D2129;
   }
   .dark .inline-edit-area {
-    background: #1e1e2e;
-    color: #e5e7eb;
+    background: var(--tv-page);
+    color: var(--tv-ink-dark);
     border-color: var(--acc2);
   }
   /* Swipe buttons */
@@ -1784,7 +1784,7 @@ tailwind.config={
   .quick-bar::-webkit-scrollbar{display:none}
   .quick-chip{flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;border:1px solid #e5e7eb;background:#f9fafb;color:#4b5563;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
   .quick-chip:hover{border-color:var(--acc);color:var(--acc);background:color-mix(in srgb, var(--acc) 10%, #fff)}
-  .dark .quick-chip{border-color:#374151;background:#2a2a3e;color:#9ca3af}
+  .dark .quick-chip{border-color:#374151;background:var(--tv-panel);color:#9ca3af}
   .dark .quick-chip:hover{border-color:var(--acc2);color:var(--acc2);background:color-mix(in srgb, var(--acc2) 12%, transparent)}
   .quick-chip.active{background:var(--acc);border-color:var(--acc);color:#fff}
   .dark .quick-chip.active{background:var(--acc2);border-color:var(--acc2);color:#fff}
@@ -1792,7 +1792,7 @@ tailwind.config={
   /* ===== Voice / TTS buttons ===== */
   .icon-btn{display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #e5e7eb;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s;height:40px;width:40px;flex-shrink:0}
   .icon-btn:hover{border-color:var(--acc);color:var(--acc);background:color-mix(in srgb, var(--acc) 10%, #fff)}
-  .dark .icon-btn{border-color:#4b5563;background:#2a2a3e;color:#9ca3af}
+  .dark .icon-btn{border-color:#4b5563;background:var(--tv-panel);color:#9ca3af}
   .dark .icon-btn:hover{border-color:var(--acc2);color:var(--acc2);background:color-mix(in srgb, var(--acc2) 12%, transparent)}
   .icon-btn.recording{background:#fee2e2;border-color:#ef4444;color:#dc2626;animation:rec-pulse 1.2s ease-in-out infinite}
   .dark .icon-btn.recording{background:rgba(239,68,68,.18);border-color:#ef4444;color:#fca5a5}
@@ -1802,7 +1802,7 @@ tailwind.config={
 
   /* ===== In-chat search ===== */
   .search-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
-  .dark .search-bar{background:#2a2a3e;border-color:#374151}
+  .dark .search-bar{background:var(--tv-panel);border-color:#374151}
   .search-bar input{flex:1;background:transparent;border:none;outline:none;font-size:12px;color:inherit}
   .search-hit{background:#fde68a;border-radius:2px;padding:0 1px}
   .dark .search-hit{background:#a16207;color:#fff}
@@ -1810,7 +1810,7 @@ tailwind.config={
 
   /* ===== Emoji picker ===== */
   .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:160px;overflow-y:auto;margin-top:6px;padding:4px;border:1px solid #e5e7eb;border-radius:8px;background:#fff}
-  .dark .emoji-grid{background:#1e1e2e;border-color:#374151}
+  .dark .emoji-grid{background:var(--tv-page);border-color:#374151}
   .emoji-grid button{font-size:18px;padding:4px;border-radius:6px;cursor:pointer;background:transparent;border:none;line-height:1}
   .emoji-grid button:hover{background:color-mix(in srgb, var(--acc) 10%, #fff)}
   .dark .emoji-grid button:hover{background:color-mix(in srgb, var(--acc2) 15%, transparent)}
@@ -1832,7 +1832,7 @@ tailwind.config={
   /* ===== Scroll-to-bottom button ===== */
   .scroll-bottom-btn{position:absolute;right:16px;bottom:80px;width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 2px 8px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#6b7280;transition:all .2s;z-index:10}
   .scroll-bottom-btn:hover{color:var(--acc);border-color:var(--acc)}
-  .dark .scroll-bottom-btn{background:#2a2a3e;border-color:#4b5563;color:#9ca3af}
+  .dark .scroll-bottom-btn{background:var(--tv-panel);border-color:#4b5563;color:#9ca3af}
 
   /* ===== Branch indicator ===== */
   .branch-tag{font-size:10px;color:#9ca3af;margin-right:4px}
@@ -1930,6 +1930,28 @@ tailwind.config={
   }
 </style>
 <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.inset-0{inset:0px}.bottom-0{bottom:0px}.left-0{left:0px}.right-2{right:0.5rem}.top-0{top:0px}.top-1\/2{top:50%}.z-30{z-index:30}.z-40{z-index:40}.mb-0\.5{margin-bottom:0.125rem}.mb-1{margin-bottom:0.25rem}.mb-1\.5{margin-bottom:0.375rem}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.ml-auto{margin-left:auto}.mr-1{margin-right:0.25rem}.mt-0\.5{margin-top:0.125rem}.mt-1{margin-top:0.25rem}.mt-1\.5{margin-top:0.375rem}.mt-2{margin-top:0.5rem}.mt-3{margin-top:0.75rem}.mt-4{margin-top:1rem}.mr-auto{margin-right:auto}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-12{height:3rem}.h-4{height:1rem}.h-8{height:2rem}.h-9{height:2.25rem}.h-\[40px\]{height:40px}.max-h-72{max-height:18rem}.max-h-\[200px\]{max-height:200px}.max-h-\[70vh\]{max-height:70vh}.max-h-\[75vh\]{max-height:75vh}.min-h-\[40px\]{min-height:40px}.w-12{width:3rem}.w-14{width:3.5rem}.w-20{width:5rem}.w-4{width:1rem}.w-8{width:2rem}.w-9{width:2.25rem}.w-\[40px\]{width:40px}.w-full{width:100%}.min-w-0{min-width:0px}.max-w-2xl{max-width:42rem}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.shrink-0{flex-shrink:0}.-translate-x-full{--tw-translate-x:-100%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.-translate-y-1\/2{--tw-translate-y:-50%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.resize-none{resize:none}.resize-y{resize:vertical}.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.grid-cols-\[auto_1fr\]{grid-template-columns:auto 1fr}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-end{align-items:flex-end}.items-center{align-items:center}.justify-start{justify-content:flex-start}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-2\.5{gap:0.625rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.self-center{align-self:center}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-nowrap{white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}.rounded-bl-2xl{border-bottom-left-radius:1rem}.rounded-br-2xl{border-bottom-right-radius:1rem}.border{border-width:1px}.border-2{border-width:2px}.border-b{border-bottom-width:1px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-dashed{border-style:dashed}.border-blue-200{--tw-border-opacity:1;border-color:rgb(191 219 254 / var(--tw-border-opacity, 1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246 / var(--tw-border-opacity, 1))}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219 / var(--tw-border-opacity, 1))}.border-orange-200{--tw-border-opacity:1;border-color:rgb(254 215 170 / var(--tw-border-opacity, 1))}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202 / var(--tw-border-opacity, 1))}.bg-black\/40{background-color:rgb(0 0 0 / 0.4)}.bg-blue-50{--tw-bg-opacity:1;background-color:rgb(239 246 255 / var(--tw-bg-opacity, 1))}.bg-blue-500{--tw-bg-opacity:1;background-color:rgb(59 130 246 / var(--tw-bg-opacity, 1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-neutral{--tw-bg-opacity:1;background-color:rgb(245 247 250 / var(--tw-bg-opacity, 1))}.bg-orange-50{--tw-bg-opacity:1;background-color:rgb(255 247 237 / var(--tw-bg-opacity, 1))}.bg-orange-500{--tw-bg-opacity:1;background-color:rgb(249 115 22 / var(--tw-bg-opacity, 1))}.bg-primary{--tw-bg-opacity:1;background-color:var(--acc)}.bg-primary\/10{background-color:color-mix(in srgb, var(--acc) 10%, transparent)}.bg-red-50{--tw-bg-opacity:1;background-color:rgb(254 242 242 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/15{background-color:rgb(255 255 255 / 0.15)}.bg-white\/20{background-color:rgb(255 255 255 / 0.2)}.bg-gradient-to-br{background-image:linear-gradient(to bottom right, var(--tw-gradient-stops))}.from-blue-50{--tw-gradient-from:#FFF1E8 var(--tw-gradient-from-position);--tw-gradient-to:rgb(239 246 255 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.to-indigo-50{--tw-gradient-to:#eef2ff var(--tw-gradient-to-position)}.p-0\.5{padding:0.125rem}.p-1{padding:0.25rem}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.px-1{padding-left:0.25rem;padding-right:0.25rem}.pr-8{padding-right:2rem}.pt-2{padding-top:0.5rem}.pt-3{padding-top:0.75rem}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[8px\]{font-size:8px}.text-\[9px\]{font-size:9px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.leading-normal{line-height:1.5}.leading-relaxed{line-height:1.625}.text-blue-500\/60{color:rgb(59 130 246 / 0.6)}.text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.text-blue-700{--tw-text-opacity:1;color:rgb(29 78 216 / var(--tw-text-opacity, 1))}.text-dark{--tw-text-opacity:1;color:rgb(29 33 41 / var(--tw-text-opacity, 1))}.text-gray-300{--tw-text-opacity:1;color:rgb(209 213 219 / var(--tw-text-opacity, 1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81 / var(--tw-text-opacity, 1))}.text-orange-500{--tw-text-opacity:1;color:rgb(249 115 22 / var(--tw-text-opacity, 1))}.text-orange-600{--tw-text-opacity:1;color:rgb(234 88 12 / var(--tw-text-opacity, 1))}.text-orange-700{--tw-text-opacity:1;color:rgb(194 65 12 / var(--tw-text-opacity, 1))}.text-primary{--tw-text-opacity:1;color:var(--acc)}.text-red-500{--tw-text-opacity:1;color:rgb(239 68 68 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.accent-primary{accent-color:var(--acc)}.opacity-0{opacity:0}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-300{transition-duration:300ms}.hover\:border-primary:hover{--tw-border-opacity:1;border-color:var(--acc)}.hover\:bg-blue-600:hover{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-100:hover{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-200:hover{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-200\/60:hover{background-color:rgb(229 231 235 / 0.6)}.hover\:bg-primary\/90:hover{background-color:color-mix(in srgb, var(--acc) 90%, transparent)}.hover\:bg-red-100:hover{--tw-bg-opacity:1;background-color:rgb(254 226 226 / var(--tw-bg-opacity, 1))}.hover\:bg-red-50:hover{--tw-bg-opacity:1;background-color:rgb(254 242 242 / var(--tw-bg-opacity, 1))}.hover\:bg-white\/20:hover{background-color:rgb(255 255 255 / 0.2)}.hover\:bg-white\/25:hover{background-color:rgb(255 255 255 / 0.25)}.hover\:bg-white\/30:hover{background-color:rgb(255 255 255 / 0.3)}.hover\:text-primary:hover{--tw-text-opacity:1;color:var(--acc)}.hover\:text-red-500:hover{--tw-text-opacity:1;color:rgb(239 68 68 / var(--tw-text-opacity, 1))}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.hover\:opacity-90:hover{opacity:0.9}.focus\:border-primary:focus{--tw-border-opacity:1;border-color:var(--acc)}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-primary\/30:focus{--tw-ring-color:color-mix(in srgb, var(--acc) 30%, transparent)}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.dark\:border-blue-800:is(.dark *){--tw-border-opacity:1;border-color:rgb(30 64 175 / var(--tw-border-opacity, 1))}.dark\:border-gray-600:is(.dark *){--tw-border-opacity:1;border-color:rgb(75 85 99 / var(--tw-border-opacity, 1))}.dark\:border-gray-700:is(.dark *){--tw-border-opacity:1;border-color:rgb(55 65 81 / var(--tw-border-opacity, 1))}.dark\:border-orange-800:is(.dark *){--tw-border-opacity:1;border-color:rgb(154 52 18 / var(--tw-border-opacity, 1))}.dark\:border-red-800:is(.dark *){--tw-border-opacity:1;border-color:rgb(153 27 27 / var(--tw-border-opacity, 1))}.dark\:bg-\[\#1a1a2e\]:is(.dark *){--tw-bg-opacity:1;background-color:rgb(26 26 46 / var(--tw-bg-opacity, 1))}.dark\:bg-\[\#1e1e2e\]:is(.dark *){--tw-bg-opacity:1;background-color:rgb(30 30 46 / var(--tw-bg-opacity, 1))}.dark\:bg-\[\#2a2a3e\]:is(.dark *){--tw-bg-opacity:1;background-color:rgb(42 42 62 / var(--tw-bg-opacity, 1))}.dark\:bg-blue-900\/20:is(.dark *){background-color:rgb(30 58 138 / 0.2)}.dark\:bg-gray-700:is(.dark *){--tw-bg-opacity:1;background-color:rgb(55 65 81 / var(--tw-bg-opacity, 1))}.dark\:bg-gray-800:is(.dark *){--tw-bg-opacity:1;background-color:rgb(31 41 55 / var(--tw-bg-opacity, 1))}.dark\:bg-gray-800\/50:is(.dark *){background-color:rgb(31 41 55 / 0.5)}.dark\:bg-orange-900\/20:is(.dark *){background-color:rgb(124 45 18 / 0.2)}.dark\:bg-primary\/20:is(.dark *){background-color:color-mix(in srgb, var(--acc) 20%, transparent)}.dark\:bg-red-900\/30:is(.dark *){background-color:rgb(127 29 29 / 0.3)}.dark\:from-blue-900\/20:is(.dark *){--tw-gradient-from:rgb(30 58 138 / 0.2) var(--tw-gradient-from-position);--tw-gradient-to:rgb(30 58 138 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.dark\:to-indigo-900\/20:is(.dark *){--tw-gradient-to:rgb(49 46 129 / 0.2) var(--tw-gradient-to-position)}.dark\:text-blue-300:is(.dark *){--tw-text-opacity:1;color:rgb(147 197 253 / var(--tw-text-opacity, 1))}.dark\:text-blue-400:is(.dark *){--tw-text-opacity:1;color:rgb(96 165 250 / var(--tw-text-opacity, 1))}.dark\:text-gray-100:is(.dark *){--tw-text-opacity:1;color:rgb(243 244 246 / var(--tw-text-opacity, 1))}.dark\:text-gray-200:is(.dark *){--tw-text-opacity:1;color:rgb(229 231 235 / var(--tw-text-opacity, 1))}.dark\:text-gray-300:is(.dark *){--tw-text-opacity:1;color:rgb(209 213 219 / var(--tw-text-opacity, 1))}.dark\:text-gray-400:is(.dark *){--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.dark\:text-gray-500:is(.dark *){--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.dark\:text-gray-600:is(.dark *){--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.dark\:text-orange-400:is(.dark *){--tw-text-opacity:1;color:rgb(251 146 60 / var(--tw-text-opacity, 1))}.dark\:text-red-400:is(.dark *){--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.dark\:hover\:bg-gray-600:hover:is(.dark *){--tw-bg-opacity:1;background-color:rgb(75 85 99 / var(--tw-bg-opacity, 1))}.dark\:hover\:bg-gray-600\/60:hover:is(.dark *){background-color:rgb(75 85 99 / 0.6)}.dark\:hover\:bg-gray-700:hover:is(.dark *){--tw-bg-opacity:1;background-color:rgb(55 65 81 / var(--tw-bg-opacity, 1))}.dark\:hover\:bg-red-900\/30:hover:is(.dark *){background-color:rgb(127 29 29 / 0.3)}.dark\:hover\:bg-red-900\/50:hover:is(.dark *){background-color:rgb(127 29 29 / 0.5)}.dark\:hover\:bg-gray-700\/50:hover:is(.dark *){background-color:rgb(55 65 81 / 0.5)}.dark\:hover\:text-blue-400:hover:is(.dark *){--tw-text-opacity:1;color:rgb(96 165 250 / var(--tw-text-opacity, 1))}@media (min-width: 640px){.sm\:inline{display:inline}}@media (min-width: 768px){.md\:static{position:static}.md\:flex{display:flex}.md\:\!hidden{display:none !important}.md\:hidden{display:none}.md\:w-60{width:15rem}.md\:translate-x-0{--tw-translate-x:0px;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.md\:gap-2{gap:0.5rem}.md\:gap-4{gap:1rem}.md\:p-3{padding:0.75rem}.md\:p-4{padding:1rem}.md\:px-3{padding-left:0.75rem;padding-right:0.75rem}.md\:px-4{padding-left:1rem;padding-right:1rem}.md\:py-3{padding-top:0.75rem;padding-bottom:0.75rem}.md\:text-lg{font-size:1.125rem;line-height:1.75rem}.md\:text-sm{font-size:0.875rem;line-height:1.25rem}.md\:text-xl{font-size:1.25rem;line-height:1.75rem}.md\:shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}}@media (min-width: 1024px){.lg\:w-72{width:18rem}}</style></head>
+<style>
+/* ═══ V5.0 主题适配：结构色语义变量层 ═══
+   覆盖预编译 Tailwind 的任意值类（dark:bg-[#1e1e2e] / dark:bg-[#2a2a3e] / dark:bg-[#1a1a2e]），
+   使 tavern 暗色面板统一由变量驱动；嵌入主站时 syncEmbeddedFromParent 会按主站实际配色覆写这些变量 */
+:root{
+  --tv-page:#1e1e2e;   /* 暗色页面/输入框底（原 dark:bg-[#1e1e2e]） */
+  --tv-panel:#2a2a3e;  /* 暗色面板/弹窗/消息气泡底（原 dark:bg-[#2a2a3e]） */
+  --tv-deep:#1a1a2e;   /* 暗色最深 body 底（原 dark:bg-[#1a1a2e]） */
+  --tv-hover:#3a3a4e;  /* 暗色悬停底 */
+  --tv-soft:#f5f7fa;   /* 亮色浅灰底 */
+  --tv-ink:#1d2129;    /* 亮色正文 */
+  --tv-ink-dark:#e5e7eb; /* 暗色正文 */
+  --tv-muted:#555;     /* 亮色弱文本 */
+}
+.dark{
+  --tv-page:#1e1e2e; --tv-panel:#2a2a3e; --tv-deep:#1a1a2e; --tv-hover:#3a3a4e;
+  --tv-soft:#2a2a3e; --tv-ink:#e5e7eb; --tv-ink-dark:#e5e7eb; --tv-muted:#9ca3af;
+}
+html.dark .dark\:bg-\[\#1e1e2e\]{background-color:var(--tv-page)}
+html.dark .dark\:bg-\[\#2a2a3e\]{background-color:var(--tv-panel)}
+html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
+</style>
 <body class="bg-white dark:bg-[#1a1a2e] text-dark dark:text-gray-100 flex flex-col">
 <div class="toast-container" id="toastContainer"></div>
 
@@ -2304,7 +2326,7 @@ https://doubaosearch.c</div>
       <div><label class="text-xs text-gray-500 dark:text-gray-400 font-medium">模型</label>
         <select id="gmModel" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100">
           <optgroup label="⚡ 站内AI (本站·免密钥·推荐)">
-            <option value="st:ai_chat">站内 AI · GLM-4.7-Flash (免费·免密钥·登录即用)</option>
+              <option value="st:ai_chat">站内 AI · Llama 3.2 3B (免费·免密钥·登录即用)</option>
           </optgroup>
           <optgroup label="🚀 NVIDIA NIM (后端认证·需代理)">
             <option value="deepseek-ai/deepseek-v4-flash">DeepSeek V4 Flash (快速 · 推理强)</option>
@@ -2324,11 +2346,11 @@ https://doubaosearch.c</div>
             <option value="zp:glm-4v-flash">GLM-4V-Flash (免费·视觉理解)</option>
             <option value="zp:glm-4-flashx">GLM-4-FlashX (免费·极速)</option>
           </optgroup>
-          <optgroup label="☁️ Cloudflare Workers AI (免费1万次/天·需代理)">
-            <option value="cf:@cf/meta/llama-3.2-1b-instruct">Llama 3.2 1B (最小最快)</option>
-            <option value="cf:@cf/meta/llama-3.2-3b-instruct">Llama 3.2 3B (小模型)</option>
-            <option value="cf:@cf/meta/llama-3.1-8b-instruct-fp8">Llama 3.1 8B FP8 (均衡)</option>
-            <option value="cf:@cf/deepseek/deepseek-r1-distill-qwen-32b">DeepSeek R1 蒸馏 32B (推理)</option>
+          <optgroup label="☁️ Cloudflare Workers AI (本站·免密钥·登录即用)">
+          <option value="cf:@cf/meta/llama-3.2-1b-instruct">Llama 3.2 1B (最小最快)</option>
+          <option value="cf:@cf/meta/llama-3.2-3b-instruct">Llama 3.2 3B (小模型)</option>
+          <option value="cf:@cf/meta/llama-3.1-8b-instruct-fp8">Llama 3.1 8B FP8 (均衡)</option>
+          <option value="cf:@cf/ibm-granite/granite-4.0-h-micro">Granite 4.0 Micro (超省)</option>
           </optgroup>
           <optgroup label="自定义 (OpenAI 兼容)">
             <option value="custom">自定义模型 + API 地址</option>
@@ -2394,33 +2416,13 @@ https://doubaosearch.c</div>
         <div class="flex items-center gap-2 mb-2">
           <i class="fa fa-cloud text-orange-500"></i>
           <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Cloudflare Workers AI</span>
-          <span class="ml-auto text-[11px] text-orange-500">每天免费 10,000 次</span>
+          <span class="ml-auto text-[11px] text-orange-500">本站提供 · 免密钥</span>
         </div>
-        <!-- 配置引导 -->
+        <!-- V4.13 免密钥：由本站后端 Workers AI 直接提供，无需配置 -->
         <div class="p-2.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 mb-2">
-          <p class="text-[11px] text-orange-700 dark:text-orange-400 font-medium mb-1.5">配置步骤：</p>
-          <div class="space-y-1">
-            <div class="flex items-center gap-1.5 text-[11px] text-orange-600 dark:text-orange-400">
-              <span class="flex-shrink-0 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">1</span>
-              <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener" class="hover:underline">
-                <i class="fa fa-external-link text-[10px]"></i> 注册/登录 Cloudflare 账号
-              </a>
-            </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-orange-600 dark:text-orange-400">
-              <span class="flex-shrink-0 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">2</span>
-              <span>在 Dashboard 右侧栏找到「Workers 和 Pages」→「AI」，页面右侧显示 <b>Account ID</b>，复制到下方</span>
-            </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-orange-600 dark:text-orange-400">
-              <span class="flex-shrink-0 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] flex items-center justify-center font-bold">3</span>
-              <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener" class="hover:underline">
-                <i class="fa fa-external-link text-[10px]"></i> 创建 API Token → 选「Workers AI」模板 → 复制 Token 到上方 API Key 框
-              </a>
-            </div>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="text-[11px] text-gray-400 font-medium">Cloudflare Account ID</label>
-          <input id="gmCfAccountId" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="例如：a1b2c3d4e5f6...">
+          <p class="text-[11px] text-orange-700 dark:text-orange-400 leading-relaxed">
+            <i class="fa fa-info-circle"></i> V4.13 起 Cloudflare 模型由本站后端 Workers AI 直接提供，登录后即可使用，无需填写任何密钥或 Account ID。
+          </p>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -2677,29 +2679,39 @@ https://doubaosearch.c</div>
 <div class="modal-overlay hidden" id="personaModal">
   <div class="modal-card max-w-lg">
     <div class="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-600">
-      <h3 class="font-semibold text-gray-700 dark:text-gray-200">人格管理</h3>
-      <button id="personaClose" class="p-1 rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/60 transition"><i class="fa fa-times text-gray-500 dark:text-gray-300"></i></button>
+      <h3 class="font-semibold text-gray-700 dark:text-gray-200"><i class="fa fa-user-circle mr-1 text-primary"></i>人格管理</h3>
+      <div class="flex items-center gap-2">
+        <span id="personaCurrentChip" class="hidden text-[11px] px-2 py-0.5 rounded-full text-white" style="background:var(--acc)"></span>
+        <button id="personaClose" class="p-1 rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/60 transition"><i class="fa fa-times text-gray-500 dark:text-gray-300"></i></button>
+      </div>
     </div>
     <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+      <!-- 编辑区（置于列表上方，打开时自动滚入视野，避免藏在列表底部找不到） -->
+      <div id="personaEdit" class="hidden rounded-lg p-3 space-y-2" style="border:1px solid color-mix(in srgb, var(--acc) 40%, transparent);background:color-mix(in srgb, var(--acc) 5%, transparent)">
+        <div class="flex items-center justify-between">
+          <span id="personaEditTitle" class="text-xs font-semibold" style="color:var(--acc)">新建人格</span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">头像 + 名称 + 描述</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="pAvatarPreview" class="w-10 h-10 rounded-lg flex items-center justify-center text-2xl shrink-0 border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1e1e2e]">👤</div>
+          <input id="pAvatar" maxlength="4" class="w-14 text-center text-xl px-1 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100" placeholder="👤" title="输入任意表情或字符">
+          <div class="flex-1 flex flex-wrap gap-1" id="pEmojiPicker"></div>
+        </div>
+        <input id="pName" class="w-full px-2.5 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="人格名称（即 {{user}} 的值）">
+        <textarea id="pDesc" rows="3" class="w-full px-2.5 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm resize-y" placeholder="人格描述（可选）— 描述用户的性格、背景等，会注入到 AI 上下文"></textarea>
+        <div class="flex gap-2">
+          <button id="personaSaveBtn" class="flex-1 px-3 py-1.5 text-white rounded text-sm font-medium hover:opacity-90 transition" style="background:linear-gradient(135deg,var(--acc),var(--acc2))">保存</button>
+          <button id="personaCancelBtn" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">取消</button>
+        </div>
+      </div>
+      <!-- 人格列表 -->
       <div id="personaList" class="space-y-2"></div>
       <button id="personaAddBtn" class="w-full px-3 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded text-sm text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary transition">
         <i class="fa fa-plus mr-1"></i>新建人格
       </button>
-      <!-- 编辑区 -->
-      <div id="personaEdit" class="hidden border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
-        <div class="grid grid-cols-[auto_1fr] gap-2">
-          <input id="pAvatar" maxlength="4" class="w-12 text-center text-2xl px-2 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100" placeholder="👤">
-          <input id="pName" class="px-2.5 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="人格名称（即 {{user}} 的值）">
-        </div>
-        <textarea id="pDesc" rows="3" class="w-full px-2.5 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm resize-y" placeholder="人格描述（可选）— 描述用户的性格、背景等，会注入到 AI 上下文"></textarea>
-        <div class="flex gap-2">
-          <button id="personaSaveBtn" class="flex-1 px-3 py-1.5 bg-primary text-white rounded text-sm font-medium hover:opacity-90 transition">保存</button>
-          <button id="personaCancelBtn" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">取消</button>
-        </div>
-      </div>
     </div>
     <div class="p-3 border-t border-gray-200 dark:border-gray-600 text-[11px] text-gray-400 dark:text-gray-500">
-      <i class="fa fa-info-circle mr-1"></i>人格名称会替换所有 <code>{{user}}</code> 宏，描述会注入到 AI 上下文
+      <i class="fa fa-info-circle mr-1"></i>人格名称会替换所有 <code>{{user}}</code> 宏，描述会注入到 AI 上下文；点击列表行可直接切换人格
     </div>
   </div>
 </div>
@@ -3910,6 +3922,53 @@ async function regenerateSwipe(div) {
       // 移除临时的流式 div
       const streamDiv = chatContainer.querySelector('.stream-message');
       if (streamDiv) streamDiv.remove();
+    } else if (info.provider === 'cloudflare') {
+      // Cloudflare Workers AI 路径（站长后端 env.AI · 免密钥，V4.13）
+      const dpToken = localStorage.getItem('dp_token') || '';
+      if (!dpToken) throw new Error('请先在逗包用户广场登录，再使用 Cloudflare AI');
+      const response = await fetch('/api/tools/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + dpToken },
+        body: JSON.stringify({ tool_id: 'ai_chat', model: info.realModel, messages: msgs, max_tokens: data.config.maxTokens || 2048, stream: true }),
+        signal: abortController.signal
+      });
+      if (!response.ok) throw new Error('Cloudflare AI '+response.status+': '+await response.text().catch(()=>''));
+      removeLoading();
+      const reader = response.body.getReader();
+      const msgDiv = createStreamMsgDiv(c);
+      const decoder = new TextDecoder();
+      let fullReply = '';
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const d = trimmed.slice(6);
+          if (d === '[DONE]') continue;
+          try {
+            const p = JSON.parse(d);
+            const text = p.text || '';
+            if (text) {
+              fullReply += text;
+              msg.content = fullReply;
+              msg.swipes[msg.swipeIndex] = fullReply;
+              const st = msgDiv.querySelector('.stream-text');
+              if (st) renderStreamText(st, fullReply);
+              maybeAutoScroll();
+            }
+          } catch(_) {}
+        }
+      }
+      // 用实际消息替换流式 div
+      msgDiv.remove();
+      saveData();
+      renderChat();
+      autoSpeakIfEnabled(fullReply);
     } else {
       // 远程 API 路径
       const apiBase = (data.config.apiBase||'').replace(/\/+$/,'').replace('{ACCOUNT_ID}', data.config.cfAccountId || '');
@@ -3917,17 +3976,8 @@ async function regenerateSwipe(div) {
       const apiKey = data.config.apiKey || '';
       const apiModel = info.realModel || (model === 'custom' ? (data.config.customModelName||'custom-model') : model);
       const corsProxy = (data.config.corsProxy || '').trim();
-      const fetchUrl = corsProxy ? corsProxy : targetUrl;
-      const fetchHeaders = { 'Content-Type': 'application/json' };
-      if (apiKey) fetchHeaders['Authorization'] = 'Bearer ' + apiKey;
-      if (corsProxy) fetchHeaders['X-Target-URL'] = targetUrl;
-      
-      const response = await fetch(fetchUrl, {
-        method: 'POST',
-        headers: fetchHeaders,
-        body: JSON.stringify({ model: apiModel, messages: msgs, temperature: data.config.temperature, top_p: data.config.topP, max_tokens: data.config.maxTokens, frequency_penalty: data.config.freqPenalty, stream: true }),
-        signal: abortController.signal
-      });
+      // V5.0 修复：直连失败自动回退站内 /api/proxy（见 fetchRemoteApi）
+      const response = await fetchRemoteApi(targetUrl, { model: apiModel, messages: msgs, temperature: data.config.temperature, top_p: data.config.topP, max_tokens: data.config.maxTokens, frequency_penalty: data.config.freqPenalty, stream: true }, { apiKey, corsProxy, signal: abortController.signal });
       if (!response.ok) throw new Error('API '+response.status+': '+await response.text().catch(()=>''));
 
       removeLoading();
@@ -4203,6 +4253,66 @@ async function continueGeneration() {
         finalizeStreamMsg(lastDiv, lastMsg.content, c);
       }
     }
+  } else if (getProviderInfo(data.config.model).provider === 'cloudflare') {
+    // ----- Cloudflare Workers AI 继续生成（站长后端 env.AI · 免密钥，V4.13）-----
+    abortController = new AbortController();
+    try {
+      const info = getProviderInfo(data.config.model);
+      const dpToken = localStorage.getItem('dp_token') || '';
+      if (!dpToken) throw new Error('请先在逗包用户广场登录，再使用 Cloudflare AI');
+      const response = await fetch('/api/tools/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + dpToken },
+        body: JSON.stringify({ tool_id: 'ai_chat', model: info.realModel, messages: msgs, max_tokens: data.config.maxTokens || 2048, stream: true }),
+        signal: abortController.signal
+      });
+      if (!response.ok) {
+        const e = await response.text().catch(()=> '');
+        throw new Error('Cloudflare AI '+response.status+': '+(e.slice(0,100)||response.statusText));
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullReply = '';
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const d = trimmed.slice(6);
+          if (d === '[DONE]') continue;
+          try {
+            const p = JSON.parse(d);
+            const text = p.text || '';
+            if (text) {
+              fullReply += text;
+              const stEl = lastDiv.querySelector('.stream-text');
+              if (stEl) { renderStreamText(stEl, lastMsg.content + fullReply); }
+              maybeAutoScroll();
+            }
+          } catch(_) {}
+        }
+      }
+      const finalContent = lastMsg.content + fullReply;
+      lastMsg.content = finalContent;
+      finalizeStreamMsg(lastDiv, finalContent, c);
+      updateCtxBar();
+    } catch(error) {
+      if (error.name === 'AbortError') {
+        const stEl = lastDiv.querySelector('.stream-text');
+        const partial = stEl ? stEl.textContent : lastMsg.content;
+        lastMsg.content = partial;
+        finalizeStreamMsg(lastDiv, partial, c);
+        toast('已停止', 'info');
+      } else {
+        toast('继续生成失败: ' + friendlyApiError(error.message), 'error');
+        finalizeStreamMsg(lastDiv, lastMsg.content, c);
+      }
+    }
   } else {
     abortController = new AbortController();
     try {
@@ -4212,25 +4322,16 @@ async function continueGeneration() {
       const apiKey = data.config.apiKey || '';
       const apiModel = info.realModel || (data.config.model === 'custom' ? (data.config.customModelName||'custom-model') : data.config.model);
       const corsProxy = (data.config.corsProxy || '').trim();
-      const fetchUrl = corsProxy ? corsProxy : targetUrl;
-      const fetchHeaders = { 'Content-Type': 'application/json' };
-      if (apiKey) fetchHeaders['Authorization'] = 'Bearer ' + apiKey;
-      if (corsProxy) fetchHeaders['X-Target-URL'] = targetUrl;
-      
-      const response = await fetch(fetchUrl, {
-        method:'POST',
-        headers: fetchHeaders,
-        body: JSON.stringify({
-          model: apiModel,
-          messages: msgs,
-          temperature: data.config.temperature||0.7,
-          top_p: data.config.topP||0.9,
-          max_tokens: data.config.maxTokens||2048,
-          frequency_penalty: data.config.freqPenalty||0,
-          stream: true
-        }),
-        signal: abortController.signal
-      });
+      // V5.0 修复：直连失败自动回退站内 /api/proxy（见 fetchRemoteApi）
+      const response = await fetchRemoteApi(targetUrl, {
+        model: apiModel,
+        messages: msgs,
+        temperature: data.config.temperature||0.7,
+        top_p: data.config.topP||0.9,
+        max_tokens: data.config.maxTokens||2048,
+        frequency_penalty: data.config.freqPenalty||0,
+        stream: true
+      }, { apiKey, corsProxy, signal: abortController.signal });
       if (!response.ok) {
         const e = await response.text().catch(()=> '');
         throw new Error('API '+response.status+': '+(e.slice(0,100)||response.statusText));
@@ -4574,6 +4675,39 @@ function parseCozeSSE(reader, onChunk) {
 }
 
 // ===== SEND / STREAM =====
+// V5.0 修复：远程 API 统一请求入口 —— 直连失败（CORS / PNA / 网络错误）时自动回退本站 /api/proxy 转发
+// 解决用户本机 DNS/代理把 AI 域名解析成内网地址后浏览器 PNA 拦截、以及智谱等无 CORS 响应头渠道的直连失败
+async function fetchRemoteApi(targetUrl, payload, opts) {
+  const { apiKey, corsProxy, signal } = opts || {};
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+  if (corsProxy) headers['X-Target-URL'] = targetUrl;
+  // 1. 按配置请求（配置了代理走代理，否则直连）
+  const firstUrl = corsProxy ? corsProxy : targetUrl;
+  let resp = null;
+  let directError = null;
+  try {
+    resp = await fetch(firstUrl, { method: 'POST', headers, body: JSON.stringify(payload), signal });
+  } catch (e) {
+    directError = e;
+  }
+  if (resp) return resp; // 已拿到响应（含 HTTP 错误状态），不自动回退
+  // 2. 直连失败且未配置代理 → 自动回退站内 /api/proxy（同源部署时可用；独立部署时本次调用同样失败并抛出明确错误）
+  if (!corsProxy) {
+    try {
+      const ph = { 'Content-Type': 'application/json', 'X-Target-URL': targetUrl };
+      if (apiKey) ph['Authorization'] = 'Bearer ' + apiKey;
+      resp = await fetch('/api/proxy', { method: 'POST', headers: ph, body: JSON.stringify(payload), signal });
+    } catch (e) {
+      const why = (directError && directError.message) ? directError.message : '网络错误';
+      throw new Error('直连失败（' + why + '），自动回退代理转发也失败（' + (e.message || '网络错误') + '）');
+    }
+  } else {
+    throw directError || new Error('请求失败');
+  }
+  return resp;
+}
+
 async function sendMessage() {
   if (isGenerating) return;
   if (!currentCharId) { toast('请先选择一个角色','info'); return; }
@@ -4764,6 +4898,71 @@ async function sendMessage() {
       chatContainer.appendChild(errDiv);
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
+  } else if (getProviderInfo(data.config.model).provider === 'cloudflare') {
+    // ----- Cloudflare Workers AI PATH (站长后端 env.AI · 免密钥，V4.13) -----
+    abortController = new AbortController();
+    try {
+      const dpToken = localStorage.getItem('dp_token') || '';
+      if (!dpToken) throw new Error('请先在逗包用户广场登录，再使用 Cloudflare AI');
+      const info = getProviderInfo(data.config.model);
+      const response = await fetch('/api/tools/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + dpToken
+        },
+        body: JSON.stringify({
+          tool_id: 'ai_chat',
+          model: info.realModel,
+          messages: msgs,
+          max_tokens: data.config.maxTokens || 2048,
+          stream: true
+        }),
+        signal: abortController.signal
+      });
+      removeLoading();
+      if (!response.ok) {
+        const e = await response.json().catch(() => ({}));
+        throw new Error(e.error || ('Cloudflare AI ' + response.status));
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const msgDiv = createStreamMsgDiv(c);
+      let fullReply = '';
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const d = trimmed.slice(6);
+          if (d === '[DONE]') continue;
+          try {
+            const p = JSON.parse(d);
+            const text = p.text || '';
+            if (text) {
+              fullReply += text;
+              const st = msgDiv.querySelector('.stream-text');
+              if (st) renderStreamText(st, fullReply);
+              maybeAutoScroll();
+            }
+          } catch (_) { /* ignore partial chunk */ }
+        }
+      }
+      finalizeStreamMsg(msgDiv, fullReply, c);
+      updateCtxBar();
+    } catch (error) {
+      removeLoading();
+      const errDiv = document.createElement('div');
+      errDiv.className = 'message-bubble mr-auto bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-2 rounded-t-2xl rounded-br-2xl border border-red-100 dark:border-red-800';
+      errDiv.textContent = '请求失败: '+friendlyApiError(error.message);
+      chatContainer.appendChild(errDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
   } else {
     // ----- REMOTE API PATH -----
     abortController = new AbortController();
@@ -4774,26 +4973,16 @@ async function sendMessage() {
       const apiKey = data.config.apiKey || '';
       const apiModel = info.realModel || (data.config.model === 'custom' ? (data.config.customModelName||'custom-model') : data.config.model);
       const corsProxy = (data.config.corsProxy || '').trim();
-      // 如果有 CORS 代理，走代理；否则直连（SiliconFlow/OpenRouter 支持 CORS）
-      const fetchUrl = corsProxy ? corsProxy : targetUrl;
-      const fetchHeaders = { 'Content-Type': 'application/json' };
-      if (apiKey) fetchHeaders['Authorization'] = 'Bearer ' + apiKey;
-      if (corsProxy) fetchHeaders['X-Target-URL'] = targetUrl;
-
-      const response = await fetch(fetchUrl, {
-        method:'POST',
-        headers: fetchHeaders,
-        body: JSON.stringify({
-          model: apiModel,
-          messages: msgs,
-          temperature: data.config.temperature||0.7,
-          top_p: data.config.topP||0.9,
-          max_tokens: data.config.maxTokens||2048,
-          frequency_penalty: data.config.freqPenalty||0,
-          stream: true
-        }),
-        signal: abortController.signal
-      });
+      // V5.0 修复：直连失败自动回退站内 /api/proxy（见 fetchRemoteApi）
+      const response = await fetchRemoteApi(targetUrl, {
+        model: apiModel,
+        messages: msgs,
+        temperature: data.config.temperature||0.7,
+        top_p: data.config.topP||0.9,
+        max_tokens: data.config.maxTokens||2048,
+        frequency_penalty: data.config.freqPenalty||0,
+        stream: true
+      }, { apiKey, corsProxy, signal: abortController.signal });
       removeLoading();
       if (!response.ok) {
         const e = await response.text().catch(()=> '');
@@ -5214,14 +5403,15 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
   document.getElementById('gmBgUrl').value = cfg.bgUrl || '';
   // 图床设置
   document.getElementById('gmPicgoKey').value = localStorage.getItem('tavern_picgo_key') || '';
-  // Cloudflare 设置
-  document.getElementById('gmCfAccountId').value = cfg.cfAccountId || '';
+  // Cloudflare 设置（V4.13 免密钥：字段已移除，仅兼容旧数据）
+  const cfAccEl = document.getElementById('gmCfAccountId');
+  if (cfAccEl) cfAccEl.value = cfg.cfAccountId || '';
   // 模型相关 - 根据提供商显示/隐藏
   const info = getProviderInfo(cfg.model);
   document.getElementById('gmCustomWrap').classList.toggle('hidden', cfg.model !== 'custom');
   const isCloudflare = info.provider === 'cloudflare';
   const isZhipu = info.provider === 'zhipu';
-  const needsProxy = info.provider === 'nvidia' || isCloudflare;
+  const needsProxy = info.provider === 'nvidia';
   document.getElementById('gmCorsProxyWrap').classList.toggle('hidden', !needsProxy);
   document.getElementById('gmCloudflareWrap').classList.toggle('hidden', !isCloudflare);
   document.getElementById('gmZhipuWrap').classList.toggle('hidden', !isZhipu);
@@ -5280,13 +5470,12 @@ const API_PROVIDERS = {
     freeModel: 'glm-4-flash'
   },
   cloudflare: {
-    apiBase: 'https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1',
-    apiKey: '',
-    corsProxy: PROXY_URL,
-    note: 'Cloudflare Workers AI，每天免费 10,000 次请求。需提供 Account ID 和 API Token，通过 CORS 代理转发。',
-    note2: '小模型 Llama 3.2-1B/3B + DeepSeek R1 蒸馏版',
-    regUrl: 'https://dash.cloudflare.com/',
-    keyUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    apiBase: '/api/tools/ai',
+    apiKey: '',  // V4.13 免密钥：由本站后端 Workers AI 提供，无需用户自带 CF 凭据
+    corsProxy: '',
+    auth: 'dp_token',
+    note: 'Cloudflare Workers AI（本站·免密钥）：由本站后端 Workers AI 直接提供，登录后即可使用，无需任何密钥。',
+    note2: '小模型 Llama 1B/3B/8B-FP8 + Granite Micro · 免密钥 · 登录即用',
     accountId: ''
   },
   coze: {
@@ -5302,7 +5491,7 @@ const API_PROVIDERS = {
     apiKey: '',  // 免密钥，由后端 Workers AI 处理
     corsProxy: '',
     auth: 'dp_token',
-    note: '逗包广场站内 AI（免密钥）：由本站后端 Workers AI 提供，GLM-4.7-Flash 模型，登录后直接可用，无需任何 API 密钥。',
+    note: '逗包广场站内 AI（免密钥）：由本站后端 Workers AI 提供，Llama 3.2 3B 小模型，登录后直接可用，无需任何 API 密钥。',
     note2: '免费 · 免密钥 · 自动携带角色人格设定 · 支持流式输出',
     auth: 'none'
   }
@@ -5314,8 +5503,7 @@ function friendlyApiError(msg) {
   if (msg.includes('524')) return '代理超时(524)。大模型响应过慢，建议换用 SiliconFlow(支持CORS直连) 或稍后重试';
   if (msg.includes('502')) return '代理网关错误(502)。目标API可能不可达，请检查网络或更换模型';
   if (msg.includes('Failed to fetch')) return '网络请求失败。请检查网络连接或代理是否可用';
-  if (msg.includes('ACCOUNT_ID')) return '请先在设置中填写 Cloudflare Account ID';
-  if (msg.includes('9109') || msg.includes('Unauthorized')) return 'API Token 无效或权限不足，请检查 Cloudflare API Token 设置';
+  if (msg.includes('不允许的模型')) return '所选模型不受本站支持，请换用其他模型';
   return msg;
 }
 
@@ -5334,18 +5522,19 @@ const info = getProviderInfo(this.value);
   const isSite = info.provider === 'site';
   const isCloudflare = info.provider === 'cloudflare';
   const isZhipu = info.provider === 'zhipu';
-  const needsProxy = info.provider === 'nvidia' || isCloudflare;
+  // V4.13 Cloudflare 免密钥：仅 NVIDIA 需 CORS 代理
+  const needsProxy = info.provider === 'nvidia';
   
   document.getElementById('gmCustomWrap').classList.toggle('hidden', !isCustom);
   document.getElementById('gmCorsProxyWrap').classList.toggle('hidden', !needsProxy);
   document.getElementById('gmCloudflareWrap').classList.toggle('hidden', !isCloudflare);
   document.getElementById('gmZhipuWrap').classList.toggle('hidden', !isZhipu);
   
-  // 站内 AI 免密钥：隐藏 API 地址/Key 配置
+  // 站内 AI / Cloudflare 免密钥：隐藏 API 地址/Key 配置
   const apiBaseWrap = document.getElementById('gmApiBase').closest('div');
   const apiKeyWrap = document.getElementById('gmApiKey').closest('div');
-  if (apiBaseWrap) apiBaseWrap.classList.toggle('hidden', isSite);
-  if (apiKeyWrap) apiKeyWrap.classList.toggle('hidden', isSite);
+  if (apiBaseWrap) apiBaseWrap.classList.toggle('hidden', isSite || isCloudflare);
+  if (apiKeyWrap) apiKeyWrap.classList.toggle('hidden', isSite || isCloudflare);
   
   // 自动填充 API 地址与Key
   if (API_PROVIDERS[info.provider]) {
@@ -5497,8 +5686,9 @@ function saveSettings() {
   cfg.bgUrl = document.getElementById('gmBgUrl').value.trim();
   // 图床设置（保存在 localStorage，非角色数据）
   localStorage.setItem('tavern_picgo_key', document.getElementById('gmPicgoKey').value.trim());
-  // Cloudflare Account ID
-  cfg.cfAccountId = document.getElementById('gmCfAccountId').value.trim();
+  // Cloudflare Account ID（V4.13 免密钥：字段已移除，兼容旧数据）
+  const cfAccEl = document.getElementById('gmCfAccountId');
+  cfg.cfAccountId = cfAccEl ? cfAccEl.value.trim() : '';
   saveData();
   applyBackground();
   updateCtxBar();
@@ -6524,6 +6714,20 @@ function syncEmbeddedFromParent(prefs) {
   if (prefs.themeColor) {
     applyThemeColor(String(prefs.themeColor));
   }
+  // V5.0 修复：嵌入时暗色模式跟随主站 + 结构色变量按主站实际配色覆写（仅暗色下生效）
+  if (typeof prefs.dark === 'boolean') {
+    applyDark(prefs.dark);
+  }
+  if (prefs.palette && typeof prefs.palette === 'object') {
+    const p = prefs.palette;
+    const es = document.documentElement.style;
+    if (p.page) es.setProperty('--tv-page', p.page);
+    if (p.panel) es.setProperty('--tv-panel', p.panel);
+    if (p.deep) es.setProperty('--tv-deep', p.deep);
+    if (p.hover) es.setProperty('--tv-hover', p.hover);
+    if (p.ink) { es.setProperty('--tv-ink', p.ink); es.setProperty('--tv-ink-dark', p.ink); }
+    if (p.muted) es.setProperty('--tv-muted', p.muted);
+  }
 }
 
 // 背景设置弹窗
@@ -6656,39 +6860,61 @@ document.getElementById('ceBgFileInput').addEventListener('change', (e) => {
 });
 
 // 通用图床上传函数（供背景、头像共用）
-// 通过 Cloudflare CORS 代理转发，解决图床不支持 CORS 的问题
-const IMG_PROXY = 'https://doubao-plaza.pages.dev/api/proxy';
+// V5.0 修复：
+//  1. 新增「站内上传」优先通道 —— 走本站 /api/upload/tmpfile（服务端转发 tmpfile.link，登录 dp_token 即可，不受第三方图床政策影响）
+//  2. 代理地址由硬编码域名改为相对路径 /api/proxy（适配自定义域名；独立部署时该通道自动失败并跳过）
+//  3. img.remit.ee（403）/ sm.ms（401）已停止匿名服务，保留为最后兜底，失败自动跳过
+const IMG_PROXY = '/api/proxy';
 
 async function uploadToImageHost(file, statusEl) {
   // 图床列表：picgo.net 需 API Key，其余免 Key
   const picgoKey = localStorage.getItem('tavern_picgo_key') || '';
+  const dpToken = localStorage.getItem('dp_token') || '';
   const services = [
-    // picgo.net（需 API Key，优先级最高）
+    // 站内上传（本站服务端转发 tmpfile.link，需登录，成功率最高）
+    { site: '/api/upload/tmpfile', needLogin: true, name: '站内上传', respType: 'site' },
+    // picgo.net（需 API Key，优先级次之）
     { url: 'https://www.picgo.net/api/1/upload', fields: { key: picgoKey, source: file }, name: 'picgo.net', needKey: true, respPath: 'image.url' },
-    // img.remit.ee（免 Key）
+    // img.remit.ee（免 Key，服务可能已停）
     { url: 'https://img.remit.ee/api/upload', fields: { file: file }, name: 'img.remit.ee', respPath: 'url' },
-    // sm.ms（免 Key）
+    // sm.ms（免 Key，匿名上传可能被拒）
     { url: 'https://sm.ms/api/v2/upload', fields: { smfile: file }, name: 'sm.ms', respPath: 'data.url' },
   ];
   
   for (const svc of services) {
-    // picgo.net 需要 API Key，没配置就跳过
+    // picgo.net 需要 API Key，没配置就跳过；站内上传需要登录，未登录跳过
     if (svc.needKey && !picgoKey) continue;
+    if (svc.needLogin && !dpToken) continue;
     try {
       if (statusEl) statusEl.textContent = '正在通过 ' + svc.name + ' 上传…';
       const fd = new FormData();
-      for (const [k, v] of Object.entries(svc.fields)) fd.append(k, v);
-      // 通过 CORS 代理转发，避免图床不支持 CORS
-      const res = await fetch(IMG_PROXY, {
-        method: 'POST',
-        headers: { 'X-Target-URL': svc.url },
-        body: fd
-      });
+      if (svc.site) {
+        fd.append('file', file, file.name || 'file');
+      } else {
+        for (const [k, v] of Object.entries(svc.fields)) fd.append(k, v);
+      }
+      let res;
+      if (svc.site) {
+        // 站内上传：同源直调，带登录态
+        res = await fetch(svc.site, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + dpToken },
+          body: fd
+        });
+      } else {
+        // 通过 CORS 代理转发，避免图床不支持 CORS
+        res = await fetch(IMG_PROXY, {
+          method: 'POST',
+          headers: { 'X-Target-URL': svc.url },
+          body: fd
+        });
+      }
       if (!res.ok) { console.log(svc.name + ' HTTP ' + res.status); continue; }
       const data = await res.json();
       // 解析返回的图片 URL（兼容各种格式）
       let url = null;
-      if (svc.respPath === 'image.url') url = data.image?.url;
+      if (svc.respType === 'site') url = data.url || data.downloadLink || null;
+      else if (svc.respPath === 'image.url') url = data.image?.url;
       else if (svc.respPath === 'url') url = data.url || data.data?.url;
       else if (svc.respPath === 'data.url') url = data.data?.url || data.data?.links?.image;
       // 通用回退
@@ -7629,54 +7855,82 @@ function initEmojiPicker() {
 }
 
 // ===== PERSONA MODAL =====
+// ===== PERSONA MANAGEMENT UI（V5.0 重做：编辑区上置 + 头像快捷选择 + 删除确认 + 当前人格指示）=====
+const PERSONA_EMOJIS = ['😀','😎','🦊','🐱','🐶','🐰','🦄','🐼','👧','👦','👩','👨','🧙','🕵️','🌸','⚡','🔥','🎮','🎨','📚','🌙','💎'];
+function personaSetAvatar(val) {
+  const av = document.getElementById('pAvatar');
+  const pv = document.getElementById('pAvatarPreview');
+  const v = (val || '').trim() || '👤';
+  if (av) av.value = v;
+  if (pv) pv.textContent = v;
+}
 function renderPersonaList() {
   const list = document.getElementById('personaList');
   if (!list) return;
   list.innerHTML = data.personas.map(p => {
     const active = p.id === data.currentPersonaId;
-    return `<div class="flex items-center gap-2 p-2 rounded border cursor-pointer transition ${active ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}" data-pid="${p.id}" title="点击切换人格">
-      <span class="text-xl">${esc(p.avatar||'👤')}</span>
+    return `<div class="flex items-center gap-2 p-2 rounded border cursor-pointer transition ${active ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}" data-pid="${p.id}" title="点击切换为当前人格">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center text-lg shrink-0 bg-gray-100 dark:bg-[#2a2a3e]">${esc(p.avatar||'👤')}</div>
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium ${active ? 'text-primary dark:text-blue-400' : 'text-gray-700 dark:text-gray-200'}">${esc(p.name)}${active ? ' <i class="fa fa-check text-xs"></i>' : ''}</div>
+        <div class="text-sm font-medium flex items-center gap-1 ${active ? 'text-primary' : 'text-gray-700 dark:text-gray-200'}">
+          <span class="truncate">${esc(p.name)}</span>
+          ${active ? '<span class="text-[10px] px-1.5 py-px rounded-full text-white shrink-0" style="background:var(--acc)">使用中</span>' : ''}
+        </div>
         ${p.description ? '<div class="text-[11px] text-gray-400 truncate">'+esc(p.description)+'</div>' : ''}
       </div>
-      <button class="persona-edit-btn p-1 text-xs text-gray-400 rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/60 transition" data-pid="${p.id}" title="编辑" onclick="event.stopPropagation()"><i class="fa fa-pencil"></i></button>
-      <button class="persona-del-btn p-1 text-xs text-gray-400 rounded hover:text-red-500 transition" data-pid="${p.id}" title="删除" onclick="event.stopPropagation()"><i class="fa fa-times"></i></button>
+      <button class="persona-edit-btn p-1 text-xs text-gray-400 rounded hover:text-white transition" data-pid="${p.id}" title="编辑" onclick="event.stopPropagation()" style="background:transparent"><i class="fa fa-pencil"></i></button>
+      <button class="persona-del-btn p-1 text-xs text-gray-400 rounded hover:text-red-500 transition" data-pid="${p.id}" title="删除" onclick="event.stopPropagation()"><i class="fa fa-trash-o"></i></button>
     </div>`;
   }).join('');
   list.querySelectorAll('[data-pid]').forEach(row => row.addEventListener('click', (e) => {
     if (e.target.closest('.persona-edit-btn') || e.target.closest('.persona-del-btn')) return;
-    selectPersona(row.dataset.pid); renderPersonaList(); toast('已切换人格');
+    selectPersona(row.dataset.pid); renderPersonaList(); updatePersonaChip();
+    const p = data.personas.find(x => x.id === row.dataset.pid);
+    toast('已切换人格：' + (p ? p.name : ''));
   }));
   list.querySelectorAll('.persona-edit-btn').forEach(b => b.addEventListener('click', () => {
     const p = data.personas.find(x => x.id === b.dataset.pid);
     if (!p) return;
-    document.getElementById('personaEdit').classList.remove('hidden');
-    document.getElementById('pAvatar').value = p.avatar || '👤';
-    document.getElementById('pName').value = p.name;
-    document.getElementById('pDesc').value = p.description || '';
-    document.getElementById('personaEdit').dataset.editId = p.id;
-    document.getElementById('pName').focus();
+    openPersonaEdit(p);
   }));
   list.querySelectorAll('.persona-del-btn').forEach(b => b.addEventListener('click', () => {
-    deletePersona(b.dataset.pid); renderPersonaList();
+    const p = data.personas.find(x => x.id === b.dataset.pid);
+    if (!p) return;
+    if (data.personas.length <= 1) { toast('至少保留一个人格'); return; }
+    if (!confirm('确定删除人格「' + p.name + '」？删除后不可恢复。')) return;
+    deletePersona(p.id); renderPersonaList(); updatePersonaChip(); toast('人格已删除');
   }));
 }
-let _personaEditing = false;
+function openPersonaEdit(p) {
+  const box = document.getElementById('personaEdit');
+  document.getElementById('personaEditTitle').textContent = p ? '编辑人格：' + p.name : '新建人格';
+  personaSetAvatar(p ? (p.avatar || '👤') : '👤');
+  document.getElementById('pName').value = p ? p.name : '';
+  document.getElementById('pDesc').value = p ? (p.description || '') : '';
+  document.getElementById('personaEdit').dataset.editId = p ? p.id : '';
+  box.classList.remove('hidden');
+  document.getElementById('pName').focus();
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function updatePersonaChip() {
+  const chip = document.getElementById('personaCurrentChip');
+  if (!chip) return;
+  const p = getCurrentPersona();
+  chip.textContent = '当前：' + (p.name || 'User');
+  chip.classList.remove('hidden');
+}
+function closePersonaModal() { document.getElementById('personaModal').classList.add('hidden'); }
 document.getElementById('personaBtn').addEventListener('click', () => {
-  renderPersonaList();
+  renderPersonaList(); updatePersonaChip();
   document.getElementById('personaEdit').classList.add('hidden');
   document.getElementById('personaModal').classList.remove('hidden');
 });
-document.getElementById('personaClose').addEventListener('click', () => document.getElementById('personaModal').classList.add('hidden'));
-document.getElementById('personaAddBtn').addEventListener('click', () => {
-  document.getElementById('personaEdit').classList.remove('hidden');
-  document.getElementById('pAvatar').value = '👤';
-  document.getElementById('pName').value = '';
-  document.getElementById('pDesc').value = '';
-  document.getElementById('personaEdit').dataset.editId = '';
-  document.getElementById('pName').focus();
+document.getElementById('personaClose').addEventListener('click', closePersonaModal);
+document.getElementById('personaModal').addEventListener('click', (e) => { if (e.target === document.getElementById('personaModal')) closePersonaModal(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('personaModal') && !document.getElementById('personaModal').classList.contains('hidden')) closePersonaModal();
 });
+document.getElementById('personaAddBtn').addEventListener('click', () => openPersonaEdit(null));
 document.getElementById('personaCancelBtn').addEventListener('click', () => document.getElementById('personaEdit').classList.add('hidden'));
 document.getElementById('personaSaveBtn').addEventListener('click', () => {
   const name = document.getElementById('pName').value.trim();
@@ -7692,9 +7946,25 @@ document.getElementById('personaSaveBtn').addEventListener('click', () => {
   }
   saveData();
   document.getElementById('personaEdit').classList.add('hidden');
-  renderPersonaList();
+  renderPersonaList(); updatePersonaChip();
   toast('人格已保存');
 });
+document.getElementById('pName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('personaSaveBtn').click(); } });
+document.getElementById('pAvatar').addEventListener('input', (e) => { const pv = document.getElementById('pAvatarPreview'); if (pv) pv.textContent = e.target.value.trim() || '👤'; });
+// 常用表情快捷选择
+(function() {
+  const picker = document.getElementById('pEmojiPicker');
+  if (!picker) return;
+  PERSONA_EMOJIS.forEach(em => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = em;
+    b.className = 'w-7 h-7 text-sm rounded hover:bg-gray-200/70 dark:hover:bg-gray-600/70 transition';
+    b.title = em;
+    b.addEventListener('click', () => personaSetAvatar(em));
+    picker.appendChild(b);
+  });
+})();
 
 // ===== WORLD INFO SYSTEM =====
 function getCharWorldInfo(c) {

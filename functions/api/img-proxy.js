@@ -1,6 +1,7 @@
-// 图片代理：浏览器端外部图片统一走本站域名（/api/img-proxy?url=...），
-// 规避浏览器 Private Network Access (PNA) / CORS 对外部图片的拦截。
+// 图片/媒体代理：浏览器端外部图片、视频、音频统一走本站域名（/api/img-proxy?url=...），
+// 规避浏览器 Private Network Access (PNA) / CORS 对外部资源的拦截。
 // 部署在 Cloudflare Pages Functions，fetch 从 Cloudflare 网络发起，不受客户端 DNS/代理影响。
+// V5.0 修复：放行 video/* 与 audio/*（聊天视频消息此前被「非图片内容」拒绝导致无法播放）；超时缩短至 10s。
 
 const MAX_BYTES = 10 * 1024 * 1024; // 最大转发 10MB
 
@@ -67,7 +68,7 @@ export async function onRequestGet(context) {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), 10000);
   try {
     const resp = await fetch(target, {
       method: 'GET',
@@ -82,9 +83,9 @@ export async function onRequestGet(context) {
       return new Response('上游返回 ' + resp.status, { status: 502 });
     }
     const ctype = resp.headers.get('Content-Type') || '';
-    // 只转发图片内容（部分图床用 octet-stream，一并放行；img 解码失败会自行触发 onerror 回退）
-    if (!ctype.startsWith('image/') && ctype !== 'application/octet-stream') {
-      return new Response('非图片内容', { status: 502 });
+    // 只转发图片/音视频内容（部分图床用 octet-stream，一并放行；解码失败会自行触发 onerror 回退）
+    if (!ctype.startsWith('image/') && !ctype.startsWith('video/') && !ctype.startsWith('audio/') && ctype !== 'application/octet-stream') {
+      return new Response('非媒体内容', { status: 502 });
     }
     const len = parseInt(resp.headers.get('Content-Length') || '0', 10);
     if (len > MAX_BYTES) {

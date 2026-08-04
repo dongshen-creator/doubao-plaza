@@ -30,7 +30,7 @@
   category: 'independent',
   description: '工具描述',
   api_type: 'ai_chat',        // 或 'ai_image'
-  model: '@cf/zai-org/glm-4.7-flash',
+  model: '@cf/meta/llama-3.2-3b-instruct',
   system_prompt: '系统提示词',
   input_fields: [
     { name: 'message', type: 'textarea', label: '输入', placeholder: '...', required: true }

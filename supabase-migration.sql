@@ -696,12 +696,15 @@ CREATE POLICY "chat_room_members_delete" ON chat_room_members FOR DELETE TO auth
     OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = room_id AND created_by = app_user_id())
   );
 
--- chat_messages：仅房间成员可发消息，sender_id 必须为本人；管理员/创建者可撤回/删除
+-- chat_messages：房间成员可发消息，sender_id 必须为本人；V5.0 修复：公开频道（is_channel_public）无需成员记录即可发送（与读取策略对齐，解决加入流程中断导致成员缺失时发不出消息）；管理员/创建者可撤回/删除
 DROP POLICY IF EXISTS "chat_messages_insert" ON chat_messages;
 CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT TO authenticated
   WITH CHECK (
     app_user_id() = sender_id
-    AND EXISTS (SELECT 1 FROM chat_room_members WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
+    AND (
+      is_channel_public(room_id)
+      OR EXISTS (SELECT 1 FROM chat_room_members WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
+    )
   );
 DROP POLICY IF EXISTS "chat_messages_update" ON chat_messages;
 CREATE POLICY "chat_messages_update" ON chat_messages FOR UPDATE TO authenticated
