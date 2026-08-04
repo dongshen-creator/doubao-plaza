@@ -16,7 +16,9 @@
 - `syncEmbeddedFromParent` 接收主站 `themeColor` 并应用；主站 `syncTavernPrefs` 发送 `dp_theme_color`（默认 orange）——嵌入时主题色与主站完全一致
 
 ##### 2. Tavern 嵌入时 CSP 阻断外部 AI API（智谱 / NVIDIA / 站内对话）
-- `public/_headers` 新增 `/tavern.html` 路径规则：`connect-src 'self' https: wss:` 全面放宽，其余指令与全局一致——智谱直连、NVIDIA 代理、站内 `/api/tools/ai` 均不再被 CSP 拦截
+- **方案变更**：`_headers` 的 `/tavern.html` 路径规则经线上验证**不生效**——Cloudflare `_headers` 对同一 header 在多个匹配规则中采用「值逗号拼接」合并语义，多 CSP 策略被浏览器同时强制执行 = 取交集 = 最严格策略仍生效，无法单独放宽；且 `_headers` 不适用于 Pages Function 响应
+- 改为**新增 `functions/tavern.html.js`**：用 `env.ASSETS.fetch()` 取回静态 tavern.html，在函数内覆写 `Content-Security-Policy` 为 `connect-src 'self' https: wss:` 的独立宽松策略（其余安全头同步补全）——智谱直连、NVIDIA 代理、站内 `/api/tools/ai` 均不再被 CSP 拦截
+- `public/_routes.json` include 加入 `/tavern.html` 使请求进入该 Function
 
 ##### 3. 新增「站内 AI」提供商（免密钥）
 - gmModel 下拉最前新增 `⚡ 站内AI（本站·免密钥·推荐）` → `st:ai_chat`
@@ -35,7 +37,8 @@
 |------|------|
 | `public/tavern.html` | 主题变量 / 站内 AI 提供商 / 人格 UI / onVirtualScroll 残留清理 |
 | `public/index.html` | `syncTavernPrefs` 发送 themeColor |
-| `public/_headers` | `/tavern.html` CSP 放宽规则 |
+| `functions/tavern.html.js` | 新增 tavern 专属 CSP 改写 Function（替代失效的 `_headers` 规则） |
+| `public/_routes.json` | include 加入 `/tavern.html` |
 | `CHANGELOG.md` | 本记录 |
 
 ---
