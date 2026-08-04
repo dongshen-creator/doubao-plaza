@@ -4,6 +4,49 @@
 
 ---
 
+## v4.12 — 2026-08-04
+
+### 修复 Tavern 外部 AI API 被全局 CSP 拦截 + 主题色全面跟随主题变量
+
+#### 修复
+
+##### 1. 外部 AI API（智谱 / 自定义 / DeepSeek 等）被 CSP 拦截 —— 彻底解决
+- **根因**：全局 `_headers` 的 CSP `connect-src` 仅白名单 supabase / 翻译 / 图床 6 个域名，**不含任何 AI 提供商**；tavern 的智谱（`open.bigmodel.cn`）与「自定义 API」（任意域名）设计为浏览器直连（`corsProxy:''`），被拦截时浏览器报 `Refused to connect because it violates the document's Content Security Policy`
+- **修复**：`public/_headers` 全局 CSP `connect-src` 由域名白名单放宽为 `'self' https: wss:`——允许任意 https（含自定义 API 任意域名）与 wss 连接，同时消除 v4.11 遗留的「嵌入模式外部 AI 直连被拦」已知限制
+- 主站页面安全不受影响：`default-src 'self'`、`script-src` 白名单等其余指令保持原样；`frame-ancestors 'self'` 也保留（防止跨站嵌入）
+
+##### 2. 主题色切换不同步 tavern 嵌入页 —— 断链补齐
+- **根因**：主站 `setThemeColor()` 仅写 localStorage + 切 body 类，**未调用 `syncTavernPrefs()`**，导致 tavern iframe 收不到主题色变更推送
+- **修复**：`setThemeColor()` 末尾补调 `syncTavernPrefs()`（该方法本已发送 `dp_theme_color` → iframe `syncEmbeddedFromParent` → `applyThemeColor` 写入 `--acc`/`--acc2`），主站切主题色后 tavern 立即跟随
+
+##### 3. tavern 大量颜色不随主题色变化 —— 硬编码全面变量化
+- **根因（三层）**：
+  1. 自定义 CSS 中 **41 处硬编码 `#FF6B35`**（主色）与 16 处 `#FF8F5E`（暗色变体）——只跟随默认橙色，不跟 `--acc`/`--acc2`
+  2. **预编译 Tailwind 的 `primary` 色是蓝色 `rgb(22 93 255)`（#165DFF）**，`tailwind.config`（`primary:'#FF6B35'`）是死代码（tavern 无 Tailwind CDN/运行时，L24 的 bundle 无 tailwind 引擎符号）——`bg-primary` 头部、`text-primary` 图标、hover/focus/dark 变体等 10 条规则全部是蓝色
+  3. `#FFF1E8`（浅橙背景 6 处）与 `rgba(255,107,53,α)`（阴影/浅底 11 处）同样硬编码
+- **修复（tavern.html 共 76 处 + 编译块 10 处）**：
+  - 自定义 CSS 硬编码纯色 → `var(--acc)` / `var(--acc2)`；`#FFF1E8` → `color-mix(in srgb, var(--acc) 10%, #fff)`
+  - `rgba(255,107,53,α)` → `color-mix(in srgb, var(--acc) N%, transparent)`；`rgba(255,143,94,α)` → 同上用 `var(--acc2)`
+  - 预编译 Tailwind 块内 10 条 primary 规则：`rgb(22 93 255 / ...)` / `#FF6B35` 全部替换为 `var(--acc)` / `color-mix(in srgb, var(--acc) N%, transparent)`（含 `.bg-primary`、`.text-primary`、`.hover:bg-primary/90`、`.focus:ring-primary/30`、`.dark:bg-primary/20` 等）
+  - **保留不动**：`:root { --acc: #FF6B35; --acc2: #FF8F5E }` 默认定义、`THEME_ACCENTS` 六色映射数据、登录墙独立文档（L16）与 bundle（L24）内硬编码、`tailwind.config` 死代码
+  - 运行时代码 10 处 `style.color` 红/绿/黑/白（状态指示、语音按钮）为语义色，不随主题，保留
+
+#### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `public/_headers` | CSP `connect-src` 放宽为 `'self' https: wss:`（外部 AI API / 自定义 API 可直连） |
+| `public/index.html` | `setThemeColor()` 补调 `syncTavernPrefs()` 推送主题色到 tavern iframe |
+| `public/tavern.html` | 76 处自定义 CSS 硬编码色 + 预编译 Tailwind 10 条 primary 规则全部变量化（`var(--acc)`/`var(--acc2)`/`color-mix`） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [ ] 部署后 `curl -I` 验证两域名 CSP 头含 `connect-src 'self' https: wss:`
+- [ ] tavern 嵌入主站：切任一主题色（蓝/绿/紫…）→ 头部 / 按钮 / 链接 / hover 颜色跟随变化，暗色模式 `--acc2` 变体同步
+- [ ] tavern 设置-模型配置：智谱 / 自定义 API 发送消息不再报 CSP Refused to connect
+
+---
+
 ## v4.11 — 2026-08-04
 
 ### Tavern 嵌入模式修复（主题同步 / CSP / 站内 AI 免密钥）+ 人格 UI 优化

@@ -11470,6 +11470,8 @@ function applyThemeColor(colorId) {
 function setThemeColor(colorId) {
   localStorage.setItem('dp_theme_color', colorId);
   applyThemeColor(colorId);
+  // V4.12 修复：主题色切换后同步推送至 tavern 嵌入页（此前缺失导致 iframe 内主题色不同步）
+  syncTavernPrefs();
   toast('主题色已切换', 'success');
 }
 
