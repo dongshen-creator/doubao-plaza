@@ -4,6 +4,42 @@
 
 ---
 
+## v4.11 — 2026-08-04
+
+### Tavern 嵌入模式修复（主题同步 / CSP / 站内 AI 免密钥）+ 人格 UI 优化
+
+#### 修复
+
+##### 1. Tavern 嵌入主站时主题色不同步
+- tavern 新增 `:root { --acc: #FF6B35; --acc2: #FF8F5E }` 平台化主色调变量，`button.bg-primary` 由硬编码 `#FF6B35` 渐变改为 `linear-gradient(135deg, var(--acc), var(--acc2))` + `color-mix` 阴影
+- 新增 `THEME_ACCENTS`（orange/blue/green/purple/pink/cyan 六色映射）+ `applyThemeColor(colorId)`（写入 `--acc`/`--acc2`）
+- `syncEmbeddedFromParent` 接收主站 `themeColor` 并应用；主站 `syncTavernPrefs` 发送 `dp_theme_color`（默认 orange）——嵌入时主题色与主站完全一致
+
+##### 2. Tavern 嵌入时 CSP 阻断外部 AI API（智谱 / NVIDIA / 站内对话）
+- `public/_headers` 新增 `/tavern.html` 路径规则：`connect-src 'self' https: wss:` 全面放宽，其余指令与全局一致——智谱直连、NVIDIA 代理、站内 `/api/tools/ai` 均不再被 CSP 拦截
+
+##### 3. 新增「站内 AI」提供商（免密钥）
+- gmModel 下拉最前新增 `⚡ 站内AI（本站·免密钥·推荐）` → `st:ai_chat`
+- `getProviderInfo` 识别 `st:` 前缀 → provider `site`
+- `API_PROVIDERS.site` 配置（apiBase `/api/tools/ai`，免密钥说明文案）
+- `sendMessage` 新增站内 AI 分支：走 `POST /api/tools/ai`（`tool_id: ai_chat` + `buildRequestMessages` 历史 + `Bearer dp_token`），SSE 流式解析（`data: {text}` + `[DONE]`），未登录时报错提示
+- gmModel change 处理器：选择站内 AI 时自动隐藏 API 地址 / API Key 配置框
+
+##### 4. 人格设置 UI 优化
+- 人格列表整行可点击切换（原仅有小圆点按钮），悬停高亮
+- 编辑 / 新建人格时名称输入框自动聚焦
+
+#### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `public/tavern.html` | 主题变量 / 站内 AI 提供商 / 人格 UI / onVirtualScroll 残留清理 |
+| `public/index.html` | `syncTavernPrefs` 发送 themeColor |
+| `public/_headers` | `/tavern.html` CSP 放宽规则 |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v4.10 — 2026-08-04
 
 ### Tavern 接入 MOSS 高质量音色（TTS/STT/声线设计）+ 气泡操作栏重设计 + 嵌入同步

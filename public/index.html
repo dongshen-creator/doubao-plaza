@@ -9796,7 +9796,8 @@ function syncTavernPrefs() {
     if (typeof f.contentWindow.syncEmbeddedFromParent !== 'function') return;
     var prefs = {
       bgUrl: localStorage.getItem('dp_chat_bg') || '',
-      fontFamily: (document.body && getComputedStyle(document.body).fontFamily) || ''
+      fontFamily: (document.body && getComputedStyle(document.body).fontFamily) || '',
+      themeColor: localStorage.getItem('dp_theme_color') || 'orange'
     };
     f.contentWindow.syncEmbeddedFromParent(prefs);
   } catch(e) {}
