@@ -1964,23 +1964,32 @@ tailwind.config={
     <button id="darkToggle" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="切换主题">
       <i class="fa fa-sun-o" id="darkIcon"></i><span class="header-btn-text hidden sm:inline">主题</span>
     </button>
-    <button id="importBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="导入数据">
-      <i class="fa fa-upload"></i><span class="header-btn-text hidden sm:inline">导入</span>
-    </button>
-    <button id="urlImportHeaderBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="从链接导入对话">
-      <i class="fa fa-link"></i><span class="header-btn-text hidden sm:inline">链接导入</span>
-    </button>
-    <button id="buildBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="手动构建角色卡">
-      <i class="fa fa-magic"></i><span class="header-btn-text hidden sm:inline">构建</span>
-    </button>
-    <button id="exportBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="导出数据">
-      <i class="fa fa-download"></i><span class="header-btn-text hidden sm:inline">导出</span>
-    </button>
+    <!-- 更多操作下拉 -->
+    <div id="moreMenuWrap" class="relative">
+      <button id="moreMenuBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="更多操作" onclick="toggleMoreMenu(event)">
+        <i class="fa fa-ellipsis-v"></i><span class="header-btn-text hidden sm:inline">更多</span>
+      </button>
+      <div id="moreMenu" class="hidden absolute right-0 top-full mt-1 min-w-44 rounded-xl bg-white dark:bg-[#2a2a3e] shadow-lg border border-gray-200 dark:border-gray-600 py-1.5 z-50">
+        <button id="importBtn" class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="导入数据">
+          <i class="fa fa-upload w-4 text-primary"></i><span>导入数据</span>
+        </button>
+        <button id="urlImportHeaderBtn" class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="从链接导入对话">
+          <i class="fa fa-link w-4 text-primary"></i><span>链接导入</span>
+        </button>
+        <button id="buildBtn" class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="手动构建角色卡">
+          <i class="fa fa-magic w-4 text-primary"></i><span>构建角色卡</span>
+        </button>
+        <button id="exportBtn" class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="导出数据">
+          <i class="fa fa-download w-4 text-primary"></i><span>导出数据</span>
+        </button>
+        <div class="my-1 border-t border-gray-200 dark:border-gray-600"></div>
+        <button id="personaBtn" class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="人格管理">
+          <i class="fa fa-user-circle w-4 text-primary"></i><span>人格管理</span>
+        </button>
+      </div>
+    </div>
     <button id="settingsBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="全局设置">
       <i class="fa fa-cog"></i><span class="header-btn-text hidden sm:inline">设置</span>
-    </button>
-    <button id="personaBtn" class="header-btn bg-white/15 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/25 transition flex items-center gap-1" title="人格管理">
-      <i class="fa fa-user-circle"></i><span class="header-btn-text hidden sm:inline">人格</span>
     </button>
     <button id="newCharBtn" class="header-btn bg-white/20 text-white px-2 md:px-3 py-1.5 rounded text-xs md:text-sm hover:bg-white/30 transition flex items-center gap-1 font-semibold" title="新建角色">
       <i class="fa fa-plus"></i><span class="hidden sm:inline">角色</span>
@@ -2442,6 +2451,50 @@ https://doubaosearch.c</div>
           <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
             <input type="checkbox" id="gmTtsAutoPlay" class="accent-primary"> 新消息自动朗读
           </label>
+          <div class="border border-dashed border-primary/40 rounded-lg p-2 bg-primary/5">
+            <div class="flex items-center gap-2">
+              <i class="fa fa-magic text-primary text-xs"></i>
+              <button onclick="openVoiceDesignModal()" class="text-xs text-primary font-medium hover:underline">AI 声线设计（生成自定义音色）</button>
+            </div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">用一句话描述想要的声音（如「温柔甜美的年轻女声」），AI 生成专属音色，保存后可设为朗读音色。</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">提示：MOSS 高质量音色（AI）分组内的音色为内置音色，直接可选。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- STT 设置 -->
+      <div class="border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
+        <div class="flex items-center gap-2 mb-2">
+          <label class="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-1.5">
+            <i class="fa fa-microphone text-primary"></i> 语音输入 (STT)
+          </label>
+        </div>
+        <div class="flex flex-col gap-2">
+          <div>
+            <label class="text-xs text-gray-400 font-medium">识别引擎</label>
+            <select id="gmSttEngine" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm">
+              <option value="browser">浏览器（免费 · 需联网）</option>
+              <option value="moss">MOSS AI（更准确 · 需登录广场）</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 font-medium">识别语言</label>
+            <select id="gmSttLang" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm">
+              <option value="zh-CN">中文（普通话）</option>
+              <option value="zh-TW">中文（繁体）</option>
+              <option value="en-US">英语（美国）</option>
+              <option value="en-GB">英语（英国）</option>
+              <option value="ja-JP">日语</option>
+              <option value="ko-KR">韩语</option>
+              <option value="fr-FR">法语</option>
+              <option value="de-DE">德语</option>
+              <option value="es-ES">西班牙语</option>
+              <option value="ru-RU">俄语</option>
+            </select>
+          </div>
+          <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
+            <input type="checkbox" id="gmSttContinuous" class="accent-primary"> 连续识别（说完不自动停）
+          </label>
         </div>
       </div>
 
@@ -2520,6 +2573,36 @@ https://doubaosearch.c</div>
     <div id="statsContent" class="stats-pop"></div>
     <div class="flex gap-2 mt-4">
       <button class="flex-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="document.getElementById(&#39;statsModal&#39;).classList.add(&#39;hidden&#39;)">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voice design modal (AI 声线设计) -->
+<div class="modal-overlay hidden" id="voiceDesignModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><i class="fa fa-magic"></i></div>
+      <div class="modal-title">AI 声线设计</div>
+      <button class="modal-close" onclick="closeVoiceDesignModal()">×</button>
+    </div>
+    <div class="flex flex-col gap-3 text-sm">
+      <div>
+        <label class="text-xs text-gray-400 font-medium">声音风格描述</label>
+        <textarea id="vdInstruction" rows="2" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded resize-none bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="例如：一个温柔、自然、略带微笑感的年轻女声"></textarea>
+      </div>
+      <div>
+        <label class="text-xs text-gray-400 font-medium">试听文本</label>
+        <textarea id="vdInput" rows="2" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded resize-none bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="例如：欢迎来到逗包广场，很高兴认识你！">欢迎来到逗包广场，很高兴认识你！</textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="vdGenBtn" onclick="generateVoiceDesign()" class="flex-1 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition"><i class="fa fa-play"></i> 生成并试听</button>
+        <button id="vdSaveBtn" onclick="saveDesignedVoice()" disabled class="flex-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm font-medium disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fa fa-save"></i> 保存为音色</button>
+      </div>
+      <div id="vdPreview" class="hidden">
+        <audio id="vdAudio" controls class="w-full h-9"></audio>
+      </div>
+      <div id="vdMsg" class="text-xs"></div>
+      <div id="vdCustomList"></div>
     </div>
   </div>
 </div>
@@ -2836,6 +2919,7 @@ function defaultConfig() {
     // STT 设置
     sttLang: 'zh-CN',
     sttContinuous: false,
+    sttEngine: 'browser', // 'browser'（Web Speech 免费） | 'moss'（MOSS AI 更准确，经 /api/moss/stt）
     // Coze 站点设置
     cozeSite: 'https://030b34b3-0e6a-4b78-ba5f-0f3cdfab9dd1-5000.dev.coze.site',
     // Cloudflare Workers AI 设置
@@ -5052,6 +5136,10 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
   document.getElementById('gmTtsPitch').value = cfg.ttsPitch || 1.0;
   document.getElementById('gmTtsPitchVal').textContent = (cfg.ttsPitch||1.0).toFixed(1);
   document.getElementById('gmTtsAutoPlay').checked = cfg.ttsAutoPlay || false;
+  // STT 设置
+  document.getElementById('gmSttEngine').value = cfg.sttEngine || 'browser';
+  document.getElementById('gmSttLang').value = cfg.sttLang || 'zh-CN';
+  document.getElementById('gmSttContinuous').checked = cfg.sttContinuous || false;
   // 背景设置
   document.querySelectorAll('[data-gbg]').forEach(el => {
     el.classList.toggle('active', el.dataset.gbg === (cfg.bgMode || 'default'));
@@ -5314,6 +5402,10 @@ function saveSettings() {
   cfg.ttsRate = parseFloat(document.getElementById('gmTtsRate').value);
   cfg.ttsPitch = parseFloat(document.getElementById('gmTtsPitch').value);
   cfg.ttsAutoPlay = document.getElementById('gmTtsAutoPlay').checked;
+  // STT 设置
+  cfg.sttEngine = document.getElementById('gmSttEngine').value;
+  cfg.sttLang = document.getElementById('gmSttLang').value;
+  cfg.sttContinuous = document.getElementById('gmSttContinuous').checked;
   // 背景设置
   const activeBg = document.querySelector('[data-gbg].active');
   if (activeBg) cfg.bgMode = activeBg.dataset.gbg;
@@ -6239,6 +6331,27 @@ document.getElementById('bdSave').addEventListener('click', () => {
   toast('角色「' + name + '」已创建' + exInfo + histInfo);
 });
 
+// ===== MORE MENU (顶部「更多」下拉) =====
+function toggleMoreMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('moreMenu');
+  if (!menu) return;
+  menu.classList.toggle('hidden');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('moreMenu');
+  const wrap = document.getElementById('moreMenuWrap');
+  if (menu && !menu.classList.contains('hidden') && wrap && !wrap.contains(e.target)) {
+    menu.classList.add('hidden');
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const menu = document.getElementById('moreMenu');
+    if (menu) menu.classList.add('hidden');
+  }
+});
+
 // ===== DARK MODE =====
 const darkToggle = document.getElementById('darkToggle');
 const darkIcon = document.getElementById('darkIcon');
@@ -6285,6 +6398,29 @@ function applyBackground() {
   } else {
     // 默认：跟随暗色模式
     chatContainer.style.backgroundColor = '';
+  }
+}
+
+// 主站嵌入时由父页面调用（同源 iframe 直调）：同步背景 / 字体偏好
+// 参数: { bgUrl: string, fontFamily: string }
+function syncEmbeddedFromParent(prefs) {
+  if (!prefs || typeof prefs !== 'object') return;
+  const chatContainer = document.getElementById('chatContainer');
+  if (chatContainer) {
+    if (prefs.bgUrl) {
+      chatContainer.classList.add('chat-bg-image');
+      chatContainer.style.backgroundImage = 'url("' + String(prefs.bgUrl).replace(/"/g, '') + '")';
+      chatContainer.style.backgroundColor = '';
+    } else {
+      // 无主站背景时恢复 tavern 自身背景配置
+      chatContainer.classList.remove('chat-bg-image');
+      chatContainer.style.backgroundImage = '';
+      chatContainer.style.backgroundColor = '';
+      applyBackground();
+    }
+  }
+  if (prefs.fontFamily) {
+    document.body.style.fontFamily = String(prefs.fontFamily);
   }
 }
 
@@ -6639,6 +6775,11 @@ function applyQuickPrompt(i) {
 let _recognition = null;
 let _recognizing = false;
 function initVoice() {
+  // MOSS AI 引擎：MediaRecorder 录音 → /api/moss/stt（更准确）
+  if ((data.config.sttEngine || 'browser') === 'moss') {
+    initVoiceMoss();
+    return;
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = document.getElementById('voiceBtn');
   if (!btn) return;
@@ -6718,6 +6859,244 @@ function initVoice() {
 let _speakingBtn = null;
 let _voices = [];
 
+// ===== MOSS AI 语音输入 (STT): MediaRecorder 录音 → /api/moss/stt =====
+let _mossMediaRecorder = null;
+let _mossMediaChunks = [];
+let _mossMediaStream = null;
+function initVoiceMoss() {
+  const btn = document.getElementById('voiceBtn');
+  if (!btn) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    btn.style.opacity = '0.4';
+    btn.title = '当前浏览器不支持麦克风录音（需 HTTPS）';
+    btn.addEventListener('click', () => {
+      toast('当前浏览器不支持麦克风录音，请在 HTTPS 环境下使用 Chrome/Edge', 'error');
+    });
+    return;
+  }
+  btn.addEventListener('click', async () => {
+    if (_mossMediaRecorder && _mossMediaRecorder.state === 'recording') {
+      // 停止录音并转写
+      _mossMediaRecorder.stop();
+      return;
+    }
+    try {
+      _mossMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+      _mossMediaRecorder = new MediaRecorder(_mossMediaStream, mime ? { mimeType: mime } : undefined);
+      _mossMediaChunks = [];
+      _mossMediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) _mossMediaChunks.push(e.data); };
+      _mossMediaRecorder.onstop = async () => {
+        btn.classList.remove('recording');
+        btn.querySelector('i').className = 'fa fa-microphone';
+        const st = document.getElementById('recStatus');
+        st.classList.remove('hidden');
+        st.innerHTML = '<i class="fa fa-spinner fa-spin text-[8px]"></i> 识别中…';
+        try {
+          const blob = new Blob(_mossMediaChunks, { type: mime || 'audio/webm' });
+          if (blob.size < 200) { toast('录音太短，未识别到内容', 'info'); return; }
+          const fd = new FormData();
+          fd.append('file', blob, 'recording.webm');
+          const res = await fetch('/api/moss/stt', { method: 'POST', body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) throw new Error(data.error || ('语音识别失败 (' + res.status + ')'));
+          const ta = document.getElementById('userInput');
+          const base = ta.value;
+          ta.value = base + (base ? ' ' : '') + (data.text || '').trim();
+          autoResizeTextarea();
+          saveDraft();
+          toast('语音识别完成', 'success');
+        } catch (err) {
+          toast(err.message || '语音识别失败', 'error');
+        } finally {
+          if (_mossMediaStream) { _mossMediaStream.getTracks().forEach(t => t.stop()); _mossMediaStream = null; }
+          _mossMediaRecorder = null;
+          document.getElementById('recStatus').classList.add('hidden');
+        }
+      };
+      _mossMediaRecorder.onerror = () => { toast('录音出错', 'error'); };
+      _mossMediaRecorder.start();
+      btn.classList.add('recording');
+      btn.querySelector('i').className = 'fa fa-stop';
+      const st = document.getElementById('recStatus');
+      st.classList.remove('hidden');
+      st.innerHTML = '<i class="fa fa-circle text-[8px]"></i> 录音中… 再次点击结束';
+    } catch (e) {
+      toast('无法访问麦克风: ' + (e.message || '权限被拒绝'), 'error');
+    }
+  });
+}
+
+// ===== MOSS 高质量语音（AI 音色，经 /api/moss/tts）=====
+const MOSS_BUILTIN_VOICES = [
+  { id: 'c6c0a40a-ea82-4468-9a21-333d3c4a76f6', name: '曼波有口音版', desc: '轻快·可爱·搞笑', lang: '中文' },
+  { id: 'f80b6698-0066-430b-88a0-f0fb8796db34', name: '明太祖', desc: '高冷·沉稳·霸总', lang: '中文' },
+  { id: 'ddc6e38b-6f55-4415-b21b-a88cad2cc1d9', name: 'VOX AKUMA', desc: '慵懒·磁性·专业', lang: '英文' },
+  { id: '7662a8a1-700c-466a-b66b-57ece9e2e231', name: '李白', desc: '古风·热血', lang: '中文' },
+  { id: 'f9a1416b-d006-4b77-9581-8f0e8ec1e401', name: '旁白Jake', desc: '沉稳·磁性·专业', lang: '英文' },
+  { id: 'faf7f550-0627-4fc6-8db0-d3bfdad49358', name: '经验女教师', desc: '高冷·自然', lang: '中文' },
+  { id: 'fe85a513-9bf3-4ef7-aa0b-8b2d11e4db93', name: '少年感人声（男）', desc: '温柔·磁性·自然', lang: '中文' },
+  { id: '0804710c-8e5e-4b67-acda-5785ef13c309', name: '历史解说男声', desc: '沉稳·磁性', lang: '中文' },
+  { id: '9d1e88e9-3b9c-4992-a414-7a1cb3ff7ab5', name: '优雅英国女士', desc: '温柔·磁性·自然', lang: '英文' },
+  { id: '806c9695-6160-404e-8722-4f788d935af3', name: '轻快灵动女声', desc: '轻快·活泼·自然', lang: '中文' },
+  { id: '2fdf194e-c16e-4587-9027-0d3464e09b4e', name: '诗词朗读', desc: '沉稳·磁性·专业', lang: '中文' },
+  { id: '133bd03b-d717-4a55-8974-7ffc9afc1b51', name: '故宫纪录片', desc: '沉稳·磁性·专业', lang: '中文' },
+  { id: '26838557-6890-4505-bc7c-e8198443a141', name: '东北虎哥', desc: '搞笑·慵懒', lang: '中文' },
+  { id: '19411508-8731-4b68-901d-7e4b8a98e23f', name: '忧伤的秋', desc: '温柔·慵懒', lang: '中文' },
+  { id: '944eb93b-3820-49f3-b2c0-4e37a31d1161', name: '三农农业旁白', desc: '轻快·磁性·专业', lang: '中文' }
+];
+// 用户声线设计生成的自定义音色（存 localStorage）
+function getMossCustomVoices() {
+  try { return JSON.parse(localStorage.getItem('tavern_moss_voices') || '[]'); }
+  catch (_) { return []; }
+}
+function saveMossCustomVoices(list) {
+  localStorage.setItem('tavern_moss_voices', JSON.stringify(list));
+}
+function getAllMossVoices() { return MOSS_BUILTIN_VOICES.concat(getMossCustomVoices()); }
+
+// ===== MOSS 声线设计：文本+风格描述 → 生成音频 → 保存为自定义音色 =====
+let _vdBlob = null;          // 最近一次生成的音频 blob（试听与保存复用）
+let _vdAudioUrl = null;      // 对应 objectURL
+let _vdGenerating = false;
+
+function openVoiceDesignModal() {
+  document.getElementById('voiceDesignModal').classList.remove('hidden');
+  renderCustomVoiceList();
+  const msg = document.getElementById('vdMsg');
+  if (msg) { msg.textContent = ''; msg.className = 'text-xs'; }
+  document.getElementById('vdPreview').classList.add('hidden');
+  document.getElementById('vdSaveBtn').disabled = true;
+}
+
+function closeVoiceDesignModal() {
+  const audio = document.getElementById('vdAudio');
+  if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  if (_vdAudioUrl) { URL.revokeObjectURL(_vdAudioUrl); _vdAudioUrl = null; }
+  _vdBlob = null;
+  document.getElementById('voiceDesignModal').classList.add('hidden');
+}
+
+async function generateVoiceDesign() {
+  if (_vdGenerating) return;
+  const instruction = document.getElementById('vdInstruction').value.trim();
+  const input = document.getElementById('vdInput').value.trim();
+  if (!instruction) { setVdMsg('请先填写声音风格描述', true); return; }
+  if (!input) { setVdMsg('请填写试听文本', true); return; }
+  _vdGenerating = true;
+  const btn = document.getElementById('vdGenBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 生成中…';
+  setVdMsg('AI 生成音色中，约需 20-60 秒，请稍候…', false);
+  try {
+    const resp = await fetch('/api/moss/voice-generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input, instruction, response_format: 'mp3', delivery_method: 'audio' }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || ('生成失败 (' + resp.status + ')'));
+    }
+    const ctype = resp.headers.get('Content-Type') || '';
+    if (ctype.includes('application/json')) {
+      const data = await resp.json();
+      throw new Error(data.error || data.detail || '生成失败');
+    }
+    _vdBlob = await resp.blob();
+    if (!_vdBlob || _vdBlob.size < 500) throw new Error('生成的音频为空');
+    if (_vdAudioUrl) URL.revokeObjectURL(_vdAudioUrl);
+    _vdAudioUrl = URL.createObjectURL(_vdBlob);
+    const audio = document.getElementById('vdAudio');
+    audio.src = _vdAudioUrl;
+    document.getElementById('vdPreview').classList.remove('hidden');
+    document.getElementById('vdSaveBtn').disabled = false;
+    setVdMsg('生成成功！可试听，满意后点击「保存为音色」', false);
+  } catch (err) {
+    setVdMsg('生成失败：' + err.message, true);
+  } finally {
+    _vdGenerating = false;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa fa-play"></i> 生成并试听';
+  }
+}
+
+async function saveDesignedVoice() {
+  if (!_vdBlob) { setVdMsg('请先点击「生成并试听」', true); return; }
+  const btn = document.getElementById('vdSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 保存中…';
+  const instruction = document.getElementById('vdInstruction').value.trim();
+  const name = (instruction ? instruction.slice(0, 20) : '自定义音色') + '_' + Date.now().toString(36);
+  try {
+    const fd = new FormData();
+    fd.append('audio_sample', _vdBlob, 'designed_voice.mp3');
+    fd.append('name', name);
+    const resp = await fetch('/api/moss/voices', { method: 'POST', body: fd });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.success) throw new Error(data.error || ('保存失败 (' + resp.status + ')'));
+    const voiceId = data.voice_id;
+    if (!voiceId) throw new Error('未返回音色 ID');
+    const list = getMossCustomVoices();
+    list.push({ id: voiceId, name: data.name || name });
+    saveMossCustomVoices(list);
+    loadVoices();
+    const select = document.getElementById('gmTtsVoice');
+    if (select) { select.value = 'moss:' + voiceId; }
+    renderCustomVoiceList();
+    setVdMsg('已保存为自定义音色「' + (data.name || name) + '」，已自动选中', false);
+  } catch (err) {
+    setVdMsg('保存失败：' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa fa-save"></i> 保存为音色';
+  }
+}
+
+function renderCustomVoiceList() {
+  const box = document.getElementById('vdCustomList');
+  if (!box) return;
+  const list = getMossCustomVoices();
+  if (!list.length) { box.innerHTML = '<p class="text-[11px] text-gray-400">暂无自定义音色，生成后点击「保存为音色」即可加入此列表。</p>'; return; }
+  box.innerHTML = '<div class="text-xs text-gray-400 font-medium mb-1">我的自定义音色（' + list.length + '）</div>' +
+    '<div class="flex flex-col gap-1">' + list.map((v, i) =>
+      '<div class="flex items-center gap-2 text-xs">' +
+      '<i class="fa fa-music text-primary"></i>' +
+      '<span class="flex-1 truncate text-gray-600 dark:text-gray-300">' + v.name + '</span>' +
+      '<button onclick="setTtsVoice(\'moss:' + v.id + '\')" class="text-primary hover:underline">选用</button>' +
+      '<button onclick="deleteCustomVoice(' + i + ')" class="text-red-400 hover:underline">删除</button>' +
+      '</div>').join('') + '</div>';
+}
+
+function setTtsVoice(val) {
+  const select = document.getElementById('gmTtsVoice');
+  if (select) { select.value = val; }
+  toast('已设为朗读音色');
+}
+
+function deleteCustomVoice(i) {
+  const list = getMossCustomVoices();
+  if (i < 0 || i >= list.length) return;
+  list.splice(i, 1);
+  saveMossCustomVoices(list);
+  const select = document.getElementById('gmTtsVoice');
+  if (select && select.value.startsWith('moss:')) {
+    // 若当前选中的是被删音色，重置为默认
+    const cur = getMossCustomVoices().concat(MOSS_BUILTIN_VOICES).find(v => 'moss:' + v.id === select.value);
+    if (!cur) select.value = '';
+  }
+  loadVoices();
+  renderCustomVoiceList();
+  toast('已删除该自定义音色', 'info');
+}
+
+function setVdMsg(text, isError) {
+  const msg = document.getElementById('vdMsg');
+  if (!msg) return;
+  msg.textContent = text;
+  msg.className = 'text-xs ' + (isError ? 'text-red-400' : 'text-gray-400 dark:text-gray-400');
+}
+
 // 加载可用语音列表
 function loadVoices() {
   _voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
@@ -6752,6 +7131,17 @@ function loadVoices() {
     });
     select.appendChild(grp);
   }
+  // 追加 MOSS 高质量音色（AI，经 /api/moss/tts）
+  const mossGrp = document.createElement('optgroup');
+  mossGrp.label = 'MOSS 高质量音色 (AI)';
+  getAllMossVoices().forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = 'moss:' + v.id;
+    opt.textContent = v.name + '（' + v.desc + '）';
+    mossGrp.appendChild(opt);
+  });
+  select.appendChild(mossGrp);
+
   select.value = currentVal;
 }
 
@@ -6781,6 +7171,11 @@ document.addEventListener('touchstart', unlockTTS, { once: false, passive: true 
 document.addEventListener('keydown', unlockTTS, { once: false, passive: true });
 
 function speakText(btn, text) {
+  // MOSS 高质量音色（AI）分流：ttsVoice 以 moss: 开头
+  if ((data.config.ttsVoice || '').indexOf('moss:') === 0) {
+    speakTextMoss(btn, text);
+    return;
+  }
   if (!('speechSynthesis' in window)) { toast('浏览器不支持语音合成', 'error'); return; }
   
   // 确保已解锁
@@ -6827,6 +7222,73 @@ function speakText(btn, text) {
   _speakingBtn = btn;
   if (btn) btn.classList.add('playing');
   window.speechSynthesis.speak(u);
+}
+
+// MOSS 高质量语音（AI）TTS：POST /api/moss/tts 获取音频字节流并播放
+let _mossAudio = null;
+let _mossAudioUrl = null;
+async function speakTextMoss(btn, text) {
+  // 点击正在播放的按钮 → 停止
+  if (_speakingBtn === btn && _mossAudio) {
+    _mossAudio.pause();
+    if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; }
+    _mossAudio = null;
+    if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
+    return;
+  }
+  // 停止之前的朗读（浏览器 TTS 与 MOSS 互斥）
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (_mossAudio) { _mossAudio.pause(); _mossAudio = null; }
+  if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; }
+
+  // 清理 Markdown 噪音（与浏览器 TTS 保持一致）
+  const clean = text
+    .replace(/```[\s\S]*?```/g, '（代码块）')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')
+    .replace(/[#*`>_~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) { toast('没有可朗读的文本', 'info'); return; }
+
+  const voiceId = (data.config.ttsVoice || '').replace(/^moss:/, '');
+  _speakingBtn = btn;
+  if (btn) btn.classList.add('playing');
+  try {
+    const res = await fetch('/api/moss/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean, voice_id: voiceId, response_format: 'mp3', delivery_method: 'audio' })
+    });
+    if (!res.ok) {
+      let errMsg = 'MOSS 语音请求失败 (' + res.status + ')';
+      try { const j = await res.json(); if (j && j.error) errMsg = j.error; } catch(_) {}
+      throw new Error(errMsg);
+    }
+    const blob = await res.blob();
+    if (!blob || blob.size < 100) throw new Error('MOSS 语音响应异常');
+    const url = URL.createObjectURL(blob);
+    _mossAudioUrl = url;
+    const audio = new Audio(url);
+    _mossAudio = audio;
+    audio.onended = () => {
+      URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null;
+      _mossAudio = null;
+      if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null;
+      _mossAudio = null;
+      if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
+      toast('音频播放失败', 'error');
+    };
+    await audio.play();
+  } catch (e) {
+    if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
+    if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; _mossAudio = null; }
+    toast(e.message || 'MOSS 语音请求失败', 'error');
+  }
 }
 
 // 自动朗读新消息（如果启用）

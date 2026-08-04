@@ -46,6 +46,10 @@ doubao-plaza/
 │   │   ├── tools/ai.js            # AI 工具端点（对话/翻译/总结/画图）
 │   │   ├── tools/proxy.js         # 免费 API 代理转发
 │   │   ├── tools/fetch.js         # 统一内容获取端点（SSRF 防护，tavern 链接导入/下载）
+│   │   ├── moss/tts.js            # MOSS AI 文本转语音转接端点（tavern 高质量朗读）
+│   │   ├── moss/stt.js            # MOSS AI 语音转文本转接端点（tavern 语音输入）
+│   │   ├── moss/voices.js         # MOSS 音色列表 + 创建音色（声线设计保存）
+│   │   ├── moss/voice-generations.js # MOSS 声线设计生成端点（文本+风格描述）
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
 │   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
 │   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
@@ -392,9 +396,12 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - **继续生成**：在最后一条 AI 回复后追加续写
 - **内联编辑**：双击消息直接编辑，支持 Markdown 渲染
 - **语音功能**：
-  - TTS 语音朗读（Web Speech API，免费，可选语音/语速/音调/自动播放）
-  - STT 语音输入（Web Speech API，支持中英文识别）
+  - TTS 语音朗读（Web Speech API 免费 + **MOSS 高质量音色 AI**：15 个官方内置音色 + AI 声线设计自定义音色）
+  - STT 语音输入（Web Speech API 免费 / **MOSS AI 引擎**更准确，可选识别语言与连续识别）
+  - **AI 声线设计**：一句话描述想要的声音风格（如「温柔甜美的年轻女声」）→ MOSS 生成专属音色 → 试听后一键保存，可设为朗读音色
+  - 语音设置支持语速/音调/自动播放，MOSS 能力经 Cloudflare Pages Function（`/api/moss/*`）转接，密钥仅存后端
 - **背景设置**：4 种模式（默认/纯黑/纯白/自定义图片），支持角色级背景覆盖，集成第三方图床上传
+- **嵌入同步**：作为页面工具全屏嵌入主站时，自动跟随主站主题（亮/暗）、聊天背景图与字体偏好
 - **本地模型**：支持 Transformers.js v3 本地推理（浏览器内运行，无需 API）
 - **CORS 代理**：通过 Cloudflare Pages Function (`/api/proxy`) 转发不支持跨域的 API 请求
 

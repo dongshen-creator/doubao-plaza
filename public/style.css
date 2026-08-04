@@ -948,12 +948,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 @keyframes toolSpin{to{transform:rotate(360deg)}}
 
 /* 聊天消息操作栏 */
-.chat-msg-actions{display:flex;gap:2px;margin-top:2px;opacity:0;transition:opacity .2s}
+.chat-msg-actions{display:flex;gap:2px;margin-top:2px;opacity:0;transition:opacity .18s}
 .chat-msg:hover .chat-msg-actions{opacity:1}
-.chat-msg-action{background:none;border:none;color:var(--text-faint);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all .15s}
+.chat-msg-action{background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:6px;transition:all .15s;line-height:1}
 .chat-msg-action:hover{background:var(--bg-hover);color:var(--accent)}
+.chat-msg-action-translate{color:var(--accent)}
 .chat-msg-right .chat-msg-action{color:var(--text-faint)}
 .chat-msg-right .chat-msg-action:hover{background:var(--bg-hover);color:var(--accent)}
+.chat-msg-time-text{font-size:10px;color:var(--text-faint)}
+@media (hover:none){
+  .chat-msg-actions{opacity:1}
+}
 
 /* 表情反应徽章 */
 .chat-reactions{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}

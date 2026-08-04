@@ -4,6 +4,56 @@
 
 ---
 
+## v4.10 — 2026-08-04
+
+### Tavern 接入 MOSS 高质量音色（TTS/STT/声线设计）+ 气泡操作栏重设计 + 嵌入同步
+
+#### 新增功能
+
+##### 1. MOSS AI 语音能力（tavern）
+- **TTS 高质量朗读**：语音设置新增「MOSS 高质量音色（AI）」分组（15 个官方内置音色，硬编码兜底，`GET /audio/voices` 上游偶发 502 时仍可选）；选择 `moss:` 前缀音色后朗读自动走 `/api/moss/tts`（moss-tts 模型），支持点击再停、多音色切换、Markdown 清理
+- **STT AI 语音输入**：语音输入设置新增引擎选择（浏览器免费 / MOSS AI 更准确）+ 识别语言 + 连续识别；MOSS 引擎走 MediaRecorder 录音 → multipart 上传 `/api/moss/stt`（moss-transcribe 模型），识别结果自动填入输入框
+- **AI 声线设计弹窗**：设置面板新增「AI 声线设计」入口；输入试听文本 + 一句话声音风格描述 → 调 `/api/moss/voice-generations`（moss-voice-generator）生成音频试听 → 「保存为音色」把预览音频上传 `/api/moss/voices`（multipart audio_sample）创建可复用 voice_id → 存入 localStorage（`tavern_moss_voices`），自动出现在语音下拉并可设为朗读音色；弹窗内可选用/删除自定义音色
+- 后端新增 4 个 MOSS 转接端点（密钥仅存后端 env `MOSS_API_KEY`，前端不暴露）：
+  - `functions/api/moss/tts.js` — 文本转语音（`POST /api/moss/tts`，audio 模式返回音频二进制）
+  - `functions/api/moss/stt.js` — 语音转文本（`POST /api/moss/stt`，multipart `file` 字段）
+  - `functions/api/moss/voices.js` — 音色列表 GET + 创建音色 POST（multipart audio_sample）
+  - `functions/api/moss/voice-generations.js` — 声线设计生成（input + instruction，url/audio 两种 delivery_method）
+
+##### 2. 频道气泡操作栏重设计（index.html）
+- 消息时间戳常驻显示，操作按钮（翻译/回复/表情）悬停或触屏时淡入显示，主界面更清爽
+- 新增 🌐 翻译一级快捷按钮（高亮样式），一键调用现有翻译服务；编辑/撤回收进 ⋯ 更多菜单
+- 触屏设备（`@media (hover:none)`）操作栏常驻，保证移动端可用
+
+##### 3. Tavern 顶部工具栏精简
+- 头部高频操作只留「主题 / 设置 / 新建角色」，导入 / 链接导入 / 构建 / 导出 / 人格收进「更多」下拉菜单（点击外部或 Esc 关闭）
+
+##### 4. Tavern 嵌入主站主题/背景/字体同步
+- tavern 新增 `syncEmbeddedFromParent`（同源直调）：接收主站聊天背景图（`dp_chat_bg`）与字体族并实时应用，无主站背景时恢复自身配置
+- 主站新增 `syncTavernPrefs`：iframe 加载完成与聊天背景变更（`applyChatBackground`）时自动推送；两条嵌入路径（页面工具 / 工具面板覆盖层）均绑定
+
+#### 修改/新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `functions/api/moss/tts.js` | **新增** — MOSS 文本转语音转接端点 |
+| `functions/api/moss/stt.js` | **新增** — MOSS 语音转文本转接端点（multipart file） |
+| `functions/api/moss/voices.js` | **扩展** — 新增 POST 创建音色（multipart audio_sample） |
+| `functions/api/moss/voice-generations.js` | **新增** — MOSS 声线设计生成端点 |
+| `public/tavern.html` | MOSS 内置音色列表 + TTS/STT/声线设计设置区 + 相关 JS；顶部工具栏「更多」下拉；`syncEmbeddedFromParent` |
+| `public/index.html` | 气泡操作栏重设计（时间戳 + 悬停操作栏 + 翻译快捷入口）；`syncTavernPrefs` + iframe 同步绑定 |
+| `public/style.css` | `.chat-msg-actions` / `.chat-msg-action-translate` / `.chat-msg-time-text` / 触屏常驻规则 |
+| `CHANGELOG.md` | 本文档 |
+
+#### 验证记录
+- 后端 4 个 MOSS 端点 + 既有 translate/stream：`node --check` 语法通过；MOSS 密钥仅存后端，前端无泄漏
+- MOSS TTS：真实调用 200（audio/mpeg 音频返回）；STT：multipart 上传真实调用成功返回转写文本
+- 声线设计闭环：真实调用验证 生成（voice-generations 200 + 音频URL）→ 下载 → 创建音色（voices POST 200 + voice_id）→ 用该 voice_id TTS 朗读 200 全链路通过
+- 内置音色：以官方文档 15 个真实 voice_id 硬编码兜底（`GET /audio/voices` 上游偶发 502 时仍可选）
+- tavern/index 全量 `<script>` 提取 `node --check` 通过
+
+---
+
 ## v4.9 — 2026-08-04
 
 ### Tavern 体验升级：云盘导入助手 + 主题色对齐 + 背景/质感 + 统一转接层

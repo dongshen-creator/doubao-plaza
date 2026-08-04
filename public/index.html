@@ -2640,6 +2640,12 @@ async function openToolPanel(toolId, title) {
       '</div>';
     mainTavern.style.display = 'flex';
     mainTavern.style.flexDirection = 'column';
+    // 嵌入模式同步主题/背景/字体
+    var tfTavern = document.getElementById('tavernFrame');
+    if (tfTavern) tfTavern.addEventListener('load', function() {
+      syncTavernTheme();
+      syncTavernPrefs();
+    });
     return;
   }
 
@@ -7465,21 +7471,22 @@ function renderMsgHTML(m, roomId) {
   const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
   var eid = escAttr(m.event_id || '');
   var rid = escAttr(roomId || '');
-  // 引用和表情按钮始终可见
-  var replyBtn = !m.recalled ? '<button class="chat-action-btn" onclick="event.stopPropagation();setReplyTo(\'' + eid + '\',\'' + escAttr(text.slice(0,50)) + '\')">引用</button>' : '';
-  var reactionBtn = !m.recalled ? '<button class="chat-action-btn" onclick="event.stopPropagation();showReactionPicker(\'' + eid + '\')">😀</button>' : '';
-  // 收纳菜单：编辑、撤回、翻译
-  var moreActions = '';
+  // 操作工具栏（悬停显示）：翻译快捷入口 + 引用 + 表情 + 更多菜单
+  var actionBtns = '';
   if (!m.recalled) {
-    moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();translateMessage(\'' + eid + '\')">🌐 翻译</div>';
+    actionBtns += '<button class="chat-msg-action chat-msg-action-translate" title="翻译" onclick="event.stopPropagation();translateMessage(\'' + eid + '\')">🌐</button>';
+    actionBtns += '<button class="chat-msg-action" title="引用" onclick="event.stopPropagation();setReplyTo(\'' + eid + '\',\'' + escAttr(text.slice(0,50)) + '\')">↩</button>';
+    actionBtns += '<button class="chat-msg-action" title="表情" onclick="event.stopPropagation();showReactionPicker(\'' + eid + '\')">😀</button>';
   }
+  // 收纳菜单：编辑、撤回
+  var moreActions = '';
   if (isMine && !m.recalled) {
     moreActions += '<div class="chat-more-menu-item" onclick="event.stopPropagation();editMessage(\'' + eid + '\')">✏️ 编辑</div>';
   }
   if (!m.recalled && canRecallMessage(roomId, m)) {
     moreActions += '<div class="chat-more-menu-item chat-more-danger" onclick="event.stopPropagation();recallMessage(\'' + eid + '\',\'' + rid + '\')">🗑 撤回</div>';
   }
-  var moreBtn = moreActions ? '<div class="chat-more-wrapper" onclick="event.stopPropagation();var m=this.querySelector(\'.chat-more-menu\');if(m.style.display===\'block\'){m.style.display=\'none\'}else{m.style.display=\'block\'}" style="position:relative;display:inline-block"><button class="chat-action-btn">⋯</button><div class="chat-more-menu" style="display:none">' + moreActions + '</div></div>' : '';
+  var moreBtn = moreActions ? '<div class="chat-more-wrapper" onclick="event.stopPropagation();var m=this.querySelector(\'.chat-more-menu\');if(m.style.display===\'block\'){m.style.display=\'none\'}else{m.style.display=\'block\'}" style="position:relative;display:inline-block"><button class="chat-msg-action">⋯</button><div class="chat-more-menu" style="display:none">' + moreActions + '</div></div>' : '';
   var avatarHtml;
   if (isMine) {
     avatarHtml = currentUser.avatar
@@ -7500,7 +7507,7 @@ function renderMsgHTML(m, roomId) {
     '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
     reactionsHtml +
-    '<div class="chat-msg-time">' + time + ' ' + replyBtn + reactionBtn + moreBtn + '</div>' +
+    '<div class="chat-msg-time"><span class="chat-msg-time-text">' + time + '</span><span class="chat-msg-actions">' + actionBtns + moreBtn + '</span></div>' +
     '</div>' +
     '</div>' +
   '</div>';
@@ -9753,7 +9760,10 @@ function openEmbeddedPage(url, title, kind) {
 
   if (kind === 'tavern') {
     var f = document.getElementById('tavernFrame');
-    f.addEventListener('load', syncTavernTheme);
+    f.addEventListener('load', function() {
+      syncTavernTheme();
+      syncTavernPrefs();
+    });
   }
 }
 
@@ -9765,7 +9775,7 @@ function tavernAction(btnId) {
   if (btn) btn.click();
 }
 
-// 主站主题同步到嵌入页（tavern 用 documentElement.classList 'dark' 控制；同源可直调 applyDark 保持其配置一致）
+// 主站主题/背景/字体同步到嵌入页（tavern 用 documentElement.classList 'dark' 控制；同源可直调 applyDark 保持其配置一致）
 function syncTavernTheme() {
   var f = document.getElementById('tavernFrame');
   if (!f || !f.contentWindow || !f.contentDocument) return;
@@ -9776,6 +9786,20 @@ function syncTavernTheme() {
   if (f.contentDocument.documentElement) {
     f.contentDocument.documentElement.classList.toggle('dark', dark);
   }
+}
+
+// 同步背景/字体偏好到 tavern 嵌入页（同源直调 syncEmbeddedFromParent）
+function syncTavernPrefs() {
+  var f = document.getElementById('tavernFrame');
+  if (!f || !f.contentWindow || !f.contentDocument) return;
+  try {
+    if (typeof f.contentWindow.syncEmbeddedFromParent !== 'function') return;
+    var prefs = {
+      bgUrl: localStorage.getItem('dp_chat_bg') || '',
+      fontFamily: (document.body && getComputedStyle(document.body).fontFamily) || ''
+    };
+    f.contentWindow.syncEmbeddedFromParent(prefs);
+  } catch(e) {}
 }
 
 // ═══ 工具面板覆盖层 ═══
@@ -11473,6 +11497,8 @@ function applyChatBackground() {
     panel.style.backgroundPosition = '';
     panel.style.backgroundRepeat = '';
   }
+  // 同步嵌入的 Tavern 背景
+  if (typeof syncTavernPrefs === 'function') syncTavernPrefs();
 }
 
 function clearChatBg() {
