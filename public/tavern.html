@@ -1951,6 +1951,21 @@ tailwind.config={
 html.dark .dark\:bg-\[\#1e1e2e\]{background-color:var(--tv-page)}
 html.dark .dark\:bg-\[\#2a2a3e\]{background-color:var(--tv-panel)}
 html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
+/* V5.0 修复：.modal-card 此前无任何 CSS 定义 → 弹窗全透明，补上亮/暗双态背景 */
+.modal-card{
+  background:#fff;
+  border-radius:16px;
+  border:1px solid rgba(0,0,0,.06);
+  box-shadow:0 20px 60px rgba(0,0,0,.15);
+  max-height:85vh;
+  overflow-y:auto;
+  width:100%;
+}
+.dark .modal-card{
+  background:var(--tv-panel);
+  color:var(--tv-ink-dark);
+  border-color:#374151;
+}
 </style>
 <body class="bg-white dark:bg-[#1a1a2e] text-dark dark:text-gray-100 flex flex-col">
 <div class="toast-container" id="toastContainer"></div>
@@ -2029,7 +2044,7 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
       <button id="drawerClose" class="p-1 rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/60 transition"><i class="fa fa-times text-gray-500 dark:text-gray-300"></i></button>
     </div>
     <div class="p-2 flex-1 overflow-y-auto" id="charList"><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mpz6bzx3slxv&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden ">g</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden ">g</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">gpt</div>
         
@@ -2037,15 +2052,15 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">43</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 selected-char" onclick="switchCharacter(&#39;mq6osaepzpdi&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden ">助</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden ">助</div>
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium truncate text-primary dark:text-blue-400">助理</div>
+        <div class="text-sm font-medium truncate text-primary">助理</div>
         <div class="text-[11px] text-gray-400 dark:text-gray-500 truncate">您是助理，是由无限自由公司-助理开发组研发的智能助手。</div>
         <div class="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5">测试</div>
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">49</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mqcgsmz85nm1&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden ">旺</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden ">旺</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">旺旺</div>
         
@@ -2053,7 +2068,7 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">3</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mrim115m5eh9&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🎭</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🎭</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">文风大师</div>
         
@@ -2063,7 +2078,7 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">15</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mrp1vulq4hh3&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden avatar-emoji">😷</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden avatar-emoji">😷</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">林波离</div>
         <div class="text-[11px] text-gray-400 dark:text-gray-500 truncate">从对话数据导入</div>
@@ -2071,7 +2086,7 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">592</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mrp1vulquasq&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🤖</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🤖</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">智能体保存处</div>
         <div class="text-[11px] text-gray-400 dark:text-gray-500 truncate">从对话数据导入</div>
@@ -2080,7 +2095,7 @@ https://doubaosearch.c</div>
       </div>
       <div class="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">1</div>
     </div><div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 hover:bg-gray-100 dark:hover:bg-gray-700/50" onclick="switchCharacter(&#39;mrp1vulrpm5u&#39;)">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🤖</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden avatar-emoji">🤖</div>
       <div class="flex-1 min-w-0">
         <div class="text-sm font-medium truncate ">翻译工具人</div>
         <div class="text-[11px] text-gray-400 dark:text-gray-500 truncate">从对话数据导入</div>
@@ -2137,9 +2152,9 @@ https://doubaosearch.c</div>
           </button>
         </div>
         <div class="flex items-center gap-3 justify-center text-sm">
-          <button onclick="document.getElementById(&#39;newCharBtn&#39;).click()" class="text-primary dark:text-blue-400 font-medium">+ 创建角色</button>
+          <button onclick="document.getElementById(&#39;newCharBtn&#39;).click()" class="text-primary font-medium">+ 创建角色</button>
           <span class="text-gray-300 dark:text-gray-600">|</span>
-          <button onclick="document.getElementById(&#39;importBtn&#39;).click()" class="text-primary dark:text-blue-400 font-medium">导入 JSON 文件</button>
+          <button onclick="document.getElementById(&#39;importBtn&#39;).click()" class="text-primary font-medium">导入 JSON 文件</button>
         </div>
         <div id="urlImportProgress" class="hidden mt-3 text-xs text-gray-400">
           <i class="fa fa-spinner fa-spin mr-1"></i><span id="urlImportStatus">正在下载...</span>
@@ -2414,13 +2429,13 @@ https://doubaosearch.c</div>
       <!-- Cloudflare Workers AI 配置 -->
       <div id="gmCloudflareWrap" class="hidden border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
         <div class="flex items-center gap-2 mb-2">
-          <i class="fa fa-cloud text-orange-500"></i>
+          <i class="fa fa-cloud" style="color:var(--acc)"></i>
           <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Cloudflare Workers AI</span>
-          <span class="ml-auto text-[11px] text-orange-500">本站提供 · 免密钥</span>
+          <span class="ml-auto text-[11px]" style="color:var(--acc)">本站提供 · 免密钥</span>
         </div>
-        <!-- V4.13 免密钥：由本站后端 Workers AI 直接提供，无需配置 -->
-        <div class="p-2.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 mb-2">
-          <p class="text-[11px] text-orange-700 dark:text-orange-400 leading-relaxed">
+        <!-- V4.13 免密钥：由本站后端 Workers AI 直接提供，无需配置；V5.0 主题色对齐 -->
+        <div class="p-2.5 rounded-lg border mb-2" style="background:color-mix(in srgb, var(--acc) 8%, transparent);border-color:color-mix(in srgb, var(--acc) 30%, transparent)">
+          <p class="text-[11px] leading-relaxed" style="color:var(--acc2)">
             <i class="fa fa-info-circle"></i> V4.13 起 Cloudflare 模型由本站后端 Workers AI 直接提供，登录后即可使用，无需填写任何密钥或 Account ID。
           </p>
         </div>
@@ -2606,9 +2621,19 @@ https://doubaosearch.c</div>
       </div>
       <div id="vdPreview" class="hidden">
         <audio id="vdAudio" controls class="w-full h-9"></audio>
+        <div class="flex gap-2 mt-1">
+          <a id="vdDownloadBtn" class="flex-1 text-center px-3 py-1.5 rounded text-xs font-medium text-white no-underline" style="background:linear-gradient(135deg,var(--acc),var(--acc2))" download="designed_voice.mp3"><i class="fa fa-download"></i> 下载音频</a>
+        </div>
       </div>
       <div id="vdMsg" class="text-xs"></div>
       <div id="vdCustomList"></div>
+      <div class="border-t border-gray-200 dark:border-gray-600 pt-2">
+        <label class="text-xs text-gray-400 font-medium">导入他人分享的音色</label>
+        <div class="flex gap-2 mt-1">
+          <input id="vdImportInput" class="flex-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded text-xs bg-white dark:bg-[#1e1e2e] dark:text-gray-100" placeholder="粘贴音色分享链接或 voice_id">
+          <button onclick="importMossVoice()" class="px-3 py-1.5 rounded text-xs font-medium text-white shrink-0" style="background:var(--acc)"><i class="fa fa-download"></i> 导入</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -3381,9 +3406,9 @@ function renderCharList() {
     const isEmoji = !avatar.startsWith('data:') && !avatar.startsWith('http') && /\p{Emoji}/u.test(avatar) && avatar.length <= 4;
     const isImg = avatar.startsWith('data:') || avatar.startsWith('http');
     return `<div class="flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition mb-0.5 ${active ? 'selected-char' : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'}" onclick="switchCharacter('${c.id}')">
-      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-blue-400 font-bold text-sm shrink-0 overflow-hidden ${isEmoji?'avatar-emoji':''}">${isImg ? renderAvatarHTML(avatar) : esc(avatar)}</div>
+      <div class="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden ${isEmoji?'avatar-emoji':''}">${isImg ? renderAvatarHTML(avatar) : esc(avatar)}</div>
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium truncate ${active ? 'text-primary dark:text-blue-400' : ''}">${esc(c.name)}</div>
+        <div class="text-sm font-medium truncate ${active ? 'text-primary' : ''}">${esc(c.name)}</div>
         ${c.description ? '<div class="text-[11px] text-gray-400 dark:text-gray-500 truncate">'+esc(c.description)+'</div>' : ''}
         ${lastMsg ? '<div class="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5">'+esc(lastMsg.content.slice(0,30))+'</div>' : '<div class="text-[10px] text-gray-400/50 mt-0.5">暂无对话</div>'}
       </div>
@@ -7335,6 +7360,8 @@ async function generateVoiceDesign() {
     _vdAudioUrl = URL.createObjectURL(_vdBlob);
     const audio = document.getElementById('vdAudio');
     audio.src = _vdAudioUrl;
+    const dl = document.getElementById('vdDownloadBtn');
+    if (dl) dl.href = _vdAudioUrl;
     document.getElementById('vdPreview').classList.remove('hidden');
     document.getElementById('vdSaveBtn').disabled = false;
     setVdMsg('生成成功！可试听，满意后点击「保存为音色」', false);
@@ -7388,10 +7415,56 @@ function renderCustomVoiceList() {
     '<div class="flex flex-col gap-1">' + list.map((v, i) =>
       '<div class="flex items-center gap-2 text-xs">' +
       '<i class="fa fa-music text-primary"></i>' +
-      '<span class="flex-1 truncate text-gray-600 dark:text-gray-300">' + v.name + '</span>' +
+      '<span class="flex-1 truncate text-gray-600 dark:text-gray-300">' + esc(v.name) + '</span>' +
       '<button onclick="setTtsVoice(\'moss:' + v.id + '\')" class="text-primary hover:underline">选用</button>' +
+      '<button class="vd-share-btn text-primary hover:underline" data-id="' + v.id + '" data-name="' + esc(v.name) + '">分享</button>' +
       '<button onclick="deleteCustomVoice(' + i + ')" class="text-red-400 hover:underline">删除</button>' +
       '</div>').join('') + '</div>';
+  box.querySelectorAll('.vd-share-btn').forEach(b => b.addEventListener('click', () => shareMossVoice(b.dataset.id, b.dataset.name)));
+}
+
+// V5.0 新增：自定义音色分享 / 导入 / 下载
+function shareMossVoice(id, name) {
+  const url = location.origin + location.pathname + '?mossVoice=' + encodeURIComponent(id) + '&mossVoiceName=' + encodeURIComponent(name);
+  const done = () => toast('分享链接已复制，发给好友即可导入使用');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(() => { prompt('复制分享链接（Ctrl+C）：', url); });
+  } else {
+    prompt('复制分享链接（Ctrl+C）：', url);
+  }
+}
+function importMossVoice(raw) {
+  const input = document.getElementById('vdImportInput');
+  const text = (raw || (input ? input.value : '')).trim();
+  if (!text) { toast('请粘贴分享链接或 voice_id', 'error'); return; }
+  let id = '', name = '';
+  try {
+    const u = new URL(text, location.origin);
+    id = u.searchParams.get('mossVoice') || '';
+    name = u.searchParams.get('mossVoiceName') || '';
+  } catch (_) {}
+  if (!id) {
+    const m = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (m) id = m[0];
+  }
+  if (!id) { toast('无法识别音色 ID', 'error'); return; }
+  const list = getMossCustomVoices();
+  if (list.some(v => v.id === id)) { toast('该音色已在列表中'); return; }
+  list.push({ id: id, name: name || ('分享音色_' + id.slice(0, 8)) });
+  saveMossCustomVoices(list);
+  loadVoices();
+  renderCustomVoiceList();
+  if (input) input.value = '';
+  toast('音色导入成功，可在语音设置中选用');
+}
+// 通过分享链接打开页面时自动导入音色（?mossVoice=<voice_id>&mossVoiceName=<name>）
+function handleMossVoiceShareParam() {
+  try {
+    const p = new URLSearchParams(location.search);
+    if (!p.get('mossVoice')) return;
+    importMossVoice(location.href);
+    history.replaceState({}, '', location.pathname);
+  } catch (_) {}
 }
 
 function setTtsVoice(val) {
@@ -8259,6 +8332,7 @@ initEmojiPicker();
 updateLocalModelStatusUI();
 applyBackground();
 loadVoices();
+handleMossVoiceShareParam();
 </script>
 
 </body></html>

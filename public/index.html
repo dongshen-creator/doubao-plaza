@@ -7419,8 +7419,9 @@ function renderMsgHTML(m, roomId) {
     const furl = lc > 0 ? fc.substring(lc + 1) : fc;
     // tmpfile.link 文件支持 iframe 预览嵌入
     if (furl.indexOf('tmpfile.link') >= 0) {
+      // V5.0 修复：iframe 直连原地址（img-proxy 只转发媒体类型、会拒绝 HTML 页面导致预览 502「连不上」）
       contentHtml = '<div style="border:1px solid var(--border-color);border-radius:8px;overflow:hidden;margin:4px 0;max-width:320px">' +
-        '<iframe src="' + imgProxyUrl(esc(furl)) + '" style="width:100%;height:200px;border:none" loading="lazy" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>' +
+        '<iframe src="' + esc(furl) + '" style="width:100%;height:200px;border:none" loading="lazy" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>' +
         '<a href="' + esc(furl) + '" target="_blank" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary);padding:6px 8px;border-top:1px solid var(--border-color);font-size:13px">📎 ' + esc(fname || '文件') + '</a>' +
         '</div>';
     } else {

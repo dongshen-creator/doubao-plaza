@@ -125,6 +125,10 @@ export async function onRequestPost(context) {
         });
 
         // 将 Workers AI 的 ReadableStream 包装为标准 SSE 格式
+        // V5.0 修复：Workers AI 流式 chunk 格式已升级为 OpenAI 兼容的
+        //   { choices: [{ delta: { content: '...' } }], response: '' }
+        //   （response 字段变为空串），必须读取 choices[0].delta.content，
+        //   否则所有内容被丢弃、流只剩 [DONE]（表现为 cf: 模型发送无回复）
         const { readable, writable } = new TransformStream({
           transform(chunk, controller) {
             let text = '';
@@ -132,6 +136,9 @@ export async function onRequestPost(context) {
               text = chunk;
             } else if (chunk && typeof chunk === 'object') {
               text = chunk.response || chunk.text || chunk.content || '';
+              if (!text && Array.isArray(chunk.choices) && chunk.choices[0] && chunk.choices[0].delta) {
+                text = chunk.choices[0].delta.content || '';
+              }
             }
             if (text) {
               controller.enqueue(

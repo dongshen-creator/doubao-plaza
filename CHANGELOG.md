@@ -60,16 +60,39 @@
 - **当前人格指示**：弹窗头部新增「当前：xxx」徽标；使用中的人格行显示「使用中」标签（去掉暗色下蓝色残留 `dark:text-blue-400`）
 - **交互增强**：Esc / 点击遮罩关闭弹窗；名称输入框回车直接保存；切换人格 toast 显示新人格名
 
+#### 修复 9：cf: 模型发送无回复（Workers AI 流式格式升级）
+
+- **根因**：Workers AI 流式 chunk 已升级为 OpenAI 兼容格式 `{ choices:[{delta:{content}}], response:"" }`，`response` 字段变为空串；`/api/tools/ai` 的 TransformStream 只读 `chunk.response` → 所有内容被丢弃，流只剩 `[DONE]`（实测线上：200 SSE 立即结束、零内容）
+- **修复**（`functions/api/tools/ai.js`）：chunk 解析增加 `choices[0].delta.content` 回退（已用账号 token 直接调 Workers AI 原始 API 验证 chunk 格式）
+
+#### 修复 10：Tavern 弹窗全透明 + 主题色残留
+
+- **弹窗透明根因**：`.modal-card` 类被 5 个弹窗（人格/世界书/设置等）使用，但**全文件无任何 CSS 定义** → 弹窗背景透明
+- **修复**：主题层补 `.modal-card` 亮/暗双态样式（白底 / `var(--tv-panel)` + 圆角 + 阴影）
+- **主题色残留**：设置区 Cloudflare 提示框 4 处 `orange-*` 硬编码 → `var(--acc)`/`color-mix`；15 处 `dark:text-blue-400`（角色列表/人格行）→ 统一走 `text-primary`（var(--acc)）
+- 注：线上 `/tavern` 文件的 `bg-primary` 已是 var(--acc)（实测部署文件仅 1 条规则）；用户端看到固定橙色多为浏览器缓存旧版，强制刷新即可
+
+#### 修复 11：MOSS 自定义音色：分享 / 导入 / 下载
+
+- **分享**：自定义音色列表新增「分享」按钮 → 复制 `tavern.html?mossVoice=<voice_id>&mossVoiceName=<name>` 分享链接；他人打开链接自动导入该音色并清理地址栏参数
+- **导入**：声线设计弹窗新增「导入他人分享的音色」输入框，支持粘贴分享链接或裸 voice_id（UUID 自动识别），导入后自动出现在自定义列表与语音下拉
+- **下载**：声线生成试听区新增「下载音频」按钮（blob 直下 mp3）
+
+#### 修复 12：聊天 tmpfile 文件预览连不上
+
+- **根因**：`file:` 消息的 tmpfile.link iframe 预览 src 走了 `/api/img-proxy`，而 img-proxy 只转发媒体类型、拒绝 HTML 页面 → 预览恒 502
+- **修复**（`public/index.html`）：iframe 改为直连 tmpfile.link 原地址（tmpfile.link 服务本身在线，实测 200）
+
 #### 修改文件
 
 | 文件 | 说明 |
 |------|------|
 | `public/_headers` | CSP `media-src`/`img-src` blob + `Permissions-Policy` microphone=(self) |
-| `public/index.html` | `__ensureSupabaseSession(force)` + `sendChatMsg` 失败重试；`syncTavernPrefs` 推送 dark/palette；`toggleTheme` 补调 |
-| `public/tavern.html` | `fetchRemoteApi` 代理回退 ×3；`uploadToImageHost` 站内优先；`--tv-*` 主题变量层 + 嵌入调色板同步；模型下拉收敛；Tailwind 警告静默 |
+| `public/index.html` | `__ensureSupabaseSession(force)` + `sendChatMsg` 失败重试；`syncTavernPrefs` 推送 dark/palette；`toggleTheme` 补调；tmpfile 预览直连 |
+| `public/tavern.html` | `fetchRemoteApi` 代理回退 ×3；`uploadToImageHost` 站内优先；`--tv-*` 主题变量层 + 嵌入调色板同步；人格 UI 重做；`.modal-card` 补样式；orange/blue 残留清理；MOSS 音色分享/导入/下载；模型下拉收敛；Tailwind 警告静默 |
 | `supabase-migration.sql` | `chat_messages_insert` 公开频道免成员记录（已同步线上） |
 | `functions/api/img-proxy.js` | 放行 video/audio；超时 10s |
-| `functions/api/tools/ai.js` | CF 模型白名单收敛为便宜小模型 |
+| `functions/api/tools/ai.js` | CF 模型白名单收敛为便宜小模型；流式解析兼容 `choices[0].delta.content` |
 | `functions/api/tools/registry.js` | AI对话默认模型改 Llama 3.2-3B |
 | `TOOL_FRAMEWORK_GUIDE.md` | 示例模型同步更新 |
 | `CHANGELOG.md` | 本记录 |
