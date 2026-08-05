@@ -125,19 +125,35 @@ export async function onRequestPost(context) {
         });
 
         // 将 Workers AI 的 ReadableStream 包装为标准 SSE 格式
-        // V5.0 修复：Workers AI 流式 chunk 格式已升级为 OpenAI 兼容的
-        //   { choices: [{ delta: { content: '...' } }], response: '' }
-        //   （response 字段变为空串），必须读取 choices[0].delta.content，
-        //   否则所有内容被丢弃、流只剩 [DONE]（表现为 cf: 模型发送无回复）
+        // V5.0 修复：Workers AI 流式 chunk 可能是对象（{ response } 或
+        //   OpenAI 兼容 { choices:[{delta:{content}}], response:"" }）、原始 SSE 字符串
+        //   或二进制 Uint8Array —— 全类型兼容解析，否则内容被丢弃只剩 [DONE]
         const { readable, writable } = new TransformStream({
           transform(chunk, controller) {
             let text = '';
             if (typeof chunk === 'string') {
               text = chunk;
+            } else if (chunk instanceof Uint8Array || ArrayBuffer.isView(chunk)) {
+              text = new TextDecoder().decode(chunk);
             } else if (chunk && typeof chunk === 'object') {
               text = chunk.response || chunk.text || chunk.content || '';
               if (!text && Array.isArray(chunk.choices) && chunk.choices[0] && chunk.choices[0].delta) {
                 text = chunk.choices[0].delta.content || '';
+              }
+            }
+            // 若 chunk 是 SSE 行（data: {...}），解析出实际内容
+            if (text) {
+              const t = String(text).trim();
+              if (t.indexOf('data:') === 0) {
+                const payload = t.slice(5).trim();
+                if (payload && payload !== '[DONE]') {
+                  try {
+                    const p = JSON.parse(payload);
+                    text = p.response || (p.choices && p.choices[0] && p.choices[0].delta && p.choices[0].delta.content) || '';
+                  } catch (_) { text = ''; }
+                } else {
+                  text = '';
+                }
               }
             }
             if (text) {

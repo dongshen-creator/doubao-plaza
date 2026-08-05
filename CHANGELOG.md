@@ -60,10 +60,12 @@
 - **当前人格指示**：弹窗头部新增「当前：xxx」徽标；使用中的人格行显示「使用中」标签（去掉暗色下蓝色残留 `dark:text-blue-400`）
 - **交互增强**：Esc / 点击遮罩关闭弹窗；名称输入框回车直接保存；切换人格 toast 显示新人格名
 
-#### 修复 9：cf: 模型发送无回复（Workers AI 流式格式升级）
+#### 修复 9：cf: 模型发送无回复 / 500(3030)（Workers AI 流式格式升级 + 内容安全过滤）
 
-- **根因**：Workers AI 流式 chunk 已升级为 OpenAI 兼容格式 `{ choices:[{delta:{content}}], response:"" }`，`response` 字段变为空串；`/api/tools/ai` 的 TransformStream 只读 `chunk.response` → 所有内容被丢弃，流只剩 `[DONE]`（实测线上：200 SSE 立即结束、零内容）
-- **修复**（`functions/api/tools/ai.js`）：chunk 解析增加 `choices[0].delta.content` 回退（已用账号 token 直接调 Workers AI 原始 API 验证 chunk 格式）
+- **根因 A（无回复）**：Workers AI 流式 chunk 实际可能是对象（`{response}` 或 OpenAI 兼容 `{choices:[{delta:{content}}]}`）、原始 SSE 字符串或二进制 Uint8Array；旧解析只读 `chunk.response` → 内容全丢、只剩 `[DONE]`
+- **修复 A**（`functions/api/tools/ai.js`）：TransformStream 全类型兼容——字符串/Uint8Array 解码/对象 `response`/`choices[0].delta.content`，SSE 行（`data: {...}`）自动解析提取
+- **根因 B（500/3030）**：Workers AI 内容安全过滤（NSFW）拦截角色扮演输入，`env.AI.run` 抛 `(code 3030)` → 500
+- **修复 B**（`public/tavern.html` `friendlyApiError`）：3030 映射为「内容被 Workers AI 安全过滤拦截，请调整措辞或换用自定义 API」；5007（模型不存在）一并映射
 
 #### 修复 10：Tavern 弹窗全透明 + 主题色残留
 
@@ -82,6 +84,12 @@
 
 - **根因**：`file:` 消息的 tmpfile.link iframe 预览 src 走了 `/api/img-proxy`，而 img-proxy 只转发媒体类型、拒绝 HTML 页面 → 预览恒 502
 - **修复**（`public/index.html`）：iframe 改为直连 tmpfile.link 原地址（tmpfile.link 服务本身在线，实测 200）
+
+#### 修复 13：Tavern 嵌入 iframe 重定向丢失 embed 参数 + 主题色缓存
+
+- **根因**：线上 `/tavern.html` 被 308 永久重定向到 `/tavern`，且 `Location` **丢弃查询参数**（`?embed=1` 丢失）→ 嵌入模式样式不生效
+- **修复**（`public/index.html`）：两处 iframe src 改为 `/tavern?embed=1`（直连无重定向，参数保留）
+- **主题色缓存说明**：线上 `/tavern` 文件 `bg-primary` 已确认 var(--acc)（唯一规则）；用户端看到 `rgb(255 107 53)` 硬编码为浏览器/边缘缓存旧版，强制刷新（Ctrl+Shift+R）即可；iframe URL 变更后自然带新缓存键
 
 #### 修改文件
 

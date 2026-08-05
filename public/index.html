@@ -2636,7 +2636,7 @@ async function openToolPanel(toolId, title) {
         '<span style="font-size:15px;font-weight:600">🏮 ' + esc(title) + '</span>' +
       '</div>' +
       '<div id="tavernFrameWrap" style="flex:1;min-height:0;display:flex">' +
-        '<iframe id="tavernFrame" src="/tavern.html" style="flex:1;width:100%;border:0;display:block;background:#12121f" title="角色酒馆" allow="clipboard-write"></iframe>' +
+        '<iframe id="tavernFrame" src="/tavern?embed=1" style="flex:1;width:100%;border:0;display:block;background:#12121f" title="角色酒馆" allow="clipboard-write"></iframe>' +
       '</div>';
     mainTavern.style.display = 'flex';
     mainTavern.style.flexDirection = 'column';
@@ -9833,7 +9833,7 @@ function syncTavernPrefs() {
 async function openToolPanel(toolId, roomId) {
   // === 页面类工具：Tavern 角色酒馆以 iframe 嵌入（保留最左侧活动栏，顶栏统一由主站提供）===
   if (toolId === 'tavern') {
-    openEmbeddedPage('/tavern.html?embed=1', '🏮 ' + (roomId || '角色酒馆'), 'tavern');
+    openEmbeddedPage('/tavern?embed=1', '🏮 ' + (roomId || '角色酒馆'), 'tavern');
     return;
   }
   var { data: tool } = await __SB.from('chat_channel_tools').select('*').eq('id', toolId).maybeSingle();
