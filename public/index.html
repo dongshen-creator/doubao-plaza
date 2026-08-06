@@ -8008,7 +8008,7 @@ async function uploadImageToPicgo(file) {
     try {
       var sForm = new FormData();
       sForm.append('image', file);
-      var sRes = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: sForm }).then(safeJsonParse);
+      var sRes = await fetch('https://img.scdn.io/api/v1.php', { method: 'POST', body: sForm, signal: AbortSignal.timeout(15000) }).then(safeJsonParse);
       if (sRes && sRes.success && sRes.url) { url = sRes.url; }
       else if (sRes && sRes.error) errors.push('img.scdn.io: ' + sRes.error);
       else errors.push('img.scdn.io: 响应异常');
@@ -8048,7 +8048,14 @@ async function uploadImageToPicgo(file) {
     try {
       var tfForm = new FormData();
       tfForm.append('file', file);
-      var tfRes = await fetch('/api/upload/tmpfile', { method: 'POST', body: tfForm }).then(safeJsonParse);
+      // V5.1 修复：站内 tmpfile 端点需要登录态，补 Authorization 头，否则 401「请先登录」；
+      // V5.1 健壮性：加 25s 超时，防止第三方图床挂起导致上传流程卡死
+      var tfRes = await fetch('/api/upload/tmpfile', {
+        method: 'POST',
+        body: tfForm,
+        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+        signal: AbortSignal.timeout(25000)
+      }).then(safeJsonParse);
       if (tfRes && tfRes.success && tfRes.url) { url = tfRes.url; }
       else if (tfRes && tfRes.error) errors.push('tmpfile.link: ' + tfRes.error);
       else errors.push('tmpfile.link: 响应异常');
@@ -8069,7 +8076,13 @@ async function uploadFileToTmpfile(file) {
   try {
     var tfForm = new FormData();
     tfForm.append('file', file);
-    var tfRes = await fetch('/api/upload/tmpfile', { method: 'POST', body: tfForm }).then(safeJsonParse);
+    // V5.1 修复：站内 /api/upload/tmpfile 需要 JWT 登录态，否则 401「请先登录」；加 25s 超时兜底
+    var tfRes = await fetch('/api/upload/tmpfile', {
+      method: 'POST',
+      body: tfForm,
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+      signal: AbortSignal.timeout(25000)
+    }).then(safeJsonParse);
     if (tfRes && tfRes.success && tfRes.url) { url = tfRes.url; }
     else if (tfRes && tfRes.error) errors.push('tmpfile.link: ' + tfRes.error);
     else errors.push('tmpfile.link: 响应异常');
@@ -8406,17 +8419,49 @@ function sendTyping() {
   // Typing indicators not implemented with Supabase (can use Presence/Broadcast later)
 }
 
+// onerror 兜底：图片加载失败时把占位替换为普通超链接（V5.1 新增）
+function imageFailToLink(raw) {
+  if (!raw) return '<div style="color:var(--text-faint);font-size:12px">图片加载失败</div>';
+  return '<a href="' + escAttr(raw) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;word-break:break-all">🔗 ' + esc(raw) + '</a>';
+}
+
+// 消息中的 URL 自动识别：带媒体扩展名的图片/视频/音频 → 内嵌渲染；其余 → 超链接
+// V5.1 修复：
+//  1) 扩展名匹配前先剥离 query/hash（原来带 ?id=xxx&token=yyy 的图片 URL 会误判为超链接）
+//  2) 无扩展名但来自知名图床/图片服务的 URL 也按图片渲染（img.scdn.io / img.nickyam.com / telegra.ph
+//     / api.qrserver.com / picsum.photos 等，onerror 自动回退为链接）
+//  3) 图片/视频/音频外链统一走 imgProxyUrl 代理，规避 PNA / 防盗链 / CORS 拦截
 function linkify(text) {
-  return text.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
-    const url = match;
-    const ext = url.split('?')[0].split('/').pop().toLowerCase();
-    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(ext))
-      return '<img src="' + url + '" loading="lazy" style="max-width:200px;max-height:200px;border-radius:8px;display:block;margin:4px 0">';
-    if (/\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)(\?|$)/i.test(ext))
-      return '<video src="' + url + '" controls style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
-    if (/\.(mp3|wav|ogg|aac|m4a|flac|wma)(\?|$)/i.test(ext))
-      return '<audio src="' + url + '" controls style="width:100%;margin:4px 0"></audio>';
-    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+  if (!text) return '';
+  var IMG_HOSTS = ['img.scdn.io', 'img.nickyam.com', 'telegra.ph', 'api.qrserver.com', 'i.imgur.com', 'picsum.photos', 'placehold.co'];
+  var IMG_RE = /\.(jpe?g|png|gif|webp|bmp|ico|avif|heic|heif|apng)(\?|#|$)/i;
+  var VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv|flv|wmv|ts)(\?|#|$)/i;
+  var AUDIO_RE = /\.(mp3|wav|ogg|aac|m4a|flac|opus|wma)(\?|#|$)/i;
+  return text.replace(/(https?:\/\/[^\s<>"'（）()【】]+)/gi, function(match) {
+    var url = match;
+    // 去掉 URL 结尾误带入的标点
+    url = url.replace(/[.,;:!]+$/, '');
+    var pathPart = url.split(/[?#]/)[0];
+    var isImage = IMG_RE.test(pathPart);
+    var isVideo = VIDEO_RE.test(pathPart);
+    var isAudio = AUDIO_RE.test(pathPart);
+    if (!isImage && !isVideo && !isAudio) {
+      // 无扩展名但 URL 来自知名图床：按图片渲染，加载失败时兜底成链接
+      try {
+        var host = new URL(url).hostname.toLowerCase();
+        if (IMG_HOSTS.indexOf(host) >= 0) isImage = true;
+      } catch(e) {}
+    }
+    if (isImage) {
+      return '<img src="' + imgProxyUrl(esc(url)) + '" data-raw-url="' + escAttr(url) + '" loading="lazy" referrerpolicy="no-referrer" style="max-width:240px;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:zoom-in" onclick="openMediaViewer(\'image\',this.dataset.rawUrl)" onerror="this.outerHTML=imageFailToLink(this.dataset.rawUrl)">';
+    }
+    if (isVideo) {
+      return '<video src="' + imgProxyUrl(esc(url)) + '" controls preload="metadata" referrerpolicy="no-referrer" style="max-width:100%;max-height:300px;border-radius:8px;display:block;margin:4px 0"></video>';
+    }
+    if (isAudio) {
+      return '<audio src="' + imgProxyUrl(esc(url)) + '" controls preload="metadata" style="width:100%;margin:4px 0"></audio>';
+    }
+    return '<a href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
   }).replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1">$1</a>');
 }
 
@@ -11598,11 +11643,17 @@ function uploadChatBg(file) {
 }
 
 // 聊天背景上传降级：使用 tmpfile.link 服务端端点（不使用 sm.ms / img.remit.ee，避免 401/CORS）
+// V5.1 修复：站内 /api/upload/tmpfile 需要登录态，补 Authorization 头，否则 401「请先登录」
 function uploadChatBgFallback(file, status) {
   if (status) status.textContent = '降级：通过 tmpfile.link 上传...';
   var fd = new FormData();
   fd.append('file', file);
-  fetch('/api/upload/tmpfile', { method: 'POST', body: fd })
+  fetch('/api/upload/tmpfile', {
+    method: 'POST',
+    body: fd,
+    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+    signal: AbortSignal.timeout(25000)
+  })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.success && data.url) {

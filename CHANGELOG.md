@@ -4,6 +4,37 @@
 
 ---
 
+## v5.1 — 2026-08-06
+
+### 修复：聊天上传报「请先登录」(401) / 无扩展名图床链接不显示为媒体 / 上传超时健壮性
+
+#### 修复 1：聊天上传图片/文件报「请先登录」(401)
+
+- **根因**：站内 `/api/upload/tmpfile` 要求 JWT 登录态（`Authorization: Bearer dp_token`），但前端 `uploadImageToPicgo` / `uploadFileToTmpfile` / `uploadChatBgFallback` 三处调用均未携带 Authorization 头 → 后端返回 401，前端提示「请先登录」
+- **修复**（`public/index.html`）：三处 `/api/upload/tmpfile` 调用统一补 `Authorization: Bearer dp_token`（与 `/api/upload/picgo` 一致）
+
+#### 修复 2：聊天消息中无扩展名图床链接不显示为图片/视频/音频
+
+- **根因**：`linkify()` 仅按「扩展名」识别媒体链接；粘贴 `https://img.scdn.io/xxx`（无扩展名）这类图床链接时识别失败，退化为普通超链接
+- **修复**（`public/index.html`）：重写 `linkify()` —— ① 先剥离 query/hash 再判定；② `IMG_HOSTS` 已知图床域名白名单 + 扩展名双轨识别；③ 图片/视频/音频统一经 `imgProxyUrl` 代理加载（img-proxy 已放行 video/audio）；④ 图片带 `data-raw-url` 属性，点击调用 `openMediaViewer('image', rawUrl)` 查看原图；⑤ 新增 `imageFailToLink(raw)`：媒体加载失败自动回退为可点击超链接，不破版
+
+#### 健壮性：上传请求超时控制
+
+- `public/index.html`：tmpfile 三处上传（`AbortSignal.timeout(25000)`）+ img.scdn.io 直传（`AbortSignal.timeout(15000)`）统一加超时中止，避免网络异常时请求无限挂起
+
+#### 修改文件表
+
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | 三处 tmpfile 补 Authorization；`linkify` 重写（IMG_HOSTS 白名单 + 媒体内嵌 + openMediaViewer + imageFailToLink 回退）；上传超时控制 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 全部改动内联 `<script>` `node --check` 语法通过（index 5/5）
+- [ ] 部署后浏览器实测：聊天上传图片/文件成功；粘贴无扩展名图床链接显示为内嵌媒体；坏链回退超链接（部署后补）
+
+---
+
 ## v5.0 — 2026-08-04
 
 ### 综合修复：聊天频道发送失败 / Tavern TTS·STT / 自定义 AI API 直连失败 / 站内 Workers AI 未连接 / 主题适配
