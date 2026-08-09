@@ -685,7 +685,11 @@ CREATE POLICY "chat_rooms_delete" ON chat_rooms FOR DELETE TO authenticated
 -- chat_room_members：本人可加入/退出，频道创建者可删除所有成员（删除频道时）
 DROP POLICY IF EXISTS "chat_room_members_insert" ON chat_room_members;
 CREATE POLICY "chat_room_members_insert" ON chat_room_members FOR INSERT TO authenticated
-  WITH CHECK (app_user_id() = user_id);
+  WITH CHECK (
+    app_user_id() = user_id
+    OR EXISTS (SELECT 1 FROM chat_rooms WHERE id = chat_room_members.room_id AND created_by = app_user_id())
+    OR EXISTS (SELECT 1 FROM chat_admins WHERE room_id = chat_room_members.room_id AND user_id = app_user_id())
+  );
 DROP POLICY IF EXISTS "chat_room_members_update" ON chat_room_members;
 CREATE POLICY "chat_room_members_update" ON chat_room_members FOR UPDATE TO authenticated
   USING (app_user_id() = user_id);

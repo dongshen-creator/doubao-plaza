@@ -4,6 +4,42 @@
 
 ---
 
+## v5.2 — 2026-08-09
+
+### 修复：即时私聊消息无法传送到对方 / 刷新读不到私聊记录
+
+#### 问题现象
+- 私聊发出消息对方收不到（本地乐观渲染后实际插入失败）
+- 刷新页面后私聊房间/历史记录读不到
+- 频道聊天正常（可发可收），仅私聊受影响
+- 频道审批「通过」时提示「添加成员失败」
+
+#### 根本原因（RLS 策略与前端成员插入不匹配）
+- 前端 `openPrivateChatInFriends` 创建私聊房间时，**一次性插入两名成员**（`[{user_id: 我}, {user_id: 对方}]`）
+- 但 `chat_room_members_insert` 策略（V1+V3 安全加固）为 `WITH CHECK (app_user_id() = user_id)`，**只允许给自己建成员记录**
+- 插入「对方」那一行时请求者是本人 → 违反策略 → PostgREST 多行插入**原子回滚** → 私聊房间只有 `chat_rooms` 记录、**一条成员都没有**
+- 而 `chat_messages_insert` / `chat_messages_read` 均要求「发送者/读者是房间成员」→ 消息插不进、读不出 → 对方收不到、刷新读不到
+- 频道之所以正常，是因为频道成员由用户**自己加入**（单行 self-insert 通过策略）
+- 同一过严策略还导致 `approveJoinRequest`（管理员替申请人插成员）失败
+
+#### 修复内容
+1. **RLS 策略**（`supabase-migration.sql`，并新增增量脚本 `fix-chat-members-rls.sql`）：`chat_room_members_insert` 放宽为「本人 OR 房间创建者 OR 频道管理员」可插入成员记录，与既有 update/delete 策略口径一致
+2. **前端健壮性**（`public/index.html`）：私聊建房改用 `chat_rooms.upsert`（规避并发/历史残留 UNIQUE 冲突），成员插入补错误检查并打印日志，避免静默失败
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `supabase-migration.sql` | 放宽 `chat_room_members_insert` 策略（本人/房主/管理员） |
+| `fix-chat-members-rls.sql` | 新增增量脚本，仅改成员写入策略，免全量重跑（避免问卷表被重置） |
+| `public/index.html` | 私聊建房 upsert + 成员插入错误检查 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 改动内联 `<script>` `node --check` 语法通过（5/5）
+- [ ] 部署后在 Supabase SQL Editor 执行 `fix-chat-members-rls.sql`，实测：新私聊建房后双方收发正常；刷新能读到历史；审批通过加人成功（部署后补）
+
+---
+
 ## v5.1 — 2026-08-06
 
 ### 修复：聊天上传报「请先登录」(401) / 无扩展名图床链接不显示为媒体 / 上传超时健壮性

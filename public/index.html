@@ -2056,11 +2056,18 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
   if (!roomId) {
     const sortedIds = [currentUser.id, friendId].sort();
     roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
-    await __SB.from('chat_rooms').insert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null });
-    await __SB.from('chat_room_members').insert([
-      { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id },
-      { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId }
-    ]);
+    // V5.2 修复：房间用 upsert 避免并发/历史残留导致的 UNIQUE 冲突；
+    // 成员用「本人+房主」可用的一次性插入（RLS 已同步放宽），并检查错误，
+    // 避免成员缺失导致私聊发不出消息、刷新读不到记录
+    var memA = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id };
+    var memB = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId };
+    var { error: roomErr } = await __SB.from('chat_rooms').upsert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null }, { onConflict: 'id' });
+    if (!roomErr) {
+      var { error: memErr } = await __SB.from('chat_room_members').insert([memA, memB]);
+      if (memErr) { console.error('创建私聊成员失败:', memErr); }
+    } else {
+      console.error('创建私聊房间失败:', roomErr);
+    }
   }
 
   if (chatState._openingTarget !== friendId) return; // 被新点击中断
