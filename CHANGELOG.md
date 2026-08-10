@@ -4,6 +4,26 @@
 
 ---
 
+## v5.3 — 2026-08-11
+
+### 变更：撤下 MOSS TTS 渠道（仅保留浏览器 TTS 朗读）
+
+#### 背景
+MOSS TTS 服务不可用，为避免界面出现不可用的渠道，从 Tavern 界面移除 MOSS TTS 相关入口与逻辑，只保留 Web Speech API 浏览器 TTS 朗读。
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/tavern.html` | 移除「AI 声线设计」入口与提示、`voiceDesignModal` 弹窗、MOSS 音色数据（`MOSS_BUILTIN_VOICES`）与自定义音色管理函数、语音下拉 MOSS 分组、`speakText` 的 MOSS 分流、`speakTextMoss` 函数、`handleMossVoiceShareParam` 调用 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 移除后仍保留：浏览器 TTS（`speechSynthesis`）朗读、STT 语音输入（含 MOSS STT 引擎选项）
+- [x] 内联 `<script>` 7 个块 `node --check` 语法全部通过
+- [ ] 部署后实测：TTS 设置页无 MOSS 入口，朗读按钮走浏览器 TTS 正常发声（部署后补）
+
+---
+
 ## v5.2 — 2026-08-09
 
 ### 修复：即时私聊消息无法传送到对方 / 刷新读不到私聊记录

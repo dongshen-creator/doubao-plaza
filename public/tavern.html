@@ -2472,14 +2472,6 @@ https://doubaosearch.c</div>
           <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
             <input type="checkbox" id="gmTtsAutoPlay" class="accent-primary"> 新消息自动朗读
           </label>
-          <div class="border border-dashed border-primary/40 rounded-lg p-2 bg-primary/5">
-            <div class="flex items-center gap-2">
-              <i class="fa fa-magic text-primary text-xs"></i>
-              <button onclick="openVoiceDesignModal()" class="text-xs text-primary font-medium hover:underline">AI 声线设计（生成自定义音色）</button>
-            </div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">用一句话描述想要的声音（如「温柔甜美的年轻女声」），AI 生成专属音色，保存后可设为朗读音色。</p>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">提示：MOSS 高质量音色（AI）分组内的音色为内置音色，直接可选。</p>
-          </div>
         </div>
       </div>
 
@@ -2594,46 +2586,6 @@ https://doubaosearch.c</div>
     <div id="statsContent" class="stats-pop"></div>
     <div class="flex gap-2 mt-4">
       <button class="flex-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="document.getElementById(&#39;statsModal&#39;).classList.add(&#39;hidden&#39;)">关闭</button>
-    </div>
-  </div>
-</div>
-
-<!-- Voice design modal (AI 声线设计) -->
-<div class="modal-overlay hidden" id="voiceDesignModal">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-header">
-      <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><i class="fa fa-magic"></i></div>
-      <div class="modal-title">AI 声线设计</div>
-      <button class="modal-close" onclick="closeVoiceDesignModal()">×</button>
-    </div>
-    <div class="flex flex-col gap-3 text-sm">
-      <div>
-        <label class="text-xs text-gray-400 font-medium">声音风格描述</label>
-        <textarea id="vdInstruction" rows="2" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded resize-none bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="例如：一个温柔、自然、略带微笑感的年轻女声"></textarea>
-      </div>
-      <div>
-        <label class="text-xs text-gray-400 font-medium">试听文本</label>
-        <textarea id="vdInput" rows="2" class="w-full mt-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded resize-none bg-white dark:bg-[#1e1e2e] dark:text-gray-100 text-sm" placeholder="例如：欢迎来到逗包广场，很高兴认识你！">欢迎来到逗包广场，很高兴认识你！</textarea>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="vdGenBtn" onclick="generateVoiceDesign()" class="flex-1 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition"><i class="fa fa-play"></i> 生成并试听</button>
-        <button id="vdSaveBtn" onclick="saveDesignedVoice()" disabled class="flex-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm font-medium disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fa fa-save"></i> 保存为音色</button>
-      </div>
-      <div id="vdPreview" class="hidden">
-        <audio id="vdAudio" controls class="w-full h-9"></audio>
-        <div class="flex gap-2 mt-1">
-          <a id="vdDownloadBtn" class="flex-1 text-center px-3 py-1.5 rounded text-xs font-medium text-white no-underline" style="background:linear-gradient(135deg,var(--acc),var(--acc2))" download="designed_voice.mp3"><i class="fa fa-download"></i> 下载音频</a>
-        </div>
-      </div>
-      <div id="vdMsg" class="text-xs"></div>
-      <div id="vdCustomList"></div>
-      <div class="border-t border-gray-200 dark:border-gray-600 pt-2">
-        <label class="text-xs text-gray-400 font-medium">导入他人分享的音色</label>
-        <div class="flex gap-2 mt-1">
-          <input id="vdImportInput" class="flex-1 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded text-xs bg-white dark:bg-[#1e1e2e] dark:text-gray-100" placeholder="粘贴音色分享链接或 voice_id">
-          <button onclick="importMossVoice()" class="px-3 py-1.5 rounded text-xs font-medium text-white shrink-0" style="background:var(--acc)"><i class="fa fa-download"></i> 导入</button>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -7279,225 +7231,6 @@ function initVoiceMoss() {
     }
   });
 }
-
-// ===== MOSS 高质量语音（AI 音色，经 /api/moss/tts）=====
-const MOSS_BUILTIN_VOICES = [
-  { id: 'c6c0a40a-ea82-4468-9a21-333d3c4a76f6', name: '曼波有口音版', desc: '轻快·可爱·搞笑', lang: '中文' },
-  { id: 'f80b6698-0066-430b-88a0-f0fb8796db34', name: '明太祖', desc: '高冷·沉稳·霸总', lang: '中文' },
-  { id: 'ddc6e38b-6f55-4415-b21b-a88cad2cc1d9', name: 'VOX AKUMA', desc: '慵懒·磁性·专业', lang: '英文' },
-  { id: '7662a8a1-700c-466a-b66b-57ece9e2e231', name: '李白', desc: '古风·热血', lang: '中文' },
-  { id: 'f9a1416b-d006-4b77-9581-8f0e8ec1e401', name: '旁白Jake', desc: '沉稳·磁性·专业', lang: '英文' },
-  { id: 'faf7f550-0627-4fc6-8db0-d3bfdad49358', name: '经验女教师', desc: '高冷·自然', lang: '中文' },
-  { id: 'fe85a513-9bf3-4ef7-aa0b-8b2d11e4db93', name: '少年感人声（男）', desc: '温柔·磁性·自然', lang: '中文' },
-  { id: '0804710c-8e5e-4b67-acda-5785ef13c309', name: '历史解说男声', desc: '沉稳·磁性', lang: '中文' },
-  { id: '9d1e88e9-3b9c-4992-a414-7a1cb3ff7ab5', name: '优雅英国女士', desc: '温柔·磁性·自然', lang: '英文' },
-  { id: '806c9695-6160-404e-8722-4f788d935af3', name: '轻快灵动女声', desc: '轻快·活泼·自然', lang: '中文' },
-  { id: '2fdf194e-c16e-4587-9027-0d3464e09b4e', name: '诗词朗读', desc: '沉稳·磁性·专业', lang: '中文' },
-  { id: '133bd03b-d717-4a55-8974-7ffc9afc1b51', name: '故宫纪录片', desc: '沉稳·磁性·专业', lang: '中文' },
-  { id: '26838557-6890-4505-bc7c-e8198443a141', name: '东北虎哥', desc: '搞笑·慵懒', lang: '中文' },
-  { id: '19411508-8731-4b68-901d-7e4b8a98e23f', name: '忧伤的秋', desc: '温柔·慵懒', lang: '中文' },
-  { id: '944eb93b-3820-49f3-b2c0-4e37a31d1161', name: '三农农业旁白', desc: '轻快·磁性·专业', lang: '中文' }
-];
-// 用户声线设计生成的自定义音色（存 localStorage）
-function getMossCustomVoices() {
-  try { return JSON.parse(localStorage.getItem('tavern_moss_voices') || '[]'); }
-  catch (_) { return []; }
-}
-function saveMossCustomVoices(list) {
-  localStorage.setItem('tavern_moss_voices', JSON.stringify(list));
-}
-function getAllMossVoices() { return MOSS_BUILTIN_VOICES.concat(getMossCustomVoices()); }
-
-// ===== MOSS 声线设计：文本+风格描述 → 生成音频 → 保存为自定义音色 =====
-let _vdBlob = null;          // 最近一次生成的音频 blob（试听与保存复用）
-let _vdAudioUrl = null;      // 对应 objectURL
-let _vdGenerating = false;
-
-function openVoiceDesignModal() {
-  document.getElementById('voiceDesignModal').classList.remove('hidden');
-  renderCustomVoiceList();
-  const msg = document.getElementById('vdMsg');
-  if (msg) { msg.textContent = ''; msg.className = 'text-xs'; }
-  document.getElementById('vdPreview').classList.add('hidden');
-  document.getElementById('vdSaveBtn').disabled = true;
-}
-
-function closeVoiceDesignModal() {
-  const audio = document.getElementById('vdAudio');
-  if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
-  if (_vdAudioUrl) { URL.revokeObjectURL(_vdAudioUrl); _vdAudioUrl = null; }
-  _vdBlob = null;
-  document.getElementById('voiceDesignModal').classList.add('hidden');
-}
-
-async function generateVoiceDesign() {
-  if (_vdGenerating) return;
-  const instruction = document.getElementById('vdInstruction').value.trim();
-  const input = document.getElementById('vdInput').value.trim();
-  if (!instruction) { setVdMsg('请先填写声音风格描述', true); return; }
-  if (!input) { setVdMsg('请填写试听文本', true); return; }
-  _vdGenerating = true;
-  const btn = document.getElementById('vdGenBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 生成中…';
-  setVdMsg('AI 生成音色中，约需 20-60 秒，请稍候…', false);
-  try {
-    const resp = await fetch('/api/moss/voice-generations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input, instruction, response_format: 'mp3', delivery_method: 'audio' }),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || ('生成失败 (' + resp.status + ')'));
-    }
-    const ctype = resp.headers.get('Content-Type') || '';
-    if (ctype.includes('application/json')) {
-      const data = await resp.json();
-      throw new Error(data.error || data.detail || '生成失败');
-    }
-    _vdBlob = await resp.blob();
-    if (!_vdBlob || _vdBlob.size < 500) throw new Error('生成的音频为空');
-    if (_vdAudioUrl) URL.revokeObjectURL(_vdAudioUrl);
-    _vdAudioUrl = URL.createObjectURL(_vdBlob);
-    const audio = document.getElementById('vdAudio');
-    audio.src = _vdAudioUrl;
-    const dl = document.getElementById('vdDownloadBtn');
-    if (dl) dl.href = _vdAudioUrl;
-    document.getElementById('vdPreview').classList.remove('hidden');
-    document.getElementById('vdSaveBtn').disabled = false;
-    setVdMsg('生成成功！可试听，满意后点击「保存为音色」', false);
-  } catch (err) {
-    setVdMsg('生成失败：' + err.message, true);
-  } finally {
-    _vdGenerating = false;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa fa-play"></i> 生成并试听';
-  }
-}
-
-async function saveDesignedVoice() {
-  if (!_vdBlob) { setVdMsg('请先点击「生成并试听」', true); return; }
-  const btn = document.getElementById('vdSaveBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 保存中…';
-  const instruction = document.getElementById('vdInstruction').value.trim();
-  const name = (instruction ? instruction.slice(0, 20) : '自定义音色') + '_' + Date.now().toString(36);
-  try {
-    const fd = new FormData();
-    fd.append('audio_sample', _vdBlob, 'designed_voice.mp3');
-    fd.append('name', name);
-    const resp = await fetch('/api/moss/voices', { method: 'POST', body: fd });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !data.success) throw new Error(data.error || ('保存失败 (' + resp.status + ')'));
-    const voiceId = data.voice_id;
-    if (!voiceId) throw new Error('未返回音色 ID');
-    const list = getMossCustomVoices();
-    list.push({ id: voiceId, name: data.name || name });
-    saveMossCustomVoices(list);
-    loadVoices();
-    const select = document.getElementById('gmTtsVoice');
-    if (select) { select.value = 'moss:' + voiceId; }
-    renderCustomVoiceList();
-    setVdMsg('已保存为自定义音色「' + (data.name || name) + '」，已自动选中', false);
-  } catch (err) {
-    setVdMsg('保存失败：' + err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa fa-save"></i> 保存为音色';
-  }
-}
-
-function renderCustomVoiceList() {
-  const box = document.getElementById('vdCustomList');
-  if (!box) return;
-  const list = getMossCustomVoices();
-  if (!list.length) { box.innerHTML = '<p class="text-[11px] text-gray-400">暂无自定义音色，生成后点击「保存为音色」即可加入此列表。</p>'; return; }
-  box.innerHTML = '<div class="text-xs text-gray-400 font-medium mb-1">我的自定义音色（' + list.length + '）</div>' +
-    '<div class="flex flex-col gap-1">' + list.map((v, i) =>
-      '<div class="flex items-center gap-2 text-xs">' +
-      '<i class="fa fa-music text-primary"></i>' +
-      '<span class="flex-1 truncate text-gray-600 dark:text-gray-300">' + esc(v.name) + '</span>' +
-      '<button onclick="setTtsVoice(\'moss:' + v.id + '\')" class="text-primary hover:underline">选用</button>' +
-      '<button class="vd-share-btn text-primary hover:underline" data-id="' + v.id + '" data-name="' + esc(v.name) + '">分享</button>' +
-      '<button onclick="deleteCustomVoice(' + i + ')" class="text-red-400 hover:underline">删除</button>' +
-      '</div>').join('') + '</div>';
-  box.querySelectorAll('.vd-share-btn').forEach(b => b.addEventListener('click', () => shareMossVoice(b.dataset.id, b.dataset.name)));
-}
-
-// V5.0 新增：自定义音色分享 / 导入 / 下载
-function shareMossVoice(id, name) {
-  const url = location.origin + location.pathname + '?mossVoice=' + encodeURIComponent(id) + '&mossVoiceName=' + encodeURIComponent(name);
-  const done = () => toast('分享链接已复制，发给好友即可导入使用');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(done).catch(() => { prompt('复制分享链接（Ctrl+C）：', url); });
-  } else {
-    prompt('复制分享链接（Ctrl+C）：', url);
-  }
-}
-function importMossVoice(raw) {
-  const input = document.getElementById('vdImportInput');
-  const text = (raw || (input ? input.value : '')).trim();
-  if (!text) { toast('请粘贴分享链接或 voice_id', 'error'); return; }
-  let id = '', name = '';
-  try {
-    const u = new URL(text, location.origin);
-    id = u.searchParams.get('mossVoice') || '';
-    name = u.searchParams.get('mossVoiceName') || '';
-  } catch (_) {}
-  if (!id) {
-    const m = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (m) id = m[0];
-  }
-  if (!id) { toast('无法识别音色 ID', 'error'); return; }
-  const list = getMossCustomVoices();
-  if (list.some(v => v.id === id)) { toast('该音色已在列表中'); return; }
-  list.push({ id: id, name: name || ('分享音色_' + id.slice(0, 8)) });
-  saveMossCustomVoices(list);
-  loadVoices();
-  renderCustomVoiceList();
-  if (input) input.value = '';
-  toast('音色导入成功，可在语音设置中选用');
-}
-// 通过分享链接打开页面时自动导入音色（?mossVoice=<voice_id>&mossVoiceName=<name>）
-function handleMossVoiceShareParam() {
-  try {
-    const p = new URLSearchParams(location.search);
-    if (!p.get('mossVoice')) return;
-    importMossVoice(location.href);
-    history.replaceState({}, '', location.pathname);
-  } catch (_) {}
-}
-
-function setTtsVoice(val) {
-  const select = document.getElementById('gmTtsVoice');
-  if (select) { select.value = val; }
-  toast('已设为朗读音色');
-}
-
-function deleteCustomVoice(i) {
-  const list = getMossCustomVoices();
-  if (i < 0 || i >= list.length) return;
-  list.splice(i, 1);
-  saveMossCustomVoices(list);
-  const select = document.getElementById('gmTtsVoice');
-  if (select && select.value.startsWith('moss:')) {
-    // 若当前选中的是被删音色，重置为默认
-    const cur = getMossCustomVoices().concat(MOSS_BUILTIN_VOICES).find(v => 'moss:' + v.id === select.value);
-    if (!cur) select.value = '';
-  }
-  loadVoices();
-  renderCustomVoiceList();
-  toast('已删除该自定义音色', 'info');
-}
-
-function setVdMsg(text, isError) {
-  const msg = document.getElementById('vdMsg');
-  if (!msg) return;
-  msg.textContent = text;
-  msg.className = 'text-xs ' + (isError ? 'text-red-400' : 'text-gray-400 dark:text-gray-400');
-}
-
 // 加载可用语音列表
 function loadVoices() {
   _voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
@@ -7532,16 +7265,6 @@ function loadVoices() {
     });
     select.appendChild(grp);
   }
-  // 追加 MOSS 高质量音色（AI，经 /api/moss/tts）
-  const mossGrp = document.createElement('optgroup');
-  mossGrp.label = 'MOSS 高质量音色 (AI)';
-  getAllMossVoices().forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = 'moss:' + v.id;
-    opt.textContent = v.name + '（' + v.desc + '）';
-    mossGrp.appendChild(opt);
-  });
-  select.appendChild(mossGrp);
 
   select.value = currentVal;
 }
@@ -7572,11 +7295,6 @@ document.addEventListener('touchstart', unlockTTS, { once: false, passive: true 
 document.addEventListener('keydown', unlockTTS, { once: false, passive: true });
 
 function speakText(btn, text) {
-  // MOSS 高质量音色（AI）分流：ttsVoice 以 moss: 开头
-  if ((data.config.ttsVoice || '').indexOf('moss:') === 0) {
-    speakTextMoss(btn, text);
-    return;
-  }
   if (!('speechSynthesis' in window)) { toast('浏览器不支持语音合成', 'error'); return; }
   
   // 确保已解锁
@@ -7623,73 +7341,6 @@ function speakText(btn, text) {
   _speakingBtn = btn;
   if (btn) btn.classList.add('playing');
   window.speechSynthesis.speak(u);
-}
-
-// MOSS 高质量语音（AI）TTS：POST /api/moss/tts 获取音频字节流并播放
-let _mossAudio = null;
-let _mossAudioUrl = null;
-async function speakTextMoss(btn, text) {
-  // 点击正在播放的按钮 → 停止
-  if (_speakingBtn === btn && _mossAudio) {
-    _mossAudio.pause();
-    if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; }
-    _mossAudio = null;
-    if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
-    return;
-  }
-  // 停止之前的朗读（浏览器 TTS 与 MOSS 互斥）
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  if (_mossAudio) { _mossAudio.pause(); _mossAudio = null; }
-  if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; }
-
-  // 清理 Markdown 噪音（与浏览器 TTS 保持一致）
-  const clean = text
-    .replace(/```[\s\S]*?```/g, '（代码块）')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[.*?\]\(.*?\)/g, '')
-    .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')
-    .replace(/[#*`>_~]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!clean) { toast('没有可朗读的文本', 'info'); return; }
-
-  const voiceId = (data.config.ttsVoice || '').replace(/^moss:/, '');
-  _speakingBtn = btn;
-  if (btn) btn.classList.add('playing');
-  try {
-    const res = await fetch('/api/moss/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: clean, voice_id: voiceId, response_format: 'mp3', delivery_method: 'audio' })
-    });
-    if (!res.ok) {
-      let errMsg = 'MOSS 语音请求失败 (' + res.status + ')';
-      try { const j = await res.json(); if (j && j.error) errMsg = j.error; } catch(_) {}
-      throw new Error(errMsg);
-    }
-    const blob = await res.blob();
-    if (!blob || blob.size < 100) throw new Error('MOSS 语音响应异常');
-    const url = URL.createObjectURL(blob);
-    _mossAudioUrl = url;
-    const audio = new Audio(url);
-    _mossAudio = audio;
-    audio.onended = () => {
-      URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null;
-      _mossAudio = null;
-      if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null;
-      _mossAudio = null;
-      if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
-      toast('音频播放失败', 'error');
-    };
-    await audio.play();
-  } catch (e) {
-    if (_speakingBtn) { _speakingBtn.classList.remove('playing'); _speakingBtn = null; }
-    if (_mossAudioUrl) { URL.revokeObjectURL(_mossAudioUrl); _mossAudioUrl = null; _mossAudio = null; }
-    toast(e.message || 'MOSS 语音请求失败', 'error');
-  }
 }
 
 // 自动朗读新消息（如果启用）
@@ -8334,7 +7985,6 @@ initEmojiPicker();
 updateLocalModelStatusUI();
 applyBackground();
 loadVoices();
-handleMossVoiceShareParam();
 </script>
 
 </body></html>
