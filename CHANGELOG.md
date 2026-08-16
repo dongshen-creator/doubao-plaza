@@ -4,6 +4,61 @@
 
 ---
 
+## v5.5 — 2026-08-16
+
+### 变更：重做频道公告置顶条布局（固定于聊天顶栏下方）
+
+#### 问题
+频道公告置顶条（`channelAnnouncementBanner`）此前被 `insertBefore` 插入到消息列表容器 `chatMsgs` 的 firstChild，成为消息流的第一项，**随聊天记录一起滚动**；且切换频道/私聊后旧公告条从不移除，会残留显示。
+
+#### 修复
+1. **插入位置改为顶栏正下方**：公告条改为 `chatViewHeader.insertAdjacentElement('afterend', ...)`（与入群申请横幅 `channelJoinBanner` 同一模式），并加 `flex-shrink:0`，固定在顶栏与消息区之间，不随消息滚动。
+2. **样式重做**：改为通栏固定条（`var(--accent-bg)` 背景 + 底部 accent 分隔线），左侧 📌 图标、中间标题（超长省略号截断）、右侧「点击阅读」。
+3. **残留清理**：`loadMessages` 中无置顶公告或非频道时移除旧公告条；`switchRoom` 切换房间时先移除旧公告条，避免缓存渲染窗口期残留。
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | `loadMessages` 公告条重做（插入位置/样式/清理）；`switchRoom` 切换时清理旧公告条 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- 5 个内联 `<script>` 块 `node --check` 语法检查通过
+- 待部署后实测：进入有置顶公告的频道，公告条应固定在顶栏下方且不随消息滚动；切换到无公告频道/私聊，公告条应消失
+
+---
+
+## v5.4 — 2026-08-11
+
+### 调研：moss TTS/STT 接入声网平台服务（轮10-1c）
+
+#### 背景
+MOSS（MOSI api.mosi.cn）TTS/STT 上游损坏，计划切换为声网平台服务（模型通过声网控制台选择，非 BYOK）：
+- TTS：豆包（bytedance，325 音色）/ CosyVoice（cosyvoice，阿里云）/ MiniMax（minimax）
+- STT：凤鸣（fengming，声网自研）/ 豆包流式 / Paraformer-v2（阿里云）/ 火山流式
+
+#### 调研结论（实测）
+1. **声网语音服务全部为 RTC 实时形态，无 HTTP 文件转写/合成 API**：
+   - convoai（对话式 AI 引擎）：已开通（agents 列表 200 OK）；RTC 频道内实时对话，`join` 必填 `llm` 配置，TTS 输出在频道内，HTTP 拿不到音频文件
+   - speech-to-text（实时转录翻译）：**未开通**（`ServiceNotEnabled`）；RTC 频道内实时转写，`join` 请求体 anyOf 仅 `rtcConfig` 变体，**无 URL/离线文件输入**（实测 url-only → `InvalidFieldValue`）
+   - Voice Agent 产品线：WebSocket 流式（模型供应商直连）
+2. **认证**（实测）：
+   - HTTP Basic Auth（`base64(customerKey:customerSecret)`）→ 全部 `Invalid authentication credentials`（Customer Key/Secret 已失效或非本项目可用）
+   - RTC Token（007，`Authorization: agora token="007..."`）→ 有效；凭证 = App ID `0353243e...` + App Certificate `d4c65781...`（已归档至 `amadeus/administrator/personal_data/agora-credentials.md`）
+3. **形态不匹配**：moss 现状为 HTTP 转接端点（浏览器录音上传→文本 / 文本→音频文件），与声网 RTC 形态不匹配，**端点上游无法直接切换为声网 RESTful API**
+
+#### 可行路线（待用户选择）
+- **路线 A（RTC 改造）**：moss 前端集成 Agora Web SDK（RTC 推流麦克风）→ 控制台开通「实时转录翻译服务」→ `speech-to-text` agent 转写；TTS 经 convoai agent（需 LLM 配置）或流式通道。改造量大，且受控制台开通状态阻塞
+- **路线 B（保持 HTTP 形态）**：moss 端点换用有 HTTP 文件形态的语音服务（如火山引擎豆包 TTS/流式 ASR、阿里云 DashScope Paraformer/CosyVoice、MiniMax 官方 API——均为 BYOK 直连，与「控制台选择非 BYOK」诉求不同）
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `amadeus/administrator/personal_data/agora-credentials.md` | 新建：声网凭证归档（App ID / App Certificate / 认证方式实测 / 服务开通状态 / 形态限制） |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v5.3 — 2026-08-11
 
 ### 变更：撤下 MOSS TTS 渠道（仅保留浏览器 TTS 朗读）

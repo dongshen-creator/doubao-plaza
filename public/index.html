@@ -7006,6 +7006,9 @@ async function switchRoom(roomId) {
   if (inputArea) inputArea.style.display = 'flex';
   applyChatBackground();
   renderRoomList();
+  // 切换房间时先移除旧公告条，避免缓存渲染窗口期残留（loadMessages 会按需重建）
+  var _oldAnn = document.getElementById('channelAnnouncementBanner');
+  if (_oldAnn) _oldAnn.remove();
   // 在频道顶部显示入群申请横幅（仅管理员可见）
   renderChannelJoinBanner(roomId);
   // 立即清除该会话的未读红点
@@ -7264,19 +7267,22 @@ async function loadMessages(roomId, silent) {
   chatState.messages[roomId] = keptRealtime.concat(nonEdits).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
   if (roomId !== chatState.currentRoomId) return;
   renderMessages(roomId);
+  // V5.5 重做：公告置顶条固定在顶栏下方（不随消息滚动），无置顶公告时移除残留
+  var annBanner = document.getElementById('channelAnnouncementBanner');
   if (isChannel && pinnedResult && pinnedResult.data && pinnedResult.data.length) {
     var pinned = pinnedResult.data;
-    if (pinned?.length) {
-      var banner = document.getElementById('channelAnnouncementBanner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'channelAnnouncementBanner';
-        banner.style.cssText = 'background:var(--accent-bg);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;cursor:pointer';
-        msgsEl.insertBefore(banner, msgsEl.firstChild);
-      }
-      banner.innerHTML = '📌 ' + pinned.map(function(a) { return esc(a.title); }).join(' ｜ ') + ' <span style="color:var(--accent)">点击阅读</span>';
-      banner.onclick = function() { showPinnedAnnouncements(pinned); };
+    if (!annBanner) {
+      annBanner = document.createElement('div');
+      annBanner.id = 'channelAnnouncementBanner';
+      annBanner.style.cssText = 'background:var(--accent-bg);border-bottom:1px solid var(--accent);padding:8px 14px;font-size:12px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:8px';
+      var _annHeader = document.getElementById('chatViewHeader');
+      if (_annHeader) _annHeader.insertAdjacentElement('afterend', annBanner);
+      else msgsEl.insertBefore(annBanner, msgsEl.firstChild);
     }
+    annBanner.innerHTML = '<span style="font-size:14px;flex-shrink:0">📌</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">' + pinned.map(function(a) { return esc(a.title); }).join(' ｜ ') + '</span><span style="color:var(--accent);flex-shrink:0">点击阅读</span>';
+    annBanner.onclick = function() { showPinnedAnnouncements(pinned); };
+  } else if (annBanner) {
+    annBanner.remove();
   }
   markRead(roomId);
   if (!silent) {
