@@ -739,6 +739,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .notification-warning{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning)}
 .notification-error{background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-text)}
 
+/* ── 上线提醒弹窗（V5.6）── */
+.online-notify-container{position:fixed;bottom:20px;right:16px;z-index:99;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:320px}
+.online-notify{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--bg-primary);border:1px solid var(--border-color);box-shadow:0 4px 16px rgba(0,0,0,0.12);font-size:13px;font-weight:500;color:var(--text-primary);animation:onlineNotifyIn .3s ease;pointer-events:auto}
+.online-notify .avatar{width:28px;height:28px;font-size:13px;flex-shrink:0}
+.online-notify b{color:var(--accent)}
+.online-notify.out{opacity:0;transform:translateX(30px);transition:opacity .3s,transform .3s}
+@keyframes onlineNotifyIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+
 /* ── 动画 ── */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
