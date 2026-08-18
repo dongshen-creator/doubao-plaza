@@ -4,6 +4,39 @@
 
 ---
 
+## v5.7 — 2026-08-18
+
+### 变更：上线提醒实时化 + 全界面暗色模式修复 + 交互打磨
+
+#### 一、上线提醒实时化（修复延迟高 / 不显示）
+- **轮询间隔 30 秒 → 10 秒**，降低上线提醒延迟
+- **移除 `document.hidden` 时暂停轮询**的逻辑，改为页面重新可见时立即补查一次（`visibilitychange` 监听）
+- **新增 Supabase Realtime 订阅 `user_presence` 表**（`postgres_changes` 全事件监听），用户上线/下线即时推送，无需等待轮询周期
+- 弹窗样式优化：左侧橙色渐变指示条 + 头像描边 + 平滑滑入动画
+
+#### 二、暗色模式硬编码浅色修复（8 处）
+- 修复 `index.html` 内联样式 8 处硬编码浅色（`#F7F8FC`/`#f9fafb`/`#f3f4f6`/`#FFF3ED`）→ 统一替换为 CSS 变量（`var(--bg-input)`/`var(--bg-hover)`/`var(--accent-bg)`/`var(--border-color)`）
+- 覆盖范围：设置弹窗资料卡、功能开关行、消息表情 reaction 徽章、@提及自动补全 hover、频道设置静音行边框、准入设置 tab 下划线/激活态、问卷题目行
+
+#### 三、交互打磨
+- **消息入场动画**：记录上次渲染的消息 eid 集合，仅对新增消息应用 `.chat-msg-new` 淡入上移动画，避免整体重渲染时全部消息闪烁
+- **移动端 safe-area**：底部 TabBar、侧边栏抽屉、遮罩层、右侧上下文面板适配 iPhone 底部安全区（`env(safe-area-inset-bottom)`）
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | 上线提醒 10 秒轮询 + Realtime 订阅（`subscribePresenceRealtime`/`handlePresenceRealtime`）；暗色模式 8 处硬编码颜色改 CSS 变量；消息入场动画（`_prevMsgEids` 对比 + `.chat-msg-new` 类） |
+| `public/style.css` | `.online-notify` 弹窗样式优化；`.chat-msg-new` 入场动画 keyframes；移动端 safe-area 适配 |
+| `supabase-migration.sql` | `user_presence` 表加入 Realtime 发布（幂等） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 5 个内联 `<script>` 块 `node --check` 语法检查通过（0 错误）
+- [x] CSS 花括号配平检查通过
+- [ ] 部署后实测：A 用户上线 B 用户应在 10 秒内（或 Realtime 即时）看到弹窗；暗色模式下各弹窗/列表/徽章无刺眼浅色；新消息淡入动画正常（部署后补）
+
+---
+
 ## v5.6 — 2026-08-18
 
 ### 变更：上线提醒弹窗 + 活动栏新消息红圈数字

@@ -424,7 +424,7 @@
       <button class="modal-close" onclick="closeModal('settings')">✕</button>
     </div>
     <div id="settingsNotifications"></div>
-    <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#F7F8FC;border-radius:16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg-input);border-radius:16px;margin-bottom:16px">
       <div class="avatar" id="settingsAvatar">?</div>
       <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text-primary)" id="settingsName">-</div><div style="font-size:12px;color:var(--text-faint)" id="settingsId">-</div></div>
       <div class="status-dot"></div>
@@ -443,7 +443,7 @@
 <div class="modal-overlay" id="reportModal" style="display:none">
   <div class="modal">
     <div class="modal-header">
-      <div style="width:32px;height:32px;border-radius:10px;background:#FEF2F2;display:flex;align-items:center;justify-content:center;color:#DC2626;font-size:16px">🚨</div>
+      <div style="width:32px;height:32px;border-radius:10px;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:16px">🚨</div>
       <div class="modal-title">举报用户</div>
       <button class="modal-close" onclick="closeModal('report')">✕</button>
     </div>
@@ -1602,12 +1602,17 @@ function startOnlineNotify() {
   if (_onlineNotifyTimer) clearInterval(_onlineNotifyTimer);
   _onlineNotifyReady = false;
   _onlineNotifySeen = {};
+  // V5.7：10 秒轮询（原 30 秒）降低上线提醒延迟；页面重新可见时立即补查一次
   pollOnlineNotify();
-  _onlineNotifyTimer = setInterval(pollOnlineNotify, 30000);
+  _onlineNotifyTimer = setInterval(pollOnlineNotify, 10000);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) pollOnlineNotify();
+  });
+  subscribePresenceRealtime();
 }
 
 async function pollOnlineNotify() {
-  if (!currentUser || !window.__SB || document.hidden) return;
+  if (!currentUser || !window.__SB) return;
   try {
     var { data: { session } } = await __SB.auth.getSession();
     if (!session) return;
@@ -1663,12 +1668,37 @@ function showOnlineNotifyToast(user) {
   }
   var el = document.createElement('div');
   el.className = 'online-notify';
-  el.innerHTML = avatarHTML(user, true) + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@<b>' + esc(user.name || '未知用户') + '</b> 上线了</span>';
+  el.innerHTML = avatarHTML(user, true) + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@<b>' + esc(user.name || '未知用户') + '</b> 上线了</span><span class="online-dot" title="在线"></span>';
   container.appendChild(el);
   setTimeout(function() {
     el.classList.add('out');
     setTimeout(function() { el.remove(); }, 350);
   }, 3200);
+}
+
+// V5.7：Realtime 实时订阅 user_presence（需将表加入 supabase_realtime 发布，见 supabase-migration.sql）
+var _presenceChannel = null;
+function subscribePresenceRealtime() {
+  if (!window.__SB || _presenceChannel) return;
+  try {
+    _presenceChannel = __SB.channel('presence-online')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, function(payload) {
+        handlePresenceRealtime(payload);
+      })
+      .subscribe();
+  } catch(e) {}
+}
+
+function handlePresenceRealtime(payload) {
+  // 首次轮询完成前不弹窗（避免登录时对已在线的用户集体弹窗）；页面隐藏时交给可见后的轮询补查
+  if (!_onlineNotifyReady || document.hidden) return;
+  var row = payload.new || payload.old;
+  if (!row || !row.user_id || row.user_id === currentUser.id) return;
+  var lastSeen = row.last_seen ? new Date(row.last_seen).getTime() : 0;
+  if (!lastSeen || Date.now() - lastSeen > 5 * 60 * 1000) return;
+  if (_onlineNotifySeen[row.user_id]) return;
+  _onlineNotifySeen[row.user_id] = true;
+  showOnlineNotify([row.user_id]);
 }
 
 var __presenceTableMissing = false;
@@ -5470,7 +5500,7 @@ async function loadFeatureToggles() {
     }
 
     el.innerHTML = features.map(f => `
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;background:#f9fafb;border-radius:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;background:var(--bg-input);border-radius:8px">
         <input type="checkbox" class="feature-toggle" data-id="${f.id}" ${hiddenFeatures.includes(f.id) ? '' : 'checked'}>
         <span style="font-size:13px;color:var(--text-secondary)">${esc(f.title)}</span>
       </label>
@@ -7417,6 +7447,8 @@ async function loadOlderMessages(roomId) {
   msgsContainer.scrollTop = msgsContainer.scrollHeight * (newCount / chatState.messages[roomId].length);
 }
 
+var _prevMsgEids = new Set();
+
 function renderMessages(roomId) {
   if (roomId !== chatState.currentRoomId) return;
   const msgsEl = document.getElementById('chatMsgs');
@@ -7426,6 +7458,9 @@ function renderMessages(roomId) {
   if (!msgs.length) { msgsEl.innerHTML = '<div class="chat-empty-inline" style="padding:32px;text-align:center;color:var(--text-faint)">暂无消息，发送第一条吧</div>'; return; }
   // 过滤被拉黑用户的消息（自己的消息不过滤）
   const visibleMsgs = msgs.filter(m => m.sender_id === currentUser.id || !isUserBlocked(m.sender_id));
+  // 记录本次新增消息的 eid，用于入场动画（避免整体重渲染时全部消息闪烁）
+  var newEids = visibleMsgs.filter(function(m) { return m.event_id && !_prevMsgEids.has(m.event_id); }).map(function(m) { return m.event_id; });
+  _prevMsgEids = new Set(visibleMsgs.map(function(m) { return m.event_id; }));
   for (const msg of visibleMsgs) {
     const reacts = chatState.reactionsMap[msg.event_id];
     if (reacts) {
@@ -7456,6 +7491,13 @@ function renderMessages(roomId) {
   }
   msgsEl.innerHTML = htmlParts.join('');
     applyLatex(msgsEl);
+  // 仅对新增消息添加入场动画类
+  if (newEids.length) {
+    var newSet = new Set(newEids);
+    msgsEl.querySelectorAll('.chat-msg[data-eid]').forEach(function(el) {
+      if (newSet.has(el.getAttribute('data-eid'))) el.classList.add('chat-msg-new');
+    });
+  }
   if (savedAnchor) {
     var newAnchor = msgsEl.querySelector('[data-eid="' + savedAnchor.eid + '"]');
     if (newAnchor) msgsEl.scrollTop = newAnchor.offsetTop - savedAnchor.offset;
@@ -7571,7 +7613,7 @@ function renderMsgHTML(m, roomId) {
     // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
     contentHtml = renderRichText(text);
   }
-  const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? '#FFF3ED' : '#f3f4f6') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
+  const reactionsHtml = m.reactions?.length ? '<div class="chat-reactions">' + m.reactions.map(r => '<span class="chat-reaction-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:' + (r.senders?.includes(currentUser.id) ? 'var(--accent-bg)' : 'var(--bg-hover)') + ';border-radius:12px;padding:2px 8px;font-size:13px;margin-right:4px" onclick="sendReaction(\'' + escAttr(m.event_id || '') + '\',\'' + escAttr(r.key) + '\')">' + r.key + ' ' + r.count + '</span>').join('') + '</div>' : '';
   var eid = escAttr(m.event_id || '');
   var rid = escAttr(roomId || '');
   // 操作工具栏（悬停显示）：翻译快捷入口 + 引用 + 表情 + 更多菜单
@@ -8504,7 +8546,7 @@ function showAtPopup(input, atIdx, partial) {
     var item = document.createElement('div');
     item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border-color)';
     item.textContent = '@' + name;
-    item.onmouseover = function() { item.style.background = '#f9fafb'; };
+    item.onmouseover = function() { item.style.background = 'var(--bg-hover)'; };
     item.onmouseout = function() { item.style.background = ''; };
     item.onclick = function() {
       input.value = valAt.slice(0, atIdx) + '@' + name + ' ' + valAt.slice(cursorAt);
@@ -8966,7 +9008,7 @@ async function showRoomSettings() {
     html += '<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">成员管理</div><div id="roomMemberList" style="max-height:240px;overflow-y:auto"></div></div>';
   }
   var roomForMute = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
-  html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;border-top:1px solid #f3f4f6;margin-top:8px"><input type="checkbox" id="muteNotifToggle" ' + (roomForMute && roomForMute.mute_notifications ? 'checked' : '') + ' onchange="toggleMuteNotifications(\'' + chatState.currentRoomId + '\')"> 🔇 不接受此会话通知</label>';
+  html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;border-top:1px solid var(--border-color);margin-top:8px"><input type="checkbox" id="muteNotifToggle" ' + (roomForMute && roomForMute.mute_notifications ? 'checked' : '') + ' onchange="toggleMuteNotifications(\'' + chatState.currentRoomId + '\')"> 🔇 不接受此会话通知</label>';
   html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
   html += '<button class="btn btn-sm btn-gray" onclick="clearLocalMessages(\'' + chatState.currentRoomId + '\')">🧹 仅清空本地记录</button>';
   html += '<button class="btn btn-sm btn-gray" onclick="clearChatHistory(\'' + chatState.currentRoomId + '\')">🗑 清空所有人记录</button>';
@@ -10293,7 +10335,7 @@ async function loadAndShowAdmissionPanel(myLevel) {
   var html = '<div class="modal-overlay" id="admissionManagementModal" style="display:flex"><div class="modal modal-lg" style="max-width:640px">';
   html += '<div class="modal-header"><div class="modal-title">准入设置</div><button class="modal-close" onclick="document.getElementById(\'admissionManagementModal\').remove()">✕</button></div>';
 
-  html += '<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid #f3f4f6;padding-bottom:8px">';
+  html += '<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border-color);padding-bottom:8px">';
   html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'test\')" id="admTabTest" style="background:var(--accent-bg);color:var(--accent)">📋 准入测试</button>';
   html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'audit\')" id="admTabAudit" style="background:var(--bg-hover)">📝 审核请求</button>';
   if (myLevel >= 3) html += '<button class="btn btn-sm" onclick="switchAdmissionTab(\'custom\')" id="admTabCustom" style="background:var(--bg-hover)">📄 自定义界面</button>';
@@ -10347,7 +10389,7 @@ function renderAdmissionTestTab(mode, questionnaire, password) {
 }
 
 function renderQuestionRow(q, i) {
-  var h = '<div style="background:#f9fafb;border-radius:8px;padding:10px;margin-bottom:8px" data-qidx="' + i + '">';
+  var h = '<div style="background:var(--bg-input);border-radius:8px;padding:10px;margin-bottom:8px" data-qidx="' + i + '">';
   h += '<div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">';
   h += '<span style="font-size:12px;font-weight:600">题' + (i+1) + '</span>';
   h += '<input class="input" value="' + esc(q.question || '') + '" placeholder="题目（≤20字）" maxlength="20" style="flex:1" data-field="question">';
@@ -10389,7 +10431,7 @@ function switchAdmissionTab(tab) {
   var tabs = {test: 'admTabTest', audit: 'admTabAudit', custom: 'admTabCustom'};
   for (var k in tabs) {
     var el = document.getElementById(tabs[k]);
-    if (el) el.style.background = k === tab ? '#FFF3ED' : '#f3f4f6';
+    if (el) el.style.background = k === tab ? 'var(--accent-bg)' : 'var(--bg-hover)';
   }
   var content = document.getElementById('admissionTabContent');
   var s = window._admSettings || {};

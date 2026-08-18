@@ -315,6 +315,15 @@ DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE chat_reactions;
   END IF;
 END $$;
+-- V5.7：user_presence 加入 Realtime 发布，实现上线提醒实时推送（幂等）
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'user_presence'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE user_presence;
+  END IF;
+END $$;
 
 -- ===== 20. 消息自动清理（7天保留 + pg_cron 定时任务）=====
 CREATE EXTENSION IF NOT EXISTS pg_cron;
