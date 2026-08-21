@@ -8418,21 +8418,21 @@ async function pollNewMessages() {
       }
     } catch(e) { console.warn('[CHAT-POLL] pollNewMessages error:', e); }
   }
-  // 自适应轮询：有新消息时 5s 后再查；连续 3 次无新消息则放慢到 12s
-  // 页面不可见时进一步降低频率到 30s，减少 Supabase 请求
-  // Realtime 是主要推送通道，轮询仅作兜底
+  // 自适应轮询：群聊对话以 Realtime 实时推送为主，轮询仅作兜底，放慢以节省算力
+  // 活跃（刚收到消息/正在聊天）8s 后再查；连续 3 次无新消息放慢到 20s
+  // 页面不可见时进一步降低到 60s，减少 Supabase 请求
   if (gotNew) { chatState._pollIdleCount = 0; }
   else { chatState._pollIdleCount = (chatState._pollIdleCount || 0) + 1; }
   var nextInterval;
-  if (document.hidden) { nextInterval = 30000; } // 后台标签页 30s
-  else if (chatState._pollIdleCount >= 3) { nextInterval = 12000; } // 空闲 12s
-  else { nextInterval = 5000; } // 活跃 5s
+  if (document.hidden) { nextInterval = 60000; } // 后台标签页 60s
+  else if (chatState._pollIdleCount >= 3) { nextInterval = 20000; } // 空闲 20s
+  else { nextInterval = 8000; } // 活跃 8s
   messagePollTimer = setTimeout(pollNewMessages, nextInterval);
 }
 
 function startMessagePolling() {
   stopMessagePolling();
-  messagePollTimer = setTimeout(pollNewMessages, 5000);
+  messagePollTimer = setTimeout(pollNewMessages, 8000);
 }
 
 function startUnreadPolling() {
