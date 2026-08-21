@@ -4,6 +4,39 @@
 
 ---
 
+## v5.10 — 2026-08-21
+
+### 变更：Supabase 全部 SQL 整合为单一文件
+
+#### 一、整合内容
+将原本分散的 Supabase 脚本**全部合并进 `supabase-migration.sql`（唯一文件）**：
+- `supabase-migration.sql`（基础：表结构 / 索引 / 外键 / 触发器 / Realtime / Storage / 开放 RLS）
+- `supabase-security-fix.sql`（安全加固：开发者白名单 / 敏感列保护 / 读侧 RLS 收紧 / 写残留收紧 / 服务端门禁 RPC `verify_admission`、`get_admission_questions`、`get_admission_settings`、`redeem_invite` / 函数加固）
+- `fix-chat-members-rls.sql`（私聊成员写入策略：允许 本人/房主/管理员 插入成员）
+
+#### 二、本次合并的关键修正（重要）
+1. **问卷表不再重置数据**：原先 `channel_questionnaires`/`channel_questionnaire_answers` 用 `DROP+CREATE`，重跑会清空已配置的问卷数据；已改为 `CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS` 补齐列，真正做到幂等不丢数据。
+2. **修复辅助函数前置引用**：`app_user_id` / `is_channel_public` / `is_room_creator` / `is_room_member` / `is_room_admin` / `is_developer` 及 `developers` 白名单表统一前移到第 21.x 段（在所有 RLS 策略与门禁 RPC 之前），否则在全新数据库上执行到 `chat_messages_insert` 等引用函数的策略时会报"函数不存在"。
+3. **恢复被上次合并遗漏的内容**：首次合并落下了一批安全内容，本次补齐——服务端门禁 RPC、`developers` 白名单、敏感列 `REVOKE SELECT`、读侧 RLS 收紧、`sign_auth_jwt`/`increment_unread` 撤销执行权限、`cleanup_old_chat_messages` 固定 `search_path`。
+4. **改名策略重复执行报"已存在"修复**：`channel_join_requests` 的 4 个策略在加固段被从「任何人可插入/更新/删除入群申请」改名为 `join_requests_insert/update/delete`，但改名后的新策略名未在 `CREATE` 前 `DROP IF EXISTS`，导致整段脚本重复执行时报 `ERROR: 42710 policy "join_requests_insert" already exists`。已在每次 `CREATE POLICY "join_requests_*"` 前补同名 `DROP POLICY IF EXISTS`。经全量扫描，**共 82 个策略中所有同名重复创建均已有前置同名 DROP**，重复执行不再报"策略已存在"。
+5. **cron 定时任务幂等**：每日清理旧消息的 `cron.schedule('cleanup-old-chat-messages', ...)` 改为「先 `cron.unschedule` 同名任务（异常忽略）再重建」，避免重复执行脚本时在 pg_cron 中堆积多个同名定时任务。
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `supabase-migration.sql` | 整合三个 Supabase 脚本的全部内容；修正问卷表幂等创建；前移辅助函数；补齐遗漏的安全加固（RPC/白名单/读侧收紧/函数加固） |
+| `supabase-security-fix.sql` | **已删除**（内容并入 `supabase-migration.sql`） |
+| `fix-chat-members-rls.sql` | **已删除**（内容并入 `supabase-migration.sql`） |
+| `AGENTS.md` | 目录结构说明同步：Supabase 增量脚本已并入唯一迁移文件 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 三个源脚本的所有函数/RPC/策略均能在合并文件中找到唯一定义（逐项核对：`app_user_id`、`is_*`、4 个门禁 RPC、`sign_auth_jwt`、`REVOKE`、`developers` 等，各自仅定义一次）
+- [x] 问卷表创建方式改为幂等，重跑不丢数据
+- [ ] 部署后在 Supabase SQL Editor 整体粘贴执行一次，确认无报错、无数据丢失；实测入群密码/问卷/邀请码仍正常（`verify_admission`/`redeem_invite` RPC 可用）、私聊与群聊收发正常、私聊双方建房成员插入正常（部署后补）
+
+---
+
 ## v5.9 — 2026-08-21
 
 ### 变更：修复重复发送 + 大幅降低会话接收延迟
