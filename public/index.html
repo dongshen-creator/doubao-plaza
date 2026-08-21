@@ -17,41 +17,24 @@
   <meta property="og:locale" content="zh_CN">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
-  <!-- SunEditor 富文本编辑器 -->
-  <link href="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/css/suneditor.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/suneditor@2.45.1/dist/suneditor.min.js"></script>
-  <!-- KaTeX LaTeX 渲染（多CDN回退 + 动态加载 + 国内CDN） -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <!-- SunEditor 富文本编辑器（本地静态资源） -->
+  <link href="/vendor/suneditor/dist/css/suneditor.min.css" rel="stylesheet">
+  <script src="/vendor/suneditor/dist/suneditor.min.js"></script>
+  <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
+  <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
   <script>
-  // KaTeX 多CDN动态加载（jsdelivr → unpkg → staticfile → bootcdn → cdnjs）
+  // KaTeX 本地静态加载（同源资源，规避外部 CDN 被 local address space 拦截）
   (function() {
-    // CSS 样式表多源回退（jsdelivr → unpkg → staticfile → bootcdn）
-    var katexCssLink = document.querySelector('link[href*="katex@0.16.9/dist/katex.min.css"]');
+    var katexCssLink = document.querySelector('link[href*="katex/dist/katex.min.css"]');
     if (katexCssLink) {
-      var cssFallbacks = [
-        'https://unpkg.com/katex@0.16.9/dist/katex.min.css',
-        'https://cdn.staticfile.net/katex/0.16.9/katex.min.css',
-        'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.css',
-        'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'
-      ];
-      var cssIdx = 0;
+      // 同源资源无需回退，仅做一次性失败提示
       katexCssLink.addEventListener('error', function() {
-        if (cssIdx < cssFallbacks.length) { katexCssLink.href = cssFallbacks[cssIdx++]; }
+        console.error('[LaTeX] KaTeX 本地 CSS 加载失败');
       });
     }
-    var katexCDNs = [
-      'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
-      'https://unpkg.com/katex@0.16.9/dist/katex.min.js',
-      'https://cdn.staticfile.net/katex/0.16.9/katex.min.js',
-      'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/katex.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'
-    ];
-    var autoRenderCDNs = [
-      'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
-      'https://unpkg.com/katex@0.16.9/dist/contrib/auto-render.min.js',
-      'https://cdn.staticfile.net/katex/0.16.9/contrib/auto-render.min.js',
-      'https://cdn.bootcdn.net/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js'
+    var katexLibs = [
+      '/vendor/katex/dist/katex.min.js',
+      '/vendor/katex/dist/contrib/auto-render.min.js'
     ];
     window.__katexReady = false;
     window.__katexFailed = false;
@@ -65,40 +48,35 @@
       document.head.appendChild(s);
     }
 
-    function tryLoadCDN(urls, index, onComplete) {
-      if (index >= urls.length) { onComplete(false); return; }
-      loadScript(urls[index], function() { onComplete(true); }, function() {
-        tryLoadCDN(urls, index + 1, onComplete);
-      });
-    }
-
-    tryLoadCDN(katexCDNs, 0, function(katexOk) {
-      if (!katexOk) {
-        console.error('[LaTeX] KaTeX 主库所有CDN加载失败');
-        // 兜底：标记失败，强制执行等待中的回调，避免回调永久排队
-        window.__katexFailed = true;
-        window.__katexReady = true;
-        var cbs = window.__katexCallbacks;
-        window.__katexCallbacks = [];
-        cbs.forEach(function(cb) { try { cb(); } catch(e) {} });
-        setTimeout(function() {
-          try {
-            if (typeof toast === 'function') {
-              toast('公式渲染组件加载失败，LaTeX 公式将以源码显示', 'error');
-            }
-          } catch(e) {}
-        }, 1500);
-        return;
-      }
+    // 同源本地资源，顺序加载主库 → auto-render
+    loadScript(katexLibs[0], function() {
       console.log('[LaTeX] KaTeX 主库加载成功');
-      tryLoadCDN(autoRenderCDNs, 0, function(renderOk) {
-        if (!renderOk) { console.error('[LaTeX] auto-render 所有CDN加载失败'); return; }
+      loadScript(katexLibs[1], function() {
         console.log('[LaTeX] auto-render 加载成功');
         window.__katexReady = true;
-        // 执行所有等待中的回调
+        window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
+        window.__katexCallbacks = [];
+      }, function() {
+        console.error('[LaTeX] auto-render 本地加载失败');
+        window.__katexReady = true;
         window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
         window.__katexCallbacks = [];
       });
+    }, function() {
+      console.error('[LaTeX] KaTeX 本地主库加载失败');
+      // 兜底：标记失败，强制执行等待中的回调，避免回调永久排队
+      window.__katexFailed = true;
+      window.__katexReady = true;
+      var cbs = window.__katexCallbacks;
+      window.__katexCallbacks = [];
+      cbs.forEach(function(cb) { try { cb(); } catch(e) {} });
+      setTimeout(function() {
+        try {
+          if (typeof toast === 'function') {
+            toast('公式渲染组件加载失败，LaTeX 公式将以源码显示', 'error');
+          }
+        } catch(e) {}
+      }, 1500);
     });
 
     // 全局回调注册函数
@@ -2172,11 +2150,15 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
     var memA = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id };
     var memB = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId };
     var { error: roomErr } = await __SB.from('chat_rooms').upsert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null }, { onConflict: 'id' });
-    if (!roomErr) {
-      var { error: memErr } = await __SB.from('chat_room_members').insert([memA, memB]);
-      if (memErr) { console.error('创建私聊成员失败:', memErr); }
-    } else {
+    if (roomErr) {
       console.error('创建私聊房间失败:', roomErr);
+    } else {
+      // V5.11 修复：分别 upsert 成员，先保证本人是成员。原批量 insert 在「房间非本人创建」时，
+      // 对方行会被成员 RLS 拒绝并导致整批失败 → 本人始终无成员记录 → 发消息/读消息持续 403。
+      if (currentUser.id && roomId) {
+        await __SB.from('chat_room_members').upsert(memA, { onConflict: 'room_id,user_id' }).catch(function(e){ console.error('私聊本人成员写入失败:', e); });
+      }
+      await __SB.from('chat_room_members').upsert(memB, { onConflict: 'room_id,user_id' }).catch(function(){});
     }
   }
 

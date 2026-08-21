@@ -4,6 +4,43 @@
 
 ---
 
+## v5.11 — 2026-08-21
+
+### 变更：解决 CDN 资源被拦截 + 修复私聊收发消息持续 403
+
+#### 一、CDN 资源（KaTeX / SunEditor）被「local address space」拦截
+- **现象**：线上 `doubao-plaza.pages.dev` 报错 `Access to ... blocked by CORS policy: Permission was denied for this request to access the local address space`，且所有备选 CDN（jsdelivr / unpkg / cdnjs / cdn.staticfile.net / cdn.bootcdn.net）逐一全部失败
+- **根因**：用户网络环境下外部 CDN 被 DNS 污染解析到本地/私网地址，触发 Chrome 私有网络访问（PNA）拦截；**换个 CDN 没用**，任何外链都会同样失败
+- **修复**：改为**本地同源静态资源自托管**，不再依赖外部 CDN：
+  1. 将 KaTeX@0.16.9 完整 `dist`（含 `katex.min.js`、`katex.min.css`、`contrib/auto-render.min.js`、`fonts/*.woff2` 共 80+ 文件）下载解压到 `public/vendor/katex/dist/`
+  2. 将 SunEditor@2.45.1 的 `dist/suneditor.min.js`、`dist/css/suneditor.min.css` 放到 `public/vendor/suneditor/`
+  3. `public/index.html` 中 SunEditor 与 KaTeX 的 `<link>`/`<script>` 全部改为本地 `/vendor/...` 路径；KaTeX 动态加载器由「多 CDN 回退」简化为「同源顺序加载主库→auto-render」，失败才标记
+  4. 本地同源资源走 `'self'` 白名单，CSP 无需新增外域；KaTeX 字体相对路径 `fonts/*` 由 `font-src 'self'` 放行
+
+#### 二、私聊/群聊收发消息持续 403（new row violates row-level security policy for table "chat_messages"）
+- **现象**：读消息（`rest/v1/chat_messages` 两次 403）与发消息（RLS 违规）提示，刷新/自动刷新 JWT 后依旧
+- **根因**：收紧后的策略要求私聊房间必须本人是「房间成员或房主」；而创建私聊时是**一次性批量插入双方成员**（`insert([memA, memB])`）。当房间**由对方创建**（`created_by` = 对方）时，本方可写入自己那行，但写入**对方行**会被成员 RLS 拒绝，**整批 insert 一起失败 → 本人始终没有成员记录** → 读写持续 403
+- **修复**：
+  1. **前端**：私聊创建成员改为**分别 upsert**，先保证本人是成员（`onConflict:'room_id,user_id'`、自我行永不阻塞），对方行单独 upsert 且失败静默。这样非房主打开既存私聊时能自愈补回自己成员身份
+  2. **RLS**：`chat_messages_insert` 的 `WITH CHECK` 增加 `OR is_room_creator(room_id, app_user_id())`，与读取策略对齐，房主即使无成员记录也可发消息
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/vendor/katex/dist/*` | 新增：KaTeX@0.16.9 本地静态资源（js/css/fonts/contrib） |
+| `public/vendor/suneditor/dist/*` | 新增：SunEditor@2.45.1 本地静态资源（js/css） |
+| `public/index.html` | SunEditor/KaTeX 引用改本地同源；KaTeX 加载器简化为同源顺序加载；私聊成员改分别 upsert 自愈 |
+| `supabase-migration.sql` | `chat_messages_insert` 增加 `is_room_creator` 分支（幂等，可重跑） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] CDN 引用无残留（`suneditor@` / `katex@0.16.9` / 旧变量均无）
+- [x] 本地 vendor 文件齐全（katex 81 文件含 fonts、suneditor js/css）
+- [ ] 部署后刷新页面确认 KaTeX（公式）与 SunEditor（富文本）正常渲染、不再报 CORS/local-address-space 错误
+- [ ] 部署后在 Supabase SQL Editor 重跑一次 `supabase-migration.sql`（幂等）；实测：两个账号互开私聊，非房主也能正常收发消息、不出现 403
+
+---
+
 ## v5.10 — 2026-08-21
 
 ### 变更：Supabase 全部 SQL 整合为单一文件

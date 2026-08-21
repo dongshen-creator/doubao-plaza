@@ -785,6 +785,7 @@ CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT TO authenticate
     app_user_id() = sender_id
     AND (
       is_channel_public(room_id)
+      OR is_room_creator(room_id, app_user_id())
       OR EXISTS (SELECT 1 FROM chat_room_members WHERE room_id = chat_messages.room_id AND user_id = app_user_id())
     )
   );
