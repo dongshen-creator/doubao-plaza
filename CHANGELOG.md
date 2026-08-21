@@ -4,6 +4,35 @@
 
 ---
 
+## v5.9 — 2026-08-21
+
+### 变更：修复重复发送 + 大幅降低会话接收延迟
+
+#### 一、bug1 修复：连按发送键重复发送
+- **根因**：`sendChatMsg` 是 async 函数，内部挂起（`await`）期间首次调用还没执行到禁用按钮，第二次调用又进入，导致重复插入消息
+- **修复**：拆分外层 `sendChatMsg`（加发送锁 `window.__sendingMsg`）+ 内层 `doSendChatMsg`（实际逻辑）。外层用 `try/finally` 保证锁必然释放，发送期间任何后续 Enter/点击直接忽略
+
+#### 二、bug2 修复：会话接收延迟高（基本 1 分钟收到一次）
+- **根因**：消息到达依赖 Realtime 实时推送为主，但后台标签页/Realtime 断连时消息只能靠轮询兜底；而 v5.8 把轮询降到 后台 60s / 空闲 20s，导致后台期间消息延迟飙到近一分钟
+- **修复**：
+  1. **轮询频率回调到 活跃 5s / 空闲 15s / 后台 30s**（兼顾实时性与算力），Realtime 正常时近实时、失效时兜底也在几秒内
+  2. **切回前台立即补拉**：`visibilitychange` 监听，页面由隐藏转可见且聊天打开时立刻触发 `pollNewMessages()`，避免后台丢失的消息要等最长 30s
+  3. **Realtime 与轮询互补**：`handleRealtimeMessage` 收到新消息时重置轮询空闲计数为 0，让轮询保持活跃快速档
+  4. **DB 侧加固 Realtime**：`chat_messages`、`chat_reactions` 设置 `REPLICA IDENTITY FULL`（幂等），确保 UPDATE/DELETE 的 postgres_changes 拿到完整旧行正确广播（编辑/撤回/删除实时同步）
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `supabase-migration.sql` | `chat_messages`/`chat_reactions` 加 `REPLICA IDENTITY FULL`（幂等） |
+| `public/index.html` | 发送锁防重（`sendChatMsg`+`doSendChatMsg`）；轮询频率 5/15/30s；前台补拉（visibilitychange）；Realtime 收到消息重置空闲计数 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 5 个内联 `<script>` 块 `node --check` 语法检查通过（0 错误）
+- [ ] 部署后实测：同一聊天快速连续按 Enter → 只发送一条；两个账号群聊互发消息，前台应近实时收到（秒级），后台切回前台立即补拉（部署后补）
+
+---
+
 ## v5.8 — 2026-08-21
 
 ### 变更：调低聊天消息轮询频率（节省算力，实时性不受影响）

@@ -325,6 +325,11 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- V5.9：聊天表设置 replica identity FULL，保证 postgres_changes 的 UPDATE/DELETE 能拿到完整旧行正确广播（幂等）
+-- 群聊实时性依赖 Realtime 推送，此设置确保编辑/撤回/删除等变更也能实时同步到所有客户端
+ALTER TABLE chat_messages REPLICA IDENTITY FULL;
+ALTER TABLE chat_reactions REPLICA IDENTITY FULL;
+
 -- ===== 20. 消息自动清理（7天保留 + pg_cron 定时任务）=====
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 

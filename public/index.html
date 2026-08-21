@@ -7832,6 +7832,8 @@ function handleRealtimeMessage(roomId, msg) {
   {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
+    // V5.9：Realtime 收到新消息时重置轮询空闲计数，让轮询保持活跃快速档（Realtime 与轮询互为补充）
+    chatState._pollIdleCount = 0;
     var room = chatState.rooms.find(r => r.id === roomId);
     if (!room) {
       room = {
@@ -8031,7 +8033,22 @@ async function sendChatMsg() {
   const input = document.getElementById('chatInput');
   const content = input.value.trim();
   if (!content || !chatState.currentRoomId) return;
+  // V5.9 修复：发送期间加锁，防止连续快速按 Enter / 快速点击发送导致内容被重复发送
+  if (window.__sendingMsg) return;
+  window.__sendingMsg = true;
+  try {
+    await doSendChatMsg(content, input);
+  } catch(e) {
+    console.warn('[SEND] 发送异常:', e);
+    var sendErrBtn = document.getElementById('chatSendBtn');
+    if (sendErrBtn) sendErrBtn.disabled = false;
+    toast('发送异常，请重试', 'error');
+  } finally {
+    window.__sendingMsg = false;
+  }
+}
 
+async function doSendChatMsg(content, input) {
   await window.__ensureSupabaseSession();
   const room = chatState.rooms.find(function(r) { return r.id === chatState.currentRoomId; });
   const btn = document.getElementById('chatSendBtn');
@@ -8418,21 +8435,30 @@ async function pollNewMessages() {
       }
     } catch(e) { console.warn('[CHAT-POLL] pollNewMessages error:', e); }
   }
-  // 自适应轮询：群聊对话以 Realtime 实时推送为主，轮询仅作兜底，放慢以节省算力
-  // 活跃（刚收到消息/正在聊天）8s 后再查；连续 3 次无新消息放慢到 20s
-  // 页面不可见时进一步降低到 60s，减少 Supabase 请求
+  // 自适应轮询：Realtime 实时推送为主，轮询作兜底（后台标签页/Realtime 断连时兜底保证不丢消息）
+  // V5.9：频率回调以降低延迟（活跃 5s / 空闲 15s / 后台 30s），兼顾算力消耗
   if (gotNew) { chatState._pollIdleCount = 0; }
   else { chatState._pollIdleCount = (chatState._pollIdleCount || 0) + 1; }
   var nextInterval;
-  if (document.hidden) { nextInterval = 60000; } // 后台标签页 60s
-  else if (chatState._pollIdleCount >= 3) { nextInterval = 20000; } // 空闲 20s
-  else { nextInterval = 8000; } // 活跃 8s
+  if (document.hidden) { nextInterval = 30000; } // 后台标签页 30s
+  else if (chatState._pollIdleCount >= 3) { nextInterval = 15000; } // 空闲 15s
+  else { nextInterval = 5000; } // 活跃 5s
   messagePollTimer = setTimeout(pollNewMessages, nextInterval);
 }
 
 function startMessagePolling() {
   stopMessagePolling();
-  messagePollTimer = setTimeout(pollNewMessages, 8000);
+  messagePollTimer = setTimeout(pollNewMessages, 5000);
+  // V5.9：切回前台（visibilitychange）立即补拉一次，避免后台期间 Realtime 断连丢失的消息要等最长 30s
+  if (!window.__pollVisibilityBound) {
+    window.__pollVisibilityBound = true;
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && currentUser && chatState.chatOpen && chatState.currentRoomId) {
+        if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
+        pollNewMessages();
+      }
+    });
+  }
 }
 
 function startUnreadPolling() {
