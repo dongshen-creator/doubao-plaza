@@ -287,8 +287,15 @@ DO $$ BEGIN
 END $$;
 
 -- ===== 18. 未读计数触发器 =====
+-- V5.12 修复：函数标记 SECURITY DEFINER。该触发器会为「房间内除发件人外的其他成员」写入未读计数，
+-- 若以调用者（发件人）身份执行，收紧后的 chat_unread_insert 策略（app_user_id() = user_id）会拦截
+-- 对接收方 user_id 行的写入，导致发消息整体失败（new row violates RLS for chat_unread）。
 CREATE OR REPLACE FUNCTION increment_unread()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   INSERT INTO chat_unread (room_id, user_id, count, last_event_id)
   SELECT NEW.room_id, m.user_id, 1, NEW.event_id
@@ -298,7 +305,7 @@ BEGIN
   DO UPDATE SET count = chat_unread.count + 1, last_event_id = NEW.event_id;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trigger_unread_increment ON chat_messages;
 CREATE TRIGGER trigger_unread_increment

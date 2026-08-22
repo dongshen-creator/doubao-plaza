@@ -4,6 +4,27 @@
 
 ---
 
+## v5.12 — 2026-08-22
+
+### 变更：修复发消息再次失败（new row violates RLS for table "chat_unread"）
+
+- **现象**：上线后发消息报 `发送失败（new row violates row-level security policy for table "chat_unread"）`
+- **根因**：`increment_unread()` 触发器会在 `chat_messages` 插入后，为「房间内除发件人外的其他成员」往 `chat_unread` 写未读计数（用户那行 `user_id` = 接收方）。该触发器此前未声明 `SECURITY DEFINER`，因此以调用者（发件人）身份执行；而收紧后的 `chat_unread_insert` 策略要求 `app_user_id() = user_id`，对接收方行的写入被 RLS 拦截 → 触发器抛错 → **整条 `chat_messages` INSERT 回滚 → 发消息失败**（前几版此处策略为 `(true)`，故未暴露）
+- **修复**：将 `increment_unread()` 声明为 `SECURITY DEFINER SET search_path = public, pg_temp`（信任的内部触发器逻辑，仅按成员关系递增未读计数，绕过 RLS 限制，符合其作为系统自动记账的定位）
+- **注意**：DB 改动需在 Supabase SQL Editor 重跑本迁移脚本后生效
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `supabase-migration.sql` | `increment_unread()` 加 `SECURITY DEFINER SET search_path`（幂等，可重跑） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [ ] 重跑迁移后，发送私聊/群聊消息不再报 chat_unread 的 RLS 违规
+- [ ] 接收方能看到未读计数 +1（触发器恢复自动记账）
+
+---
+
 ## v5.11 — 2026-08-21
 
 ### 变更：解决 CDN 资源被拦截 + 修复私聊收发消息持续 403
