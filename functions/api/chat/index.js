@@ -2,6 +2,10 @@
 // 聊天消息由前端直连 Supabase (Realtime + 轮询)，本接口仅保留 D1 元数据操作：
 // channel-members / kick-member / delete-conversation / cleanup-messages
 
+// V5.13 安全修复：kick-member / delete-conversation 此前信任客户端传入的 user_id，
+// 任何人可冒充管理员踢人或删除频道（越权漏洞）。现改为从 Bearer 会话 token 提取身份。
+import { getAuthUserId } from '../_lib/jwt.js';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { 'Content-Type': 'application/json' }
@@ -67,8 +71,9 @@ export async function onRequest(context) {
     const resolvedAction = action || body.action || '';
 
     if (method === 'GET' && resolvedAction === 'channel-members') return await handleChannelMembers(env, url);
-    if (method === 'POST' && resolvedAction === 'kick-member') return await handleKickMember(env, body);
-    if (method === 'POST' && resolvedAction === 'delete-conversation') return await handleDeleteConversation(env, body);
+    // V5.13：写操作统一走会话鉴权（user_id 以 token 身份为准，不再信任 body）
+    if (method === 'POST' && resolvedAction === 'kick-member') return await handleKickMember(env, body, request);
+    if (method === 'POST' && resolvedAction === 'delete-conversation') return await handleDeleteConversation(env, body, request);
     if (method === 'POST' && resolvedAction === 'cleanup-messages') return await handleCleanupMessages(env, body);
 
     return json({ error: '未知操作' }, 400);
@@ -93,9 +98,12 @@ async function handleChannelMembers(env, url) {
 }
 
 // ── 踢出成员（前端 kickMember 调用） ──
-async function handleKickMember(env, body) {
-  const { user_id, room_id, target_user_id } = body;
-  if (!user_id || !room_id || !target_user_id) return json({ error: '参数不完整' });
+// V5.13：身份从会话 token 提取；未登录一律拒绝
+async function handleKickMember(env, body, request) {
+  const { room_id, target_user_id } = body;
+  const user_id = await getAuthUserId(env, request);
+  if (!user_id) return json({ error: '请先登录' }, 401);
+  if (!room_id || !target_user_id) return json({ error: '参数不完整' });
   const role = await isAdminOrCreator(env, room_id, user_id);
   if (!role) return json({ error: '只有频道创建者和管理员可以踢人' });
   const room = await env.DB.prepare("SELECT created_by FROM chat_rooms WHERE id=?").bind(room_id).first();
@@ -111,9 +119,12 @@ async function handleKickMember(env, body) {
 }
 
 // ── 删除会话/退出频道（前端 deleteConversation 调用） ──
-async function handleDeleteConversation(env, body) {
-  const { user_id, room_id } = body;
-  if (!user_id || !room_id) return json({ error: '参数不完整' });
+// V5.13：身份从会话 token 提取；未登录一律拒绝
+async function handleDeleteConversation(env, body, request) {
+  const { room_id } = body;
+  const user_id = await getAuthUserId(env, request);
+  if (!user_id) return json({ error: '请先登录' }, 401);
+  if (!room_id) return json({ error: '参数不完整' });
   const room = await env.DB.prepare("SELECT * FROM chat_rooms WHERE id=?").bind(room_id).first();
   if (!room) return json({ error: '房间不存在' });
   const member = await env.DB.prepare("SELECT id FROM chat_room_members WHERE room_id=? AND user_id=?").bind(room_id, user_id).first();

@@ -388,6 +388,8 @@
     <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填，最多500字）" rows="3" maxlength="500" style="resize:vertical"></textarea><div class="form-hint">最多500字</div></div>
     <!-- V11 修复：Turnstile 人机验证 -->
     <div class="form-group" id="turnstileContainer" style="display:none"><div class="form-label">人机验证</div><div id="turnstileWidget"></div><input type="hidden" id="turnstileToken"></div>
+    <!-- V5.13：蜜罐字段（防批量注册）——正常用户不可见，机器人自动填表会填入，后端直接拒绝 -->
+    <div style="position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden" aria-hidden="true"><label for="regWebsite">网站</label><input type="text" id="regWebsite" name="website" tabindex="-1" autocomplete="off"></div>
     <button type="submit" class="btn btn-orange btn-full">注册</button>
     </form>
     <p style="text-align:center;font-size:13px;color:var(--text-faint);margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:var(--accent);font-weight:600">去登录</a></p>
@@ -534,7 +536,9 @@ function toast(message, type = 'success') {
   const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<span>${icons[type]}</span><span style="flex:1">${message}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
+  // V5.13 安全加固：message 统一转义（380+ 调用点全部为纯文本，部分拼接服务端错误信息，
+  // 错误串可能回显用户可控内容，原样 innerHTML 存在 XSS 风险）
+  el.innerHTML = `<span>${icons[type]}</span><span style="flex:1">${esc(message)}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
   container.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
@@ -1479,6 +1483,41 @@ function removeDeviceLogin(userId) {
   }
 
 // ===== Register =====
+// V5.13 新增：注册防滥用——PoW 工作量证明求解。
+// 向 /api/users/register-challenge 取挑战，本地穷举 nonce 使 SHA-256(challenge:nonce)
+// 有 difficulty 个前导零位。批量注册者每号都要支付真实算力，与 IP 无关，抗 Tor/代理轮换。
+function countLeadingZeroBits(u8) {
+  var bits = 0;
+  for (var i = 0; i < u8.length; i++) {
+    var b = u8[i];
+    if (b === 0) { bits += 8; continue; }
+    for (var j = 7; j >= 0; j--) { if (b & (1 << j)) return bits; bits++; }
+  }
+  return bits;
+}
+
+async function solveRegisterPow() {
+  var res = await fetch('/api/users/register-challenge').then(function(r) { return r.json(); });
+  if (!res || !res.success) throw new Error((res && res.error) || '获取注册验证失败，请重试');
+  if (res.data && res.data.disabled) return null; // 服务端 PoW 未启用（表未创建），跳过
+  var d = res.data || {};
+  if (!d.token || !d.challenge || !d.difficulty) throw new Error('注册验证数据异常，请重试');
+  var encoder = new TextEncoder();
+  var nonce = 0;
+  var startTs = Date.now();
+  while (true) {
+    var digest = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(d.challenge + ':' + nonce)));
+    if (countLeadingZeroBits(digest) >= d.difficulty) {
+      return { token: d.token, nonce: String(nonce) };
+    }
+    nonce++;
+    // 20 秒仍未解出（极慢设备）→ 放弃并提示重试
+    if (nonce % 20000 === 0 && Date.now() - startTs > 20000) {
+      throw new Error('注册验证耗时过长，请重试');
+    }
+  }
+}
+
 async function doRegister() {
   const name = document.getElementById('regName').value.trim();
   const password = document.getElementById('regPassword').value;
@@ -1497,6 +1536,18 @@ async function doRegister() {
   // 获取设备指纹（失败不阻止注册）
   const fingerprint = await getDeviceFingerprint();
 
+  // V5.13：防批量注册——蜜罐字段 + PoW 工作量证明（首次约 1~3 秒，仅注册时执行一次）
+  var honeypot = (document.getElementById('regWebsite') || {}).value || '';
+  errEl.innerHTML = '<div class="form-hint" style="margin-bottom:8px">🔐 正在进行注册安全验证（约需 1~3 秒）…</div>';
+  var pow = null;
+  try {
+    pow = await solveRegisterPow();
+  } catch (ePow) {
+    errEl.innerHTML = '<div class="form-error">' + esc(ePow.message || '注册安全验证失败，请重试') + '</div>';
+    return;
+  }
+  errEl.innerHTML = '';
+
   // V11 修复：获取 Turnstile token（配置了站点密钥时才校验）
   var turnstileToken = '';
   if (TURNSTILE_SITE_KEY) {
@@ -1507,7 +1558,7 @@ async function doRegister() {
   try {
     const res = await api('/api/users', {
       method: 'POST',
-      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio, device_fingerprint: fingerprint, turnstile_token: turnstileToken }),
+      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio, device_fingerprint: fingerprint, turnstile_token: turnstileToken, pow_token: pow ? pow.token : '', pow_nonce: pow ? pow.nonce : '', website: honeypot }),
     });
 
     if (res.success) {
@@ -1583,9 +1634,14 @@ function startOnlineNotify() {
   // V5.7：10 秒轮询（原 30 秒）降低上线提醒延迟；页面重新可见时立即补查一次
   pollOnlineNotify();
   _onlineNotifyTimer = setInterval(pollOnlineNotify, 10000);
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) pollOnlineNotify();
-  });
+  // V5.13 修复：监听器只绑定一次（原先每次调用 startOnlineNotify（如重新登录）都会重复 addEventListener，
+  // 导致多次重复补查/弹窗）
+  if (!window.__onlineNotifyVisBound) {
+    window.__onlineNotifyVisBound = true;
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) pollOnlineNotify();
+    });
+  }
   subscribePresenceRealtime();
 }
 
@@ -2118,55 +2174,16 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
   // 记录正在打开的目标，支持中断
   chatState._openingTarget = friendId;
 
-  // 隐藏欢迎卡片、搜索结果和顶部标题栏（聊天界面自带头部）
+  // V5.13 优化：先立即渲染聊天界面外壳（原先要等「查找房间 + 创建房间」全部完成才渲染，
+  // 查找是逐房间串行成员查询（N+1），私聊多的用户点击「发起私聊」后界面卡住数秒，无法快速发起）
   var welcome = document.getElementById('friendsWelcomeCard');
   var searchR = document.getElementById('searchResults');
   var headerBar = document.getElementById('friendsViewHeaderBar');
   if (welcome) welcome.style.display = 'none';
   if (searchR) searchR.style.display = 'none';
   if (headerBar) headerBar.style.display = 'none';
-
-  // 查找或创建私聊房间
-  var roomId;
-  const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
-  if (chatState._openingTarget !== friendId) return; // 被新点击中断
-  if (myMemberships?.length) {
-    const myRoomIds = myMemberships.map(m => m.room_id);
-    const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
-    if (privateRooms?.length) {
-      for (const pr of privateRooms) {
-        const { data: other } = await __SB.from('chat_room_members').select('user_id').eq('room_id', pr.id).neq('user_id', currentUser.id).maybeSingle();
-        if (other?.user_id === friendId) { roomId = pr.id; break; }
-      }
-    }
-  }
-  if (chatState._openingTarget !== friendId) return; // 被新点击中断
-  if (!roomId) {
-    const sortedIds = [currentUser.id, friendId].sort();
-    roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
-    // V5.2 修复：房间用 upsert 避免并发/历史残留导致的 UNIQUE 冲突；
-    // 成员用「本人+房主」可用的一次性插入（RLS 已同步放宽），并检查错误，
-    // 避免成员缺失导致私聊发不出消息、刷新读不到记录
-    var memA = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id };
-    var memB = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId };
-    var { error: roomErr } = await __SB.from('chat_rooms').upsert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null }, { onConflict: 'id' });
-    if (roomErr) {
-      console.error('创建私聊房间失败:', roomErr);
-    } else {
-      // V5.11 修复：分别 upsert 成员，先保证本人是成员。原批量 insert 在「房间非本人创建」时，
-      // 对方行会被成员 RLS 拒绝并导致整批失败 → 本人始终无成员记录 → 发消息/读消息持续 403。
-      if (currentUser.id && roomId) {
-        await __SB.from('chat_room_members').upsert(memA, { onConflict: 'room_id,user_id' }).catch(function(e){ console.error('私聊本人成员写入失败:', e); });
-      }
-      await __SB.from('chat_room_members').upsert(memB, { onConflict: 'room_id,user_id' }).catch(function(){});
-    }
-  }
-
-  if (chatState._openingTarget !== friendId) return; // 被新点击中断
-
   // 移动端关闭侧边栏抽屉
   if (isMobile()) closeMobilePanels();
-
   // 在私聊区域渲染聊天界面
   var area = document.getElementById('privateChatArea');
   if (area) {
@@ -2182,12 +2199,12 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
               <div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(friendName)}</div>
               <div style="font-size:11px;color:var(--text-faint)">${isFriend ? '私聊' : '非好友私聊 · 对方回复前只能发一条'}</div>
             </div>
-            <button onclick="showPrivateChatMenu('${roomId}')" title="设置" aria-label="设置" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">⚙️</button>
+            <button id="privateChatMenuBtn" title="设置" aria-label="设置" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1">⚙️</button>
           </div>
           <div class="chat-view-body" id="chatMsgs">
             <div class="chat-empty-inline" id="chatEmpty">
               <div style="font-size:36px;margin-bottom:8px">💬</div>
-              <div>开始与 ${esc(friendName)} 的对话</div>
+              <div>正在打开会话…</div>
             </div>
           </div>
           <div id="chatReplyBar" class="chat-reply-bar" style="display:none">
@@ -2210,20 +2227,87 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
   }
 
   chatState.chatOpen = true;
+
+  // 查找或创建私聊房间（V5.13 优化：批量查询，见函数说明）
+  var roomId = await findOrCreatePrivateRoom(friendId, friendName);
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
+
+  // 确保内存中有该会话的最小房间对象（新私聊首次打开时 loadRoomList 尚未完成，避免渲染/未读逻辑空指针）
+  var _roomObj = chatState.rooms.find(function(r) { return r.id === roomId; });
+  if (!_roomObj) {
+    _roomObj = {
+      id: roomId, type: 'private', name: friendName || '', unread: 0, member_count: 0,
+      other: { id: friendId, name: friendName || '用户', avatar: '', doubao_id: '' },
+      mute_notifications: false, is_admin: false, created_by: '', created_at: ''
+    };
+    chatState.rooms.push(_roomObj);
+  }
   chatState.currentRoomId = roomId;
+  // 设置聊天设置按钮（渲染外壳时 roomId 尚未知，此处补绑）
+  var menuBtn = document.getElementById('privateChatMenuBtn');
+  if (menuBtn) menuBtn.onclick = function() { showPrivateChatMenu(roomId); };
+  // 立即订阅 Realtime + 启动轮询（不等历史消息加载完成）
+  subscribeToRoom(roomId);
+  startMessagePolling();
   // 立即清除该好友的红点（同步更新内存，不等 markRead 的异步回调）
-  var _roomToClear = chatState.rooms.find(function(r) { return r.id === roomId; });
-  if (_roomToClear) _roomToClear.unread = 0;
+  _roomObj.unread = 0;
   markRead(roomId);
   loadMyFriends(); // 刷新好友列表，移除该好友的红点
   loadTempChats().catch(function(){}); // 同时刷新临时私聊列表
-  await loadRoomList();
-  if (chatState._openingTarget !== friendId) return; // 被新点击中断
+  // V5.13 优化：先 await 历史消息（用户最关心），会话列表刷新放后台不阻塞
   await loadMessages(roomId);
+  if (chatState._openingTarget !== friendId) return; // 被新点击中断
   updateNonFriendChatStatus(roomId, friendName);
-  subscribeToRoom(roomId);
-  startMessagePolling();
+  loadRoomList().catch(function(e) { console.warn('openPrivateChat loadRoomList:', e); });
   chatState._openingChat = false;
+}
+
+// V5.13 新增：查找或创建与目标用户的私聊房间。
+// 查找阶段由原来的「逐房间串行查询成员（N+1）」改为 3 次固定查询 + 内存配对；
+// 会话列表缓存中已有的私聊直接复用，零查询。
+async function findOrCreatePrivateRoom(friendId, friendName) {
+  // 快速路径：会话列表缓存中已有与该用户的私聊
+  var cached = (chatState.rooms || []).find(function(r) {
+    return r.type === 'private' && r.other && r.other.id === friendId;
+  });
+  if (cached) return cached.id;
+
+  const { data: myMemberships } = await __SB.from('chat_room_members').select('room_id').eq('user_id', currentUser.id);
+  if (myMemberships?.length) {
+    const myRoomIds = myMemberships.map(m => m.room_id);
+    const { data: privateRooms } = await __SB.from('chat_rooms').select('id').in('id', myRoomIds).eq('type', 'private');
+    if (privateRooms?.length) {
+      // 仅查询这些私聊房间的成员（私聊房间只有 2 名成员，结果集很小），内存配对
+      const pIds = privateRooms.map(pr => pr.id);
+      const { data: members } = await __SB.from('chat_room_members').select('room_id,user_id').in('room_id', pIds);
+      var membersByRoom = {};
+      (members || []).forEach(function(m) {
+        (membersByRoom[m.room_id] = membersByRoom[m.room_id] || []).push(m.user_id);
+      });
+      for (const pr of privateRooms) {
+        var ids = membersByRoom[pr.id] || [];
+        if (ids.indexOf(friendId) >= 0 && ids.indexOf(currentUser.id) >= 0) return pr.id;
+      }
+    }
+  }
+  // 不存在则创建（确定性 ID：双方 user_id 排序拼接）
+  const sortedIds = [currentUser.id, friendId].sort();
+  const roomId = 'private_' + sortedIds[0] + '_' + sortedIds[1];
+  // V5.2 修复：房间用 upsert 避免并发/历史残留导致的 UNIQUE 冲突；
+  // V5.11 修复：成员分别 upsert（原批量 insert 在「房间非本人创建」时对方行会被 RLS 拒绝导致整批失败）
+  var memA = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), room_id: roomId, user_id: currentUser.id };
+  var memB = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'b', room_id: roomId, user_id: friendId };
+  var { error: roomErr } = await __SB.from('chat_rooms').upsert({ id: roomId, type: 'private', created_by: currentUser.id, name: friendName || null }, { onConflict: 'id' });
+  if (roomErr) {
+    console.error('创建私聊房间失败:', roomErr);
+  } else {
+    // V5.13 优化：两个成员写入并行执行（原先串行 await）
+    await Promise.all([
+      __SB.from('chat_room_members').upsert(memA, { onConflict: 'room_id,user_id' }).catch(function(e){ console.error('私聊本人成员写入失败:', e); }),
+      __SB.from('chat_room_members').upsert(memB, { onConflict: 'room_id,user_id' }).catch(function(){})
+    ]);
+  }
+  return roomId;
 }
 
 // 更新非好友私聊状态：对方回复后解除限制，更新头部提示
@@ -3929,7 +4013,8 @@ function blogShowLatexPreview() {
   modal.className = 'modal-overlay';
   modal.style.cssText = 'display:flex;z-index:10000';
   modal.innerHTML =
-    '<div class="modal-box" style="max-width:800px;width:90%;max-height:85vh;display:flex;flex-direction:column">' +
+    // V5.13 修复：改用已有样式的 .modal 类。原 .modal-box 全项目无定义 → 弹窗背景透明，预览内容与页面混在一起
+    '<div class="modal" style="max-width:800px;width:90%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;padding:0">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border-color);flex-shrink:0">' +
         '<span style="font-size:15px;font-weight:600">👁 文章预览（含LaTeX渲染）</span>' +
         '<button onclick="document.getElementById(\'blogLatexPreviewModal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-faint);padding:4px 8px">✕</button>' +
@@ -7668,19 +7753,15 @@ function renderReplyBlock(eventId, roomId) {
 }
 
 function subscribeToRoom(roomId) {
-  if (!chatState._subDebounce) chatState._subDebounce = {};
-  var now = Date.now();
-  var last = chatState._subDebounce[roomId] || 0;
-  chatState._subDebounce[roomId] = now;
-  var oldCh = chatState.sbChannels[roomId];
-  if (oldCh) {
-    oldCh._closingIntentionally = true;
-    try { oldCh.unsubscribe(); } catch(e) {}
-    if (oldCh._subTime && now - oldCh._subTime < 10000 && oldCh.state !== 'closed') {
-      oldCh._closingIntentionally = false;
-      chatState.sbChannels[roomId] = oldCh;
-      return;
-    }
+  // V5.13 优化：已处于 joined 状态的频道直接复用，不再退订重订。
+  // 原先每次切换会话 / loadRoomList 刷新都会先 unsubscribe 再重建同名频道，
+  // 重订握手窗口期内到达的消息只能等 5~15s 轮询兜底，造成消息延迟尖峰，
+  // 且移动端弱网下频繁重订更容易失败。仅在频道确实不可用（errored/closed/joining 卡住）时才重建。
+  var existing = chatState.sbChannels[roomId];
+  if (existing && existing.state === 'joined') return;
+  if (existing) {
+    existing._closingIntentionally = true;
+    try { existing.unsubscribe(); } catch(e) {}
   }
   const channel = __SB
     .channel('room:' + roomId)
@@ -7718,15 +7799,17 @@ function subscribeToRoom(roomId) {
       })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') channel._subTime = Date.now();
-      if (status === 'CLOSED' && !channel._closingIntentionally && chatState.chatOpen) {
+      // V5.13 修复：除 CLOSED 外，CHANNEL_ERROR / TIMED_OUT（移动端弱网切后台常见）也自动重订，
+      // 原先这两种状态不会触发重订，断流后只能靠轮询兜底
+      if ((status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !channel._closingIntentionally && chatState.chatOpen) {
         setTimeout(function() {
-          if (chatState.sbChannels[roomId] === channel && channel.state === 'closed') {
+          if (chatState.sbChannels[roomId] === channel && channel.state !== 'joined') {
             subscribeToRoom(roomId);
           }
         }, 3000);
       }
     });
-  channel._subTime = now;
+  channel._subTime = Date.now();
   channel._closingIntentionally = false;
   chatState.sbChannels[roomId] = channel;
 }
@@ -8437,10 +8520,39 @@ function startMessagePolling() {
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden && currentUser && chatState.chatOpen && chatState.currentRoomId) {
         if (messagePollTimer) { clearTimeout(messagePollTimer); messagePollTimer = null; }
+        ensureRealtimeAlive(); // V5.13：回前台先确保 Realtime 连接/频道存活，再补拉
         pollNewMessages();
       }
     });
   }
+}
+
+// V5.13 优化：回前台时确保 Realtime 连接存活。
+// 移动端切后台后 WebSocket 常被系统挂起/杀掉，若 SDK 自动重连未及时完成或频道卡在 errored/closed，
+// 消息推送会静默断流（只能等轮询兜底）。回前台时主动 connect()（已连接则为 no-op）并重订不可用频道。
+function ensureRealtimeAlive() {
+  if (!window.__SB || !__SB.realtime) return;
+  try {
+    if (!__SB.realtime.isConnected() && typeof __SB.realtime.connect === 'function') {
+      __SB.realtime.connect();
+    }
+    if (typeof __SB.realtime.getChannels === 'function') {
+      (__SB.realtime.getChannels() || []).forEach(function(ch) {
+        if (ch.state === 'joined' || ch.state === 'joining') return;
+        // topic 形如 room:<id> 的房间频道：走 subscribeToRoom 重建（带去抖）；其他频道直接重订
+        var m = /^room:(.+)$/.exec(ch.topic);
+        if (m) {
+          if (chatState.sbChannels[m[1]] === ch) {
+            delete chatState.sbChannels[m[1]];
+            try { ch.unsubscribe(); } catch(e) {}
+            subscribeToRoom(m[1]);
+          }
+        } else if (ch.state === 'errored' || ch.state === 'closed') {
+          try { ch.subscribe(); } catch(e) {}
+        }
+      });
+    }
+  } catch(e) {}
 }
 
 function startUnreadPolling() {

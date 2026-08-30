@@ -33,7 +33,60 @@ async function verifyPassword(password, stored) {
     keyMaterial, 256
   );
   const computedHash = Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, '0')).join('');
-  return computedHash === storedHash;
+  // V5.13 修复：恒定时间比较，防止时序侧信道泄露哈希前缀
+  if (computedHash.length !== storedHash.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computedHash.length; i++) {
+    diff |= computedHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+// V5.13 修复：登录暴力破解防护（原先密码可无限次试错）
+// 失败尝试记录在 login_attempts 表（首次使用自动创建，与 recover.js 的 password_recovery_attempts 同一模式）：
+// 同 IP 15 分钟内最多 10 次失败、同账号 15 分钟内最多 5 次失败
+async function ensureLoginAttemptsTable(env) {
+  try {
+    await env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS login_attempts (
+        id TEXT PRIMARY KEY,
+        identifier TEXT,
+        ip_address TEXT,
+        success INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`
+    ).run();
+    await env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)`
+    ).run();
+    await env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_login_attempts_ident ON login_attempts(identifier, created_at)`
+    ).run();
+    return true;
+  } catch (e) {
+    console.warn('[LOGIN] login_attempts 表创建失败:', e.message);
+    return false;
+  }
+}
+
+// 检查是否被锁定；并顺带清理 1 天前的旧记录（10% 概率触发）
+async function isLoginLocked(env, identifier, clientIP) {
+  try {
+    const ipFails = await env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM login_attempts WHERE ip_address = ? AND success = 0 AND created_at > datetime('now', '-15 minutes')`
+    ).bind(clientIP).first();
+    if (ipFails && ipFails.cnt >= 10) return true;
+    const identFails = await env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM login_attempts WHERE identifier = ? AND success = 0 AND created_at > datetime('now', '-15 minutes')`
+    ).bind(identifier).first();
+    if (identFails && identFails.cnt >= 5) return true;
+    if (Math.random() < 0.1) {
+      env.DB.prepare(`DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')`).run().catch(() => {});
+    }
+    return false;
+  } catch (e) {
+    return false; // 表异常不阻塞登录
+  }
 }
 
 async function checkAndUpdatePunishment(env, userId) {
@@ -70,9 +123,27 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '请输入账号和密码' });
     }
 
+    const clientIP = context.request.headers.get('CF-Connecting-IP')
+      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+      || 'unknown';
+
+    // V5.13：暴力破解防护——失败过多直接锁定（先于密码校验，避免给爆破者做算力）
+    const tableReady = await ensureLoginAttemptsTable(env);
+    if (tableReady && await isLoginLocked(env, String(identifier), clientIP)) {
+      return Response.json({ success: false, error: '登录尝试过于频繁，请 15 分钟后再试' });
+    }
+
     const user = await env.DB.prepare(
       `SELECT * FROM users WHERE (doubao_id = ? OR agent_url = ?)`
     ).bind(identifier, identifier).first();
+
+    // 记录尝试（失败场景）；成功场景在下方标记 success=1
+    const attemptId = generateToken().slice(0, 24);
+    if (tableReady) {
+      env.DB.prepare(
+        `INSERT INTO login_attempts (id, identifier, ip_address, success) VALUES (?, ?, ?, 0)`
+      ).bind(attemptId, String(identifier).slice(0, 200), clientIP).run().catch(() => {});
+    }
 
     if (!user) {
       return Response.json({ success: false, error: '账号或密码错误' });
@@ -81,6 +152,10 @@ export async function onRequestPost(context) {
     const valid = await verifyPassword(password, user.password);
     if (!valid) {
       return Response.json({ success: false, error: '账号或密码错误' });
+    }
+
+    if (tableReady) {
+      env.DB.prepare(`UPDATE login_attempts SET success = 1 WHERE id = ?`).bind(attemptId).run().catch(() => {});
     }
 
     // 如果是旧版明文密码，登录成功后升级为 PBKDF2 哈希
@@ -101,9 +176,6 @@ export async function onRequestPost(context) {
     // 签发 Supabase JWT（用于 RLS 鉴权）
     const supabaseToken = await signSupabaseJWT(user.id, env);
 
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
     const userAgent = context.request.headers.get('User-Agent') || '';
 
     await env.DB.prepare(

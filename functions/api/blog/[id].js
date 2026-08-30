@@ -196,8 +196,22 @@ export async function onRequestPut(context) {
       params.push(sanitizeHtml(summary));
     }
     if (cover_image !== undefined) {
-      updates.push('cover_image = ?');
-      params.push(cover_image || null);
+      // V5.13 安全加固：封面图协议白名单（http/https），拦截 javascript:/data: 等危险协议
+      if (cover_image && String(cover_image).trim()) {
+        try {
+          const cu = new URL(String(cover_image).trim());
+          if (cu.protocol !== 'http:' && cu.protocol !== 'https:') {
+            return jsonResponse({ success: false, error: '封面图链接必须以 http:// 或 https:// 开头' });
+          }
+          updates.push('cover_image = ?');
+          params.push(String(cover_image).trim());
+        } catch {
+          return jsonResponse({ success: false, error: '封面图链接格式不正确' });
+        }
+      } else {
+        updates.push('cover_image = ?');
+        params.push(null);
+      }
     }
     if (tags !== undefined) {
       updates.push('tags = ?');

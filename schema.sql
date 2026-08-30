@@ -317,3 +317,15 @@ CREATE TABLE IF NOT EXISTS blog_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_blog_notif_user ON blog_notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_blog_notif_post ON blog_notifications(post_id);
+
+-- ============================================================
+-- V5.13 新增：注册防滥用（PoW 挑战记录表）
+-- 用于注册工作量证明的「单次有效 + 最短填写时间」校验，详见 functions/api/_lib/pow.js
+-- 已有数据库需重跑本 schema.sql（幂等，CREATE IF NOT EXISTS 不影响现有数据）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS register_challenges (
+  id TEXT PRIMARY KEY,
+  used INTEGER DEFAULT 0,
+  issued_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_register_challenges_issued ON register_challenges(issued_at);

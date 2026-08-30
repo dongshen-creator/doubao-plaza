@@ -749,6 +749,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .online-notify .online-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-bg);flex-shrink:0}
 .online-notify.out{opacity:0;transform:translateX(30px);transition:opacity .3s,transform .3s}
 @keyframes onlineNotifyIn{from{opacity:0;transform:translateX(30px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}
+/* V5.13 修复：移动端(<768px)活动栏变为底部 TabBar（fixed bottom、z-index:100、高 56px+安全区），
+   弹窗此前位于 bottom:20px/z-index:99，正好整块被 TabBar 盖住导致移动端看不见；
+   现上移到 TabBar 之上并加高层级，宽度改两侧留白自适应 */
+@media (max-width: 767px) {
+  .online-notify-container{bottom:calc(64px + env(safe-area-inset-bottom, 0));left:16px;right:16px;max-width:none;z-index:105}
+}
 
 /* ── 动画 ── */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}

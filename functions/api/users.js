@@ -6,6 +6,7 @@
 // (注销见 /api/users/[id].js)
 
 import { signSupabaseJWT, generateToken } from './_lib/jwt.js';
+import { verifyChallenge, consumeChallenge, isTorExitIP } from './_lib/pow.js';
 
 // 校验是否为合法的 http(s) 链接（豆包智能体链接或创作视频链接等均可）
 function isValidHttpUrl(url) {
@@ -175,8 +176,8 @@ export async function onRequestGet(context) {
     }
 
     const results = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, pat_suffix, privacy_setting, created_at 
-       FROM users ${whereClause} ORDER BY created_at DESC`
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, pat_suffix, privacy_setting, created_at
+       FROM users ${whereClause} ORDER BY created_at DESC LIMIT 500`
     ).bind(...params).all();
 
     return Response.json({ success: true, data: results.results });
@@ -197,7 +198,19 @@ export async function onRequestPost(context) {
   try {
     const { env } = context;
     const body = await context.request.json().catch(() => ({}));
-    const { name, password, doubao_id, agent_url, avatar, bio, device_fingerprint, turnstile_token } = body;
+    const { name, password, doubao_id, agent_url, avatar, bio, device_fingerprint, turnstile_token, pow_token, pow_nonce, website } = body;
+
+    // V5.13 修复：蜜罐字段——隐藏输入框正常用户不可见不会填写，机器人自动填表会填入，直接拒绝
+    if (website && String(website).trim() !== '') {
+      return Response.json({ success: false, error: '注册失败，请刷新页面重试' });
+    }
+
+    // V5.13：防批量注册——PoW 工作量证明校验（只读校验；挑战消耗在落库前原子执行，
+    // 保证「昵称重复」等校验失败后用户无需重新解题，重试体验不受影响）
+    const powResult = await verifyChallenge(env, pow_token, pow_nonce);
+    if (!powResult.ok) {
+      return Response.json({ success: false, error: powResult.error });
+    }
 
     // V11 修复：Turnstile 人机验证（配置了 TURNSTILE_SECRET 时强制校验）
     const clientIP = context.request.headers.get('CF-Connecting-IP')
@@ -259,6 +272,12 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '该网络注册过于频繁，请 1 小时后再试' });
     }
 
+    // V5.13：Tor 出口节点拦截——洋葱网络批量注册的直接出口 IP 来自 Tor 出口列表，
+    // 命中即拒（列表 D1 缓存 6 小时，拉取失败自动放行，不影响正常注册；env.BLOCK_TOR_REGISTRATION='off' 可关闭）
+    if (await isTorExitIP(env, clientIP)) {
+      return Response.json({ success: false, error: '检测到匿名代理网络，请使用常规网络注册' });
+    }
+
     // IP 总数限制：同 IP 最多注册 10 个账号（防止批量注册）
     const totalRegs = await env.DB.prepare(
       `SELECT COUNT(*) as cnt FROM users WHERE registered_ip = ?`
@@ -287,6 +306,11 @@ export async function onRequestPost(context) {
     if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
 
     const regUA = context.request.headers.get('User-Agent') || '';
+
+    // V5.13：所有校验通过、即将落库——原子消耗 PoW 挑战（单次有效，防重放）
+    if (powResult.id && !(await consumeChallenge(env, powResult.id))) {
+      return Response.json({ success: false, error: '注册验证已使用，请刷新页面重试' });
+    }
 
     // 创建用户（ID由数据库自动生成）；主页链接为空时存 NULL
     const hashedPassword = await hashPassword(password);

@@ -254,6 +254,25 @@ export async function onRequestPost(context) {
     const isDev = await isDeveloper(env, authUserId);
     const postStatus = isDev ? 'published' : 'pending';
 
+    // V5.13：每日投稿限制——普通用户每个自然日（北京时间）最多提交 1 篇新文章送审。
+    // 例外：开发者不受限；修改已发布/送审中的文章走 PUT /api/blog/[id]，不经过本入口，天然不受影响；
+    // 状态为 rejected（被驳回）的文章不计入名额（送审未成功占用，允许当天改投新篇）。
+    // 前端绕过无效：本限制在服务端强制执行。
+    if (!isDev) {
+      const todayCount = await env.DB.prepare(
+        `SELECT COUNT(*) as cnt FROM blog_posts
+         WHERE author_id = ?
+           AND date(created_at, '+8 hours') = date('now', '+8 hours')
+           AND status != 'rejected'`
+      ).bind(authUserId).first();
+      if (todayCount && todayCount.cnt >= 1) {
+        return jsonResponse({
+          success: false,
+          error: '每位用户每天最多投稿 1 篇文章（今日已投稿），明天再来吧；已发布的文章可随时修改'
+        }, 429);
+      }
+    }
+
     // 处理 category_id：若提供则校验分类是否存在
     let categoryIdValue = null;
     if (category_id !== undefined && category_id !== null &&
@@ -270,6 +289,20 @@ export async function onRequestPost(context) {
       }
     }
 
+    // V5.13 安全加固：封面图协议白名单（http/https），拦截 javascript:/data: 等危险协议
+    let safeCoverImage = null;
+    if (cover_image && String(cover_image).trim()) {
+      try {
+        const cu = new URL(String(cover_image).trim());
+        if (cu.protocol !== 'http:' && cu.protocol !== 'https:') {
+          return jsonResponse({ success: false, error: '封面图链接必须以 http:// 或 https:// 开头' });
+        }
+        safeCoverImage = String(cover_image).trim();
+      } catch {
+        return jsonResponse({ success: false, error: '封面图链接格式不正确' });
+      }
+    }
+
     // 净化 HTML 内容
     const cleanTitle = sanitizeHtml(title);
     const cleanContent = sanitizeHtml(content);
@@ -282,7 +315,7 @@ export async function onRequestPost(context) {
       `INSERT INTO blog_posts (title, content, summary, cover_image, tags, author_id, author_name, author_avatar, author_doubao_id, status, category_id, reject_reason)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')`
     ).bind(
-      cleanTitle, cleanContent, cleanSummary, cover_image || null, tagsStr,
+      cleanTitle, cleanContent, cleanSummary, safeCoverImage, tagsStr,
       user.id, user.name, user.avatar || null, user.doubao_id || null,
       postStatus, categoryIdValue
     ).run();

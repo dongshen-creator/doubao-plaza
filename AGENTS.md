@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v4.11，2026-08-04）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v5.13，2026-08-30）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `migrate-developers.sql` / `d1-cleanup.sql` — D1 增量数据库脚本

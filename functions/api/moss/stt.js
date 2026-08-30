@@ -57,6 +57,27 @@ export async function onRequestPost(context) {
       }
       const model = formData.get('model') || 'moss-transcribe';
       const response_format = formData.get('response_format') || 'json';
+      const engine = String(formData.get('engine') || 'moss');
+
+      // 本地渠道（MOSS-Transcribe-Diarize）：音频直传本机 8101（仅本机 wrangler dev 可达）
+      if (engine === 'local') {
+        const localUrl = env?.LOCAL_ASR_URL || 'http://127.0.0.1:8101';
+        const lfd = new FormData();
+        lfd.append('file', file, file.name || 'recording.webm');
+        const lres = await fetch(`${localUrl}/transcribe`, {
+          method: 'POST', body: lfd, signal: AbortSignal.timeout(60000),
+        }).catch((e) => ({ localError: e.message }));
+        if (lres && !lres.localError && lres.ok) {
+          const ld = await lres.json().catch(() => ({}));
+          if (ld && ld.ok) {
+            return jsonResponse({ success: true, text: ld.text || '', segments: ld.segments || [] });
+          }
+        }
+        return jsonResponse({
+          success: false, error: '本地 ASR 不可用（服务未启动或非本机环境）',
+          detail: (lres?.localError || `HTTP ${lres?.status}`).slice(0, 200),
+        }, 502);
+      }
 
       // 重新组装 multipart，避免透传前端不可信的表单字段
       const out = new FormData();

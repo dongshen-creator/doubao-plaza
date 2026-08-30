@@ -3,21 +3,15 @@
 // 使用方式：POST /api/proxy，Header 中带 X-Target-URL 指定目标地址
 // Coze 支持：X-Coze-Session 头会自动转为 Cookie: db_session=<value>
 
-// ===== 预置 API 密钥（存储在后端，前端不暴露）=====
-// 优先使用 Cloudflare 环境变量，回退到硬编码值
-// 如需更换密钥：在 Cloudflare Pages 设置 → Environment Variables 中添加 NVIDIA_API_KEY
-const PRESET_KEYS = {
-  // NVIDIA NIM API Key
-  nvidia: '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'
-};
-
-// 根据目标 URL 获取预置密钥（匹配域名）
+// V5.13 安全修复：移除硬编码预置密钥（密钥提交在代码中会被任何能读取源码的人滥用，且开放代理
+// 无鉴权会导致密钥被盗刷）。预置密钥只从 Cloudflare 环境变量 NVIDIA_API_KEY 读取；
+// 未配置环境变量时不注入密钥，用户需自带 key 调用。
 function getPresetApiKey(targetUrl, env) {
   try {
     const hostname = new URL(targetUrl).hostname;
     // NVIDIA NIM
     if (hostname === 'integrate.api.nvidia.com') {
-      return env?.NVIDIA_API_KEY || PRESET_KEYS.nvidia;
+      return env?.NVIDIA_API_KEY || null;
     }
     return null;
   } catch {

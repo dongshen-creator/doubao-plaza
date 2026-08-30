@@ -4,6 +4,87 @@
 
 ---
 
+## v5.13 — 2026-08-30
+
+### 变更：移动端上线弹窗修复 + 消息实时提速 + 防批量注册 + 多项安全加固
+
+#### 一、修复：移动端上线弹窗看不见
+- **根因**：移动端（<768px）`.activity-bar` 会变成底部 TabBar（`position:fixed; bottom:0; z-index:100`，高 56px+安全区），而上线提醒弹窗容器 `.online-notify-container` 位于 `bottom:20px; z-index:99` —— 弹窗整块落在 TabBar 区域内且层级更低，**被 TabBar 完全盖住**，移动端永远看不见（桌面端无 TabBar 不受影响）
+- **修复**：`style.css` 新增移动端媒体查询——弹窗上移至 TabBar 之上（`bottom:calc(64px + env(safe-area-inset-bottom))`），左右各 16px 自适应满宽，层级提升到 105
+- 顺带修复：`startOnlineNotify` 每次调用（如重新登录）都重复 `addEventListener('visibilitychange')`，改为只绑定一次，避免重复补查/重复弹窗
+
+#### 二、优化：消息实时响应速度
+1. **`subscribeToRoom` 频道复用**：原先每次切换会话/`loadRoomList` 刷新都会**先退订再重建**同名 Realtime 频道，重订握手窗口期内到达的消息只能等 5~15s 轮询兜底，造成延迟尖峰；且移动端弱网下频繁重订更易失败。现改为「已处于 joined 状态的频道直接复用」，仅频道不可用（errored/closed）时才重建
+2. **断线自动重订补全**：订阅回调原先只处理 `CLOSED`，`CHANNEL_ERROR`/`TIMED_OUT`（移动端切后台弱网常见）不会触发重订，断流后只能靠轮询。现三种状态都会在 3 秒后自动重订
+3. **回前台实时恢复**：新增 `ensureRealtimeAlive()`——页面转可见时若 Realtime WebSocket 已断开则主动 `connect()`（幂等）并重订所有非 joined 状态的房间频道，与既有的「前台立即补拉」形成互补
+
+#### 三、修复：新建对话（开启私聊）无法快速发起
+- **根因**：`openPrivateChatInFriends` 要等「查找房间 → 创建房间」全部完成才渲染聊天界面；而查找既有私聊是**逐房间串行查询成员（N+1）**，私聊多的用户点击「发起私聊」后界面卡住数秒
+- **修复**：
+  1. 点击后**立即渲染聊天界面外壳**（显示「正在打开会话…」），房间查找/创建与历史消息加载并行在后
+  2. 查找改为 3 次固定查询 + 内存配对（新函数 `findOrCreatePrivateRoom`）：会话列表缓存命中零查询；未命中时 1 次成员查询 + 1 次私聊房间查询 + 1 次成员批量查询，替代 N+1
+  3. 房间不存在时创建：两个成员 upsert 改并行（原先串行）
+  4. `loadRoomList()`（重接口）不再阻塞消息加载，移到后台执行；订阅 Realtime 与轮询提前到 `loadMessages` 之前启动
+
+#### 四、新增：小肥羊讲堂每日限投一篇
+- **规则**：普通用户每个自然日（北京时间）最多提交 **1 篇**新文章送审；**开发者不受限**；**修改已发布/送审中的文章**走 `PUT /api/blog/[id]`，不经过创建入口，天然不受影响；被驳回（rejected）的文章不计入当日名额（送审未成功占用，允许当天改投新篇）
+- **实现**：`POST /api/blog` 服务端强制校验（`date(created_at,'+8 hours') = date('now','+8 hours')` 且 status != 'rejected' 计数 ≥1 拒绝，HTTP 429），前端绕过无效；超限返回明确提示
+
+#### 五、修复：博客预览弹窗透明
+- **根因**：`blogShowLatexPreview` 预览弹窗使用了 `.modal-box` 类，但**全项目不存在该样式定义**（样式化弹窗类是 `.modal`）→ 弹窗背景透明，预览内容与页面混在一起几乎不可读
+- **修复**：改用 `.modal` 类（`background:var(--modal-bg)`），并固定头部、内容区独立滚动
+
+#### 六、新增：防批量注册机制（抗 Tor / 动态 IP）
+原防护（同 IP 频率限制 + 设备指纹一机一号）对洋葱网络/轮换代理基本无效：换 IP 即绕过，Tor 浏览器每次会话指纹随机化。本次新增四层防护（核心思路：**用真实算力成本而非 IP 身份防批量**）：
+1. **PoW 工作量证明（核心）**：注册前前端向 `GET /api/users/register-challenge` 取挑战，本地穷举 nonce 使 `SHA-256(challenge:nonce)` 有 20 个前导零位（约 1~3 秒/次），注册请求携带 `pow_token + pow_nonce` 服务端验证（HMAC-SHA256 签名防篡改难度/过期）。批量注册者每注册一号都需支付真实算力，**与 IP 无关**。难度可通过环境变量 `REGISTER_POW_DIFFICULTY`（16~22）调整，密钥用 `REGISTER_POW_SECRET`（未配置则自动生成持久化到 D1）
+2. **挑战单次有效 + 时间窗**：新 D1 表 `register_challenges`（schema.sql 已加，幂等可重跑）记录签发时间：15 分钟过期、签发后 <2 秒提交直接拒（脚本秒回即暴露）、原子消耗防重放；挑战先只读校验、落库前才消耗，保证「昵称重复」等校验失败后重试**无需重新解题**
+3. **Tor 出口节点拦截**：对照 torproject 官方出口 IP 列表（D1 缓存 6 小时、拉取失败自动放行），命中拒绝注册；可用环境变量 `BLOCK_TOR_REGISTRATION=off` 关闭
+4. **蜜罐字段**：注册表单隐藏输入框（屏幕外），机器人自动填表会填入，后端直接拒绝
+- 兼容性：`register_challenges` 表未创建（未重跑 schema.sql）时整套 PoW 自动降级放行，不影响正常注册
+
+#### 七、安全审查与修复
+| # | 位置 | 问题 | 修复 |
+|---|------|------|------|
+| 1 | `functions/api/proxy.js` | **硬编码 NVIDIA API Key**（源码泄露即密钥泄露，且开放代理无鉴权可被盗刷） | 移除硬编码回退值，仅从环境变量 `NVIDIA_API_KEY` 读取；未配置时不注入，用户自带 key |
+| 2 | `functions/api/users/login.js` | **登录无暴力破解防护**（密码可无限试错）+ 哈希比较非常量时间 | 新增 `login_attempts` 表（首次自动创建）：同 IP 15 分钟 10 次失败、同账号 15 分钟 5 次失败即锁定；比较改恒定时间（与 recover.js 同实现） |
+| 3 | `functions/api/chat/index.js` | **越权（IDOR）**：`kick-member`/`delete-conversation` 信任客户端传入的 `user_id`，任何人可冒充管理员踢人或删除频道 | 身份改为从 Bearer 会话 token 提取（`getAuthUserId`），未登录拒绝，body 中的 user_id 不再采信 |
+| 4 | `functions/cdn-assets/[[key]].js` | R2 文件按扩展名回 Content-Type，缺 `nosniff`；SVG 可内嵌脚本（存储型 XSS 面） | 统一加 `X-Content-Type-Options: nosniff`；`image/svg+xml`/`text/html` 强制 `Content-Disposition: attachment` + CSP sandbox |
+| 5 | `functions/api/features.js` | 功能卡 `link_url`/`icon_url` 无协议校验（可存 `javascript:` URL） | POST/PUT 均加 http(s) 协议白名单 |
+| 6 | `functions/api/blog.js` / `blog/[id].js` | 封面图 `cover_image` 无协议校验 | POST/PUT 均加 http(s) 协议白名单（遵循 AGENTS.md 规则 6） |
+| 7 | `public/index.html` | `toast()` 消息未转义直接 innerHTML（380+ 调用点，部分拼接可能回显用户内容的服务端错误串） | 统一 `esc(message)` 转义（全部调用点均为纯文本，已核查无依赖 HTML 的调用） |
+| 8 | `public/_headers` | CSP 残留 4 个已不使用的 CDN 域（v5.11 自托管后 unpkg/cdnjs/staticfile/bootcdn 已无引用） | script-src/script-src-elem/style-src-elem/font-src 移除多余 CDN 域，仅保留 jsdelivr（FingerprintJS/tavern 依赖）；补 `worker-src 'self' blob:` |
+| 9 | `functions/api/users.js` | 用户搜索接口无结果集上限（全表扫 + 全量返回） | 增加 `LIMIT 500` 上限 |
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/style.css` | 移动端 `.online-notify-container` 上移至 TabBar 之上 + 层级 105 + 满宽自适应 |
+| `public/index.html` | 上线提醒 visibilitychange 只绑一次；`subscribeToRoom` 频道复用 + 三态重订；`ensureRealtimeAlive` 前台重连；私聊立即渲染 + `findOrCreatePrivateRoom` 批量查询；博客预览弹窗 `.modal-box`→`.modal`；注册 PoW 求解器 + 蜜罐字段；`toast()` 转义 |
+| `public/_headers` | CSP 收窄 + worker-src |
+| `functions/api/_lib/pow.js` | **新增**：PoW 签发/验证/消耗 + Tor 出口列表缓存拦截 |
+| `functions/api/users/register-challenge.js` | **新增**：GET 签发注册 PoW 挑战 |
+| `functions/api/users.js` | 注册接 PoW/蜜罐/Tor 校验 + 挑战原子消耗；搜索 LIMIT 500 |
+| `functions/api/users/login.js` | 登录暴力破解锁定 + 恒定时间比较 |
+| `functions/api/chat/index.js` | kick/delete 越权修复（会话鉴权） |
+| `functions/api/features.js` | link_url/icon_url 协议白名单 |
+| `functions/api/blog.js` | 每日限投一篇（服务端强制）+ cover_image 校验 |
+| `functions/api/blog/[id].js` | cover_image 校验 |
+| `functions/cdn-assets/[[key]].js` | nosniff + SVG/HTML 强制下载 |
+| `schema.sql` | 新增 `register_challenges` 表 + 索引（幂等可重跑） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 全部修改文件 `node --check` 语法通过（index.html 5 个内联脚本块、9 个 Function 文件）；CSS 花括号配平
+- [ ] Supabase 无本版本改动（如未执行过 v5.12 的迁移脚本则仍需重跑 `supabase-migration.sql`）；D1 无需手动操作——`register_challenges`/`site_settings` 表在首次注册验证时自动创建（幂等），重跑 `schema.sql` 亦可
+- [ ] 移动端（<768px 宽度）实测：另一账号上线时弹窗出现在底部 TabBar 上方且完整可见
+- [ ] 实测私聊：注册 PoW 约 1~3 秒（手机端可能 2~5 秒）后注册成功；同一昵称注册失败后修改昵称重试**不要求重新解题**
+- [ ] 实测普通用户当天第 2 篇博客送审被拒（429 提示），修改已发布文章不受影响；开发者发多篇不受影响
+- [ ] 博客编辑器「👁 预览」弹窗背景为卡片色（不透明），暗色模式下正常
+- [ ] 私聊快速发起：点击「发起私聊」后界面立即出现，消息秒级到达（Realtime 正常时）；弱网切后台再回前台消息自动补拉
+- [ ] 若 NVIDIA 密钥原先依赖硬编码回退值：部署前需在 Cloudflare Pages 环境变量配置 `NVIDIA_API_KEY`，否则 NIM 预置密钥通道停用（用户自带 key 不受影响）
+
+---
+
 ## v5.12 — 2026-08-22
 
 ### 变更：修复发消息再次失败（new row violates RLS for table "chat_unread"）

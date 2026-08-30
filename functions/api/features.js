@@ -31,6 +31,18 @@ async function isDeveloper(env, userId) {
   return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
 }
 
+// V5.13 安全加固：链接协议白名单（http/https），拦截 javascript:/data: 等危险协议
+// （link_url 渲染为 <a href>、icon_url 渲染为 <img src>，恶意协议可造成 XSS）
+function isSafeHttpUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const u = new URL(url.trim());
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export async function onRequestGet(context) {
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
@@ -78,6 +90,13 @@ export async function onRequestPost(context) {
 
     if (!title || !link_url) {
       return Response.json({ success: false, error: '标题和链接不能为空' });
+    }
+    // V5.13：协议白名单校验
+    if (!isSafeHttpUrl(link_url)) {
+      return Response.json({ success: false, error: '链接必须以 http:// 或 https:// 开头' });
+    }
+    if (icon_url && !isSafeHttpUrl(icon_url)) {
+      return Response.json({ success: false, error: '图标链接必须以 http:// 或 https:// 开头' });
     }
     const created_by = authUserId;
 
@@ -131,6 +150,13 @@ export async function onRequestPut(context) {
 
     if (!title || !link_url) {
       return Response.json({ success: false, error: '标题和链接不能为空' });
+    }
+    // V5.13：协议白名单校验
+    if (!isSafeHttpUrl(link_url)) {
+      return Response.json({ success: false, error: '链接必须以 http:// 或 https:// 开头' });
+    }
+    if (icon_url && !isSafeHttpUrl(icon_url)) {
+      return Response.json({ success: false, error: '图标链接必须以 http:// 或 https:// 开头' });
     }
 
     await env.DB.prepare(
