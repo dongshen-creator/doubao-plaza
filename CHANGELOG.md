@@ -4,6 +4,52 @@
 
 ---
 
+## v5.14 — 2026-08-31
+
+### 变更：前端企业级体验优化（消息本地缓存 + 增量渲染 + 未读提示 + 全局健壮性 + 依赖自托管）
+
+基于「企业级聊天网站」目标的前端性能/体验专项优化（在 v5.13 基础上，本版本同时承载了本次 10 项优化审计中的多项已落地改动）。
+
+#### 一、消息本地缓存（本次重点，sessionStorage 按房间）
+- **背景**：原先每次切换会话 / 重新进入会话都会重新拉取服务端最近 200 条消息，网络耗时 + 白屏等待；弱网 / 短时断线时更是打不开历史。
+- **实现**：
+  1. 新增缓存读写辅助（`getMsgCache` / `setMsgCache` / `clearMsgCache` / `restoreMsgCache`），键前缀 `dp_msg_cache_v1_`，有效期 6 小时，只缓存轻量字段（event_id/sender/content/ts 等，不带 reactions）
+  2. `switchRoom` / `openChatByRoomId`：内存没有时先从 `sessionStorage` 恢复缓存 → **即时渲染（秒开）** → 再后台静默刷新最新消息；会话内已实时收的新消息与缓存合并去重按时间排序
+  3. 所有写入点同步维护缓存：`loadMessages`、`loadOlderMessages`（加载更多）、`pollNewMessages`（轮询增量）、Realtime 收到新消息、撤回/编辑（`handleRealtimeUpdate`）、全部发送路径（文本/图片/视频/文件/分享工具/分享名片/分享频道）、发送失败回滚
+  4. 失效清理：清空服务端记录、单方面清理本地、移除私聊、删除会话/频道、离开频道、被请离频道——全部同步清除对应缓存
+  5. 缓存与「本地清理时间戳」（`dp_local_cleared`）联动：已清理过的房间不会把清理前的历史从缓存里复活
+- **收益**：会话切换即时渲染、弱网断线仍可看最近历史、减少 200 条重复拉取
+
+#### 二、消息列表增量渲染（避免全量重绘闪烁）
+- 新增 `appendNewMessages(roomId, newMsgs)`：新消息到达时用 `insertAdjacentHTML('beforeend')` 增量追加单条消息节点并注入日期分隔符（复检），不再整列 `innerHTML` 重建
+- 应用于：发送消息乐观添加、轮询增量合并；条件不满足（有编辑/撤回/分页等）时自动回退全量渲染，保证不丢渲染
+
+#### 三、未读标题 + favicon 红点
+- 新增 `updateTitleUnread(total)`：合并各会话/频道未读数后标题变为 `(N) 逗包用户广场`；favicon 动态叠加红色角标（data-URI，恢复时保留原始 favicon）；未读数归零自动恢复
+
+#### 四、全局错误兜底 + 离线横幅
+- `unhandledrejection` 全局兜底（console 提示，避免未捕获 Promise 异常白屏）；`offline`/`online` 事件驱动顶部网络状态横幅，恢复联网自动补拉消息 + 刷新会话列表
+
+#### 五、第三方依赖自托管（防 CDN DNS 污染 / local-address-space 拦截）
+- FingerprintJS 从 jsdelivr CDN 改为自托管 `/vendor/fingerprintjs/fp.min.js`（浏览器指纹用于防批量注册）
+- SunEditor（博客富文本编辑器）改为按需懒加载：首屏不再阻塞，进入博客编辑器时才动态加载，并支持加载失败提示
+- KaTeX 数学公式渲染改为 `requestIdleCallback` 空闲期加载（`timeout: 3000` 兜底），避免首屏卡顿
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | v5.14 全部前端改动：消息缓存读写/恢复/失效、`appendNewMessages` 增量渲染、`updateTitleUnread` 标题/favicon 红点、全局错误与离线横幅、SunEditor/KaTeX 懒加载、FingerprintJS 自托管引用 |
+| `public/vendor/fingerprintjs/fp.min.js` | **新增**：FingerprintJS 4.5.1 自托管文件 |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] `node --check` 语法验证：index.html 全部 5 个内联脚本块通过
+- [x] 消息缓存逻辑走查：所有 `chatState.messages[...]` 写入点均联动缓存写入或失效清理；删除/清空/离开/被踢场景缓存同步移除
+- [ ] 浏览器实测：切会话秒开（缓存命中）、断网切会话仍显示最近历史、发送/撤回后重进会话缓存一致
+- [ ] 数据库：本版本无 D1/Supabase 改动
+
+---
+
 ## v5.13 — 2026-08-30
 
 ### 变更：移动端上线弹窗修复 + 消息实时提速 + 防批量注册 + 多项安全加固

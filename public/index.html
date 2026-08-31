@@ -17,9 +17,8 @@
   <meta property="og:locale" content="zh_CN">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
-  <!-- SunEditor 富文本编辑器（本地静态资源） -->
-  <link href="/vendor/suneditor/dist/css/suneditor.min.css" rel="stylesheet">
-  <script src="/vendor/suneditor/dist/suneditor.min.js"></script>
+  <!-- SunEditor 富文本编辑器（本地静态资源，按需懒加载，见 ensureSunEditorLoaded） -->
+  <link rel="preload" href="/vendor/suneditor/dist/suneditor.min.js" as="script">
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
   <script>
@@ -48,36 +47,44 @@
       document.head.appendChild(s);
     }
 
-    // 同源本地资源，顺序加载主库 → auto-render
-    loadScript(katexLibs[0], function() {
-      console.log('[LaTeX] KaTeX 主库加载成功');
-      loadScript(katexLibs[1], function() {
-        console.log('[LaTeX] auto-render 加载成功');
-        window.__katexReady = true;
-        window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
-        window.__katexCallbacks = [];
+    // V5.14 优化：KaTeX 主库延迟到浏览器空闲/首次交互后再加载，避免 ~800KB 阻塞首屏解析渲染。
+    // window.onKatexReady 注册机制仍即时生效（回调会被排队），消息里出现公式时再触发也不晚。
+    function startKatexLoad() {
+      loadScript(katexLibs[0], function() {
+        console.log('[LaTeX] KaTeX 主库加载成功');
+        loadScript(katexLibs[1], function() {
+          console.log('[LaTeX] auto-render 加载成功');
+          window.__katexReady = true;
+          window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
+          window.__katexCallbacks = [];
+        }, function() {
+          console.error('[LaTeX] auto-render 本地加载失败');
+          window.__katexReady = true;
+          window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
+          window.__katexCallbacks = [];
+        });
       }, function() {
-        console.error('[LaTeX] auto-render 本地加载失败');
+        console.error('[LaTeX] KaTeX 本地主库加载失败');
+        // 兜底：标记失败，强制执行等待中的回调，避免回调永久排队
+        window.__katexFailed = true;
         window.__katexReady = true;
-        window.__katexCallbacks.forEach(function(cb) { try { cb(); } catch(e) {} });
+        var cbs = window.__katexCallbacks;
         window.__katexCallbacks = [];
+        cbs.forEach(function(cb) { try { cb(); } catch(e) {} });
+        setTimeout(function() {
+          try {
+            if (typeof toast === 'function') {
+              toast('公式渲染组件加载失败，LaTeX 公式将以源码显示', 'error');
+            }
+          } catch(e) {}
+        }, 1500);
       });
-    }, function() {
-      console.error('[LaTeX] KaTeX 本地主库加载失败');
-      // 兜底：标记失败，强制执行等待中的回调，避免回调永久排队
-      window.__katexFailed = true;
-      window.__katexReady = true;
-      var cbs = window.__katexCallbacks;
-      window.__katexCallbacks = [];
-      cbs.forEach(function(cb) { try { cb(); } catch(e) {} });
-      setTimeout(function() {
-        try {
-          if (typeof toast === 'function') {
-            toast('公式渲染组件加载失败，LaTeX 公式将以源码显示', 'error');
-          }
-        } catch(e) {}
-      }, 1500);
-    });
+    }
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(function() { startKatexLoad(); }, { timeout: 3000 });
+    } else {
+      setTimeout(startKatexLoad, 500);
+    }
 
     // 全局回调注册函数
     window.onKatexReady = function(cb) {
@@ -86,8 +93,8 @@
     };
   })();
   </script>
-  <!-- FingerprintJS 开源版 -->
-  <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
+  <!-- FingerprintJS 开源版（V5.14 本地自托管，规避外部 CDN 被 local address space 拦截） -->
+  <script src="/vendor/fingerprintjs/fp.min.js" defer></script>
   <script src="supabase-sdk.js?v=2"></script>
   <script>
     (function () {
@@ -720,6 +727,8 @@ async function patUser(targetUserId, targetUserName, targetSuffix) {
       sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '',
       content, reply_to: null, ts: Date.now()
     }];
+    // V5.14 私聊发送后同步写入缓存
+    setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
     renderMessages(chatState.currentRoomId);
   }
 }
@@ -1088,6 +1097,43 @@ var siteSettings = { maintenance_mode: 'off', migration_mode: 'off' };
 async function init() {
   // V6b 修复：清除旧的 PicGo key（不再存储在 localStorage）
   localStorage.removeItem('dp_picgo_key');
+
+  // V5.14 优化：全局错误/离线兜底（只绑定一次，捕获未处理 Promise 拒绝 + 网络状态提示）
+  if (!window.__globalErrBound) {
+    window.__globalErrBound = true;
+    window.addEventListener('unhandledrejection', function(ev) {
+      var reason = ev && ev.reason;
+      var msg = reason && (reason.message || reason.error || String(reason)) || '';
+      if (/supabase|jwt|expired|network|fetch failed|failed to fetch/i.test(String(msg))) {
+        console.warn('[GLOBAL] 未处理的网络/鉴权错误已捕获:', msg);
+      } else {
+        console.warn('[GLOBAL] unhandledrejection:', msg);
+      }
+      ev.preventDefault && ev.preventDefault();
+    });
+    var updateNetBanner = function(online) {
+      var banner = document.getElementById('netStatusBanner');
+      if (online) {
+        if (banner) banner.remove();
+        return;
+      }
+      if (banner) return;
+      banner = document.createElement('div');
+      banner.id = 'netStatusBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:#FEF2F2;color:#991B1B;text-align:center;padding:8px 12px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.08)';
+      banner.textContent = '网络已断开，部分功能暂时不可用。恢复连接后将自动刷新…';
+      document.body.appendChild(banner);
+    };
+    window.addEventListener('offline', function() { updateNetBanner(false); });
+    window.addEventListener('online', function() {
+      updateNetBanner(true);
+      // 恢复连接后立即补拉关键数据
+      if (currentUser && chatState.chatOpen && chatState.currentRoomId) {
+        if (typeof pollNewMessages === 'function') pollNewMessages();
+      }
+      if (typeof loadRoomList === 'function') { try { loadRoomList(); } catch(e) {} }
+    });
+  }
 
   // 拉取站点设置（维护模式 / 迁移模式）
   try {
@@ -3771,84 +3817,14 @@ function blogShowEditor(container, postId) {
       '</div>' +
     '</div>';
 
-  // 初始化 SunEditor
+  // 初始化 SunEditor（先确保本地按需加载完成）
   var textarea = document.getElementById('blogContentTextarea');
   if (textarea && typeof SUNEDITOR !== 'undefined') {
-    var se = SUNEDITOR.create(textarea, {
-      height: '400px',
-      minHeight: '300px',
-      maxHeight: '800px',
-      width: '100%',
-      resizingBar: true,
-      showPathLabel: true,
-      resizeEnable: true,
-      buttonList: [
-        ['undo', 'redo'],
-        ['font', 'fontSize', 'formatBlock'],
-        ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
-        ['fontColor', 'hiliteColor', 'textStyle'],
-        ['removeFormat'],
-        ['indent', 'outdent'],
-        ['align', 'horizontalRule', 'list', 'lineHeight'],
-        ['blockquote', 'paragraphStyle'],
-        ['table', 'link', 'image', 'video'],
-        ['fullScreen', 'showBlocks', 'codeView'],
-        ['print']
-      ],
-      font: ['Arial', 'Courier New', 'Georgia', 'Microsoft YaHei', 'SimSun', 'Tahoma', 'Times New Roman', 'Verdana'],
-      fontSize: [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32],
-      fontSizeUnit: 'px',
-      lineHeights: [
-        {text: '1', value: 1},
-        {text: '1.15', value: 1.15},
-        {text: '1.5', value: 1.5},
-        {text: '2', value: 2},
-        {text: '2.5', value: 2.5},
-        {text: '3', value: 3}
-      ],
-      formats: ['p', 'div', 'blockquote', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-      placeholder: '开始写作...',
-      charCounter: true,
-      charCounterType: 'byte-html',
-      charCounterLabel: '字数',
-      imageResizing: true,
-      imageHeightLimit: 500,
-      imageWidthLimit: 800,
-      onChange: function() { blogScheduleDraftSave(); },
-      onImageUpload: function(files, info, core) {
-        // 阻止本地文件上传，提示用户使用图床
-        toast('请勿直接上传图片。请先上传到图床（如 Nickyam、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
-        if (window.__blogSunEditor && window.__blogSunEditor.core) {
-          try { window.__blogSunEditor.core.initImageSelect(); } catch(e) {}
-        }
-      },
-      toolbarWidth: '100%',
-      attributes: { style: 'font-size:15px;line-height:1.8;text-align:left' }
-    });
-    window.__blogSunEditor = se;
-    blogState.editorState.sunEditor = se;
+    initBlogSunEditor(textarea);
   } else if (textarea) {
-    // SunEditor 未加载，显示纯文本编辑器作为降级方案
-    textarea.style.display = '';
-    textarea.style.width = '100%';
-    textarea.style.height = '400px';
-    textarea.style.padding = '12px';
-    textarea.style.border = '1px solid var(--border)';
-    textarea.style.borderRadius = '8px';
-    textarea.style.background = 'var(--bg-card)';
-    textarea.style.color = 'var(--text-primary)';
-    textarea.style.fontSize = '14px';
-    textarea.style.resize = 'vertical';
-    textarea.style.fontFamily = 'inherit';
-    textarea.placeholder = '编辑器加载中...如果长时间无响应请刷新页面';
-    textarea.addEventListener('input', blogScheduleDraftSave);
-    // 降级模式下 getContents/setContents 使用 textarea.value
-    window.__blogSunEditor = {
-      getContents: function() { return textarea.value; },
-      getText: function() { return textarea.value; },
-      setContents: function(html) { textarea.value = html; },
-      destroy: function() {}
-    };
+    ensureSunEditorLoaded(function() {
+      initBlogSunEditor(textarea);
+    });
   }
 
   // 表单字段变化时自动保存草稿（防抖 2s）
@@ -3872,6 +3848,122 @@ function blogShowEditor(container, postId) {
   } else if (isEdit) {
     blogLoadPostForEdit(postId);
   }
+}
+
+// SunEditor 按需懒加载：仅在打开博客编辑器时才注入 CSS/JS，避免阻塞首屏（V5.14 优化）
+var _sunEditorLoaded = false;
+var _sunEditorCallbacks = [];
+function ensureSunEditorLoaded(cb) {
+  if (typeof SUNEDITOR !== 'undefined') { _sunEditorLoaded = true; if (cb) cb(); return; }
+  if (_sunEditorLoaded) { if (cb) cb(); return; }
+  _sunEditorCallbacks.push(cb);
+  if (_sunEditorCallbacks.length > 1) return; // 已在加载中
+  // 先注入 CSS
+  if (!document.querySelector('link[href="/vendor/suneditor/dist/css/suneditor.min.css"]')) {
+    var cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    cssLink.href = '/vendor/suneditor/dist/css/suneditor.min.css';
+    document.head.appendChild(cssLink);
+  }
+  var s = document.createElement('script');
+  s.src = '/vendor/suneditor/dist/suneditor.min.js';
+  s.onload = function() {
+    _sunEditorLoaded = true;
+    while (_sunEditorCallbacks.length) {
+      var c = _sunEditorCallbacks.shift();
+      if (c) { try { c(); } catch(e) { console.warn('[SunEditor] 初始化回调异常:', e); } }
+    }
+  };
+  s.onerror = function() {
+    console.error('[SunEditor] 本地静态资源加载失败，使用纯文本降级');
+    _sunEditorLoaded = true; // 标记已尝试，后续走降级
+    while (_sunEditorCallbacks.length) {
+      var c2 = _sunEditorCallbacks.shift();
+      if (c2) { try { c2(); } catch(e) {} }
+    }
+  };
+  document.head.appendChild(s);
+}
+
+// 实际创建 SunEditor 实例（供懒加载成功后调用）
+function initBlogSunEditor(textarea) {
+  if (typeof SUNEDITOR === 'undefined') {
+    // 降级：显示纯文本编辑器
+    if (window.__blogSunEditor) { try { window.__blogSunEditor.destroy(); } catch(e) {} }
+    textarea.style.display = '';
+    textarea.style.width = '100%';
+    textarea.style.height = '400px';
+    textarea.style.padding = '12px';
+    textarea.style.border = '1px solid var(--border)';
+    textarea.style.borderRadius = '8px';
+    textarea.style.background = 'var(--bg-card)';
+    textarea.style.color = 'var(--text-primary)';
+    textarea.style.fontSize = '14px';
+    textarea.style.resize = 'vertical';
+    textarea.style.fontFamily = 'inherit';
+    textarea.placeholder = '编辑器加载中...如果长时间无响应请刷新页面';
+    textarea.addEventListener('input', blogScheduleDraftSave);
+    window.__blogSunEditor = {
+      getContents: function() { return textarea.value; },
+      getText: function() { return textarea.value; },
+      setContents: function(html) { textarea.value = html; },
+      destroy: function() {}
+    };
+    return;
+  }
+  var se = SUNEDITOR.create(textarea, {
+    height: '400px',
+    minHeight: '300px',
+    maxHeight: '800px',
+    width: '100%',
+    resizingBar: true,
+    showPathLabel: true,
+    resizeEnable: true,
+    buttonList: [
+      ['undo', 'redo'],
+      ['font', 'fontSize', 'formatBlock'],
+      ['bold', 'underline', 'italic', 'strike', 'subscript', 'superscript'],
+      ['fontColor', 'hiliteColor', 'textStyle'],
+      ['removeFormat'],
+      ['indent', 'outdent'],
+      ['align', 'horizontalRule', 'list', 'lineHeight'],
+      ['blockquote', 'paragraphStyle'],
+      ['table', 'link', 'image', 'video'],
+      ['fullScreen', 'showBlocks', 'codeView'],
+      ['print']
+    ],
+    font: ['Arial', 'Courier New', 'Georgia', 'Microsoft YaHei', 'SimSun', 'Tahoma', 'Times New Roman', 'Verdana'],
+    fontSize: [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32],
+    fontSizeUnit: 'px',
+    lineHeights: [
+      {text: '1', value: 1},
+      {text: '1.15', value: 1.15},
+      {text: '1.5', value: 1.5},
+      {text: '2', value: 2},
+      {text: '2.5', value: 2.5},
+      {text: '3', value: 3}
+    ],
+    formats: ['p', 'div', 'blockquote', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    placeholder: '开始写作...',
+    charCounter: true,
+    charCounterType: 'byte-html',
+    charCounterLabel: '字数',
+    imageResizing: true,
+    imageHeightLimit: 500,
+    imageWidthLimit: 800,
+    onChange: function() { blogScheduleDraftSave(); },
+    onImageUpload: function(files, info, core) {
+      // 阻止本地文件上传，提示用户使用图床
+      toast('请勿直接上传图片。请先上传到图床（如 Nickyam、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
+      if (window.__blogSunEditor && window.__blogSunEditor.core) {
+        try { window.__blogSunEditor.core.initImageSelect(); } catch(e) {}
+      }
+    },
+    toolbarWidth: '100%',
+    attributes: { style: 'font-size:15px;line-height:1.8;text-align:left' }
+  });
+  window.__blogSunEditor = se;
+  blogState.editorState.sunEditor = se;
 }
 
 // --- 编辑器草稿暂存（localStorage）---
@@ -6698,6 +6790,57 @@ let chatState = {
   publicChannels: []
 };
 
+// ---- V5.14 消息本地缓存（sessionStorage，按房间）----
+// 切换房间 / 重新进入会话时优先恢复上次会话缓存，即时渲染后再后台静默刷新，
+// 减少重复拉取 200 条，并在弱网 / 短时断线时提供离线回退展示。
+var MSG_CACHE_PREFIX = 'dp_msg_cache_v1_';
+var MSG_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 小时有效期
+function getMsgCache(roomId) {
+  try {
+    var raw = sessionStorage.getItem(MSG_CACHE_PREFIX + roomId);
+    if (!raw) return null;
+    var obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.messages) || !obj.ts) return null;
+    if (Date.now() - obj.ts > MSG_CACHE_TTL) return null;
+    if (obj.clearedTs && getLocalClearTimestamp(roomId) > obj.clearedTs) return null;
+    return obj;
+  } catch(e) { return null; }
+}
+function setMsgCache(roomId, messages) {
+  try {
+    if (!roomId || !Array.isArray(messages)) return;
+    // 只缓存消息正文/发送者等轻量字段，避免把临时标记（reactions 等）带上
+    sessionStorage.setItem(MSG_CACHE_PREFIX + roomId, JSON.stringify({
+      ts: Date.now(),
+      clearedTs: getLocalClearTimestamp(roomId),
+      messages: messages.map(function(m) { return {
+        event_id: m.event_id, sender: m.sender, sender_id: m.sender_id,
+        sender_avatar: m.sender_avatar, sender_doubao_id: m.sender_doubao_id,
+        content: m.content, reply_to: m.reply_to, ts: m.ts,
+        recalled: m.recalled, edited: m.edited
+      }; })
+    }));
+  } catch(e) { /* sessionStorage 可能满，静默忽略 */ }
+}
+function clearMsgCache(roomId) {
+  try { sessionStorage.removeItem(MSG_CACHE_PREFIX + roomId); } catch(e) {}
+}
+function restoreMsgCache(roomId) {
+  var c = getMsgCache(roomId);
+  if (!c || !c.messages.length) return false;
+  var existing = chatState.messages[roomId] || [];
+  // 合并缓存消息与会话内已实时收到的新消息，去重后按时间排序
+  var seen = {};
+  existing.forEach(function(m) { if (m.event_id) seen[m.event_id] = true; });
+  var merged = c.messages.slice();
+  for (var i = 0; i < existing.length; i++) {
+    if (!seen[existing[i].event_id]) merged.push(existing[i]);
+  }
+  merged.sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
+  chatState.messages[roomId] = merged;
+  return true;
+}
+
 async function getPermissionLevel(roomId, userId) {
   if (!roomId || !userId) return 0;
   if (userId === currentUser?.id && isDeveloper()) return 3;
@@ -7199,7 +7342,8 @@ async function switchRoom(roomId) {
   renderChannelJoinBanner(roomId);
   // 立即清除该会话的未读红点
   markRead(roomId);
-  if (chatState.messages[roomId]?.length) {
+  // V5.14 消息缓存：内存已有或可从 sessionStorage 恢复时，先即时渲染再后台静默刷新
+  if (chatState.messages[roomId]?.length || restoreMsgCache(roomId)) {
     // 先用缓存消息渲染（即时反馈），再异步加载最新消息
     renderMessages(roomId);
     subscribeToRoom(roomId);
@@ -7451,6 +7595,8 @@ async function loadMessages(roomId, silent) {
     if (!serverEventIds[existingMsgs[ei].event_id]) keptRealtime.push(existingMsgs[ei]);
   }
   chatState.messages[roomId] = keptRealtime.concat(nonEdits).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
+  // V5.14 消息缓存：服务端加载成功后将合并后的消息写入 sessionStorage
+  setMsgCache(roomId, chatState.messages[roomId]);
   if (roomId !== chatState.currentRoomId) return;
   renderMessages(roomId);
   // V5.5 重做：公告置顶条固定在顶栏下方（不随消息滚动），无置顶公告时移除残留
@@ -7508,6 +7654,8 @@ async function loadOlderMessages(roomId) {
     ts: m.ts || 0, recalled: !!m.recalled, edited: false
   };});
   chatState.messages[roomId] = olderMsgs.concat(existing);
+  // V5.14 消息缓存：加载更多后同步更新缓存
+  setMsgCache(roomId, chatState.messages[roomId]);
   renderMessages(roomId);
   var msgsContainer = document.getElementById('chatMsgs');
   var newCount = olderMsgs.length;
@@ -7572,6 +7720,75 @@ function renderMessages(roomId) {
   } else if (msgsEl.scrollTop >= msgsEl.scrollHeight - msgsEl.clientHeight - 100 || !msgsEl.scrollTop) {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+}
+
+// V5.14 优化：增量追加新消息，避免新消息到达时全量重绘整个消息列表（大量聊天时显著降低卡顿与回流）
+// 仅在「当前 DOM 已包含此前的全部可见消息」这一稳态下走快速追加；编辑/撤回/翻页等特殊情况仍由 renderMessages 全量重建
+function appendNewMessages(roomId, newMsgs) {
+  if (roomId !== chatState.currentRoomId) return false;
+  var msgsEl = document.getElementById('chatMsgs');
+  if (!msgsEl) return false;
+  var visibleAll = msgsEl.querySelectorAll('.chat-msg[data-eid]');
+  if (!visibleAll.length) return false; // 空列表，交给 renderMessages
+  // 现有 DOM 中已有的 eid 集合
+  var domIds = new Set();
+  for (var i = 0; i < visibleAll.length; i++) domIds.add(visibleAll[i].getAttribute('data-eid'));
+  // 检查是否所有既有消息都已在 DOM（若中间有消息从未被渲染，则不能安全追加）
+  var all = chatState.messages[roomId] || [];
+  var renderedCount = 0;
+  for (var j = 0; j < all.length; j++) {
+    var mm = all[j];
+    if (mm.sender_id === currentUser.id || !isUserBlocked(mm.sender_id)) {
+      if (mm.event_id && domIds.has(mm.event_id)) renderedCount++;
+      else if (mm.event_id && newMsgs.some(function(n) { return n.event_id === mm.event_id; })) { /* 新消息还未渲染 */ }
+      else return false; // 存在未渲染的旧消息，无法安全追加
+    }
+  }
+  // 过滤真正的新消息（去重 + 排除拉黑者）
+  var fresh = [];
+  for (var k = 0; k < newMsgs.length; k++) {
+    var n = newMsgs[k];
+    if (!n.event_id) continue;
+    if (domIds.has(n.event_id)) continue;
+    if (n.sender_id && n.sender_id !== currentUser.id && isUserBlocked(n.sender_id)) continue;
+    fresh.push(n);
+  }
+  if (!fresh.length) return true; // 无新增，但状态已同步
+  // 追加新消息（含日期分隔符判断）
+  var lastVisible = null;
+  for (var q = all.length - 1; q >= 0; q--) {
+    var lv = all[q];
+    if (lv.sender_id === currentUser.id || !isUserBlocked(lv.sender_id)) { lastVisible = lv; break; }
+  }
+  var lastDateStr = '';
+  if (lastVisible && lastVisible.ts) {
+    var ldt = new Date(lastVisible.ts);
+    lastDateStr = ldt.getFullYear() + '-' + (ldt.getMonth()+1) + '-' + ldt.getDate();
+  }
+  var frag = '';
+  for (var r = 0; r < fresh.length; r++) {
+    var nm = fresh[r];
+    if (nm.ts) {
+      var ndt = new Date(nm.ts);
+      var nds = ndt.getFullYear() + '-' + (ndt.getMonth()+1) + '-' + ndt.getDate();
+      if (nds !== lastDateStr) {
+        lastDateStr = nds;
+        frag += '<div class="chat-date-separator"><span>' + formatDateLabel(ndt) + '</span></div>';
+      }
+    }
+    frag += renderMsgHTML(nm, roomId);
+  }
+  var atBottom = msgsEl.scrollTop >= msgsEl.scrollHeight - msgsEl.clientHeight - 100 || !msgsEl.scrollTop;
+  msgsEl.insertAdjacentHTML('beforeend', frag);
+  // 新消息入场动画
+  var adds = msgsEl.querySelectorAll('.chat-msg[data-eid]');
+  for (var s = adds.length - 1; s >= 0; s--) {
+    var ae = adds[s];
+    if (fresh.some(function(f) { return f.event_id === ae.getAttribute('data-eid'); })) ae.classList.add('chat-msg-new');
+  }
+  applyLatex(msgsEl);
+  if (atBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
+  return true;
 }
 
 function formatDateLabel(d) {
@@ -7897,6 +8114,8 @@ function handleRealtimeMessage(roomId, msg) {
   {
     const msgs = chatState.messages[roomId] || [];
     chatState.messages[roomId] = [...msgs, newMsg];
+    // V5.14 Realtime 收到新消息时同步写入缓存
+    setMsgCache(roomId, chatState.messages[roomId]);
     // V5.9：Realtime 收到新消息时重置轮询空闲计数，让轮询保持活跃快速档（Realtime 与轮询互为补充）
     chatState._pollIdleCount = 0;
     var room = chatState.rooms.find(r => r.id === roomId);
@@ -7954,6 +8173,8 @@ function handleRealtimeUpdate(roomId, msg) {
   if (found) {
     if (msg.recalled) { found.recalled = true; found.content = ''; }
     else if (msg.content) { found.content = msg.content; found.edited = true; }
+    // V5.14 撤回/编辑后同步更新缓存
+    if (msg.recalled || msg.content) setMsgCache(roomId, existing);
     if (roomId === chatState.currentRoomId) renderMessages(roomId);
   }
 }
@@ -7962,6 +8183,8 @@ function handleKickedFromRoom(roomId) {
   toast('你已被请离频道', 'warning');
   if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
   delete chatState.messages[roomId];
+  // V5.14 被请离频道时同步清除本地缓存
+  clearMsgCache(roomId);
   chatState.rooms = chatState.rooms.filter(function(r) { return r.id !== roomId; });
   if (chatState.currentRoomId === roomId) {
     chatState.currentRoomId = null;
@@ -8035,6 +8258,29 @@ function updateUnreadBadge() {
     else { badge.classList.add('hidden'); }
   }
   updateActivityBadges();
+  updateTitleUnread(total);
+}
+
+// V5.14 优化：标签页标题版权/页面图标显示未读总数（企业级 IM 标配，切走标签也能感知新消息）
+var _docTitleBase = '逗包用户广场';
+function updateTitleUnread(total) {
+  if (!document.title) { document.title = '逗包用户广场'; }
+  var base = _docTitleBase || '逗包用户广场';
+  var title = (total > 0) ? '(' + (total > 99 ? '99+' : total) + ') ' + base : base;
+  if (document.title !== title) document.title = title;
+  // 页面图标 + 未读红点
+  var fav = document.querySelector('link[rel="icon"]');
+  if (fav && total > 0) {
+    if (fav.href.indexOf('data:image/svg+xml') === 0) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">✨</text><circle cx="82" cy="18" r="18" fill="#ef4444"/></svg>';
+      if (fav.href !== 'data:image/svg+xml,' + encodeURIComponent(svg)) {
+        fav.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+        fav.dataset._orig = 'data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>✨</text></svg>';
+      }
+    }
+  } else if (fav && fav.dataset && fav.dataset._orig) {
+    fav.href = fav.dataset._orig;
+  }
 }
 
 // 更新活动栏红点徽章（好友栏=私聊未读+好友申请，频道栏=频道未读+入群申请）
@@ -8140,7 +8386,12 @@ async function doSendChatMsg(content, input) {
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content, reply_to: chatState.replyTo || null, ts: Date.now() };
   const prevMsgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
-  renderMessages(chatState.currentRoomId);
+  // V5.14 发送乐观消息后同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
+  // V5.14 优化：发送采用增量追加，避免整列重绘闪烁；失败回退全量渲染
+  if (!appendNewMessages(chatState.currentRoomId, [localMsg])) {
+    renderMessages(chatState.currentRoomId);
+  }
   input.value = ''; autoChatResize(input);
   const replyToSave = chatState.replyTo;
   if (chatState.replyTo) cancelReply();
@@ -8186,6 +8437,7 @@ async function doSendChatMsg(content, input) {
       }
       await window.__clearSupabaseSession();
       chatState.messages[chatState.currentRoomId] = prevMsgs;
+      setMsgCache(chatState.currentRoomId, prevMsgs);
       renderMessages(chatState.currentRoomId);
       toast('发送失败，请刷新页面重新登录后重试（' + (retryRes.error.message || retryRes.error.code) + '）', 'error');
       btn.disabled = false;
@@ -8193,6 +8445,7 @@ async function doSendChatMsg(content, input) {
     }
     toast('发送失败: ' + error.message, 'error');
     chatState.messages[chatState.currentRoomId] = prevMsgs;
+    setMsgCache(chatState.currentRoomId, prevMsgs);
     renderMessages(chatState.currentRoomId);
     btn.disabled = false;
     return;
@@ -8336,6 +8589,8 @@ async function sendImageMessage(url, isVideo) {
     content: prefix + url, reply_to: null, ts: Date.now() };
   var msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
+  // V5.14 图片/视频消息同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
   renderMessages(chatState.currentRoomId);
 }
 
@@ -8380,6 +8635,8 @@ async function uploadChatFile(input) {
   const localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: 'file:' + file.name + ':' + url, reply_to: null, ts: Date.now() };
   const msgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...msgs, localMsg];
+  // V5.14 文件消息同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
   renderMessages(chatState.currentRoomId);
   toast('文件已发送', 'success');
 }
@@ -8429,6 +8686,8 @@ async function recallMessage(eventId, roomId) {
   const msgs2 = chatState.messages[roomId] || [];
   const msg2 = msgs2.find(m => m.event_id === eventId);
   if (msg2) { msg2.recalled = true; msg2.content = ''; }
+  // V5.14 撤回后同步更新缓存
+  setMsgCache(roomId, chatState.messages[roomId] || []);
   renderMessages(roomId);
 }
 
@@ -8489,7 +8748,14 @@ async function pollNewMessages() {
         }
         if (newMsgs.length > 0 || contentChanged) {
           chatState.messages[roomId] = existingMsgs.concat(newMsgs).sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
-          if (roomId === chatState.currentRoomId) { renderMessages(roomId); markRead(roomId); }
+          // V5.14 轮询合并后同步写入缓存
+          setMsgCache(roomId, chatState.messages[roomId]);
+          if (roomId === chatState.currentRoomId) {
+            // V5.14 优化：优先增量追加（仅渲染新增消息），失败时回退全量重绘
+            var appended = !contentChanged ? appendNewMessages(roomId, newMsgs) : false;
+            if (!appended) renderMessages(roomId);
+            markRead(roomId);
+          }
           // 非好友私聊：对方回复后解除限制
           if (roomId === chatState.currentRoomId && chatState._isNonFriendChat) {
             updateNonFriendChatStatus(roomId);
@@ -9061,6 +9327,8 @@ async function deleteConversation(roomId) {
   }
   if (chatState.sbChannels[roomId]) { try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}; delete chatState.sbChannels[roomId]; }
   delete chatState.messages[roomId];
+  // V5.14 删除会话时同步清除本地缓存
+  clearMsgCache(roomId);
   chatState.rooms = (chatState.rooms || []).filter(function(r) { return r.id !== roomId; });
   chatState._forceRoomListReload = true;
   await loadRoomList();
@@ -9071,6 +9339,9 @@ async function leaveChannel(roomId) {
   if (!confirm('确定要离开这个频道吗？')) return;
   await __SB.from('chat_room_members').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
   await __SB.from('chat_unread').delete().eq('room_id', roomId).eq('user_id', currentUser.id);
+  // V5.14 离开频道后清除本地消息缓存，避免恢复过期历史
+  delete chatState.messages[roomId];
+  clearMsgCache(roomId);
   if (chatState.currentRoomId === roomId) { chatState.currentRoomId = null; document.getElementById('chatEmpty').classList.remove('hidden'); document.getElementById('chatMsgs').classList.add('hidden'); }
   var { count } = await __SB.from('chat_room_members').select('*', { count: 'exact', head: true }).eq('room_id', roomId);
   if (count === 0) {
@@ -9158,6 +9429,8 @@ async function clearChatHistory(roomId) {
     await __SB.from('chat_reactions').delete().eq('room_id', roomId);
     await __SB.from('chat_unread').update({ count: 0 }).eq('room_id', roomId);
     chatState.messages[roomId] = [];
+    // V5.14 清空服务端消息后同时清除本地缓存
+    clearMsgCache(roomId);
     if (chatState.currentRoomId === roomId) renderMessages(roomId);
     toast('聊天记录已清空', 'success');
   } catch(e) { toast('清空失败: ' + e.message, 'error'); }
@@ -9174,6 +9447,8 @@ function clearLocalMessages(roomId) {
     localStorage.setItem('dp_local_cleared', JSON.stringify(clearMap));
     // 清空当前内存中的消息
     chatState.messages[roomId] = [];
+    // V5.14 本地清理后同步清除 sessionStorage 缓存（避免缓存吞噬清理效果）
+    clearMsgCache(roomId);
     if (chatState.currentRoomId === roomId) renderMessages(roomId);
     toast('本地记录已清空', 'success');
   } catch(e) { toast('清空失败: ' + e.message, 'error'); }
@@ -9198,6 +9473,8 @@ async function removePrivateChat(roomId) {
     // 从本地状态移除
     chatState.rooms = chatState.rooms.filter(function(r) { return r.id !== roomId; });
     delete chatState.messages[roomId];
+    // V5.14 移除会话时同步清除本地缓存
+    clearMsgCache(roomId);
     // 退订实时频道
     if (chatState.sbChannels[roomId]) {
       try { chatState.sbChannels[roomId].unsubscribe(); } catch(e) {}
@@ -9865,6 +10142,8 @@ async function shareToolToChannel(toolId, toolType, icon, title) {
   var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
   var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  // V5.14 分享工具到频道后同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
   renderMessages(chatState.currentRoomId);
   await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
@@ -9936,6 +10215,8 @@ async function sendShareCard(uid, name, avatar, doubaoId) {
   var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
   var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  // V5.14 分享名片后同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
   renderMessages(chatState.currentRoomId);
   await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
@@ -9988,6 +10269,8 @@ async function sendShareChannel(roomId, roomName, avatar) {
   var localMsg = { event_id: eventId, sender: currentUser.name, sender_id: currentUser.id, sender_avatar: currentUser.avatar || '', sender_doubao_id: currentUser.doubao_id || '', content: content, reply_to: null, ts: Date.now() };
   var prevMsgs = chatState.messages[chatState.currentRoomId] || [];
   chatState.messages[chatState.currentRoomId] = [...prevMsgs, localMsg];
+  // V5.14 分享频道后同步写入缓存
+  setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
   renderMessages(chatState.currentRoomId);
   await __SB.from('chat_messages').insert({
     event_id: eventId, room_id: chatState.currentRoomId, sender_id: currentUser.id,
