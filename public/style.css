@@ -1915,3 +1915,140 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
    ═══════════════════════════════════════════════════════════ */
 .chat-msg-bubble-time{font-size:10px;color:var(--text-faint);text-align:right;margin-top:4px}
 .chat-msg-right .chat-msg-bubble-time{color:var(--text-faint)}
+
+/* ═══════════════════════════════════════════════════════════
+   V12 全方位设计增强（追加式，不修改既有规则）
+   品牌氛围 · 访客落地 · 微交互 · 细节一致性
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 环境光晕变量（亮/暗各自适配，橙-青-紫三色调呼应 hero 渐变） ── */
+:root {
+  --glow-orange: rgba(255,107,53,0.10);
+  --glow-cyan: rgba(78,205,196,0.08);
+  --glow-violet: rgba(124,58,237,0.07);
+}
+.dark {
+  --glow-orange: rgba(255,107,53,0.16);
+  --glow-cyan: rgba(78,205,196,0.10);
+  --glow-violet: rgba(124,58,237,0.12);
+}
+
+/* ── 品牌氛围：body 环境渐变光晕（不遮内容，滚动区域在 app-main 内部） ── */
+body {
+  background-color: var(--bg-primary);
+  background-image:
+    radial-gradient(1100px 700px at 88% -12%, var(--glow-orange), transparent 62%),
+    radial-gradient(900px 620px at -12% 108%, var(--glow-cyan), transparent 58%),
+    radial-gradient(1000px 640px at 50% 118%, var(--glow-violet), transparent 60%);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* ── 文本选择品牌色 ── */
+::selection { background: var(--accent); color: var(--text-on-accent); }
+.dark ::selection { background: var(--accent); color: #fff; }
+
+/* ── 访客落地体验：登录提示玻璃卡片化 ── */
+.login-required {
+  max-width: 420px;
+  margin: 6vh auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: var(--shadow-md);
+  padding: 44px 28px !important;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp .45s ease both;
+}
+.login-required::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent-gradient);
+  opacity: .9;
+}
+.login-required .welcome-icon { box-shadow: 0 8px 28px var(--accent-shadow); }
+.login-required h3 { font-size: 22px !important; letter-spacing: .2px; }
+.login-required p { font-size: 14px; line-height: 1.7; }
+.login-required .btn {
+  border-radius: 14px;
+  padding: 12px 36px;
+  font-size: 15px;
+  box-shadow: 0 6px 20px var(--accent-shadow);
+}
+
+/* ── 卡片：柔和边缘高光线 + hover 光晕 ── */
+.card { position: relative; }
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(140% 120% at 50% 0%, var(--accent-bg), transparent 55%);
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.card:hover::before { opacity: 1; }
+
+/* ── 弹窗品牌化：顶部渐变描边 + 更柔和的投影 ── */
+.modal { position: relative; border: 1px solid var(--border-color); }
+.modal::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent-gradient);
+  border-radius: 20px 20px 0 0;
+  opacity: .85;
+}
+.modal-overlay { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* ── 提示框品牌竖条 ── */
+.toast { position: relative; overflow: hidden; padding-left: 18px; }
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent-gradient);
+}
+.toast-success::before { background: linear-gradient(180deg, var(--success), var(--success-text)); }
+.toast-error::before { background: linear-gradient(180deg, var(--danger), var(--danger-text)); }
+.toast-info::before { background: linear-gradient(180deg, var(--info), var(--info-text)); }
+.toast-warning::before { background: linear-gradient(180deg, #F59E0B, var(--warning)); }
+
+/* ── 导航主按钮：柔和悬浮辉光 ── */
+.nav-btn-primary { box-shadow: 0 2px 8px var(--accent-shadow); }
+.nav-btn-primary:hover { box-shadow: 0 6px 20px var(--accent-shadow); }
+.btn-orange, .chat-send-btn { box-shadow: 0 2px 10px var(--accent-shadow); }
+
+/* ── 聊天图片/文件卡片：加载淡入 ── */
+.chat-msg img, .chat-msg video { animation: chatMediaIn .3s ease both; }
+@keyframes chatMediaIn { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+
+/* ── 聊天气泡：轻微 hover 提亮 ── */
+.chat-msg:hover .chat-msg-bubble { box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+
+/* ── 友情链接 hover 过渡（富文本内链接） ── */
+.chat-msg-content a, .dp-rich-content a, .custom-page-content a {
+  transition: color .15s ease;
+}
+.chat-msg-content a:hover, .dp-rich-content a:hover, .custom-page-content a:hover { filter: brightness(1.15); }
+
+/* ── 滚动条：更精致 + hover 加深 ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; transition: background .2s; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); opacity: .8; }
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+
+/* ── 关闭动画重绘成本：仅对常驻动效限制层合成（不影响已有关键帧） ── */
+.anim-up, .anim-up-d1, .anim-up-d2, .anim-up-d3 { will-change: transform, opacity; }
+
+/* ── 移动端落地卡片留白 ── */
+@media (max-width: 480px) {
+  .login-required { margin: 4vh auto; padding: 36px 20px !important; }
+}
