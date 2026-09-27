@@ -1935,18 +1935,18 @@ tailwind.config={
    覆盖预编译 Tailwind 的任意值类（dark:bg-[#1e1e2e] / dark:bg-[#2a2a3e] / dark:bg-[#1a1a2e]），
    使 tavern 暗色面板统一由变量驱动；嵌入主站时 syncEmbeddedFromParent 会按主站实际配色覆写这些变量 */
 :root{
-  --tv-page:#1e1e2e;   /* 暗色页面/输入框底（原 dark:bg-[#1e1e2e]） */
-  --tv-panel:#2a2a3e;  /* 暗色面板/弹窗/消息气泡底（原 dark:bg-[#2a2a3e]） */
-  --tv-deep:#1a1a2e;   /* 暗色最深 body 底（原 dark:bg-[#1a1a2e]） */
-  --tv-hover:#3a3a4e;  /* 暗色悬停底 */
+  --tv-page:#241E18;   /* 暗色页面/输入框底（v6.2 暖调对齐主站，原 dark:bg-[#1e1e2e]） */
+  --tv-panel:#2A241D;  /* 暗色面板/弹窗/消息气泡底（v6.2 暖调，原 dark:bg-[#2a2a3e]） */
+  --tv-deep:#16130F;   /* 暗色最深 body 底（v6.2 暖调，原 dark:bg-[#1a1a2e]） */
+  --tv-hover:#352E25;  /* 暗色悬停底（v6.2 暖调） */
   --tv-soft:#f5f7fa;   /* 亮色浅灰底 */
   --tv-ink:#1d2129;    /* 亮色正文 */
   --tv-ink-dark:#e5e7eb; /* 暗色正文 */
   --tv-muted:#555;     /* 亮色弱文本 */
 }
 .dark{
-  --tv-page:#1e1e2e; --tv-panel:#2a2a3e; --tv-deep:#1a1a2e; --tv-hover:#3a3a4e;
-  --tv-soft:#2a2a3e; --tv-ink:#e5e7eb; --tv-ink-dark:#e5e7eb; --tv-muted:#9ca3af;
+  --tv-page:#241E18; --tv-panel:#2A241D; --tv-deep:#16130F; --tv-hover:#352E25;
+  --tv-soft:#2A241D; --tv-ink:#e5e7eb; --tv-ink-dark:#e5e7eb; --tv-muted:#9ca3af;
 }
 html.dark .dark\:bg-\[\#1e1e2e\]{background-color:var(--tv-page)}
 html.dark .dark\:bg-\[\#2a2a3e\]{background-color:var(--tv-panel)}
@@ -1967,7 +1967,7 @@ html.dark .dark\:bg-\[\#1a1a2e\]{background-color:var(--tv-deep)}
   border-color:#374151;
 }
 </style>
-<body class="bg-white dark:bg-[#1a1a2e] text-dark dark:text-gray-100 flex flex-col">
+<body class="np-page bg-white dark:bg-[#1a1a2e] text-dark dark:text-gray-100 flex flex-col">
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- Login Overlay -->
@@ -6663,13 +6663,16 @@ const THEME_ACCENTS = {
   green: ['#10B981', '#34D399'],
   purple: ['#8B5CF6', '#A78BFA'],
   pink: ['#EC4899', '#F472B6'],
-  cyan: ['#06B6D4', '#22D3EE']
+  cyan: ['#06B6D4', '#22D3EE'],
+  red: ['#D42B20', '#F2644C'],
+  ink: ['#464B52', '#6E747C']
 };
 function applyThemeColor(colorId) {
   const pair = THEME_ACCENTS[colorId];
   if (!pair) return;
   document.documentElement.style.setProperty('--acc', pair[0]);
   document.documentElement.style.setProperty('--acc2', pair[1]);
+  if (window.__npSyncAccent) window.__npSyncAccent();
 }
 function syncEmbeddedFromParent(prefs) {
   if (!prefs || typeof prefs !== 'object') return;
@@ -6948,6 +6951,21 @@ document.querySelectorAll('[data-gbg]').forEach(el => {
 });
 if (data.config.dark) applyDark(true);
 darkToggle.addEventListener('click',()=>applyDark(!data.config.dark));
+// v6.2: 独立打开时同步主站主题偏好（embed 模式由父页 syncEmbeddedFromParent 同步，跳过）
+if (!document.documentElement.classList.contains('embed-mode')) {
+  try {
+    var savedTheme = localStorage.getItem('dp_theme');
+    if (savedTheme) {
+      applyDark(savedTheme === 'dark');
+    } else if (!data.config.dark) {
+      // 无主站显式偏好且酒馆自身非暗色：跟随系统（与主站 loadTheme 逻辑一致）
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      applyDark(!!prefersDark);
+    }
+    var savedColor = localStorage.getItem('dp_theme_color');
+    if (savedColor) applyThemeColor(savedColor);
+  } catch (e) {}
+}
 
 // ===== DROP FILE =====
 document.querySelector('.input-area').addEventListener('dragover',e=>{
@@ -7985,6 +8003,252 @@ initEmojiPicker();
 updateLocalModelStatusUI();
 applyBackground();
 loadVoices();
+</script>
+
+<style id="np-visual-layer">
+/* ===== NP 视觉层 v6.2：三层背景（WebGL 流体 / SVG 噪点 / 磨砂玻璃）+ 主站字体栈 ===== */
+body.np-page {
+  font-family: 'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei','Hiragino Sans GB','Noto Sans CJK SC',sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: #F7F3EC;
+  background-image:
+    radial-gradient(60vw 50vh at 12% -8%, color-mix(in srgb, var(--acc) 10%, transparent), transparent 70%),
+    radial-gradient(55vw 45vh at 95% 110%, color-mix(in srgb, var(--acc2) 7%, transparent), transparent 70%),
+    radial-gradient(70vw 60vh at 60% 40%, #FFFDF7, transparent 75%),
+    linear-gradient(180deg, #FDFBF7, #EFE7DB);
+  background-attachment: fixed;
+}
+html.dark body.np-page {
+  background-color: var(--tv-deep);
+  background-image:
+    radial-gradient(60vw 50vh at 12% -8%, color-mix(in srgb, var(--acc) 14%, transparent), transparent 70%),
+    radial-gradient(55vw 45vh at 95% 110%, color-mix(in srgb, var(--acc2) 8%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.05));
+  background-attachment: fixed;
+}
+#np-fluid { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; opacity: .85; pointer-events: none; }
+html.dark #np-fluid { opacity: .55; }
+.np-noise {
+  position: fixed; inset: 0; z-index: -1; opacity: .05;
+  mix-blend-mode: multiply; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html.dark .np-noise { opacity: .04; mix-blend-mode: overlay; }
+/* 磨砂玻璃（亮态暖白，暗态 var 驱动保 embed palette 同步） */
+#sidePanel {
+  background: rgba(255,252,247,0.78);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+html.dark #sidePanel { background: color-mix(in srgb, var(--tv-panel) 76%, transparent); }
+#inputArea {
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+html.dark #inputArea { background: color-mix(in srgb, var(--tv-page) 82%, transparent); }
+.modal-card {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+html.dark .modal-card { background: color-mix(in srgb, var(--tv-panel) 88%, transparent); }
+</style>
+<div class="np-noise" aria-hidden="true"></div>
+<script>
+(function () {
+  function die() {
+    try { var c = document.getElementById('np-fluid'); if (c && c.parentNode) c.parentNode.removeChild(c); } catch (e) {}
+  }
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!document.body || !window.requestAnimationFrame) return;
+    var canvas = document.createElement('canvas');
+    canvas.id = 'np-fluid';
+    canvas.setAttribute('aria-hidden', 'true');
+    var opts = { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' };
+    var gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+    if (!gl) return;
+    function compile(type, src) {
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || 'shader');
+      return s;
+    }
+    var vs = compile(gl.VERTEX_SHADER, 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}');
+    var fs = compile(gl.FRAGMENT_SHADER, [
+      'precision mediump float;',
+      'uniform vec2 u_res;uniform float u_t;uniform float u_d;',
+      'uniform vec3 u_acc;uniform vec4 u_rip[8];uniform float u_ro;',
+      'float blob(vec2 a,vec2 b,float r){vec2 d=a-b;return exp(-dot(d,d)/(r*r));}',
+      'float rip(vec2 pt){',
+      ' float h=0.0;',
+      ' for(int i=0;i<8;i++){',
+      '  vec4 r=u_rip[i];',
+      '  if(r.w<=0.001)continue;',
+      '  float age=u_t-r.z;',
+      '  if(age<0.0||age>2.4)continue;',
+      '  float d=length(pt-r.xy);',
+      '  float band=d-age*1.2;',
+      '  h+=r.w*sin(band*40.0)*exp(-abs(band)*6.0)*exp(-d*1.5)*exp(-age*1.9)*smoothstep(0.0,0.08,age);',
+      ' }',
+      ' return h;',
+      '}',
+      'void main(){',
+      ' vec2 uv=gl_FragCoord.xy/u_res;',
+      ' vec2 p=uv;p.x*=u_res.x/u_res.y;',
+      ' float h0=0.0;vec2 pr=p;',
+      ' if(u_ro>0.5){',
+      '  float e=0.012;',
+      '  h0=rip(p);',
+      '  vec2 grad=vec2(rip(p+vec2(e,0.0))-h0,rip(p+vec2(0.0,e))-h0)/e;',
+      '  pr=p+clamp(grad,-8.0,8.0)*0.0035;',
+      ' }',
+      ' float t=u_t*0.045;',
+      ' vec3 base=mix(vec3(0.988,0.976,0.960),vec3(0.078,0.067,0.058),u_d);',
+      ' vec3 warm=mix(base,u_acc,u_d>0.5?0.18:0.22);',
+      ' vec3 glow=u_acc;',
+      ' float g=0.0;',
+      ' g+=blob(pr,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
+      ' g+=blob(pr,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
+      ' g+=blob(pr,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
+      ' g+=blob(pr,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
+      ' g=clamp(g,0.0,1.4);',
+      ' vec3 col=mix(base,warm,clamp(g,0.0,1.0)*0.75);',
+      ' col=mix(col,glow,clamp(g-0.78,0.0,1.0)*(u_d>0.5?0.22:0.16));',
+      ' col*=1.0-0.05*uv.y;',
+      ' float crest=clamp(h0,0.0,1.0);',
+      ' col+=u_acc*crest*0.07;',
+      ' col+=vec3(1.0)*crest*crest*0.10;',
+      ' col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
+      ' gl_FragColor=vec4(col,1.0);',
+      '}'
+    ].join('\n'));
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'link');
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    var uRes = gl.getUniformLocation(prog, 'u_res');
+    var uT = gl.getUniformLocation(prog, 'u_t');
+    var uD = gl.getUniformLocation(prog, 'u_d');
+    var uAcc = gl.getUniformLocation(prog, 'u_acc');
+    var uRip = gl.getUniformLocation(prog, 'u_rip[0]');
+    var uRo = gl.getUniformLocation(prog, 'u_ro');
+    var accRGB = [1.0, 0.4196, 0.2078];
+    function hex2v(s) {
+      s = String(s || '').trim();
+      if (s.charAt(0) === '#') {
+        var n, r, g, b;
+        if (s.length === 7) {
+          n = parseInt(s.slice(1), 16);
+          if (isNaN(n)) return null;
+          return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+        }
+        if (s.length === 4) {
+          r = parseInt(s.charAt(1), 16); g = parseInt(s.charAt(2), 16); b = parseInt(s.charAt(3), 16);
+          if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+          return [(r * 17) / 255, (g * 17) / 255, (b * 17) / 255];
+        }
+        return null;
+      }
+      var m = s.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+      if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+      return null;
+    }
+    function syncAcc() {
+      try {
+        var v = getComputedStyle(document.documentElement).getPropertyValue('--acc');
+        var rgb = hex2v(v);
+        if (rgb) accRGB = rgb;
+      } catch (e) {}
+    }
+    syncAcc();
+    window.__npSyncAccent = syncAcc;
+    var ripBuf = new Float32Array(32);
+    var ripIdx = 0;
+    var ripActive = false;
+    var lastRx = -1e4, lastRy = -1e4, lastRt = 0;
+    function pushRipple(cx, cy, amp) {
+      var w = window.innerWidth, h = window.innerHeight;
+      if (!w || !h) return;
+      var i = (ripIdx++ % 8) * 4;
+      ripBuf[i] = (cx / w) * (w / h);
+      ripBuf[i + 1] = 1 - cy / h;
+      ripBuf[i + 2] = performance.now() / 1000;
+      ripBuf[i + 3] = amp;
+    }
+    function onMove(x, y) {
+      var now = performance.now();
+      var dx = x - lastRx, dy = y - lastRy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 22 && now - lastRt < 110) return;
+      var amp = Math.max(0.25, Math.min(0.9, dist / 60));
+      pushRipple(x, y, amp);
+      lastRx = x; lastRy = y; lastRt = now;
+    }
+    window.addEventListener('pointermove', function (e) { onMove(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener('touchmove', function (e) {
+      var t = e.touches && e.touches[0];
+      if (t) onMove(t.clientX, t.clientY);
+    }, { passive: true });
+    var pollTick = 0;
+    function resize() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      var h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        gl.viewport(0, 0, w, h);
+      }
+    }
+    function isDark() {
+      var el = document.documentElement;
+      return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
+    }
+    function frame(now) {
+      try {
+        if (!document.hidden) {
+          resize();
+          var nowS = (now || 0) / 1000;
+          var any = false;
+          for (var i = 0; i < 8; i++) {
+            var b = i * 4;
+            if (ripBuf[b + 3] > 0) {
+              if (nowS - ripBuf[b + 2] < 2.4) any = true;
+              else ripBuf[b + 3] = 0;
+            }
+          }
+          ripActive = any;
+          if ((pollTick = (pollTick + 1) % 30) === 0) syncAcc();
+          gl.uniform2f(uRes, canvas.width, canvas.height);
+          gl.uniform1f(uT, nowS);
+          gl.uniform1f(uD, isDark() ? 1 : 0);
+          gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
+          gl.uniform1f(uRo, ripActive ? 1 : 0);
+          gl.uniform4fv(uRip, ripBuf);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+      } catch (err) {
+        die();
+        return;
+      }
+      requestAnimationFrame(frame);
+    }
+    document.body.appendChild(canvas);
+    requestAnimationFrame(frame);
+  } catch (e) {
+    die();
+  }
+})();
 </script>
 
 </body></html>

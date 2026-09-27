@@ -184,7 +184,7 @@
       };
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=50">
+  <link rel="stylesheet" href="style.css?v=51">
   <!-- V11 修复：Cloudflare Turnstile 人机验证脚本（站点密钥为空时无需加载，避免脚本被外网环境拦截产生报错；启用时取消注释并填入 TURNSTILE_SITE_KEY） -->
   <!-- <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> -->
   <script>
@@ -5306,6 +5306,8 @@ async function switchSettingsTab(tab, btnEl) {
           <button class="btn btn-sm" onclick="setThemeColor('purple')" style="background:#8B5CF6;color:#fff;border:2px solid transparent" id="themeBtn-purple">典雅紫</button>
           <button class="btn btn-sm" onclick="setThemeColor('pink')" style="background:#EC4899;color:#fff;border:2px solid transparent" id="themeBtn-pink">樱花粉</button>
           <button class="btn btn-sm" onclick="setThemeColor('cyan')" style="background:#06B6D4;color:#fff;border:2px solid transparent" id="themeBtn-cyan">青碧色</button>
+          <button class="btn btn-sm" onclick="setThemeColor('red')" style="background:#D42B20;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>
+          <button class="btn btn-sm" onclick="setThemeColor('ink')" style="background:#6E747C;color:#fff;border:2px solid transparent" id="themeBtn-ink">水墨灰</button>
         </div>
       </div>
       <div class="form-group">
@@ -11807,6 +11809,8 @@ function settingsAccountHTML() {
     '<button class="btn btn-sm" onclick="setThemeColor(\'purple\')" style="background:#8B5CF6;color:#fff;border:2px solid transparent" id="themeBtn-purple">典雅紫</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'pink\')" style="background:#EC4899;color:#fff;border:2px solid transparent" id="themeBtn-pink">樱花粉</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'cyan\')" style="background:#06B6D4;color:#fff;border:2px solid transparent" id="themeBtn-cyan">青碧色</button>' +
+    '<button class="btn btn-sm" onclick="setThemeColor(\'red\')" style="background:#D42B20;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>' +
+    '<button class="btn btn-sm" onclick="setThemeColor(\'ink\')" style="background:#6E747C;color:#fff;border:2px solid transparent" id="themeBtn-ink">水墨灰</button>' +
     '</div></div>' +
     '<div class="form-group"><label class="form-label">聊天背景</label>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">' +
@@ -12050,6 +12054,8 @@ function toggleTheme() {
   const isDark = document.body.classList.toggle('dark');
   localStorage.setItem('dp_theme', isDark ? 'dark' : 'light');
   updateThemeIcon();
+  // v6.2: 暗色切换改变 --accent，同步 meta/流体
+  syncMetaThemeColor();
   // 同步嵌入页（Tavern 等）主题
   if (typeof syncTavernTheme === 'function') syncTavernTheme();
   // V5.0 修复：同时推送暗色模式与调色板，tavern 结构色跟随主站实际配色
@@ -12080,7 +12086,9 @@ var THEME_COLORS = [
   { id: 'green', name: '森林绿', color: '#10B981' },
   { id: 'purple', name: '典雅紫', color: '#8B5CF6' },
   { id: 'pink', name: '樱花粉', color: '#EC4899' },
-  { id: 'cyan', name: '青碧色', color: '#06B6D4' }
+  { id: 'cyan', name: '青碧色', color: '#06B6D4' },
+  { id: 'red', name: '中国红', color: '#D42B20' },
+  { id: 'ink', name: '水墨灰', color: '#6E747C' }
 ];
 
 function loadThemeColor() {
@@ -12089,13 +12097,24 @@ function loadThemeColor() {
 }
 
 function applyThemeColor(colorId) {
-  var themes = ['theme-orange','theme-blue','theme-green','theme-purple','theme-pink','theme-cyan'];
+  var themes = ['theme-orange','theme-blue','theme-green','theme-purple','theme-pink','theme-cyan','theme-red','theme-ink'];
   themes.forEach(function(t) { document.body.classList.remove(t); });
   if (colorId !== 'orange') document.body.classList.add('theme-' + colorId);
   THEME_COLORS.forEach(function(t) {
     var btn = document.getElementById('themeBtn-' + t.id);
     if (btn) btn.style.border = t.id === colorId ? '2px solid var(--text-primary)' : '2px solid transparent';
   });
+  syncMetaThemeColor();
+}
+
+// v6.2: 浏览器 UI 颜色跟随主题（meta theme-color）+ 流体着色器 accent 即时同步
+function syncMetaThemeColor() {
+  try {
+    var acc = (getComputedStyle(document.body).getPropertyValue('--accent') || '').trim();
+    var mc = document.querySelector('meta[name="theme-color"]');
+    if (mc && acc) mc.setAttribute('content', acc);
+    if (typeof window.__npSyncAccent === 'function') window.__npSyncAccent();
+  } catch (e) {}
 }
 
 function setThemeColor(colorId) {
@@ -12396,23 +12415,48 @@ document.addEventListener('DOMContentLoaded', function() {
     var fs = compile(gl.FRAGMENT_SHADER, [
       'precision mediump float;',
       'uniform vec2 u_res;uniform float u_t;uniform float u_d;',
+      'uniform vec3 u_acc;uniform vec4 u_rip[8];uniform float u_ro;',
       'float blob(vec2 a,vec2 b,float r){vec2 d=a-b;return exp(-dot(d,d)/(r*r));}',
+      'float rip(vec2 pt){',
+      ' float h=0.0;',
+      ' for(int i=0;i<8;i++){',
+      '  vec4 r=u_rip[i];',
+      '  if(r.w<=0.001)continue;',
+      '  float age=u_t-r.z;',
+      '  if(age<0.0||age>2.4)continue;',
+      '  float d=length(pt-r.xy);',
+      '  float band=d-age*1.2;',
+      '  h+=r.w*sin(band*40.0)*exp(-abs(band)*6.0)*exp(-d*1.5)*exp(-age*1.9)*smoothstep(0.0,0.08,age);',
+      ' }',
+      ' return h;',
+      '}',
       'void main(){',
       ' vec2 uv=gl_FragCoord.xy/u_res;',
       ' vec2 p=uv;p.x*=u_res.x/u_res.y;',
+      ' float h0=0.0;vec2 pr=p;',
+      ' if(u_ro>0.5){',
+      '  float e=0.012;',
+      '  h0=rip(p);',
+      '  vec2 grad=vec2(rip(p+vec2(e,0.0))-h0,rip(p+vec2(0.0,e))-h0)/e;',
+      '  pr=p+clamp(grad,-8.0,8.0)*0.0035;',
+      ' }',
       ' float t=u_t*0.045;',
       ' vec3 base=mix(vec3(0.988,0.976,0.960),vec3(0.078,0.067,0.058),u_d);',
-      ' vec3 warm=mix(vec3(0.965,0.860,0.760),vec3(0.240,0.150,0.105),u_d);',
-      ' vec3 glow=mix(vec3(0.949,0.384,0.165),vec3(1.0,0.541,0.298),u_d);',
+      ' vec3 warm=mix(base,u_acc,u_d>0.5?0.18:0.22);',
+      ' vec3 glow=u_acc;',
       ' float g=0.0;',
-      ' g+=blob(p,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
-      ' g+=blob(p,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
-      ' g+=blob(p,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
-      ' g+=blob(p,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
+      ' g+=blob(pr,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
+      ' g+=blob(pr,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
+      ' g+=blob(pr,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
+      ' g+=blob(pr,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
       ' g=clamp(g,0.0,1.4);',
       ' vec3 col=mix(base,warm,clamp(g,0.0,1.0)*0.75);',
       ' col=mix(col,glow,clamp(g-0.78,0.0,1.0)*(u_d>0.5?0.22:0.16));',
       ' col*=1.0-0.05*uv.y;',
+      ' float crest=clamp(h0,0.0,1.0);',
+      ' col+=u_acc*crest*0.07;',
+      ' col+=vec3(1.0)*crest*crest*0.10;',
+      ' col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
       ' gl_FragColor=vec4(col,1.0);',
       '}'
     ].join('\n'));
@@ -12431,6 +12475,67 @@ document.addEventListener('DOMContentLoaded', function() {
     var uRes = gl.getUniformLocation(prog, 'u_res');
     var uT = gl.getUniformLocation(prog, 'u_t');
     var uD = gl.getUniformLocation(prog, 'u_d');
+    var uAcc = gl.getUniformLocation(prog, 'u_acc');
+    var uRip = gl.getUniformLocation(prog, 'u_rip[0]');
+    var uRo = gl.getUniformLocation(prog, 'u_ro');
+    var accRGB = [0.949, 0.384, 0.165];
+    function hex2v(s) {
+      s = String(s || '').trim();
+      if (s.charAt(0) === '#') {
+        var n, r, g, b;
+        if (s.length === 7) {
+          n = parseInt(s.slice(1), 16);
+          if (isNaN(n)) return null;
+          return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+        }
+        if (s.length === 4) {
+          r = parseInt(s.charAt(1), 16); g = parseInt(s.charAt(2), 16); b = parseInt(s.charAt(3), 16);
+          if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+          return [(r * 17) / 255, (g * 17) / 255, (b * 17) / 255];
+        }
+        return null;
+      }
+      var m = s.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+      if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+      return null;
+    }
+    function syncAcc() {
+      try {
+        var v = getComputedStyle(document.body).getPropertyValue('--accent');
+        var rgb = hex2v(v);
+        if (rgb) accRGB = rgb;
+      } catch (e) {}
+    }
+    syncAcc();
+    window.__npSyncAccent = syncAcc;
+    var ripBuf = new Float32Array(32);
+    var ripIdx = 0;
+    var ripActive = false;
+    var lastRx = -1e4, lastRy = -1e4, lastRt = 0;
+    function pushRipple(cx, cy, amp) {
+      var w = window.innerWidth, h = window.innerHeight;
+      if (!w || !h) return;
+      var i = (ripIdx++ % 8) * 4;
+      ripBuf[i] = (cx / w) * (w / h);
+      ripBuf[i + 1] = 1 - cy / h;
+      ripBuf[i + 2] = performance.now() / 1000;
+      ripBuf[i + 3] = amp;
+    }
+    function onMove(x, y) {
+      var now = performance.now();
+      var dx = x - lastRx, dy = y - lastRy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 22 && now - lastRt < 110) return;
+      var amp = Math.max(0.25, Math.min(0.9, dist / 60));
+      pushRipple(x, y, amp);
+      lastRx = x; lastRy = y; lastRt = now;
+    }
+    window.addEventListener('pointermove', function (e) { onMove(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener('touchmove', function (e) {
+      var t = e.touches && e.touches[0];
+      if (t) onMove(t.clientX, t.clientY);
+    }, { passive: true });
+    var pollTick = 0;
     function resize() {
       var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
@@ -12448,9 +12553,23 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         if (!document.hidden) {
           resize();
+          var nowS = (now || 0) / 1000;
+          var any = false;
+          for (var i = 0; i < 8; i++) {
+            var b = i * 4;
+            if (ripBuf[b + 3] > 0) {
+              if (nowS - ripBuf[b + 2] < 2.4) any = true;
+              else ripBuf[b + 3] = 0;
+            }
+          }
+          ripActive = any;
+          if ((pollTick = (pollTick + 1) % 30) === 0) syncAcc();
           gl.uniform2f(uRes, canvas.width, canvas.height);
-          gl.uniform1f(uT, (now || 0) / 1000);
+          gl.uniform1f(uT, nowS);
           gl.uniform1f(uD, isDark() ? 1 : 0);
+          gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
+          gl.uniform1f(uRo, ripActive ? 1 : 0);
+          gl.uniform4fv(uRip, ripBuf);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
       } catch (err) {

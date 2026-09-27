@@ -39,6 +39,43 @@
 #### 验证记录
 - [x] 静态校验：`<script>` 10/10 平衡、iconify 416/416 配平、RESIDUAL=0、保护行 emoji 完整、流体 JS `node --check` 通过、括号配平
 - [x] 浏览器实测（本地 :8124 + Playwright）：亮/暗双主题截图通过、流体画布 1911×1074 渲染、噪点层就位、iconify 42/42 实例全部渲染、favicon 徽章应用/还原逻辑通过、控制台无新增错误（仅静态服务器预期的 /api 404）
+- [x] GitHub 推送 + 线上验证（commit `29335b1` 已推送，线上 `?v=50` 生效）
+
+---
+
+## v6.2 — 2026-09-28
+
+### 变更：8 主题深度着色 + 中国红/水墨灰新主题 + Tavern NP 视觉层对齐主站
+
+#### 一、style.css 主题深度着色（告别"只换 accent"）
+- 6 套既有主题由"仅 accent 渐变"升级为派生色系深度着色：hover/active/border/selection/scrollbar/阴影等派生色按主题色手算 hex（不用 color-mix，避免 JS 回读失真；`gen_theme_deep.py` 生成，括号配平 0）
+- 新增 `.theme-red`（中国红 `#D42B20`/`#F2644C`，暗 `#FF5245`/`#FF8A73`）与 `.theme-ink`（水墨灰 `#464B52`/`#6E747C`、`--text-on-accent:#FAFAFB`，暗 `#A7ADB8`/`#C9CED6`）
+- 5 个 `.dark.theme-X` 补齐 `--border-focus`；`.friends-hero` 硬编码 accent → `var(--accent-light)`
+
+#### 二、index.html 主题接线 + 全站水纹涟漪着色器
+- THEME_COLORS / applyThemeColor / syncMetaThemeColor / 主题按钮模板接入 red、ink（8 主题全覆盖）
+- 流体着色器硬编码橙修复：`uniform vec3 u_acc`，warm/glow 全改 u_acc 驱动；JS `hex2v()`/`syncAcc()`/`window.__npSyncAccent` 读 `--accent`，30 帧轮询兜底
+- 水纹涟漪：`uniform vec4 u_rip[8]` 环形缓冲（寿命 2.4s、波带 sin·exp 衰减、法线扰动 `u_ro` 门控），pointermove/touchmove 节流注入（dist≥22px 且 ≥110ms，amp=clamp(dist/60,0.25,0.9)），reduced-motion 跳过
+- 样式缓存键 `style.css?v=50` → `?v=51`
+
+#### 三、tavern.html 视觉层升级到与主站一致（布局与功能不变）
+- **三层背景**：注入 `<style id="np-visual-layer">`——亮态暖纸 `#F7F3EC` + accent 径向渐变 + 主站字体栈，暗态 `var(--tv-deep)` var 驱动（保 embed palette 同步）；`.np-noise` SVG feTurbulence 噪点层（亮 .05 multiply / 暗 .04 overlay）；`#np-fluid` WebGL 流体画布（z-index -2 / 噪点 -1 分层）
+- **磨砂玻璃**：`#sidePanel` / `#inputArea` / `.modal-card` 统一 `backdrop-filter: blur(18px) saturate(1.4)`（亮态暖白 rgba，暗态 `color-mix(var(--tv-panel/--tv-page))` 驱动）
+- **流体 IIFE**：canvas id `np-fluid`、syncAcc 读 documentElement `--acc`、accRGB 默认 `[1,0.4196,0.2078]`、导出 `window.__npSyncAccent`；`applyThemeColor` 换肤后 guarded 立即同步
+- **V5.0 暗色变量暖化**：`--tv-page/panel/deep/hover` → `#241E18`/`#2A241D`/`#16130F`/`#352E25`（`:root` 与 `.dark` 双块），standalone 暗色与主站 `#16130F` 暖调一致（embed 时父页 inline style 覆写优先，不受影响）
+- THEME_ACCENTS 接入 red/ink；standalone 主题初始化（`dp_theme`/`dp_theme_color` + prefers-color-scheme，embed-mode 跳过）；body 加 `np-page` 类
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/style.css` | 8 主题深度着色 + theme-red/theme-ink + `.dark.theme-X` --border-focus + friends-hero 变量化 |
+| `public/index.html` | THEME_COLORS red/ink、着色器 u_acc 改造、涟漪着色器、`?v=51` |
+| `public/tavern.html` | NP 视觉层注入（三层背景/玻璃/流体 IIFE）、暖化 V5.0 暗变量、THEME_ACCENTS red/ink、standalone 主题初始化、`np-page` |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 静态校验：`verify_tavern.py` ALL CHECKS PASSED（8254 行、8 个 script 块 `node --check` 全过、np-visual-layer 括号配平、文件尾 `</body></html>` 完整）
+- [x] 浏览器实测（本地 :8765 + Playwright）：亮态暖纸+流体+噪点三层可见；暗态 `rgb(22,19,15)` 暖底 + 玻璃三件套 color-mix 生效；canvas 尺寸 bug 修复（`inset:0` → `width/height:100%`，1274×716@dpr1.5）；red 主题 `--acc:#D42B20` 换肤即时同步；embed=1 头部隐藏 + `syncEmbeddedFromParent` green 覆写通过；pointermove 涟漪注入无报错；控制台 0 错误
 - [ ] GitHub 推送 + 线上验证（见下）
 
 ---
