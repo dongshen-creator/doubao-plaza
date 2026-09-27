@@ -4,6 +4,45 @@
 
 ---
 
+## v6.1 — 2026-09-28
+
+### 变更：NP 暖纸墨点视觉层升级（V14）+ Iconify 图标体系 + 编辑衬线字体
+
+按设计方法论对前端视觉层做系统升级（**只改视觉，布局与功能不变**），全部为追加式改造。
+
+#### 一、三层背景系统
+- **L1 WebGL 流体画布** `#fluid-canvas`：JS 注入的暖色流体着色器动画（品牌橙 blob 缓慢流动），DPR≤1.5、`prefers-reduced-motion` 跳过、try/catch 失败时移除画布回退 body 渐变
+- **L2 SVG 噪点层** `.noise-overlay`：feTurbulence fractalNoise 覆盖层（亮 .05 multiply / 暗 .04 overlay）
+- **L3 磨砂玻璃**：`backdrop-filter` 统一覆盖活动栏/侧栏/卡片/弹窗/输入区，叠暖纸高光内描边
+
+#### 二、Emoji → Iconify 全量替换（312 行，RESIDUAL=0）
+- 416 个 `<iconify-icon icon="ph:*">` 矢量图标替换功能位 emoji（全部 API 校验有效）
+- 上下文感知：📤 发送→paper-plane-tilt / 移除→x-circle / 上传→upload-simple / 退出→sign-out / 分享→share-network；➕ 加入频道→plus-circle、加好友→user-plus；彩色状态圆点→`style="color:var(--danger/--warning/--success/--text-faint)"`
+- 保护行（表情选择器 9 行、工具类型注册表、遗留注释等 18 行）保留 emoji 原文，运行时输入/输出不受影响
+- 修复 `icon_str()` 颜色 bug：原输出 `style="var(--danger)"`（非法 CSS）→ `style="color:var(--danger)"`
+
+#### 三、favicon 未读徽章（矢量化）
+- 矢量 SVG logo（品牌橙圆角方块 + 气泡）+ 未读红点（`#EF4444` r=12）；`_orig` 首次捕获、归零还原机制，无 JS 依赖渲染
+
+#### 四、编辑衬线字体 + CSP
+- 标题层：Fraunces（拉丁）+ LXGW WenKai（中文）双字体栈
+- `_headers` CSP：`style-src` / `style-src-elem` / `font-src` 放行 `https://cdn.jsdelivr.net`（字体 CSS 与 woff2 加载所需）
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/style.css` | 末尾追加 V14 视觉层规则（append-only） |
+| `public/index.html` | 字体 link、iconify script、favicon 矢量徽章、312 行 emoji→iconify、噪点层 + 流体着色器注入；缓存键 `?v=49` → `?v=50` |
+| `public/_headers` | CSP 放行 jsdelivr（style/font 源） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 静态校验：`<script>` 10/10 平衡、iconify 416/416 配平、RESIDUAL=0、保护行 emoji 完整、流体 JS `node --check` 通过、括号配平
+- [x] 浏览器实测（本地 :8124 + Playwright）：亮/暗双主题截图通过、流体画布 1911×1074 渲染、噪点层就位、iconify 42/42 实例全部渲染、favicon 徽章应用/还原逻辑通过、控制台无新增错误（仅静态服务器预期的 /api 404）
+- [ ] GitHub 推送 + 线上验证（见下）
+
+---
+
 ## v5.15 — 2026-09-11
 
 ### 变更：前端按钮质感升级（V13，append-only）
