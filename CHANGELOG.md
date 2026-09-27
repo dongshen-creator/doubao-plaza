@@ -76,7 +76,7 @@
 #### 验证记录
 - [x] 静态校验：`verify_tavern.py` ALL CHECKS PASSED（8254 行、8 个 script 块 `node --check` 全过、np-visual-layer 括号配平、文件尾 `</body></html>` 完整）
 - [x] 浏览器实测（本地 :8765 + Playwright）：亮态暖纸+流体+噪点三层可见；暗态 `rgb(22,19,15)` 暖底 + 玻璃三件套 color-mix 生效；canvas 尺寸 bug 修复（`inset:0` → `width/height:100%`，1274×716@dpr1.5）；red 主题 `--acc:#D42B20` 换肤即时同步；embed=1 头部隐藏 + `syncEmbeddedFromParent` green 覆写通过；pointermove 涟漪注入无报错；控制台 0 错误
-- [ ] GitHub 推送 + 线上验证（见下）
+- [x] GitHub 推送 + 线上验证（commit `4de86a3` 已推送；线上 `tavern.html` 含 `np-visual-layer`/`np-fluid`/`__npSyncAccent`/`theme-red`，`index.html` 为 `?v=51`，`style.css` 含 `theme-ink`）
 
 ---
 
