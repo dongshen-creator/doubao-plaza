@@ -5340,6 +5340,14 @@ async function switchSettingsTab(tab, btnEl) {
         </label>
         <div style="font-size:11px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div>
       </div>
+      <div class="form-group">
+        <label class="form-label">背景着色器</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">
+          <input type="checkbox" id="shaderToggle" ${localStorage.getItem('dp_shader') !== 'off' ? 'checked' : ''} onchange="toggleShader()">
+          显示动态涟漪背景动画（关闭后隐藏动效背景）
+        </label>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div>
+      </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 最近登录</div>
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.8">
@@ -5625,6 +5633,14 @@ function toggleNotif() {
   if (!notifEnabled) {
     document.getElementById('chatUnreadBadge').classList.add('hidden');
   }
+}
+
+function toggleShader() {
+  var on = document.getElementById('shaderToggle').checked;
+  localStorage.setItem('dp_shader', on ? 'on' : 'off');
+  if (typeof window.__npSetShader === 'function') window.__npSetShader(on);
+  if (typeof syncTavernPrefs === 'function') syncTavernPrefs();
+  toast('背景着色器已' + (on ? '开启' : '关闭'), 'success');
 }
 
 function toggleMutePrivate() {
@@ -10417,7 +10433,9 @@ function syncTavernPrefs() {
       fontFamily: (document.body && getComputedStyle(document.body).fontFamily) || '',
       themeColor: localStorage.getItem('dp_theme_color') || 'orange',
       // V5.0 修复：推送暗色模式 + 主站实际调色板（tavern 结构色跟随）
-      dark: document.body.classList.contains('dark')
+      dark: document.body.classList.contains('dark'),
+      // 着色器开关：嵌入页实时跟随主站设置
+      shader: localStorage.getItem('dp_shader') !== 'off'
     };
     if (prefs.dark) {
       var pcs = getComputedStyle(document.body);
@@ -11845,6 +11863,10 @@ function settingsAccountHTML() {
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
     '<input type="checkbox" id="chatKeyboardLiftToggle" ' + (chatKeyboardLift ? 'checked' : '') + ' onchange="toggleChatKeyboardLift()">键盘弹出时自动抬起输入框，避免被遮挡（iOS Safari / Android Chrome 适用）</label>' +
     '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div></div>' +
+    '<div class="form-group"><label class="form-label">背景着色器</label>' +
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
+    '<input type="checkbox" id="shaderToggle" ' + (localStorage.getItem('dp_shader') !== 'off' ? 'checked' : '') + ' onchange="toggleShader()">显示动态涟漪背景动画（关闭后隐藏动效背景）</label>' +
+    '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div></div>' +
     '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 最近登录</div>' +
     '<div style="font-size:12px;color:var(--text-secondary);line-height:1.8"><div>IP：' + esc(currentUser.last_login_ip || '未知') + '</div><div>时间：' + formatDate(currentUser.last_login_at) + '</div>' +
     '<div>设备：' + esc(currentUser.last_login_ua || '未知') + '</div></div></div>' +
@@ -12546,7 +12568,6 @@ document.addEventListener('DOMContentLoaded', function() {
       '    float hx=seaH(P.xz+vec2(e,0.0),tws,oct);',
       '    float hz=seaH(P.xz+vec2(0.0,e),tws,oct);',
       '    vec3 n=normalize(vec3(hh-hx,e,hh-hz));',
-      '    n=normalize(n+vec3(-clamp(grad.x*0.05,-0.5,0.5),0.0,-clamp(grad.y*0.05,-0.5,0.5)));',
       '    float fres=pow(clamp(1.0-dot(n,-rd),0.0,1.0),3.0)*0.65;',
       '    vec3 refl=skyC(reflect(rd,n));',
       '    vec3 sBase=mix(vec3(0.15,0.33,0.42),vec3(0.020,0.050,0.095),u_d);',
@@ -12558,12 +12579,14 @@ document.addEventListener('DOMContentLoaded', function() {
       '    float sp=pow(max(dot(reflect(rd,n),gSun),0.0),60.0)*2.706;',
       '    wcol+=mix(vec3(1.0),u_acc,0.30)*sp*0.5;',
       '    wcol+=u_acc*max(hh-0.55,0.0)*0.10;',
-      '    wcol+=vec3(1.0)*clamp(h0,0.0,1.0)*0.06;',
-      '    wcol+=u_acc*clamp(h0,0.0,1.0)*0.05;',
       '    col=mix(wcol,fogC,fogF);',
       '   }else{col=fogC;}',
       '  }',
       '  col*=1.0-0.05*uv.y;',
+      '  float crest=clamp(h0,0.0,1.0);',
+      '  col+=u_acc*crest*0.07;',
+      '  col+=vec3(1.0)*crest*crest*0.10;',
+      '  col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
       ' }else if(u_mode<2.5){',
       '  float tv=mod(u_t,240.0)*0.10472;',
       '  vec2 ctr=vec2(u_res.x/u_res.y*0.5,0.5);',
@@ -12652,17 +12675,13 @@ document.addEventListener('DOMContentLoaded', function() {
       '  ink=clamp(ink,0.0,1.0)*(1.0-smoothstep(5.0,13.0,u_idle));',
       '  col=mix(col,inkMid,ink*(1.0-ink)*0.35);',
       '  col=mix(col,inkC*0.85,ink*0.88);',
-      '  float brush=clamp(h0*1.4,0.0,1.0);',
-      '  float lift=clamp(-h0*1.3,0.0,1.0);',
-      '  col=mix(col,inkC,brush*0.55);',
-      '  col=mix(col,paper,lift*0.40);',
-      '  vec3 pn=normalize(vec3(-grad*0.7,1.0));',
-      '  float spec=pow(max(dot(pn,normalize(vec3(0.30,0.40,0.86))),0.0),24.0);',
-      '  col+=vec3(1.0)*spec*0.30*(u_ro>0.5?1.0:0.0);',
-      '  col+=u_acc*brush*0.06;',
       '  float grain=h21(floor(gl_FragCoord.xy*0.5));',
       '  col+=(grain-0.5)*0.03;',
       '  col*=1.0-0.05*uv.y;',
+      '  float crest=clamp(h0,0.0,1.0);',
+      '  col+=u_acc*crest*0.07;',
+      '  col+=vec3(1.0)*crest*crest*0.10;',
+      '  col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
       ' }',
       ' gl_FragColor=vec4(col,1.0);',
       '}'
@@ -12695,7 +12714,9 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         var b = document.body, m = 0;
         if (b) {
-          if (b.classList.contains('theme-purple')) m = 2;
+          if (b.classList.contains('theme-blue')) m = 1;
+          else if (b.classList.contains('theme-purple')) m = 2;
+          else if (b.classList.contains('theme-ink')) m = 3;
         }
         modeVal = m;
       } catch (e) {}
@@ -12731,6 +12752,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     syncAcc();
     window.__npSyncAccent = syncAcc;
+    // 着色器开关：dp_shader=off 时隐藏 canvas 并停止 rAF（默认开启）
+    var shaderOn = localStorage.getItem('dp_shader') !== 'off';
+    var frameQueued = false;
+    function scheduleFrame() {
+      if (!frameQueued && shaderOn) { frameQueued = true; requestAnimationFrame(frame); }
+    }
+    window.__npSetShader = function (on) {
+      shaderOn = !!on;
+      try { localStorage.setItem('dp_shader', shaderOn ? 'on' : 'off'); } catch (e) {}
+      if (canvas) canvas.style.display = shaderOn ? '' : 'none';
+      if (shaderOn) scheduleFrame();
+    };
     var ripBuf = new Float32Array(32);
     var ripIdx = 0;
     var ripActive = false;
@@ -12794,6 +12827,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
     }
     function frame(now) {
+      frameQueued = false;
+      if (!shaderOn) return;
       try {
         if (!document.hidden) {
           resize();
@@ -12824,10 +12859,11 @@ document.addEventListener('DOMContentLoaded', function() {
         die();
         return;
       }
-      requestAnimationFrame(frame);
+      scheduleFrame();
     }
+    canvas.style.display = shaderOn ? '' : 'none';
     document.body.appendChild(canvas);
-    requestAnimationFrame(frame);
+    if (shaderOn) scheduleFrame();
   } catch (e) {
     die();
   }

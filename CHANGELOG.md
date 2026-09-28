@@ -4,6 +4,42 @@
 
 ---
 
+## v7.2 — 2026-09-29
+
+### 变更：恢复海洋蓝海面/水墨灰墨滴背景 + 新增着色器开关（V7.2）
+
+按用户反馈纠正 v7.1.1 的错误方向：**涟漪水纹统一为 mode0 暖色 crest，但各主题背景功能全部保留**；并新增全局着色器开关。
+
+#### 一、纠正 v7.1.1：恢复主题→模式映射
+- `syncMode()` 恢复 `theme-blue→mode1`、`theme-ink→mode3`（`theme-purple→mode2` 不变，其余主题仍 mode0）
+- index 读 body class、tavern 镜像对称，双文件同改
+
+#### 二、涟漪水纹统一 crest（只改涟漪，不动背景）
+- **mode1（海洋蓝）**：保留 Seascape 海面背景（pr 折射 / 天空 / 雾 / 太阳高光），删除 v7.1 中压掉 crest 的法线扰动行与 2 条 `wcol` 行，`col*=1.0-0.05*uv.y` 后插入 mode0 同款 crest 4 行
+- **mode3（水墨灰）**：保留墨滴偏移 `iq=p+clamp(grad,-8.0,8.0)*0.030`、水墨山、grain、vignette，删除 brush/lift/pn/spec 8 行，vignette 后插入 crest 4 行
+- mode0（活力橙）与 mode2（优雅紫）零改动；两文件各 3 处 `crest=clamp(h0,...)`，grep 无 `brush=clamp(h0` 残留
+
+#### 三、新增着色器开关（`dp_shader`，默认开）
+- localStorage `dp_shader`（`'on'`/`'off'`）+ `shaderOn`/`frameQueued` 防双循环 + `scheduleFrame()` + `window.__npSetShader`
+- 关闭时：`frame()` 顶部提前 return（rAF 停止，降 GPU 占用与发热）、canvas `display:none`；刷新后按存储恢复
+- **index**：着色器 IIFE + `frame()` gate + boot 按开关启停；设置面板「背景着色器」`#shaderToggle`（两处模板）+ `toggleShader()` 写存储/即时生效/`syncTavernPrefs()` 同步 + toast
+- **tavern**：镜像 IIFE + frame gate + boot；设置 `#gmShaderToggle`（打开时回填 `L5384`、`saveSettings()` 持久化+即时生效）；`syncEmbeddedFromParent` 处理主站 `prefs.shader` → `__npSetShader`
+
+#### QA（playwright 实测）
+- index：海洋蓝=海面✓、水墨灰=水墨山+grain✓、优雅紫=velvet 紫绒✓、活力橙=mode0（drawArrays 挂钩 readPixels 校验和基线 57216 → 鼠标涟漪期 56653–59402 波动）✓
+- 开关：`__npSetShader(false)` → `display:none`+`dp_shader='off'`，`true` 恢复；`dp_shader=off` 刷新后仍隐藏✓；`toggleShader()` UI 路径 off/on 双向✓
+- tavern：水墨山✓、海面✓、`gmShaderToggle` 回填+`saveSettings` off/on✓、off 刷新后隐藏✓、`applyThemeColor` 蓝/墨无异常✓
+- 0 pageerror（console 仅预期 `/api/site-settings`、`/api/announcements` 404）
+
+#### 修改文件
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | `syncMode` 恢复映射、mode1/mode3 crest 修正、着色器开关 IIFE/gate/boot/UI |
+| `public/tavern.html` | 镜像同上（含 `gmShaderToggle`、`syncEmbeddedFromParent` shader 分支） |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v7.1.1 — 2026-09-28
 
 ### 变更：海洋蓝/水墨灰涟漪着色器回归 mode0 暖色流体（V7.1.1）
