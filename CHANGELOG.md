@@ -4,6 +4,40 @@
 
 ---
 
+## v7.1 — 2026-09-28
+
+### 变更：海洋蓝改海浪（Seascape）+ 水墨灰改交互式滴墨（V7.1）
+
+按用户反馈改造两个模式的着色器，**优雅紫（mode2）与其余模式不动**；布局与功能不变，仅替换 GLSL 分支与新增 ink uniform 接线。
+
+#### 一、海洋蓝 mode1：雨水 → Shadertoy Ms2SD1（Seascape）海浪
+- 移除 v7.0 的指针雨滴（Mt33DH）+ 屏幕雨水（ltffzl）双层雨效
+- 移植 Seascape 核心：`sea_octave`/`map` 高度场射线步进 + `getNormal` + 海色/天色混合 + 太阳高光；**仅保留水浪**，去掉原版岛屿/船等元素
+- 白天海景（亮色 theme-blue）与夜色暗海（dark）均由 `uD` 驱动；帧率实测 1911×1074 ≈ 76fps（13.1ms/帧）
+- 240s 包裹相位连续：`tws = mod(u_t, 240.0) × 0.21817`（240 乘系数为整数倍相位）
+
+#### 二、水墨灰 mode3：静态水墨 → 交互式滴墨三态
+- **点击滴墨**：`pointerdown`/`touchstart` 写入 `u_ink[4]` 环形缓冲（坐标 p 空间 + 时间戳 + 种子），墨滴随 `age∈[0,18]s` 扩散、`wobble` 抖动边缘
+- **指针散开**：`onMove` 更新 `u_m` + `lastInteract`，墨迹在指针扰动下晕散
+- **久置凝聚**：`u_idle = u_t - lastInteract`，闲置 5→13s 渐隐墨迹、回归原水墨山水画底（`1.0 - smoothstep(5.0, 13.0, u_idle)`）
+- uniform 接线：`u_ink[4]`（`getUniformLocation('u_ink[0]')`）+ `u_idle`，`frame()` 每帧 `uniform4fv`/`uniform1f` 上传；index 与 tavern 镜像同步
+- `pushInk(cx,cy)`：`(cx/h, 1-cy/h)` 归一化到 p 空间（`p.x *= aspect` 约定下与 `u_m` 同坐标系），实测点击位与墨点渲染位像素级吻合
+- 墨池槽位耗尽自然复写（环形 4 槽），无分配、无 GC 压力
+
+#### 三、质量验证
+- FPS 基准（同源 shader 独立 canvas，draw+readPixels 计时）：mode0 4.9ms / mode1 13.1ms / mode2 5.2ms / mode3 26.8ms → 全部 ≥30fps 达标
+- 视觉 QA 截图：滴墨（83,83,85）vs 底色 ~205 对比确认；指针打圈散开区域扩大确认；闲置 15s 后底图回归（205,205,203）确认；dark+ink、mode0、mode2、tavern 镜像 smoke 全部通过
+- 调试钩子（`__npDebug`/`__npDebugDraw`/`__npLastNowS`）已全部移除，grep 0 残留；pageerror 0
+
+#### 修改文件
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | mode1 Seascape 分支替换、mode3 滴墨三态、`u_ink`/`u_idle`/`pushInk` 接线 |
+| `public/tavern.html` | 镜像同上 7 处编辑 |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v7.0 — 2026-09-28
 
 ### 变更：流体着色器 4 模式主题分化（雨滴/丝绒/水墨）+ 玻璃拟态按钮（V7.0）
