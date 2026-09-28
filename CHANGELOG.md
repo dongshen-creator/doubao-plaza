@@ -40,7 +40,7 @@
 #### 验证记录
 - [x] 文案审计：`git diff` 新增中文仅 CSS 注释，无用户可见文案新增、无设计禁用项（霓虹紫渐变/Emoji 图标/线性动画）回归
 - [x] 浏览器实测（本地 :8766 + Playwright）：4 主题 × 亮/暗共 8 张截图（`v7c-*`）目检通过——蓝=雨水玻璃水滴、紫=低饱和丝绒、墨=纸纹灰墨晕、橙=warm 原样；canvas 1911×1074 存活、0 pageerror（仅静态服务器预期的 /api 404）；按钮 computed `color-mix` 渐变 + `blur(8px) saturate(1.5)` 生效
-- [ ] GitHub 推送 + 线上验证（待推送）
+- [x] GitHub 推送 + 线上验证（commit `95a9b6c` 已推送；线上 `index.html` 为 `?v=52` 且含 `u_mode`/`rainH`/`syncMode`、`tavern.html` 含 `u_mode`/`data-np-theme`、`style.css` 含玻璃按钮与 theme-ink 纸纹）
 
 ---
 
