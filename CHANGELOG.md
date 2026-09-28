@@ -4,6 +4,25 @@
 
 ---
 
+## v7.1.1 — 2026-09-28
+
+### 变更：海洋蓝/水墨灰涟漪着色器回归 mode0 暖色流体（V7.1.1）
+
+按用户要求，仅改 `syncMode()` 主题→模式映射，**其他任何内容不动**：
+- `theme-blue`（海洋蓝）、`theme-ink`（水墨灰）不再映射 mode1/mode3，回退 **mode0 暖色流体（与活力橙同款）**——着色器代码零改动，仍是同一 GLSL 四分支
+- `theme-purple`（优雅紫）仍为 mode2 丝绒，其余主题不变；GLSL 中 mode1/mode3 分支保留未删
+- index 读 body class、tavern 读 `data-np-theme`，双文件对称改同一处
+
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | `syncMode()` 删 theme-blue→1、theme-ink→3 两行映射 |
+| `public/tavern.html` | 镜像删 blue→1、ink→3 两行映射 |
+| `CHANGELOG.md` | 本记录 |
+
+QA：蓝/墨主题截图为 mode0 流体（无海浪/无水墨山）、紫仍 velvet、tavern 镜像同款、0 pageerror。
+
+---
+
 ## v7.1 — 2026-09-28
 
 ### 变更：海洋蓝改海浪（Seascape）+ 水墨灰改交互式滴墨（V7.1）
