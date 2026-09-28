@@ -2324,3 +2324,63 @@ iconify-icon {
   .navbar, .activity-bar, .app-sidebar { animation: none; }
   #fluid-canvas { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   V7.0 液态玻璃按钮（WccXDj 拟态 · 追加式）
+   半透明 accent 玻璃体 + blur + 内高光环 + 发丝描边；
+   继承既有 token（8 主题 × 亮暗自动适配），
+   追加块内重述 hover / focus-visible / active 防层叠覆盖。
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-orange, .nav-btn-primary, .chat-send-btn {
+  backdrop-filter: blur(8px) saturate(1.5);
+  -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+@supports (background: color-mix(in srgb, red 50%, transparent)) {
+  .btn-orange, .nav-btn-primary, .chat-send-btn {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 88%, transparent),
+      color-mix(in srgb, var(--accent-light, var(--accent)) 74%, transparent));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.38),
+      inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent),
+      0 2px 6px var(--accent-shadow),
+      0 6px 16px rgba(0,0,0,.06);
+  }
+  .btn-orange:hover, .nav-btn-primary:hover, .chat-send-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.48),
+      inset 0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent),
+      0 8px 20px var(--accent-shadow),
+      0 12px 28px rgba(0,0,0,.10);
+  }
+  .btn-orange:focus-visible, .nav-btn-primary:focus-visible,
+  .chat-send-btn:focus-visible {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.48),
+      inset 0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent),
+      0 0 0 3px var(--accent-bg),
+      0 0 0 1px var(--accent);
+  }
+  .btn-orange:active, .nav-btn-primary:active,
+  .chat-send-btn:active:not(:disabled) {
+    transform: translateY(0) scale(.97);
+    box-shadow:
+      inset 0 2px 5px rgba(0,0,0,.25),
+      inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+      0 1px 3px var(--accent-shadow);
+    filter: brightness(.98);
+  }
+}
+
+/* ── 水墨灰：纸纹加重（噪点层提密，亮暗各自收敛） ── */
+body.theme-ink .noise-overlay { opacity: .09; }
+body.dark.theme-ink .noise-overlay { opacity: .07; }
+
+/* ── V7.0 收口：减少动态偏好下取消玻璃按钮抬升 ── */
+@media (prefers-reduced-motion: reduce) {
+  .btn-orange:hover, .nav-btn-primary:hover,
+  .chat-send-btn:hover:not(:disabled) { transform: none; }
+}

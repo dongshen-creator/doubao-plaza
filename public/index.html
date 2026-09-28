@@ -184,7 +184,7 @@
       };
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="stylesheet" href="style.css?v=52">
   <!-- V11 修复：Cloudflare Turnstile 人机验证脚本（站点密钥为空时无需加载，避免脚本被外网环境拦截产生报错；启用时取消注释并填入 TURNSTILE_SITE_KEY） -->
   <!-- <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> -->
   <script>
@@ -12416,7 +12416,9 @@ document.addEventListener('DOMContentLoaded', function() {
       'precision mediump float;',
       'uniform vec2 u_res;uniform float u_t;uniform float u_d;',
       'uniform vec3 u_acc;uniform vec4 u_rip[8];uniform float u_ro;',
+      'uniform float u_mode;uniform vec2 u_m;',
       'float blob(vec2 a,vec2 b,float r){vec2 d=a-b;return exp(-dot(d,d)/(r*r));}',
+      'float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}',
       'float rip(vec2 pt){',
       ' float h=0.0;',
       ' for(int i=0;i<8;i++){',
@@ -12430,33 +12432,146 @@ document.addEventListener('DOMContentLoaded', function() {
       ' }',
       ' return h;',
       '}',
+      'float rainH(vec2 uv,float tw){',
+      ' float h=0.0;',
+      ' for(int L=0;L<2;L++){',
+      '  float fl=float(L);',
+      '  vec2 sc=mix(vec2(7.0,3.5),vec2(11.0,5.5),fl);',
+      '  vec2 g=uv*sc;',
+      '  vec2 id=floor(g);',
+      '  vec2 f=fract(g)-0.5;',
+      '  float n=h21(id+vec2(fl*17.0,fl*9.0));',
+      '  float sp=0.10+0.05*floor(h21(id+vec2(fl*17.0+3.0,fl*9.0+1.0))*3.0);',
+      '  float ph=fract(n+tw*sp);',
+      '  float y=0.6-1.2*ph;',
+      '  float x=(h21(id+vec2(fl*17.0+7.3,fl*9.0+4.2))-0.5)*0.7;',
+      '  float fade=smoothstep(0.0,0.08,ph)*(1.0-smoothstep(0.92,1.0,ph));',
+      '  vec2 d=vec2(f.x-x,f.y-y);',
+      '  vec2 dd=d*vec2(1.0,0.55);',
+      '  float head=exp(-dot(dd,dd)*70.0);',
+      '  float sy=clamp(f.y,y,y+0.5);',
+      '  vec2 td=vec2(f.x-x,f.y-sy);',
+      '  float trail=exp(-dot(td,td)*90.0);',
+      '  h+=(head+trail*0.4)*fade*(1.0-fl*0.30);',
+      ' }',
+      ' vec2 g2=uv*16.0;',
+      ' vec2 id2=floor(g2);',
+      ' vec2 f2=fract(g2)-0.5;',
+      ' float n2=h21(id2+vec2(5.1,2.3));',
+      ' if(n2>0.55){',
+      '  vec2 off=(vec2(h21(id2+vec2(1.7,0.0)),h21(id2+vec2(0.0,2.9)))-0.5)*0.55;',
+      '  float r=0.05+0.10*h21(id2+vec2(4.4,1.1));',
+      '  float d=length(f2-off);',
+      '  h+=(1.0-smoothstep(r*0.35,r,d))*0.8;',
+      ' }',
+      ' return h;',
+      '}',
       'void main(){',
       ' vec2 uv=gl_FragCoord.xy/u_res;',
       ' vec2 p=uv;p.x*=u_res.x/u_res.y;',
-      ' float h0=0.0;vec2 pr=p;',
+      ' float h0=0.0;vec2 pr=p;vec2 grad=vec2(0.0);',
       ' if(u_ro>0.5){',
       '  float e=0.012;',
       '  h0=rip(p);',
-      '  vec2 grad=vec2(rip(p+vec2(e,0.0))-h0,rip(p+vec2(0.0,e))-h0)/e;',
+      '  grad=vec2(rip(p+vec2(e,0.0))-h0,rip(p+vec2(0.0,e))-h0)/e;',
       '  pr=p+clamp(grad,-8.0,8.0)*0.0035;',
       ' }',
       ' float t=u_t*0.045;',
-      ' vec3 base=mix(vec3(0.988,0.976,0.960),vec3(0.078,0.067,0.058),u_d);',
-      ' vec3 warm=mix(base,u_acc,u_d>0.5?0.18:0.22);',
-      ' vec3 glow=u_acc;',
-      ' float g=0.0;',
-      ' g+=blob(pr,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
-      ' g+=blob(pr,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
-      ' g+=blob(pr,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
-      ' g+=blob(pr,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
-      ' g=clamp(g,0.0,1.4);',
-      ' vec3 col=mix(base,warm,clamp(g,0.0,1.0)*0.75);',
-      ' col=mix(col,glow,clamp(g-0.78,0.0,1.0)*(u_d>0.5?0.22:0.16));',
-      ' col*=1.0-0.05*uv.y;',
-      ' float crest=clamp(h0,0.0,1.0);',
-      ' col+=u_acc*crest*0.07;',
-      ' col+=vec3(1.0)*crest*crest*0.10;',
-      ' col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
+      ' vec3 col=vec3(0.0);',
+      ' if(u_mode<0.5){',
+      '  vec3 base=mix(vec3(0.988,0.976,0.960),vec3(0.078,0.067,0.058),u_d);',
+      '  vec3 warm=mix(base,u_acc,u_d>0.5?0.18:0.22);',
+      '  vec3 glow=u_acc;',
+      '  float g=0.0;',
+      '  g+=blob(pr,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
+      '  g+=blob(pr,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
+      '  g+=blob(pr,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
+      '  g+=blob(pr,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
+      '  g=clamp(g,0.0,1.4);',
+      '  col=mix(base,warm,clamp(g,0.0,1.0)*0.75);',
+      '  col=mix(col,glow,clamp(g-0.78,0.0,1.0)*(u_d>0.5?0.22:0.16));',
+      '  col*=1.0-0.05*uv.y;',
+      '  float crest=clamp(h0,0.0,1.0);',
+      '  col+=u_acc*crest*0.07;',
+      '  col+=vec3(1.0)*crest*crest*0.10;',
+      '  col-=u_acc*clamp(-h0,0.0,1.0)*0.04;',
+      ' }else if(u_mode<1.5){',
+      '  float tw=mod(u_t,240.0);',
+      '  float rh=rainH(p,tw);',
+      '  float e=0.010;',
+      '  vec2 rg=vec2(rainH(p+vec2(e,0.0),tw)-rh,rainH(p+vec2(0.0,e),tw)-rh)/e;',
+      '  vec2 disp=clamp(rg,-6.0,6.0)*0.006;',
+      '  vec2 bgp=pr+disp;',
+      '  vec3 base=mix(vec3(0.940,0.960,0.980),vec3(0.045,0.060,0.090),u_d);',
+      '  vec3 cool=mix(base,u_acc,u_d>0.5?0.20:0.14);',
+      '  float g=0.0;',
+      '  g+=blob(bgp,vec2(0.18+0.12*sin(t*1.10),0.28+0.09*cos(t*0.83)),0.52);',
+      '  g+=blob(bgp,vec2(0.82+0.10*cos(t*0.77),0.34+0.11*sin(t*1.21)),0.58);',
+      '  g+=blob(bgp,vec2(0.52+0.14*sin(t*0.61+2.4),0.82+0.08*cos(t*1.05)),0.62);',
+      '  g+=blob(bgp,vec2(0.33+0.11*cos(t*1.37+4.1),0.68+0.10*sin(t*0.69)),0.44);',
+      '  g=clamp(g,0.0,1.4);',
+      '  col=mix(base,cool,clamp(g,0.0,1.0)*0.7);',
+      '  col=mix(col,u_acc,clamp(g-0.78,0.0,1.0)*(u_d>0.5?0.20:0.14));',
+      '  float wet=clamp(rh,0.0,1.0);',
+      '  col=mix(col,col*0.90,wet*0.55);',
+      '  vec3 rn=normalize(vec3(-rg*0.5,1.0));',
+      '  vec3 ld=normalize(vec3(0.30,0.50,0.90));',
+      '  float rsp=pow(max(dot(rn,ld),0.0),30.0);',
+      '  col+=vec3(1.0)*rsp*0.45*step(0.02,rh);',
+      '  col+=u_acc*wet*0.04;',
+      '  if(u_ro>0.5){',
+      '   vec3 pn=normalize(vec3(-grad*0.6,1.0));',
+      '   float psp=pow(max(dot(pn,ld),0.0),40.0);',
+      '   float fr=pow(1.0-clamp(pn.z,0.0,1.0),2.0);',
+      '   col+=vec3(1.0)*psp*0.55;',
+      '   col+=u_acc*fr*0.22;',
+      '  }',
+      '  col*=1.0-0.05*uv.y;',
+      ' }else if(u_mode<2.5){',
+      '  float tv=mod(u_t,240.0)*0.10472;',
+      '  vec2 ctr=vec2(u_res.x/u_res.y*0.5,0.5);',
+      '  vec2 pc=pr-ctr;',
+      '  vec2 mc=u_m-ctr;',
+      '  float lp=length(pc-mc);',
+      '  float k=exp(-lp*3.5);',
+      '  vec2 uva=mc+(pc-mc)*(1.0-0.45*k);',
+      '  float b1=sin(uva.x*4.2+uva.y*2.6+tv*2.0+sin(uva.y*5.0-tv*3.0)*1.1);',
+      '  float b2=sin(uva.y*6.4-uva.x*1.8+tv*3.0);',
+      '  float f=0.5+0.5*(b1*0.65+b2*0.35);',
+      '  float sheen=pow(clamp(f,0.0,1.0),3.0);',
+      '  vec3 v0=mix(vec3(0.335,0.265,0.430),vec3(0.105,0.082,0.132),u_d);',
+      '  vec3 v1=mix(vec3(0.555,0.470,0.625),vec3(0.205,0.165,0.270),u_d);',
+      '  vec3 v2=mix(vec3(0.830,0.795,0.885),vec3(0.395,0.335,0.485),u_d);',
+      '  col=mix(v0,v1,smoothstep(0.15,0.65,f));',
+      '  col=mix(col,v2,sheen*0.65);',
+      '  col=mix(col,u_acc,0.08);',
+      '  col*=1.0-0.30*clamp(length(pc)*0.8,0.0,1.0);',
+      '  col+=u_acc*clamp(h0,0.0,1.0)*0.05;',
+      ' }else{',
+      '  float tw=mod(u_t,240.0)*0.02618;',
+      '  vec3 paper=mix(vec3(0.965,0.958,0.945),vec3(0.075,0.074,0.078),u_d);',
+      '  vec3 inkC=mix(vec3(0.160,0.165,0.175),vec3(0.760,0.770,0.790),u_d);',
+      '  float w=0.0;',
+      '  w+=blob(pr,vec2(0.30+0.13*sin(tw*2.0),0.35+0.11*cos(tw*3.0)),0.50);',
+      '  w+=blob(pr,vec2(0.72+0.11*cos(tw*2.0+2.1),0.66+0.12*sin(tw*4.0)),0.56);',
+      '  w=clamp(w,0.0,1.0);',
+      '  col=paper;',
+      '  float wash=smoothstep(0.32,0.72,w);',
+      '  col=mix(col,inkC,wash*0.72);',
+      '  float edge=smoothstep(0.28,0.42,w)*(1.0-smoothstep(0.42,0.60,w));',
+      '  col=mix(col,inkC,edge*0.30);',
+      '  float brush=clamp(h0*1.4,0.0,1.0);',
+      '  float lift=clamp(-h0*1.3,0.0,1.0);',
+      '  col=mix(col,inkC,brush*0.55);',
+      '  col=mix(col,paper,lift*0.40);',
+      '  vec3 pn=normalize(vec3(-grad*0.7,1.0));',
+      '  float spec=pow(max(dot(pn,normalize(vec3(0.30,0.40,0.86))),0.0),24.0);',
+      '  col+=vec3(1.0)*spec*0.30*(u_ro>0.5?1.0:0.0);',
+      '  col+=u_acc*brush*0.06;',
+      '  float grain=h21(floor(gl_FragCoord.xy*0.5));',
+      '  col+=(grain-0.5)*0.03;',
+      '  col*=1.0-0.05*uv.y;',
+      ' }',
       ' gl_FragColor=vec4(col,1.0);',
       '}'
     ].join('\n'));
@@ -12478,6 +12593,21 @@ document.addEventListener('DOMContentLoaded', function() {
     var uAcc = gl.getUniformLocation(prog, 'u_acc');
     var uRip = gl.getUniformLocation(prog, 'u_rip[0]');
     var uRo = gl.getUniformLocation(prog, 'u_ro');
+    var uMode = gl.getUniformLocation(prog, 'u_mode');
+    var uM = gl.getUniformLocation(prog, 'u_m');
+    var modeVal = 0;
+    var pmx = -10, pmy = -10;
+    function syncMode() {
+      try {
+        var b = document.body, m = 0;
+        if (b) {
+          if (b.classList.contains('theme-blue')) m = 1;
+          else if (b.classList.contains('theme-purple')) m = 2;
+          else if (b.classList.contains('theme-ink')) m = 3;
+        }
+        modeVal = m;
+      } catch (e) {}
+    }
     var accRGB = [0.949, 0.384, 0.165];
     function hex2v(s) {
       s = String(s || '').trim();
@@ -12505,6 +12635,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var rgb = hex2v(v);
         if (rgb) accRGB = rgb;
       } catch (e) {}
+      syncMode();
     }
     syncAcc();
     window.__npSyncAccent = syncAcc;
@@ -12522,6 +12653,8 @@ document.addEventListener('DOMContentLoaded', function() {
       ripBuf[i + 3] = amp;
     }
     function onMove(x, y) {
+      var vw = window.innerWidth, vh = window.innerHeight;
+      if (vw && vh) { pmx = (x / vw) * (vw / vh); pmy = 1 - y / vh; }
       var now = performance.now();
       var dx = x - lastRx, dy = y - lastRy;
       var dist = Math.sqrt(dx * dx + dy * dy);
@@ -12570,6 +12703,8 @@ document.addEventListener('DOMContentLoaded', function() {
           gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
           gl.uniform1f(uRo, ripActive ? 1 : 0);
           gl.uniform4fv(uRip, ripBuf);
+          gl.uniform1f(uMode, modeVal);
+          gl.uniform2f(uM, pmx, pmy);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
       } catch (err) {

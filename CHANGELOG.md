@@ -4,6 +4,46 @@
 
 ---
 
+## v7.0 — 2026-09-28
+
+### 变更：流体着色器 4 模式主题分化（雨滴/丝绒/水墨）+ 玻璃拟态按钮（V7.0）
+
+按设计规范升级前端美学：八主题各有风格，仅指定主题改流体着色器；按钮玻璃拟态参考 WccXDj；**布局与功能不变，全部追加式改造**。
+
+#### 一、流体着色器 4 模式（`u_mode` / `u_m`）
+- 单一 GLSL ES 1.0 片元着色器内四分支：**mode0 warm**（原暖色流体逐行保留，视觉与原版等同）/ **mode1 rain** / **mode2 velvet** / **mode3 ink**
+- 主题→模式映射：`theme-blue`→1、`theme-purple`→2、`theme-ink`→3、其余（含 orange、无 class）→0——未提及主题不动
+- **海洋蓝 mode1**：指针雨滴（Mt33DH）+ 屏幕雨水（ltffzl）——双层下落水滴头部 + 拖尾 + 静态凝结滴；雨速量化 `sp∈{0.10,0.15,0.20}` 使 240s 包裹点相位连续（240×sp 为整数）
+- **优雅紫 mode2**：丝绒（wdjGzK）改低饱和 plum/lilac 色调（规避禁用的霓虹紫/靛/蓝紫）；`tv=mod(u_t,240)×0.10472` 跳变 8π、整数谐波连续
+- **水墨灰 mode3**：水墨指针（fljBWc）+ shuimo.design 纸纹灰墨晕；`tw` 跳变 2π 连续
+- uniform 接线：`u_mode`/`u_m` location + `syncMode()`（index 读 body class，tavern 读 `data-np-theme`）+ `onMove` 设 `pmx/pmy` + `frame()` 每帧上传；`syncAcc` 尾调 `syncMode` 与 30 帧轮询双保险，任意顺序收敛
+- GLSL1 mediump 安全：大参数 `sin` hash 全改 fract 型 `h21`；循环边界常量化；mode0 仅提升 `grad` 声明与 `col` 初始化
+
+#### 二、玻璃拟态按钮（style.css V7.0 尾部追加）
+- `.btn-orange` / `.nav-btn-primary` / `.chat-send-btn`：`backdrop-filter: blur(8px) saturate(1.5)`
+- `@supports (background: color-mix(...))` 内重述 base/hover/focus-visible/active 的玻璃背景 + 内高光 + 描边，防层叠覆盖（`:disabled` 特异性 (0,2,0) 更高不受影响）
+- `.theme-ink .noise-overlay` 纸纹提密（亮 .09 / 暗 .07）
+- reduced-motion 取消按钮抬升（顺带修复 V13 media 规则被后置规则覆盖的既有 a11y 问题）
+
+#### 三、同步链与缓存
+- `applyThemeColor` 新增 `documentElement[data-np-theme]`（tavern 无 body 主题类，靠它定模式；standalone localStorage 路径同样生效）
+- 样式缓存键 `style.css?v=51` → `?v=52`
+
+#### 修改文件表
+| 文件 | 说明 |
+|------|------|
+| `public/index.html` | fs 数组 4 模式着色器、`u_mode`/`u_m` 接线、`syncMode`/`syncAcc`、`onMove` pmx/pmy、frame uniforms、`?v=52` |
+| `public/tavern.html` | 镜像 4 模式着色器 + `syncMode(data-np-theme)` + `applyThemeColor` setAttribute |
+| `public/style.css` | 尾部追加 V7.0 玻璃按钮 + theme-ink 纸纹 + reduced-motion（append-only） |
+| `CHANGELOG.md` | 本记录 |
+
+#### 验证记录
+- [x] 文案审计：`git diff` 新增中文仅 CSS 注释，无用户可见文案新增、无设计禁用项（霓虹紫渐变/Emoji 图标/线性动画）回归
+- [x] 浏览器实测（本地 :8766 + Playwright）：4 主题 × 亮/暗共 8 张截图（`v7c-*`）目检通过——蓝=雨水玻璃水滴、紫=低饱和丝绒、墨=纸纹灰墨晕、橙=warm 原样；canvas 1911×1074 存活、0 pageerror（仅静态服务器预期的 /api 404）；按钮 computed `color-mix` 渐变 + `blur(8px) saturate(1.5)` 生效
+- [ ] GitHub 推送 + 线上验证（待推送）
+
+---
+
 ## v6.1 — 2026-09-28
 
 ### 变更：NP 暖纸墨点视觉层升级（V14）+ Iconify 图标体系 + 编辑衬线字体
