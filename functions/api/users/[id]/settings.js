@@ -28,8 +28,8 @@ async function hashPassword(password) {
     Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 昵称规范化统一走 ../_lib/name.js（注册 / 登录 / 改名共用同一实现）
-import { normalizeName } from '../_lib/name.js';
+// 昵称规范化统一走 ../../_lib/name.js（注册 / 登录 / 改名共用同一实现）
+import { normalizeName } from '../../_lib/name.js';
 
 // 昵称合法性检查
 function validateName(name) {
