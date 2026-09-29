@@ -28,15 +28,8 @@ async function hashPassword(password) {
     Array.from(new Uint8Array(derivedBits), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 昵称规范化：去除零宽字符、不可见字符，NFC 归一化，折叠空白，转小写
-function normalizeName(name) {
-  if (!name) return '';
-  let s = name.replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u200E\u200F\u202A-\u202E\u2061-\u2064]/g, '');
-  s = s.normalize('NFC');
-  s = s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
-  s = s.trim();
-  return s.toLowerCase();
-}
+// 昵称规范化统一走 ../_lib/name.js（注册 / 登录 / 改名共用同一实现）
+import { normalizeName } from '../_lib/name.js';
 
 // 昵称合法性检查
 function validateName(name) {
@@ -125,7 +118,7 @@ export async function onRequestGet(context) {
     
     return Response.json({ success: true, data: notifications });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[settings.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
   }
 }
 
@@ -406,6 +399,6 @@ export async function onRequestPut(context) {
 
     return Response.json({ success: false, error: '未知操作' });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[settings.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }

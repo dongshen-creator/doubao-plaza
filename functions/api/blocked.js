@@ -64,7 +64,7 @@ export async function onRequestGet(context) {
 
     return Response.json({ success: true, data: blocked });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[blocked.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
   }
 }
 
@@ -108,7 +108,7 @@ export async function onRequestPost(context) {
     ).bind(user_id, blocked_user_id).run();
     return Response.json({ success: true, data: { id: result.meta.last_row_id } });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[blocked.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -145,6 +145,6 @@ export async function onRequestDelete(context) {
     await env.DB.prepare(`DELETE FROM blocked_users WHERE id = ?`).bind(id).run();
     return Response.json({ success: true, message: '已移出黑名单' });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[blocked.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }

@@ -343,8 +343,10 @@
     </div>
     <div id="loginForm">
       <form onsubmit="event.preventDefault();doLogin()">
-      <div class="form-group"><label class="form-label">豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入豆包号或智能体链接"></div>
+      <div class="form-group"><label class="form-label">昵称 / 豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入昵称、豆包号或智能体链接"></div>
       <div class="form-group"><label class="form-label">密码</label><input class="input" id="loginPwd" type="password" placeholder="输入密码" maxlength="32" autocomplete="current-password"></div>
+      <!-- V8.0：登录风险复验（撞库喷洒/持续攻击信号时展示，完成后重新点击登录） -->
+      <div class="form-group" id="loginTurnstileContainer" style="display:none"><div class="form-label">人机验证</div><div id="loginTurnstileWidget"></div><input type="hidden" id="loginTurnstileToken"></div>
       <button type="submit" class="btn btn-orange btn-full">登录</button>
       </form>
       <p style="text-align:center;font-size:13px;color:var(--text-faint);margin-top:14px">还没有账号？<a href="#" onclick="closeModal('login');showModal('register');return false" style="color:var(--accent);font-weight:600">立即注册</a></p>
@@ -399,7 +401,7 @@
     <div class="form-group"><label class="form-label">姓名 *</label><input class="input" id="regName" placeholder="你的昵称" maxlength="100"></div>
     <div class="form-group"><label class="form-label">密码 *</label><input class="input" id="regPassword" type="password" placeholder="设置密码（6-32位）" maxlength="32" autocomplete="new-password"></div>
     <div class="form-group"><label class="form-label">豆包号 *</label><input class="input" id="regDoubaoId" placeholder="你的豆包号（必填）" maxlength="50"></div>
-    <div class="form-group"><label class="form-label">AI视频链接 *</label><input class="input" id="regAgentUrl" placeholder="https://www.doubao.com/share/... 或创作视频链接"><div class="form-hint">必须填写AI视频链接（不支持智能体链接 /bot/ 链接），将作为用户主页</div></div>
+    <div class="form-group"><label class="form-label">AI视频链接</label><input class="input" id="regAgentUrl" placeholder="https://www.doubao.com/share/...（选填）"><div class="form-hint">选填，将作为用户主页；填写时不支持 /bot/ 智能体链接，可随时在设置中补全</div></div>
     <div class="form-group"><label class="form-label">头像链接</label><input class="input" id="regAvatar" placeholder="https://example.com/avatar.jpg（选填）"></div>
     <div class="form-group"><label class="form-label">个人简介</label><textarea class="input" id="regBio" placeholder="介绍一下自己（选填，最多500字）" rows="3" maxlength="500" style="resize:vertical"></textarea><div class="form-hint">最多500字</div></div>
     <!-- V11 修复：Turnstile 人机验证 -->
@@ -456,6 +458,7 @@
     <div class="modal-header">
       <div style="width:32px;height:32px;border-radius:10px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px"><iconify-icon icon="ph:wrench-fill"></iconify-icon></div>
       <div class="modal-title">开发者模式</div>
+      <a href="/developer.html" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;padding:6px 12px;border:1px solid var(--accent);border-radius:999px;background:var(--accent-bg)" title="安全后台：近期验证 / TOTP 双因素 / 审计日志"><iconify-icon icon="ph:shield-check-fill"></iconify-icon> 安全后台</a>
       <button class="modal-close" onclick="closeModal('developer')"><iconify-icon icon="ph:x"></iconify-icon></button>
     </div>
     <div class="tabs">
@@ -1524,6 +1527,60 @@ function removeDeviceLogin(userId) {
   } catch(e) {}
 }
 
+// ===== V8.0 设备标记 + Canvas 哈希（服务端一机一号与登录风控用） =====
+async function ensureDeviceMark() {
+  // 提前向服务端换取 __Host-dp_device 设备标记；失败不阻止提交（服务端在注册/登录时兜底补签）
+  try {
+    await fetch('/api/device/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      credentials: 'same-origin',
+    });
+  } catch (e) { /* 忽略 */ }
+}
+
+var _canvasHashCache = null;
+async function getCanvasHash() {
+  if (_canvasHashCache !== null) return _canvasHashCache;
+  try {
+    var canvas = document.createElement('canvas');
+    canvas.width = 220; canvas.height = 50;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) { _canvasHashCache = ''; return ''; }
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(0, 0, 120, 20);
+    ctx.fillStyle = '#069';
+    ctx.fillText('doubao plaza', 2, 15);
+    var data = canvas.toDataURL();
+    var digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+    _canvasHashCache = Array.from(new Uint8Array(digest), function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  } catch (e) {
+    _canvasHashCache = '';
+  }
+  return _canvasHashCache;
+}
+
+// 登录风险复验组件（复用注册的 TURNSTILE_SITE_KEY）
+function renderLoginTurnstile() {
+  if (!TURNSTILE_SITE_KEY || !window.turnstile) return false;
+  var container = document.getElementById('loginTurnstileWidget');
+  var hiddenInput = document.getElementById('loginTurnstileToken');
+  if (!container || !hiddenInput) return false;
+  document.getElementById('loginTurnstileContainer').style.display = '';
+  container.innerHTML = ''; // 避免重复渲染叠加
+  hiddenInput.value = '';
+  window.turnstile.render('#loginTurnstileWidget', {
+    sitekey: TURNSTILE_SITE_KEY,
+    callback: function(token) { hiddenInput.value = token; },
+    'expired-callback': function() { hiddenInput.value = ''; },
+    'error-callback': function() { hiddenInput.value = ''; },
+  });
+  return true;
+}
+
 // ===== Login =====
   async function doLogin() {
     const identifier = document.getElementById('loginId').value.trim();
@@ -1532,10 +1589,20 @@ function removeDeviceLogin(userId) {
 
     if (!identifier || !password) { errEl.innerHTML = '<div class="form-error">请输入账号和密码</div>'; return; }
 
+    // V8.0：确保服务端设备标记已签发（一机一号/风控），失败不阻止登录
+    await ensureDeviceMark();
+    const canvasHash = await getCanvasHash();
+    const loginTsToken = (document.getElementById('loginTurnstileToken') || {}).value || '';
+
     try {
       const res = await api('/api/users/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({
+          identifier, password,
+          canvas_hash: canvasHash,
+          canvas_status: canvasHash ? 'ok' : 'blocked',
+          turnstile_token: loginTsToken,
+        }),
       });
 
       if (res.success) {
@@ -1544,6 +1611,9 @@ function removeDeviceLogin(userId) {
         localStorage.setItem('dp_token', sessionToken);
         saveDeviceLogin(currentUser);
         if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
+        // 复验组件隐藏并清空（下次风险信号时重新渲染）
+        var ltBox = document.getElementById('loginTurnstileContainer');
+        if (ltBox) { ltBox.style.display = 'none'; var ltIn = document.getElementById('loginTurnstileToken'); if (ltIn) ltIn.value = ''; }
         closeModal('login');
         updateNavbar();
         if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1552,6 +1622,10 @@ function removeDeviceLogin(userId) {
           renderContent();
         }
         toast(`欢迎回来，${currentUser.name}！`);
+      } else if (res.need_turnstile) {
+        // V8.0：撞库风险信号 → 展示人机验证，用户完成后重新点击登录
+        var shown = renderLoginTurnstile();
+        errEl.innerHTML = `<div class="form-error">${esc(res.error)}${shown ? '，验证完成后再次点击登录' : '，请稍后再试'}</div>`;
       } else {
         errEl.innerHTML = `<div class="form-error">${esc(res.error)}</div>`;
       }
@@ -1608,8 +1682,11 @@ async function doRegister() {
   if (!name || !password) { errEl.innerHTML = '<div class="form-error">姓名和密码是必填项</div>'; return; }
   if (password.length < 6 || password.length > 32) { errEl.innerHTML = '<div class="form-error">密码长度必须为6-32位</div>'; return; }
   if (!doubao_id) { errEl.innerHTML = '<div class="form-error">豆包号是必填项</div>'; return; }
-  if (!agent_url) { errEl.innerHTML = '<div class="form-error">AI视频链接是必填项</div>'; return; }
-  if (/\/bot\//i.test(agent_url) || /doubao\.com\/bot/i.test(agent_url)) { errEl.innerHTML = '<div class="form-error">不支持AI智能体链接（/bot/），请填写AI视频链接</div>'; return; }
+  // V8.0：AI视频链接改为选填（填写时才校验 /bot/ 规则，与服务端一致）
+  if (agent_url && (/\/bot\//i.test(agent_url) || /doubao\.com\/bot/i.test(agent_url))) { errEl.innerHTML = '<div class="form-error">不支持AI智能体链接（/bot/），请填写AI视频链接</div>'; return; }
+
+  // V8.0：先换取服务端设备标记（一机一号校验依赖 __Host-dp_device Cookie）
+  await ensureDeviceMark();
 
   // 获取设备指纹（失败不阻止注册）
   const fingerprint = await getDeviceFingerprint();

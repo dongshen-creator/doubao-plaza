@@ -72,7 +72,7 @@ export async function onRequestGet(context) {
     } catch (e) { /* 缓存写入失败不影响本次响应 */ }
     return response;
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[announcements.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
   }
 }
 
@@ -126,7 +126,7 @@ export async function onRequestPost(context) {
     purgeAnnouncementsCache(context);
     return Response.json({ success: true, data: announcement });
   } catch (e) {
-    return Response.json({ success: false, error: '发布失败：' + e.message });
+    console.error('[announcements.js]', e); return Response.json({ success: false, error: '发布失败：' + '服务器内部错误' });
   }
 }
 
@@ -205,7 +205,7 @@ export async function onRequestPut(context) {
     purgeAnnouncementsCache(context);
     return Response.json({ success: true, data: announcement });
   } catch (e) {
-    return Response.json({ success: false, error: '编辑失败：' + e.message });
+    console.error('[announcements.js]', e); return Response.json({ success: false, error: '编辑失败：' + '服务器内部错误' });
   }
 }
 
@@ -245,6 +245,6 @@ export async function onRequestDelete(context) {
     purgeAnnouncementsCache(context);
     return Response.json({ success: true });
   } catch (e) {
-    return Response.json({ success: false, error: '删除失败：' + e.message });
+    console.error('[announcements.js]', e); return Response.json({ success: false, error: '删除失败：' + '服务器内部错误' });
   }
 }

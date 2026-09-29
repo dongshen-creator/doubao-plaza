@@ -90,7 +90,7 @@ export async function onRequestGet(context) {
 
     return jsonResponse({ success: true, data });
   } catch (e) {
-    return jsonResponse({ success: false, error: '服务器错误：' + e.message }, 500);
+    console.error('[categories.js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -149,7 +149,7 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ success: true, data: cat, message: '分类已创建' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '创建分类失败：' + e.message }, 500);
+    console.error('[categories.js]', e); return jsonResponse({ success: false, error: '创建分类失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -242,7 +242,7 @@ export async function onRequestPut(context) {
 
     return jsonResponse({ success: true, data: updated, message: '分类已更新' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '更新分类失败：' + e.message }, 500);
+    console.error('[categories.js]', e); return jsonResponse({ success: false, error: '更新分类失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -298,6 +298,6 @@ export async function onRequestDelete(context) {
 
     return jsonResponse({ success: true, message: '分类已删除，该分类下的文章已移至未分类' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '删除分类失败：' + e.message }, 500);
+    console.error('[categories.js]', e); return jsonResponse({ success: false, error: '删除分类失败：' + '服务器内部错误' }, 500);
   }
 }

@@ -224,8 +224,9 @@ export async function onRequestPost(context) {
 
     return Response.json({ success: false, error: '不支持的工具类型: ' + tool.api_type }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
   } catch (e) {
+    console.error('[ai.js] tool call failed:', e);
     return Response.json(
-      { success: false, error: 'AI 服务错误：' + (e.message || String(e)) },
+      { success: false, error: 'AI 服务错误：' + '服务器内部错误' },
       { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }

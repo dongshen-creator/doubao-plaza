@@ -11,7 +11,7 @@
 //   event: audio -> data: {"speak_url":"..."}
 //   event: end -> data: ok
 
-const UAPI_KEY = 'uapi-kpr0iybzWiUTw19yZkbtcevG8aq47DPCvpVUEwTe';
+// 密钥仅从 Pages 环境变量读取（UAPI_API_KEY），代码不含回退值
 const UAPI_STREAM_URL = 'https://uapis.cn/api/v1/translate/stream';
 
 function corsHeaders() {
@@ -52,13 +52,18 @@ export async function onRequestPost(context) {
     return jsonResponse({ success: false, error: 'from_lang 只能是 Chinese / English / auto' }, 400);
   }
 
+  const uapiKey = env?.UAPI_API_KEY || '';
+  if (!uapiKey) {
+    return jsonResponse({ success: false, error: '流式翻译服务未配置（缺少 UAPI_API_KEY）' }, 503);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
 
   try {
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + (env?.UAPI_API_KEY || UAPI_KEY),
+      'Authorization': 'Bearer ' + uapiKey,
     };
 
     const upstream = await fetch(UAPI_STREAM_URL, {
@@ -88,6 +93,6 @@ export async function onRequestPost(context) {
     if (err.name === 'AbortError') {
       return jsonResponse({ success: false, error: 'uapis 流式响应超时（25秒未收到响应头）' }, 504);
     }
-    return jsonResponse({ success: false, error: '流式翻译请求失败: ' + (err.message || '未知错误') }, 502);
+    console.error('[stream.js]', err); return jsonResponse({ success: false, error: '流式翻译请求失败: ' + '服务器内部错误' }, 502);
   }
 }

@@ -138,6 +138,6 @@ export async function onRequestPost(context) {
 
     return json({ success: true, url: accessUrl });
   } catch (e) {
-    return json({ success: false, error: '上传失败：' + (e.message || '未知错误') }, 500);
+    console.error('[image.js]', e); return json({ success: false, error: '上传失败：' + '服务器内部错误' }, 500);
   }
 }

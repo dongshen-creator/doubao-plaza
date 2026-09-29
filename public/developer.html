@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>开发者后台 · 逗包用户广场</title>
+<link rel="stylesheet" href="/style.css?v=52">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-regular.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-bold.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/600.css">
+<script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
+<style>
+  * { box-sizing: border-box; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 20px 64px; }
+
+  /* ── 顶栏 ── */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 0 18px; }
+  .topbar .back { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); text-decoration: none; font-size: 13px; padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--bg-secondary); transition: all var(--transition-fast); }
+  .topbar .back:hover { color: var(--accent); border-color: var(--accent); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo-chip { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 17px; box-shadow: 0 4px 12px var(--accent-shadow); }
+  .brand h1 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text-primary); letter-spacing: .5px; }
+  .brand .sub { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+  .top-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* ── 卡片 ── */
+  .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 22px; margin-bottom: 18px; box-shadow: var(--shadow-sm); }
+  .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .icon-chip { width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .card-head h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .card-head .desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+
+  /* ── 按钮 / 输入 ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; transition: all var(--transition-fast); font-family: inherit; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent-gradient); border: none; color: #FFFAF5; box-shadow: 0 4px 14px var(--accent-shadow); }
+  .btn.primary:hover { filter: brightness(1.06); color: #FFFAF5; }
+  .btn.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn.icon-only { padding: 8px; }
+  .input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-input); color: var(--text-primary); font-size: 14px; outline: none; transition: border-color var(--transition-fast); font-family: inherit; }
+  .input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-bg); }
+  .input::placeholder { color: var(--text-faint); }
+  label.fld { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 6px; }
+
+  /* ── 状态 / 徽标 ── */
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .status-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .status-item .k { font-size: 11px; color: var(--text-faint); margin-bottom: 5px; }
+  .status-item .v { font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: var(--radius-full); background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border); }
+  .badge.ok { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+  .badge.warn { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
+  .badge.err { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+  .muted { font-size: 13px; color: var(--text-faint); margin: 0; }
+  .err-line { font-size: 12px; color: var(--danger-text); margin-top: 8px; min-height: 16px; }
+  .ok-line { font-size: 12px; color: var(--success-text); margin-top: 8px; min-height: 16px; }
+
+  /* ── 密钥展示 ── */
+  .secret-box { margin-top: 14px; padding: 14px; background: var(--bg-input); border: 1px dashed var(--accent); border-radius: var(--radius); }
+  .secret-box .secret-val { font-family: ui-monospace, Consolas, monospace; font-size: 14px; letter-spacing: 1.5px; color: var(--text-primary); word-break: break-all; margin: 6px 0 10px; }
+  .secret-box .otpauth { font-size: 11px; color: var(--text-faint); word-break: break-all; margin-bottom: 10px; }
+  .secret-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── 审计表 ── */
+  .audit-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .audit-tools .input { width: auto; flex: 1; min-width: 160px; }
+  .audit-tools select.input { width: auto; }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tbl th { text-align: left; padding: 9px 12px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 11px; font-weight: 700; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: top; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+  .tbl td.detail { max-width: 280px; word-break: break-all; color: var(--text-faint); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .tag.dim { background: var(--bg-tertiary); color: var(--text-muted); }
+
+  /* ── 拒绝面板 ── */
+  .deny-panel { text-align: center; padding: 70px 20px; }
+  .deny-panel .icon { font-size: 44px; color: var(--text-faint); margin-bottom: 14px; }
+  .deny-panel h2 { font-size: 17px; color: var(--text-primary); margin: 0 0 8px; }
+  .deny-panel p { font-size: 13px; color: var(--text-muted); margin: 0 0 20px; }
+
+  /* ── 模态 ── */
+  .modal-overlay { position: fixed; inset: 0; background: var(--bg-overlay); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+  .modal { width: 100%; max-width: 400px; background: var(--modal-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; box-shadow: var(--shadow-lg); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .modal-header .t { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .modal-close { background: none; border: none; font-size: 18px; color: var(--text-faint); cursor: pointer; padding: 4px; line-height: 1; }
+  .modal-close:hover { color: var(--text-primary); }
+  .modal .hint { font-size: 12px; color: var(--text-muted); margin: 4px 0 0; line-height: 1.6; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* ── Toast ── */
+  #toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(12px); background: var(--text-primary); color: var(--bg-primary); padding: 10px 18px; border-radius: var(--radius-full); font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 1500; max-width: 86vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err { background: var(--danger); color: #fff; }
+</style>
+</head>
+<body>
+<script>if (localStorage.getItem('dp_theme') === 'dark') document.body.classList.add('dark');</script>
+
+<div class="wrap">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <a class="back" href="/"><iconify-icon icon="ph:arrow-left"></iconify-icon> 返回广场</a>
+    <div class="brand">
+      <div class="logo-chip"><iconify-icon icon="ph:shield-check-fill"></iconify-icon></div>
+      <div>
+        <h1>开发者后台</h1>
+        <div class="sub">服务端强制鉴权 · 高危操作需二次验证</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn icon-only" id="themeBtn" title="切换主题"></button>
+      <button class="btn" id="logoutBtn"><iconify-icon icon="ph:sign-out"></iconify-icon> 退出</button>
+    </div>
+  </header>
+
+  <!-- 无权限面板 -->
+  <div id="denyPanel" class="card deny-panel" style="display:none">
+    <div class="icon"><iconify-icon icon="ph:lock-key"></iconify-icon></div>
+    <h2 id="denyTitle">无访问权限</h2>
+    <p id="denyMsg">此页面仅供开发者使用，所有权限由服务端校验。</p>
+    <a class="btn primary" href="/"><iconify-icon icon="ph:house"></iconify-icon> 返回首页</a>
+  </div>
+
+  <main id="devMain" style="display:none">
+    <!-- 身份状态 -->
+    <section class="card">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:user-circle-fill"></iconify-icon></div>
+        <div>
+          <h2>身份状态</h2>
+          <div class="desc">会话与近期认证（step-up）状态，10 分钟内高危操作免重复验证</div>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <button class="btn" id="reverifyBtn"><iconify-icon icon="ph:key-fill"></iconify-icon> 重新验证</button>
+        </div>
+      </div>
+      <div class="status-grid">
+        <div class="status-item"><div class="k">开发者</div><div class="v" id="stName">—</div></div>
+        <div class="status-item"><div class="k">双因素认证 (TOTP)</div><div class="v" id="stTotp">—</div></div>
+        <div class="status-item"><div class="k">近期验证 (step-up)</div><div class="v" id="stStepup">—</div></div>
+      </div>
+    </section>
+
+    <!-- 双因素认证 -->
+    <section class="card">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:device-mobile-speaker-fill"></iconify-icon></div>
+        <div>
+          <h2>双因素认证</h2>
+          <div class="desc">基于 TOTP 标准（RFC 6238），密钥仅在生成时展示一次</div>
+        </div>
+        <div style="margin-left:auto" id="mfaStatusBadge"></div>
+      </div>
+      <div id="mfaDisabled">
+        <p class="muted">启用后，登录与高危操作除密码外还需输入验证器应用生成的 6 位动态码。</p>
+        <div style="margin-top:12px">
+          <button class="btn primary" id="mfaSetupBtn"><iconify-icon icon="ph:shield-check"></iconify-icon> 生成密钥并开始设置</button>
+        </div>
+      </div>
+      <div id="mfaSecretPanel" style="display:none">
+        <div class="secret-box">
+          <div style="font-size:12px;font-weight:700;color:var(--accent)">1 · 将密钥录入验证器应用</div>
+          <div class="secret-val" id="mfaSecretVal"></div>
+          <div class="otpauth" id="mfaOtpauth"></div>
+          <div class="secret-actions">
+            <button class="btn" id="copySecretBtn"><iconify-icon icon="ph:copy"></iconify-icon> 复制密钥</button>
+            <button class="btn" id="copyOtpauthBtn"><iconify-icon icon="ph:link"></iconify-icon> 复制 otpauth 链接</button>
+          </div>
+        </div>
+        <label class="fld">2 · 输入验证器上的 6 位动态码以确认启用</label>
+        <div style="display:flex;gap:8px;max-width:420px">
+          <input class="input" id="mfaEnableCode" inputmode="numeric" maxlength="6" placeholder="6 位动态码" autocomplete="one-time-code">
+          <button class="btn primary" id="mfaEnableBtn">确认启用</button>
+        </div>
+        <div class="err-line" id="mfaErr"></div>
+      </div>
+      <div id="mfaEnabled" style="display:none">
+        <p class="muted">双因素认证已启用。关闭需要输入当前动态码。</p>
+        <div style="display:flex;gap:8px;max-width:420px;margin-top:12px">
+          <input class="input" id="mfaDisableCode" inputmode="numeric" maxlength="6" placeholder="6 位动态码" autocomplete="one-time-code">
+          <button class="btn danger" id="mfaDisableBtn">关闭双因素</button>
+        </div>
+        <div class="err-line" id="mfaErr2"></div>
+      </div>
+    </section>
+
+    <!-- 审计日志 -->
+    <section class="card">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:scroll-fill"></iconify-icon></div>
+        <div>
+          <h2>审计日志</h2>
+          <div class="desc">管理员操作留痕（查看行为本身也会记录）</div>
+        </div>
+      </div>
+      <div class="audit-tools">
+        <input class="input" id="auditFilter" list="auditActions" placeholder="按动作过滤，如 stepup / mfa_enable">
+        <datalist id="auditActions">
+          <option value="stepup"></option><option value="stepup_fail"></option>
+          <option value="mfa_setup"></option><option value="mfa_enable"></option><option value="mfa_disable"></option>
+          <option value="audit_view"></option>
+        </datalist>
+        <select class="input" id="auditLimit">
+          <option value="50">50 条</option>
+          <option value="100" selected>100 条</option>
+          <option value="200">200 条</option>
+        </select>
+        <button class="btn primary" id="auditLoadBtn"><iconify-icon icon="ph:arrows-clockwise"></iconify-icon> 查询</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>目标</th><th>详情</th></tr></thead>
+          <tbody id="auditBody"><tr><td colspan="5" style="color:var(--text-faint);text-align:center">点击「查询」加载</td></tr></tbody>
+        </table>
+      </div>
+      <div class="err-line" id="auditErr"></div>
+    </section>
+
+    <!-- 隔离管理（#11 接入） -->
+    <section class="card">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:eye-slash-fill"></iconify-icon></div>
+        <div>
+          <h2>隔离管理</h2>
+          <div class="desc">惩罚性隐身：账号查找、关联展示与隔离操作</div>
+        </div>
+      </div>
+      <div id="quarantinePanel">
+        <div class="audit-tools">
+          <input class="input" id="qSearchInput" placeholder="昵称 / 用户ID / 注册IP / 最近登录IP" style="min-width:220px">
+          <button class="btn primary" id="qSearchBtn"><iconify-icon icon="ph:magnifying-glass"></iconify-icon> 查找</button>
+        </div>
+        <div id="qResults"></div>
+        <div id="qDetail" style="display:none">
+          <div class="status-grid" style="margin-bottom:12px">
+            <div class="status-item"><div class="k">账号</div><div class="v" id="qdName">—</div></div>
+            <div class="status-item"><div class="k">用户ID</div><div class="v" style="font-size:11px;font-family:ui-monospace,Consolas,monospace;word-break:break-all" id="qdId">—</div></div>
+            <div class="status-item"><div class="k">状态</div><div class="v" id="qdState">—</div></div>
+            <div class="status-item"><div class="k">活跃会话</div><div class="v" id="qdSess">—</div></div>
+          </div>
+          <div id="qdReason" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--radius);font-size:12.5px;color:var(--danger-text)"></div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px">
+            <div>
+              <div class="k" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">设备绑定</div>
+              <div id="qdDevices" class="muted">—</div>
+            </div>
+            <div>
+              <div class="k" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">同 IP 关联账号</div>
+              <div id="qdIpRel" class="muted">—</div>
+            </div>
+            <div>
+              <div class="k" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">同设备关联账号</div>
+              <div id="qdDevRel" class="muted">—</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+            <input class="input" id="qReasonInput" placeholder="隔离原因（必填，留档审计）" style="flex:1;min-width:200px;max-width:360px">
+            <button class="btn danger" id="qDoBtn"><iconify-icon icon="ph:eye-slash-fill"></iconify-icon> 隔离</button>
+            <button class="btn" id="qUndoBtn" style="display:none"><iconify-icon icon="ph:eye-fill"></iconify-icon> 解隔离</button>
+            <button class="btn" id="qBackBtn"><iconify-icon icon="ph:arrow-left"></iconify-icon> 返回</button>
+          </div>
+        </div>
+        <div class="err-line" id="qErr"></div>
+      </div>
+    </section>
+
+    <!-- 账号清理（#12 接入） -->
+    <section class="card">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:database-fill"></iconify-icon></div>
+        <div>
+          <h2>账号清理</h2>
+          <div class="desc">备份 → 预演报告 → 阈值确认 → 分批软删</div>
+        </div>
+      </div>
+      <div id="cleanupPanel">
+        <div class="audit-tools">
+          <label style="font-size:12.5px;color:var(--text-muted);white-space:nowrap">不活跃阈值（天）</label>
+          <input class="input" id="cuDays" type="number" min="30" max="3650" value="180" style="width:100px">
+          <button class="btn primary" id="cuDryBtn"><iconify-icon icon="ph:flask-fill"></iconify-icon> 生成预演报告</button>
+        </div>
+
+        <div id="cuReport" style="display:none">
+          <div class="status-grid" style="margin:12px 0">
+            <div class="status-item"><div class="k">候选账号</div><div class="v" id="cuTotal">—</div></div>
+            <div class="status-item"><div class="k">截止时间（UTC）</div><div class="v" id="cuCutoff" style="font-size:12px">—</div></div>
+            <div class="status-item"><div class="k">排除：已软删/隔离/开发者</div><div class="v" id="cuExcl" style="font-size:12px">—</div></div>
+            <div class="status-item"><div class="k">预演运行 ID</div><div class="v" style="font-size:10.5px;font-family:ui-monospace,Consolas,monospace;word-break:break-all" id="cuRunId">—</div></div>
+          </div>
+          <div id="cuCandWrap" style="max-height:260px;overflow:auto;margin-bottom:12px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px dashed var(--border)">
+            <label style="font-size:12.5px;color:var(--text-muted);white-space:nowrap">输入候选总数确认：</label>
+            <input class="input" id="cuConfirm" type="number" min="0" placeholder="= 候选总数" style="width:130px">
+            <button class="btn danger" id="cuExecBtn"><iconify-icon icon="ph:trash-fill"></iconify-icon> 开始分批软删</button>
+            <span id="cuProgress" class="muted" style="font-size:12px"></span>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">最近运行（预演 / 执行）</div>
+          <div id="cuRuns"><p class="muted">加载中…</p></div>
+        </div>
+        <div class="err-line" id="cuErr"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Step-up 验证模态 -->
+<div class="modal-overlay" id="stepupModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="t"><span class="icon-chip" style="width:28px;height:28px;font-size:14px"><iconify-icon icon="ph:key-fill"></iconify-icon></span> 验证身份</div>
+      <button class="modal-close" id="suClose"><iconify-icon icon="ph:x"></iconify-icon></button>
+    </div>
+    <p class="hint">为保护后台安全，高危操作需要重新输入密码（10 分钟内有效）。</p>
+    <label class="fld">登录密码</label>
+    <input class="input" type="password" id="suPwd" autocomplete="current-password" placeholder="当前账号密码">
+    <div id="suTotpRow" style="display:none">
+      <label class="fld">动态验证码</label>
+      <input class="input" id="suTotp" inputmode="numeric" maxlength="6" placeholder="6 位动态码" autocomplete="one-time-code">
+    </div>
+    <div class="err-line" id="suErr"></div>
+    <div class="modal-actions">
+      <button class="btn" id="suCancel">取消</button>
+      <button class="btn primary" id="suOk">验证</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ═══════════ 工具 ═══════════ */
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+var toastTimer = null;
+function toast(msg, isErr) {
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.className = ''; }, 2600);
+}
+
+/* ═══════════ 主题 ═══════════ */
+function renderThemeBtn() {
+  var dark = document.body.classList.contains('dark');
+  $('themeBtn').innerHTML = '<iconify-icon icon="' + (dark ? 'ph:sun-fill' : 'ph:moon-stars-fill') + '"></iconify-icon>';
+  $('themeBtn').title = dark ? '切换到亮色模式' : '切换到暗色模式';
+}
+$('themeBtn').addEventListener('click', function () {
+  var dark = document.body.classList.toggle('dark');
+  localStorage.setItem('dp_theme', dark ? 'dark' : 'light');
+  renderThemeBtn();
+});
+renderThemeBtn();
+
+$('logoutBtn').addEventListener('click', function () {
+  localStorage.removeItem('dp_token');
+  sessionStorage.removeItem('dp_stepup');
+  location.href = '/';
+});
+
+/* ═══════════ API 封装（自动挂会话 + step-up，need_stepup 时弹验证后重试一次） ═══════════ */
+function devApi(path, opts, _retried) {
+  opts = opts || {};
+  var headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+  var tk = localStorage.getItem('dp_token');
+  if (tk) headers['Authorization'] = 'Bearer ' + tk;
+  var st = sessionStorage.getItem('dp_stepup');
+  if (st) headers['X-Stepup-Token'] = st;
+  if (opts.body) headers['Content-Type'] = 'application/json';
+
+  return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+    return res.json().catch(function () { return null; }).then(function (data) {
+      if (res.status === 403 && data && data.need_stepup && !_retried) {
+        return openStepup().then(function () {
+          return devApi(path, opts, true);
+        });
+      }
+      if (!res.ok || !data || data.success === false) {
+        throw new Error((data && data.error) || ('请求失败 (HTTP ' + res.status + ')'));
+      }
+      return data;
+    });
+  }).catch(function (e) {
+    if (e && e.stepupCancelled) throw e;
+    if (e instanceof TypeError) throw new Error('网络错误，请稍后重试');
+    throw e;
+  });
+}
+
+/* ═══════════ Step-up 模态 ═══════════ */
+var stepupSettlers = null;
+
+function openStepup() {
+  return new Promise(function (resolve, reject) {
+    stepupSettlers = { resolve: resolve, reject: reject };
+    $('suErr').textContent = '';
+    $('suPwd').value = '';
+    $('suTotp').value = '';
+    $('suTotpRow').style.display = 'none';
+    $('stepupModal').style.display = 'flex';
+    setTimeout(function () { $('suPwd').focus(); }, 30);
+  });
+}
+function closeStepup(cancelled) {
+  $('stepupModal').style.display = 'none';
+  if (stepupSettlers) {
+    var s = stepupSettlers;
+    stepupSettlers = null;
+    if (cancelled) {
+      var err = new Error('已取消身份验证');
+      err.stepupCancelled = true;
+      s.reject(err);
+    } else {
+      s.resolve();
+    }
+  }
+}
+function submitStepup() {
+  var pwd = $('suPwd').value;
+  var totp = $('suTotp').value.trim();
+  if (!pwd) { $('suErr').textContent = '请输入密码'; return; }
+  $('suErr').textContent = '';
+  var tk = localStorage.getItem('dp_token');
+
+  fetch('/api/developer/gate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+    body: JSON.stringify({ password: pwd, totp: totp || undefined })
+  }).then(function (res) {
+    return res.json().catch(function () { return null; }).then(function (data) {
+      if (data && data.success && data.data && data.data.stepup_token) {
+        sessionStorage.setItem('dp_stepup', data.data.stepup_token);
+        closeStepup(false);
+        refreshGateStatus();
+        toast('身份验证成功（10 分钟内有效）');
+        return;
+      }
+      if (data && data.need_totp) {
+        $('suTotpRow').style.display = '';
+        $('suErr').textContent = data.error || '请输入动态验证码';
+        $('suTotp').focus();
+        return;
+      }
+      $('suErr').textContent = (data && data.error) || '验证失败';
+    });
+  }).catch(function () {
+    $('suErr').textContent = '网络错误，请稍后重试';
+  });
+}
+$('suOk').addEventListener('click', submitStepup);
+$('suCancel').addEventListener('click', function () { closeStepup(true); });
+$('suClose').addEventListener('click', function () { closeStepup(true); });
+$('suPwd').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitStepup(); });
+$('suTotp').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitStepup(); });
+$('reverifyBtn').addEventListener('click', function () {
+  openStepup().catch(function () {});
+});
+
+/* ═══════════ 门禁加载 ═══════════ */
+var gateData = null;
+
+function showDeny(title, msg) {
+  $('denyTitle').textContent = title;
+  $('denyMsg').textContent = msg;
+  $('denyPanel').style.display = '';
+  $('devMain').style.display = 'none';
+}
+
+function renderGate() {
+  $('stName').textContent = gateData.name || '—';
+  $('stTotp').innerHTML = gateData.totp_enabled
+    ? '<span class="badge ok"><iconify-icon icon="ph:check-circle-fill"></iconify-icon> 已启用</span>'
+    : '<span class="badge warn"><iconify-icon icon="ph:warning-circle-fill"></iconify-icon> 未启用</span>';
+  $('stStepup').innerHTML = gateData.stepup_valid
+    ? '<span class="badge ok"><iconify-icon icon="ph:check-circle-fill"></iconify-icon> 有效</span>'
+    : '<span class="badge"><iconify-icon icon="ph:clock-countdown"></iconify-icon> 待验证</span>';
+  $('mfaStatusBadge').innerHTML = gateData.totp_enabled
+    ? '<span class="badge ok"><iconify-icon icon="ph:shield-check-fill"></iconify-icon> 已启用</span>'
+    : '<span class="badge warn"><iconify-icon icon="ph:shield-fill"></iconify-icon> 未启用</span>';
+  $('mfaDisabled').style.display = gateData.totp_enabled ? 'none' : '';
+  $('mfaEnabled').style.display = gateData.totp_enabled ? '' : 'none';
+  if (gateData.totp_enabled) $('mfaSecretPanel').style.display = 'none';
+}
+function refreshGateStatus() {
+  return devApi('/api/developer/gate').then(function (r) {
+    gateData = r.data;
+    if (gateData.is_developer) renderGate();
+    return gateData;
+  });
+}
+
+function loadGate() {
+  if (!localStorage.getItem('dp_token')) {
+    showDeny('请先登录', '开发者后台需要有效会话，请先在首页登录。');
+    return;
+  }
+  devApi('/api/developer/gate').then(function (r) {
+    if (!r.data || !r.data.is_developer) {
+      showDeny('无访问权限', '当前会话无效，或该账号不具备开发者权限（权限由服务端强制校验）。');
+      return;
+    }
+    gateData = r.data;
+    $('denyPanel').style.display = 'none';
+    $('devMain').style.display = '';
+    renderGate();
+  }).catch(function (e) {
+    showDeny('加载失败', e.message || '无法连接服务器。');
+  });
+}
+
+/* ═══════════ 双因素认证 ═══════════ */
+var pendingSecret = null;
+
+$('mfaSetupBtn').addEventListener('click', function () {
+  $('mfaErr').textContent = '';
+  devApi('/api/developer/mfa', { method: 'POST', body: JSON.stringify({ action: 'setup' }) })
+    .then(function (r) {
+      pendingSecret = r.data;
+      $('mfaSecretVal').textContent = r.data.secret;
+      $('mfaOtpauth').textContent = r.data.otpauth_uri;
+      $('mfaSecretPanel').style.display = '';
+      $('mfaEnableCode').value = '';
+      $('mfaEnableCode').focus();
+      toast('密钥已生成，请录入验证器应用');
+    })
+    .catch(function (e) { $('mfaErr').textContent = e.message; });
+});
+
+function copyText(text, label) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      function () { toast(label + '已复制'); },
+      function () { toast('复制失败，请手动选择', true); }
+    );
+  } else {
+    toast('复制失败，请手动选择', true);
+  }
+}
+$('copySecretBtn').addEventListener('click', function () { copyText($('mfaSecretVal').textContent, '密钥'); });
+$('copyOtpauthBtn').addEventListener('click', function () { copyText($('mfaOtpauth').textContent, '链接'); });
+
+$('mfaEnableBtn').addEventListener('click', function () {
+  var code = $('mfaEnableCode').value.trim();
+  $('mfaErr').textContent = '';
+  if (!/^\d{6}$/.test(code)) { $('mfaErr').textContent = '请输入 6 位动态码'; return; }
+  devApi('/api/developer/mfa', { method: 'POST', body: JSON.stringify({ action: 'enable', code: code }) })
+    .then(function () {
+      pendingSecret = null;
+      $('mfaSecretPanel').style.display = 'none';
+      $('mfaSecretVal').textContent = '';
+      $('mfaOtpauth').textContent = '';
+      toast('双因素认证已启用');
+      return refreshGateStatus();
+    })
+    .catch(function (e) { $('mfaErr').textContent = e.message; });
+});
+
+$('mfaDisableBtn').addEventListener('click', function () {
+  var code = $('mfaDisableCode').value.trim();
+  $('mfaErr2').textContent = '';
+  if (!/^\d{6}$/.test(code)) { $('mfaErr2').textContent = '请输入 6 位动态码'; return; }
+  if (!confirm('确认关闭双因素认证？关闭后账号安全性将降低。')) return;
+  devApi('/api/developer/mfa', { method: 'POST', body: JSON.stringify({ action: 'disable', code: code }) })
+    .then(function () {
+      $('mfaDisableCode').value = '';
+      toast('双因素认证已关闭');
+      return refreshGateStatus();
+    })
+    .catch(function (e) { $('mfaErr2').textContent = e.message; });
+});
+
+/* ═══════════ 审计日志 ═══════════ */
+function loadAudit() {
+  var action = $('auditFilter').value.trim();
+  var limit = $('auditLimit').value;
+  var qs = 'limit=' + encodeURIComponent(limit) + (action ? '&action=' + encodeURIComponent(action) : '');
+  $('auditErr').textContent = '';
+  $('auditBody').innerHTML = '<tr><td colspan="5" style="color:var(--text-faint);text-align:center">加载中…</td></tr>';
+
+  devApi('/api/developer/audit?' + qs).then(function (r) {
+    var rows = r.data || [];
+    if (!rows.length) {
+      $('auditBody').innerHTML = '<tr><td colspan="5" style="color:var(--text-faint);text-align:center">暂无记录</td></tr>';
+      return;
+    }
+    $('auditBody').innerHTML = rows.map(function (row) {
+      var detail = row.detail ? String(row.detail) : '';
+      var detailShort = detail.length > 140 ? detail.slice(0, 140) + '…' : detail;
+      return '<tr>' +
+        '<td class="mono">' + esc(row.created_at) + '</td>' +
+        '<td class="mono">' + esc(row.actor_id) + '</td>' +
+        '<td><span class="tag' + (String(row.action).indexOf('fail') >= 0 || row.action === 'blocked' ? ' dim' : '') + '">' + esc(row.action) + '</span></td>' +
+        '<td class="mono">' + esc(row.target || '-') + '</td>' +
+        '<td class="detail" title="' + esc(detail) + '">' + esc(detailShort || '-') + '</td>' +
+        '</tr>';
+    }).join('');
+  }).catch(function (e) {
+    $('auditBody').innerHTML = '';
+    $('auditErr').textContent = e.message;
+  });
+}
+$('auditLoadBtn').addEventListener('click', loadAudit);
+$('auditFilter').addEventListener('keydown', function (e) { if (e.key === 'Enter') loadAudit(); });
+
+/* ═══════════ 隔离管理 ═══════════ */
+var qSelectedId = null;
+var qSelectedQuarantined = false;
+
+function qRenderResults(users) {
+  if (!users.length) {
+    $('qResults').innerHTML = '<p class="muted">未找到匹配账号</p>';
+    return;
+  }
+  $('qResults').innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+    '<th>昵称</th><th>用户ID</th><th>豆包号</th><th>最后登录</th><th>状态</th><th></th></tr></thead><tbody>' +
+    users.map(function (u) {
+      var state = u.quarantined_at
+        ? '<span class="badge err">已隔离</span>'
+        : (u.deactivated_at ? '<span class="badge dim" style="background:var(--warning-bg);color:var(--warning);border-color:var(--warning-border)">已停用</span>'
+          : '<span class="badge ok">正常</span>');
+      return '<tr><td>' + esc(u.name) + '</td>' +
+        '<td class="mono">' + esc(u.id) + '</td>' +
+        '<td class="mono">' + esc(u.doubao_id || '-') + '</td>' +
+        '<td class="mono">' + esc(u.last_login_at || '-') + '</td>' +
+        '<td>' + state + '</td>' +
+        '<td><button class="btn" data-qid="' + esc(u.id) + '" style="padding:4px 10px;font-size:12px">查看</button></td></tr>';
+    }).join('') + '</tbody></table></div>';
+  Array.prototype.forEach.call($('qResults').querySelectorAll('button[data-qid]'), function (btn) {
+    btn.addEventListener('click', function () { qOpenDetail(btn.getAttribute('data-qid')); });
+  });
+}
+
+function qSearch() {
+  var q = $('qSearchInput').value.trim();
+  $('qErr').textContent = '';
+  if (!q) { $('qErr').textContent = '请输入查找条件'; return; }
+  $('qResults').innerHTML = '<p class="muted">查找中…</p>';
+  devApi('/api/developer/users?q=' + encodeURIComponent(q))
+    .then(function (r) { qRenderResults(r.data.users || []); })
+    .catch(function (e) { $('qResults').innerHTML = ''; $('qErr').textContent = e.message; });
+}
+
+function qRelList(items, nameKey) {
+  if (!items.length) return '<span class="muted">无</span>';
+  return items.map(function (it) {
+    var mark = it.quarantined_at ? ' <span class="badge err" style="font-size:10px">隔离</span>' : '';
+    return '<div style="font-size:12.5px;padding:3px 0;border-bottom:1px dashed var(--border)">' +
+      esc(it[nameKey]) + mark + ' <span class="mono" style="color:var(--text-faint);font-size:10.5px">' + esc(it.id) + '</span></div>';
+  }).join('');
+}
+
+function qOpenDetail(id) {
+  $('qErr').textContent = '';
+  $('qDetail').style.display = 'none';
+  $('qResults').innerHTML = '<p class="muted">加载中…</p>';
+  devApi('/api/developer/users?id=' + encodeURIComponent(id))
+    .then(function (r) {
+      var d = r.data;
+      qSelectedId = d.user.id;
+      qSelectedQuarantined = !!d.user.quarantined_at;
+      $('qResults').style.display = 'none';
+      $('qDetail').style.display = '';
+      $('qdName').textContent = d.user.name;
+      $('qdId').textContent = d.user.id;
+      $('qdSess').textContent = d.sessions_active + ' 个活跃会话';
+      $('qdState').innerHTML = qSelectedQuarantined
+        ? '<span class="badge err"><iconify-icon icon="ph:eye-slash-fill"></iconify-icon> 已隔离</span>'
+        : (d.user.deactivated_at
+          ? '<span class="badge warn">已停用</span>'
+          : '<span class="badge ok">正常</span>');
+      if (qSelectedQuarantined) {
+        $('qdReason').style.display = '';
+        $('qdReason').textContent = '隔离原因：' + (d.user.quarantine_reason || '未记录') +
+          (d.user.quarantined_at ? '（始于 ' + d.user.quarantined_at + ' UTC）' : '');
+      } else {
+        $('qdReason').style.display = 'none';
+      }
+      $('qdDevices').innerHTML = d.devices.length
+        ? d.devices.map(function (dev) {
+            return '<div style="font-size:12px;padding:3px 0;border-bottom:1px dashed var(--border)">' +
+              '<span class="mono" style="font-size:10.5px">' + esc(dev.device_id) + '</span> ' +
+              '<span class="badge' + (dev.binding_status === 'active' ? ' ok' : '') + '" style="font-size:10px">' + esc(dev.binding_status) + '</span>' +
+              (dev.release_reason ? ' <span class="muted" style="font-size:10.5px">' + esc(dev.release_reason) + '</span>' : '') +
+              '</div>';
+          }).join('')
+        : '<span class="muted">无绑定记录</span>';
+      $('qdIpRel').innerHTML = qRelList(d.ip_related, 'name');
+      $('qdDevRel').innerHTML = qRelList(d.device_related, 'name');
+      $('qReasonInput').value = '';
+      $('qDoBtn').style.display = qSelectedQuarantined ? 'none' : '';
+      $('qUndoBtn').style.display = qSelectedQuarantined ? '' : 'none';
+    })
+    .catch(function (e) { $('qResults').innerHTML = ''; $('qErr').textContent = e.message; });
+}
+
+function qBackToResults() {
+  qSelectedId = null;
+  $('qDetail').style.display = 'none';
+  $('qResults').style.display = '';
+}
+
+function qAction(action) {
+  if (!qSelectedId) return;
+  $('qErr').textContent = '';
+  var reason = $('qReasonInput').value.trim();
+  if (action === 'quarantine' && !reason) { $('qErr').textContent = '请填写隔离原因'; return; }
+  var tip = action === 'quarantine'
+    ? '确认隔离该账号？将立即撤销其全部会话并解除设备绑定。'
+    : '确认解除该账号的隔离状态？';
+  if (!confirm(tip)) return;
+
+  devApi('/api/developer/quarantine', {
+    method: 'POST',
+    body: JSON.stringify({ action: action, user_id: qSelectedId, reason: reason || undefined })
+  }).then(function () {
+    toast(action === 'quarantine' ? '已隔离' : '已解除隔离');
+    qOpenDetail(qSelectedId);
+  }).catch(function (e) { $('qErr').textContent = e.message; });
+}
+
+$('qSearchBtn').addEventListener('click', qSearch);
+$('qSearchInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') qSearch(); });
+$('qDoBtn').addEventListener('click', function () { qAction('quarantine'); });
+$('qUndoBtn').addEventListener('click', function () { qAction('unquarantine'); });
+$('qBackBtn').addEventListener('click', qBackToResults);
+
+/* ═══════════ 账号清理 ═══════════ */
+var cuCurrentRun = null;   // 当前预演 run_id
+var cuCurrentTotal = 0;    // 预演候选总数（确认门槛）
+var cuRunning = false;     // 执行循环锁
+
+function cuRenderRuns(runs) {
+  if (!runs.length) { $('cuRuns').innerHTML = '<p class="muted">暂无运行记录</p>'; return; }
+  $('cuRuns').innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+    '<th>时间（UTC）</th><th>类型</th><th>阈值/总数</th><th>已处理/跳过</th><th>状态</th><th></th></tr></thead><tbody>' +
+    runs.map(function (r) {
+      var isDry = r.mode === 'dry_run';
+      var state = r.done
+        ? '<span class="badge ok">完成</span>'
+        : '<span class="badge" style="background:var(--warning-bg);color:var(--warning);border-color:var(--warning-border)">进行中</span>';
+      var main = isDry
+        ? (r.threshold_days ? r.threshold_days + ' 天 → ' + r.total + ' 候选' : (r.total != null ? r.total + ' 候选' : '—'))
+        : (r.processed != null ? r.processed + ' 条' : '—');
+      var sub = isDry ? '—' : ((r.processed || 0) + ' / 跳过 ' + (r.skipped || 0));
+      var act = (!isDry && r.processed > 0 && r.done)
+        ? '<button class="btn" data-curestore="' + esc(r.id) + '" style="padding:4px 10px;font-size:12px">恢复</button>' : '';
+      return '<tr><td class="mono" style="font-size:11px">' + esc(r.finished_at || r.started_at || '-') + '</td>' +
+        '<td>' + (isDry ? '预演' : '执行') + '</td>' +
+        '<td>' + esc(String(main)) + '</td><td>' + esc(String(sub)) + '</td>' +
+        '<td>' + state + '</td><td>' + act + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  Array.prototype.forEach.call($('cuRuns').querySelectorAll('button[data-curestore]'), function (btn) {
+    btn.addEventListener('click', function () { cuRestore(btn.getAttribute('data-curestore')); });
+  });
+}
+
+function cuLoadRuns() {
+  devApi('/api/developer/cleanup')
+    .then(function (r) { cuRenderRuns((r.data && r.data.runs) || []); })
+    .catch(function (e) { $('cuErr').textContent = e.message; });
+}
+
+function cuDryRun() {
+  var days = parseInt($('cuDays').value, 10);
+  $('cuErr').textContent = '';
+  if (!Number.isFinite(days) || days < 30 || days > 3650) {
+    $('cuErr').textContent = '阈值需在 30-3650 天之间';
+    return;
+  }
+  $('cuDryBtn').disabled = true;
+  $('cuReport').style.display = 'none';
+  devApi('/api/developer/cleanup', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'dry_run', inactive_days: days })
+  }).then(function (r) {
+    var rep = r.data.report;
+    cuCurrentRun = r.data.run_id;
+    cuCurrentTotal = rep.total;
+    $('cuReport').style.display = '';
+    $('cuTotal').textContent = rep.total + ' 个' + (rep.truncated ? '（已达名单上限，被截断）' : '');
+    $('cuCutoff').textContent = rep.cutoff;
+    $('cuExcl').textContent = [rep.excluded.already_softdeleted, rep.excluded.quarantined, rep.excluded.developers].join(' / ');
+    $('cuRunId').textContent = rep.generated_at + ' · ' + cuCurrentRun;
+    $('cuConfirm').value = '';
+    $('cuProgress').textContent = '';
+    // 候选表（上限展示 200 行）
+    if (!rep.candidates.length) {
+      $('cuCandWrap').innerHTML = '<p class="muted">无候选账号，无需执行。</p>';
+    } else {
+      var shown = rep.candidates.slice(0, 200);
+      $('cuCandWrap').innerHTML = '<table class="tbl"><thead><tr><th>昵称</th><th>用户ID</th><th>最后活跃（UTC）</th></tr></thead><tbody>' +
+        shown.map(function (c) {
+          return '<tr><td>' + esc(c.name) + '</td><td class="mono">' + esc(c.id) + '</td><td class="mono">' + esc(c.last_seen || '-') + '</td></tr>';
+        }).join('') + '</tbody></table>' +
+        (rep.candidates.length > 200
+          ? '<p class="muted" style="font-size:11.5px;margin-top:6px">仅展示前 200 条，其余 ' + (rep.candidates.length - 200) + ' 条仍在冻结名单中。</p>' : '');
+    }
+    toast('预演完成：' + rep.total + ' 个候选');
+  }).catch(function (e) { $('cuErr').textContent = e.message; })
+    .finally(function () { $('cuDryBtn').disabled = false; });
+}
+
+function cuExecLoop(runId, confirmNum) {
+  return devApi('/api/developer/cleanup', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'execute', run_id: runId, confirm: confirmNum })
+  }).then(function (r) {
+    var d = r.data;
+    $('cuProgress').textContent = '已处理 ' + d.processed_total + ' · 跳过 ' + d.skipped_total +
+      ' · 剩余 ' + d.remaining + (d.done ? ' · 完成' : ' …');
+    if (!d.done) return cuExecLoop(runId, confirmNum);
+    toast('软删完成：' + d.processed_total + ' 条（跳过 ' + d.skipped_total + '）');
+    cuLoadRuns();
+  });
+}
+
+function cuExecute() {
+  if (cuRunning || !cuCurrentRun) return;
+  $('cuErr').textContent = '';
+  var conf = parseInt($('cuConfirm').value, 10);
+  if (!Number.isFinite(conf) || conf !== cuCurrentTotal) {
+    $('cuErr').textContent = '确认数必须等于预演候选总数 ' + cuCurrentTotal;
+    return;
+  }
+  if (!confirm('确认软删 ' + cuCurrentTotal + ' 个账号？将撤销其会话、释放设备绑定，30 天内可按运行记录恢复。')) return;
+  cuRunning = true;
+  $('cuExecBtn').disabled = true;
+  $('cuProgress').textContent = '执行中…';
+  cuExecLoop(cuCurrentRun, conf)
+    .catch(function (e) { $('cuErr').textContent = e.message; $('cuProgress').textContent = '已中断（可重试，已处理部分不会重复）'; })
+    .finally(function () { cuRunning = false; $('cuExecBtn').disabled = false; });
+}
+
+function cuRestore(runId) {
+  $('cuErr').textContent = '';
+  if (!confirm('确认恢复该执行记录中的全部软删账号？')) return;
+  devApi('/api/developer/cleanup', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'restore', run_id: runId })
+  }).then(function (r) {
+    toast('已恢复 ' + r.data.restored + ' / ' + r.data.requested + ' 个账号');
+    cuLoadRuns();
+  }).catch(function (e) { $('cuErr').textContent = e.message; });
+}
+
+$('cuDryBtn').addEventListener('click', cuDryRun);
+$('cuExecBtn').addEventListener('click', cuExecute);
+cuLoadRuns();
+
+/* ═══════════ 启动 ═══════════ */
+loadGate();
+</script>
+</body>
+</html>

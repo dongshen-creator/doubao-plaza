@@ -9,22 +9,30 @@
 
 import { issueChallenge } from '../_lib/pow.js';
 
+// 统一 no-store JSON 响应：挑战需每次新鲜签发，禁止缓存
+function jsonNoStore(data, init = {}) {
+  return new Response(JSON.stringify(data), {
+    status: init.status || 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(init.headers || {}) },
+  });
+}
+
 export async function onRequestGet(context) {
   if (!context.env || !context.env.DB) {
-    return Response.json({ success: false, error: '数据库未绑定' }, { status: 500 });
+    return jsonNoStore({ success: false, error: '数据库未绑定' }, { status: 500 });
   }
   try {
     const result = await issueChallenge(context.env);
     if (!result.ok) {
-      return Response.json({ success: false, error: '获取验证挑战失败' }, { status: 500 });
+      return jsonNoStore({ success: false, error: '获取验证挑战失败' }, { status: 500 });
     }
     if (result.disabled) {
-      return Response.json({ success: true, data: { disabled: true } });
+      return jsonNoStore({ success: true, data: { disabled: true } });
     }
-    return Response.json({ success: true, data: result.data });
+    return jsonNoStore({ success: true, data: result.data });
   } catch (e) {
     // 异常时降级：返回 disabled 让前端跳过 PoW，不阻塞注册
     console.error('[register-challenge] 签发失败:', e.message);
-    return Response.json({ success: true, data: { disabled: true } });
+    return jsonNoStore({ success: true, data: { disabled: true } });
   }
 }

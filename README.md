@@ -41,7 +41,7 @@ doubao-plaza/
 │   │   ├── blog/[id].js           # 博客单篇 CRUD
 │   │   ├── blog/comments.js       # 博客评论管理
 │   │   ├── blog/announce.js       # 博客公告管理（仅开发者）
-│   │   ├── blog/publish.js        # 博客重新发布到 Matrix
+│   │   ├── blog/publish.js        # 博客发布记录（返回房间链接，简化版不调用 Matrix API）
 │   │   ├── tools/registry.js      # 工具注册表（所有工具定义，含 page 类型）
 │   │   ├── tools/ai.js            # AI 工具端点（对话/翻译/总结/画图）
 │   │   ├── tools/proxy.js         # 免费 API 代理转发
@@ -294,7 +294,6 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | `DB` | Cloudflare Pages → D1 binding | D1 数据库绑定变量名 |
 | `PAGES_BUCKET` | Cloudflare Pages → R2 binding | R2 存储桶绑定变量名（聊天文件上传） |
 | `AI` | Cloudflare Pages → AI binding | Workers AI 绑定变量名（网站工具包 AI 功能，可选） |
-| `MATRIX_ACCESS_TOKEN` | Cloudflare Pages → Environment variables | Matrix 访问令牌（博客发布到 Matrix 房间，可选） |
 | Storage 桶 `pages` | Supabase Storage | 开发者文件托管（公开桶） |
 
 > **R2 配置说明**：聊天图片/文件上传使用 Cloudflare R2（`PAGES_BUCKET` 绑定），需在 Pages 设置中配置 R2 绑定（见第六步半）。开发者文件托管仍使用 Supabase Storage 的 `pages` 桶。
@@ -361,7 +360,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - **博客阅读**：文章页支持 HTML 渲染、标签展示、Matrix 房间链接
 - **评论系统**：评论作者/博客作者/开发者可删除评论
 - **公告机制**：开发者可发布/删除公告，公告在博客列表顶部横幅展示
-- **Matrix 集成**：博客发布时自动发送到 Matrix 房间（需配置 `MATRIX_ACCESS_TOKEN`，未配置时静默跳过）
+- **房间链接**：发布后可获取博客聊天室链接（`/api/blog/publish` 记录发布状态并返回房间 URL，无需额外配置）
 - **权限模型**：开发者=全权管理，博客作者=管理自己的文章和评论，普通用户=阅读和评论
 
 ### 注册安全

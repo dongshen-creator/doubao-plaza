@@ -85,7 +85,7 @@ export async function onRequestGet(context) {
 
     return jsonResponse({ success: true, data });
   } catch (e) {
-    return jsonResponse({ success: false, error: '服务器错误：' + e.message }, 500);
+    console.error('[announce.js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -147,7 +147,7 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ success: true, data: announcement });
   } catch (e) {
-    return jsonResponse({ success: false, error: '创建公告失败：' + e.message }, 500);
+    console.error('[announce.js]', e); return jsonResponse({ success: false, error: '创建公告失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -193,6 +193,6 @@ export async function onRequestDelete(context) {
 
     return jsonResponse({ success: true, message: '公告已删除' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '删除失败：' + e.message }, 500);
+    console.error('[announce.js]', e); return jsonResponse({ success: false, error: '删除失败：' + '服务器内部错误' }, 500);
   }
 }

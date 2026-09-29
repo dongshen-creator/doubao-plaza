@@ -330,3 +330,113 @@ CREATE TABLE IF NOT EXISTS register_challenges (
   issued_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_register_challenges_issued ON register_challenges(issued_at);
+
+-- ============================================================
+-- V8.0 迁移：注册/登录简化 · 设备凭据 · 风控 · 隔离 · 账号清理
+-- 与 migrations/v8.0-foundation.sql 保持一致
+-- 已有数据库同样重跑本 schema.sql（ALTER 重复列报错忽略，CREATE 幂等）
+-- 注意：users.name_norm 的 UNIQUE 索引在历史昵称回填完成后单独创建：
+--   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name_norm ON users(name_norm);
+-- ============================================================
+
+-- users 表新列
+ALTER TABLE users ADD COLUMN name_norm TEXT;
+ALTER TABLE users ADD COLUMN quarantined_at TEXT;
+ALTER TABLE users ADD COLUMN quarantine_reason TEXT;
+ALTER TABLE users ADD COLUMN quarantined_by TEXT;
+ALTER TABLE users ADD COLUMN deactivated_at TEXT;
+ALTER TABLE users ADD COLUMN purge_after TEXT;
+ALTER TABLE users ADD COLUMN last_active_at TEXT;
+ALTER TABLE users ADD COLUMN totp_secret TEXT;
+ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN ip_backfilled_at TEXT;
+
+-- login_attempts 扩展列（风控信号）
+ALTER TABLE login_attempts ADD COLUMN asn INTEGER;
+ALTER TABLE login_attempts ADD COLUMN country TEXT;
+ALTER TABLE login_attempts ADD COLUMN canvas_hash TEXT;
+ALTER TABLE login_attempts ADD COLUMN device_hash TEXT;
+
+-- 设备凭据表（只存 token hash，原始 token 仅在 __Host-dp_device Cookie 中）
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'active',
+  risk_level INTEGER DEFAULT 0,
+  claim_count INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  last_seen_at TEXT,
+  last_claim_at TEXT,
+  created_ip TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
+CREATE INDEX IF NOT EXISTS idx_devices_created_ip ON devices(created_ip, created_at);
+
+-- 设备-账号关系（一机一号由部分唯一索引在 DB 层保证）
+CREATE TABLE IF NOT EXISTS device_accounts (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  device_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  bound_at TEXT DEFAULT (datetime('now')),
+  released_at TEXT,
+  release_reason TEXT,
+  UNIQUE(device_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_device_accounts_user ON device_accounts(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_device_accounts_device ON device_accounts(device_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_accounts_one_active
+  ON device_accounts(device_id) WHERE status = 'active';
+
+-- 风控事件（保留 90 天，访问权限见 docs/SECURITY.md）
+CREATE TABLE IF NOT EXISTS risk_events (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id TEXT,
+  device_id TEXT,
+  event_type TEXT NOT NULL,
+  ip TEXT,
+  asn INTEGER,
+  country TEXT,
+  colo TEXT,
+  ua TEXT,
+  canvas_hash TEXT,
+  canvas_status TEXT,
+  risk_score INTEGER DEFAULT 0,
+  action TEXT DEFAULT 'allowed',
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_risk_events_ip ON risk_events(ip, created_at);
+CREATE INDEX IF NOT EXISTS idx_risk_events_user ON risk_events(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_risk_events_type ON risk_events(event_type, created_at);
+
+-- 开发者后台审计日志
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  actor_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT,
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON admin_audit_log(actor_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_log(action, created_at);
+
+-- step-up token（高风险操作要求近期认证，默认 10 分钟）
+CREATE TABLE IF NOT EXISTS stepup_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  purpose TEXT DEFAULT 'devops',
+  expires_at TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stepup_user ON stepup_tokens(user_id, expires_at);
+
+-- 清理运行记录（预演/执行报告持久化）
+CREATE TABLE IF NOT EXISTS cleanup_runs (
+  id TEXT PRIMARY KEY,
+  mode TEXT NOT NULL,
+  report TEXT NOT NULL,
+  started_at TEXT DEFAULT (datetime('now')),
+  finished_at TEXT
+);

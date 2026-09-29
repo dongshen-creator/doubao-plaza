@@ -4,6 +4,14 @@
 
 import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
 
+// 统一 no-store JSON 响应：含 token 的响应禁止任何缓存
+function jsonNoStore(data, init = {}) {
+  return new Response(JSON.stringify(data), {
+    status: init.status || 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(init.headers || {}) },
+  });
+}
+
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
 async function hashPassword(password) {
@@ -70,30 +78,29 @@ async function ensureTables(env) {
 
 export async function onRequestGet(context) {
   if (!context.env.DB) {
-    return Response.json({ success: false, error: '数据库未绑定' });
+    return jsonNoStore({ success: false, error: '数据库未绑定' });
   }
 
   try {
     const { env } = context;
     await ensureTables(env);
 
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
+    // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
+    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
 
     // IP 频率限制：同 IP 每小时最多请求 10 次密保问题
     const ipRequests = await env.DB.prepare(
       `SELECT COUNT(*) as cnt FROM password_recovery_attempts WHERE ip_address = ? AND created_at > datetime('now', '-1 hour')`
     ).bind(clientIP).first();
     if (ipRequests && ipRequests.cnt >= 10) {
-      return Response.json({ success: false, error: '请求过于频繁，请 1 小时后再试' });
+      return jsonNoStore({ success: false, error: '请求过于频繁，请 1 小时后再试' });
     }
 
     const url = new URL(context.request.url);
     const userId = url.searchParams.get('user_id');
 
     if (!userId) {
-      return Response.json({ success: false, error: '缺少用户ID' });
+      return jsonNoStore({ success: false, error: '缺少用户ID' });
     }
 
     const user = await env.DB.prepare(
@@ -101,11 +108,11 @@ export async function onRequestGet(context) {
     ).bind(userId).first();
 
     if (!user) {
-      return Response.json({ success: false, error: '用户不存在' });
+      return jsonNoStore({ success: false, error: '用户不存在' });
     }
 
     if (!user.security_question) {
-      return Response.json({ success: false, error: '该账号未设置密保问题，无法找回' });
+      return jsonNoStore({ success: false, error: '该账号未设置密保问题，无法找回' });
     }
 
     // 记录此 IP 的请求
@@ -113,7 +120,7 @@ export async function onRequestGet(context) {
       `INSERT INTO password_recovery_attempts (id, user_id, ip_address, success) VALUES (?, ?, ?, 0)`
     ).bind(genId(), userId, clientIP).run();
 
-    return Response.json({
+    return jsonNoStore({
       success: true,
       data: {
         user_id: user.id,
@@ -124,32 +131,32 @@ export async function onRequestGet(context) {
       }
     });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[recover] 服务器错误:', e);
+    return jsonNoStore({ success: false, error: '服务器错误，请稍后再试' });
   }
 }
 
 export async function onRequestPost(context) {
   if (!context.env.DB) {
-    return Response.json({ success: false, error: '数据库未绑定' });
+    return jsonNoStore({ success: false, error: '数据库未绑定' });
   }
 
   try {
     const { env } = context;
     await ensureTables(env);
 
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
+    // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
+    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
 
     const body = await context.request.json().catch(() => ({}));
     const { user_id, security_answer, new_password } = body;
 
     if (!user_id || !security_answer || !new_password) {
-      return Response.json({ success: false, error: '参数不完整' });
+      return jsonNoStore({ success: false, error: '参数不完整' });
     }
 
     if (new_password.length < 6 || new_password.length > 32) {
-      return Response.json({ success: false, error: '新密码长度必须为6-32位' });
+      return jsonNoStore({ success: false, error: '新密码长度必须为6-32位' });
     }
 
     // IP 频率限制：同 IP 每小时最多 5 次尝试
@@ -157,7 +164,7 @@ export async function onRequestPost(context) {
       `SELECT COUNT(*) as cnt FROM password_recovery_attempts WHERE ip_address = ? AND created_at > datetime('now', '-1 hour')`
     ).bind(clientIP).first();
     if (ipAttempts && ipAttempts.cnt >= 5) {
-      return Response.json({ success: false, error: '尝试次数过多，请 1 小时后再试' });
+      return jsonNoStore({ success: false, error: '尝试次数过多，请 1 小时后再试' });
     }
 
     // 用户级锁定：同 user_id 每小时最多 3 次失败
@@ -165,7 +172,7 @@ export async function onRequestPost(context) {
       `SELECT COUNT(*) as cnt FROM password_recovery_attempts WHERE user_id = ? AND success = 0 AND created_at > datetime('now', '-1 hour')`
     ).bind(user_id).first();
     if (userFails && userFails.cnt >= 3) {
-      return Response.json({ success: false, error: '该账号找回尝试次数过多，请 1 小时后再试' });
+      return jsonNoStore({ success: false, error: '该账号找回尝试次数过多，请 1 小时后再试' });
     }
 
     const user = await env.DB.prepare(
@@ -173,11 +180,11 @@ export async function onRequestPost(context) {
     ).bind(user_id).first();
 
     if (!user) {
-      return Response.json({ success: false, error: '用户不存在' });
+      return jsonNoStore({ success: false, error: '用户不存在' });
     }
 
     if (!user.security_answer) {
-      return Response.json({ success: false, error: '该账号未设置密保问题' });
+      return jsonNoStore({ success: false, error: '该账号未设置密保问题' });
     }
 
     // 记录本次尝试
@@ -189,7 +196,7 @@ export async function onRequestPost(context) {
     // 验证密保答案（恒定时间比较，防时序攻击）
     const answerValid = await verifyPassword(security_answer.trim(), user.security_answer);
     if (!answerValid) {
-      return Response.json({ success: false, error: '密保答案错误' });
+      return jsonNoStore({ success: false, error: '密保答案错误' });
     }
 
     // 验证通过，更新尝试记录
@@ -239,8 +246,9 @@ export async function onRequestPost(context) {
       pat_suffix: user.pat_suffix
     };
 
-    return Response.json({ success: true, data: safeUser, token, supabase_token: supabaseToken, message: '密码重置成功，已自动登录' });
+    return jsonNoStore({ success: true, data: safeUser, token, supabase_token: supabaseToken, message: '密码重置成功，已自动登录' });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[recover] 服务器错误:', e);
+    return jsonNoStore({ success: false, error: '服务器错误，请稍后再试' });
   }
 }

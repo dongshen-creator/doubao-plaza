@@ -102,6 +102,6 @@ export async function onRequestGet(context) {
     if (err.name === 'AbortError') {
       return new Response('上游响应超时', { status: 504 });
     }
-    return new Response('代理失败: ' + (err.message || '未知错误'), { status: 502 });
+    console.error('[img-proxy.js]', err); return new Response('代理失败: ' + '服务器内部错误', { status: 502 });
   }
 }

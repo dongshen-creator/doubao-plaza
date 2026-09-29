@@ -139,6 +139,7 @@ export async function onRequestPost(context) {
     });
   } catch (err) {
     clearTimeout(timeoutId);
+    console.error('[proxy.js] proxy failed:', err);
     // 超时错误：目标服务器在 25 秒内未返回响应头
     if (err.name === 'AbortError') {
       return Response.json({
@@ -151,7 +152,7 @@ export async function onRequestPost(context) {
       });
     }
     return Response.json({
-      error: '代理请求失败: ' + (err.message || '未知错误'),
+      error: '代理请求失败: ' + '服务器内部错误',
       target: targetUrl.substring(0, 100)
     }, {
       status: 502,
@@ -228,6 +229,7 @@ export async function onRequestGet(context) {
     });
   } catch (err) {
     clearTimeout(timeoutId);
+    console.error('[proxy.js] GET proxy failed:', err);
     if (err.name === 'AbortError') {
       return Response.json({
         error: '目标服务器响应超时（25秒）。请稍后重试。',
@@ -238,7 +240,7 @@ export async function onRequestGet(context) {
       });
     }
     return Response.json({ 
-      error: '代理请求失败: ' + (err.message || '未知错误')
+      error: '代理请求失败: ' + '服务器内部错误'
     }, { 
       status: 502,
       headers: { 'Access-Control-Allow-Origin': '*' }

@@ -96,6 +96,6 @@ export async function onRequestPost(context) {
       return json({ success: false, error: 'tmpfile.link: 响应无 downloadLink 字段', response: JSON.stringify(respData).substring(0, 300) }, 502);
     }
   } catch (e) {
-    return json({ success: false, error: '上传失败：' + (e.message || '未知错误') }, 500);
+    console.error('[tmpfile.js]', e); return json({ success: false, error: '上传失败：' + '服务器内部错误' }, 500);
   }
 }

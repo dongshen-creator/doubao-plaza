@@ -3,7 +3,7 @@
 // POST /api/moss/voices - 以音频样本创建/克隆音色（multipart: audio_sample 文件 + name）
 // 返回 GET: { success: true, voices: [...] } / POST: { success: true, voice_id, name }
 // 文档: https://platform.mosi.cn/docs/reference/voices-list
-// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，回退硬编码），前端不暴露。
+// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，未入库），前端不暴露。
 
 const MOSS_BASE = 'https://api.mosi.cn/v1';
 
@@ -17,7 +17,7 @@ function corsHeaders() {
 }
 
 function getApiKey(env) {
-  return env?.MOSS_API_KEY || 'sk-1975f45d46a62ad18a1c12983c4df85484a7310de434b59c';
+  return env?.MOSS_API_KEY || '';
 }
 
 function jsonResponse(data, status = 200) {
@@ -67,7 +67,7 @@ export async function onRequestPost(context) {
     return jsonResponse({ success: true, voice_id: data.id || '', name: data.name || (name || '') , ...data });
   } catch (err) {
     if (err.name === 'AbortError') return jsonResponse({ success: false, error: 'MOSS 创建音色响应超时（30秒）' }, 504);
-    return jsonResponse({ success: false, error: 'MOSS 创建音色失败: ' + (err.message || '未知错误') }, 502);
+    console.error('[voices.js]', err); return jsonResponse({ success: false, error: 'MOSS 创建音色失败: ' + '服务器内部错误' }, 502);
   }
 }
 
@@ -97,6 +97,6 @@ export async function onRequestGet(context) {
     if (err.name === 'AbortError') {
       return jsonResponse({ success: false, error: 'MOSS 音色列表响应超时' }, 504);
     }
-    return jsonResponse({ success: false, error: 'MOSS 请求失败: ' + (err.message || '未知错误') }, 502);
+    console.error('[voices.js]', err); return jsonResponse({ success: false, error: 'MOSS 请求失败: ' + '服务器内部错误' }, 502);
   }
 }

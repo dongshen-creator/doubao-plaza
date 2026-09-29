@@ -7,7 +7,7 @@
 //   - delivery_method: audio（默认，直接返回音频二进制）/ url（返回 JSON + 结果 URL）
 //   - async: 是否异步任务（默认 false）
 // 文档: https://platform.mosi.cn/docs/reference/speech
-// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，回退硬编码），前端不暴露。
+// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，未入库），前端不暴露。
 
 const MOSS_BASE = 'https://api.mosi.cn/v1';
 
@@ -21,7 +21,7 @@ function corsHeaders() {
 }
 
 function getApiKey(env) {
-  return env?.MOSS_API_KEY || 'sk-1975f45d46a62ad18a1c12983c4df85484a7310de434b59c';
+  return env?.MOSS_API_KEY || '';
 }
 
 function jsonResponse(data, status = 200) {
@@ -101,6 +101,6 @@ export async function onRequestPost(context) {
     if (err.name === 'AbortError') {
       return jsonResponse({ success: false, error: 'MOSS TTS 响应超时（25秒）' }, 504);
     }
-    return jsonResponse({ success: false, error: 'MOSS TTS 请求失败: ' + (err.message || '未知错误') }, 502);
+    console.error('[tts.js]', err); return jsonResponse({ success: false, error: 'MOSS TTS 请求失败: ' + '服务器内部错误' }, 502);
   }
 }

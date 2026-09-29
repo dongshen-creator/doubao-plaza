@@ -129,6 +129,6 @@ export async function onRequestPost(context) {
       }, 502);
     }
   } catch (e) {
-    return json({ success: false, error: '上传失败：' + (e.message || '未知错误') }, 500);
+    console.error('[picgo.js]', e); return json({ success: false, error: '上传失败：' + '服务器内部错误' }, 500);
   }
 }

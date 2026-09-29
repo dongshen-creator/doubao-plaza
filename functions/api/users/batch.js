@@ -53,6 +53,6 @@ export async function onRequestGet(context) {
 
     return Response.json({ success: true, data: users });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    return Response.json({ success: false, error: '服务器错误，请稍后再试' });
   }
 }

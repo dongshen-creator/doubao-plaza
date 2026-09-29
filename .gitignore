@@ -5,3 +5,4 @@ scripts/pending_fixes.jsonl
 .env
 .wrangler/
 .workbuddy/
+developer-sql-reference/

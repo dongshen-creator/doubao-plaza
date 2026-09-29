@@ -7,9 +7,8 @@
 // 参数: { text, source_lang, target_lang }
 // 返回: { success, translated, detected_lang }
 
-// ===== 后端密钥（仅此文件持有，前端不暴露；优先读环境变量）=====
-const NIUTRANS_API_KEY = '2d6d4868aa915324dbbe1b6622fac2e6';
-const NIUTRANS_APP_ID = 'npT1785804378460';
+// ===== 后端密钥（仅从 Pages 环境变量读取，不入库）=====
+// NIUTRANS_API_KEY / NIUTRANS_APP_ID 在 Cloudflare Pages 环境变量配置，代码不含回退值
 
 function corsHeaders() {
   return {
@@ -132,8 +131,8 @@ function md5Bytes(bytes) {
 // ===== NiuTrans v2（主引擎，任意语言互译）=====
 // 权限字符串: 将 apikey 及发送参数按参数名 ASCII 升序排列，键值对拼接后用 MD5 加密
 async function translateWithNiuTrans(text, sourceLang, targetLang, env) {
-  const apikey = env?.NIUTRANS_API_KEY || NIUTRANS_API_KEY;
-  const appId = env?.NIUTRANS_APP_ID || NIUTRANS_APP_ID;
+  const apikey = env?.NIUTRANS_API_KEY || '';
+  const appId = env?.NIUTRANS_APP_ID || '';
   const from = sourceLang === 'auto' ? 'auto' : sourceLang;
   const to = targetLang === 'auto' ? 'zh' : targetLang;
   // 秒级时间戳（与线上可用的 KiraTrans 实现一致）
@@ -235,7 +234,8 @@ export async function onRequestPost(context) {
     }
 
     if (!result || !result.translated) {
-      return jsonResponse({ success: false, error: '翻译失败: ' + (lastError || '所有翻译API均不可用') }, 502);
+      console.error('[translate.js] all engines failed:', lastError);
+      return jsonResponse({ success: false, error: '翻译失败: 所有翻译API均不可用' }, 502);
     }
 
     return jsonResponse({
@@ -245,6 +245,6 @@ export async function onRequestPost(context) {
       engine: result.engine || 'niutrans',
     });
   } catch (e) {
-    return jsonResponse({ success: false, error: '翻译服务异常: ' + (e.message || '未知错误') }, 500);
+    console.error('[translate.js]', e); return jsonResponse({ success: false, error: '翻译服务异常: ' + '服务器内部错误' }, 500);
   }
 }

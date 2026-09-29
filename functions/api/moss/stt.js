@@ -5,7 +5,7 @@
 //   2. application/json: { url: "公网音频URL" } 或 { file_id: "已上传文件ID" }
 // 返回: { success: true, text: "识别文本" }
 // 文档: https://platform.mosi.cn/docs/reference/transcriptions
-// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，回退硬编码），前端不暴露。
+// 密钥仅保存在后端（Cloudflare 环境变量 MOSS_API_KEY，未入库），前端不暴露。
 
 const MOSS_BASE = 'https://api.mosi.cn/v1';
 const MAX_BYTES = 20 * 1024 * 1024; // 最大 20MB 音频
@@ -20,7 +20,7 @@ function corsHeaders() {
 }
 
 function getApiKey(env) {
-  return env?.MOSS_API_KEY || 'sk-1975f45d46a62ad18a1c12983c4df85484a7310de434b59c';
+  return env?.MOSS_API_KEY || '';
 }
 
 function jsonResponse(data, status = 200) {
@@ -73,9 +73,12 @@ export async function onRequestPost(context) {
             return jsonResponse({ success: true, text: ld.text || '', segments: ld.segments || [] });
           }
         }
+        if (lres && lres.localError) {
+          console.error('[stt] 本地ASR连接失败:', lres.localError);
+        }
         return jsonResponse({
           success: false, error: '本地 ASR 不可用（服务未启动或非本机环境）',
-          detail: (lres?.localError || `HTTP ${lres?.status}`).slice(0, 200),
+          detail: `HTTP ${lres?.status || 'unreachable'}`,
         }, 502);
       }
 
@@ -127,6 +130,6 @@ export async function onRequestPost(context) {
     if (err.name === 'AbortError') {
       return jsonResponse({ success: false, error: 'MOSS STT 响应超时（25秒）' }, 504);
     }
-    return jsonResponse({ success: false, error: 'MOSS STT 请求失败: ' + (err.message || '未知错误') }, 502);
+    console.error('[stt.js]', err); return jsonResponse({ success: false, error: 'MOSS STT 请求失败: ' + '服务器内部错误' }, 502);
   }
 }

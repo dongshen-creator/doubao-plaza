@@ -131,6 +131,6 @@ export async function onRequestPost(context) {
       remaining_daily: DAILY_REPORT_LIMIT - dailyCount.count - 1
     });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[reports.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }

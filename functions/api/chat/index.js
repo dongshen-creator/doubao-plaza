@@ -78,7 +78,7 @@ export async function onRequest(context) {
 
     return json({ error: '未知操作' }, 400);
   } catch (e) {
-    return json({ error: e.message }, 500);
+    console.error('[index.js]', e); return json({ error: '服务器内部错误' }, 500);
   }
 }
 
@@ -158,6 +158,6 @@ async function handleCleanupMessages(env, body) {
     } catch(e) {}
     return json({ success: true, deleted_muted: delMuted, deleted_banned: delBanned });
   } catch(e) {
-    return json({ error: e.message }, 500);
+    console.error('[index.js]', e); return json({ error: '服务器内部错误' }, 500);
   }
 }

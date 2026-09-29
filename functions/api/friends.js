@@ -72,7 +72,7 @@ export async function onRequestGet(context) {
 
     return Response.json({ success: true, data: friendships });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[friends.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
   }
 }
 
@@ -139,7 +139,7 @@ export async function onRequestPost(context) {
     ).bind(user_id, friend_id).run();
     return Response.json({ success: true, data: { id: result.meta.last_row_id, status: 'pending' } });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[friends.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -189,7 +189,7 @@ export async function onRequestPut(context) {
     ).bind(newStatus, id).run();
     return Response.json({ success: true, message: action === 'accept' ? '已通过好友申请' : '已拒绝好友申请' });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[friends.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -229,6 +229,6 @@ export async function onRequestDelete(context) {
     await env.DB.prepare(`DELETE FROM friendships WHERE id = ?`).bind(id).run();
     return Response.json({ success: true, message: '已移除好友' });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[friends.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }

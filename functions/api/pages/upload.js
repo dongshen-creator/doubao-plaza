@@ -61,7 +61,7 @@ export async function onRequestGet(context) {
 
     return Response.json({ success: true, data: files, r2: true });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[upload.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -102,7 +102,7 @@ export async function onRequestPost(context) {
 
     return Response.json({ success: true, data: { path: filePath, size: buffer.byteLength } });
   } catch (e) {
-    return Response.json({ success: false, error: '上传失败：' + e.message });
+    console.error('[upload.js]', e); return Response.json({ success: false, error: '上传失败：' + '服务器内部错误' });
   }
 }
 
@@ -134,6 +134,6 @@ export async function onRequestDelete(context) {
     await env.PAGES_BUCKET.delete(`pages/${pageId}/${filePath}`);
     return Response.json({ success: true });
   } catch (e) {
-    return Response.json({ success: false, error: '删除失败：' + e.message });
+    console.error('[upload.js]', e); return Response.json({ success: false, error: '删除失败：' + '服务器内部错误' });
   }
 }

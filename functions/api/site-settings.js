@@ -45,7 +45,7 @@ export async function onRequestGet(context) {
       }
     });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[site-settings.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -104,6 +104,6 @@ export async function onRequestPut(context) {
 
     return Response.json({ success: true, message: '站点设置已更新' });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[site-settings.js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }

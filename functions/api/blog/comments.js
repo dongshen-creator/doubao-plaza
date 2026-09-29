@@ -92,7 +92,7 @@ export async function onRequestGet(context) {
 
     return jsonResponse({ success: true, data });
   } catch (e) {
-    return jsonResponse({ success: false, error: '服务器错误：' + e.message }, 500);
+    console.error('[comments.js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -196,7 +196,7 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ success: true, data: comment });
   } catch (e) {
-    return jsonResponse({ success: false, error: '评论失败：' + e.message }, 500);
+    console.error('[comments.js]', e); return jsonResponse({ success: false, error: '评论失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -254,6 +254,6 @@ export async function onRequestDelete(context) {
 
     return jsonResponse({ success: true, message: '评论已删除' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '删除失败：' + e.message }, 500);
+    console.error('[comments.js]', e); return jsonResponse({ success: false, error: '删除失败：' + '服务器内部错误' }, 500);
   }
 }

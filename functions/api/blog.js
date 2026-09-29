@@ -203,7 +203,7 @@ export async function onRequestGet(context) {
       },
     });
   } catch (e) {
-    return jsonResponse({ success: false, error: '服务器错误：' + e.message }, 500);
+    console.error('[blog.js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -346,6 +346,6 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ success: true, data: post, status: post.status, message });
   } catch (e) {
-    return jsonResponse({ success: false, error: '发布失败：' + e.message }, 500);
+    console.error('[blog.js]', e); return jsonResponse({ success: false, error: '发布失败：' + '服务器内部错误' }, 500);
   }
 }

@@ -48,6 +48,6 @@ export async function onRequestPost(context) {
 
     return Response.json({ success: true });
   } catch(e) {
-    return Response.json({ success: false, error: e.message }, { status: 500 });
+    console.error('[presence.js]', e); return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 }

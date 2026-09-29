@@ -31,7 +31,7 @@ export async function onRequestGet(context) {
     if (!user) return Response.json({ success: false, error: '用户不存在' });
     return Response.json({ success: true, data: user });
   } catch (e) {
-    return Response.json({ success: false, error: e.message });
+    console.error('[[id].js]', e); return Response.json({ success: false, error: '服务器内部错误' });
   }
 }
 
@@ -66,6 +66,6 @@ export async function onRequestDelete(context) {
 
     return Response.json({ success: true, message: '账号已永久删除' });
   } catch (e) {
-    return Response.json({ success: false, error: '注销失败：' + e.message });
+    console.error('[[id].js]', e); return Response.json({ success: false, error: '注销失败：' + '服务器内部错误' });
   }
 }

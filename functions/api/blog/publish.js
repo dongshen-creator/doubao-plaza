@@ -95,6 +95,6 @@ export async function onRequestPost(context) {
       message: '文章已记录，可通过聊天室链接分享',
     });
   } catch (e) {
-    return jsonResponse({ success: false, error: '操作失败：' + e.message }, 500);
+    console.error('[publish.js]', e); return jsonResponse({ success: false, error: '操作失败：' + '服务器内部错误' }, 500);
   }
 }

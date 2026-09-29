@@ -123,11 +123,12 @@ export async function onRequestGet(context) {
       return new Response(body, { status: 200, headers: respHeaders });
     }
   } catch (e) {
+    console.error('[tools/proxy.js] request failed:', e);
     if (e.name === 'AbortError') {
       return Response.json({ success: false, error: '工具请求超时（10秒）' }, { status: 504, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
     return Response.json(
-      { success: false, error: '代理请求失败: ' + (e.message || String(e)) },
+      { success: false, error: '代理请求失败: ' + '服务器内部错误' },
       { status: 502, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }

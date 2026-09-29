@@ -3,6 +3,14 @@
 
 import { signSupabaseJWT, generateToken, getAuthUserId } from '../_lib/jwt.js';
 
+// 统一 no-store JSON 响应：含 token 的响应禁止任何缓存
+function jsonNoStore(data, init = {}) {
+  return new Response(JSON.stringify(data), {
+    status: init.status || 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(init.headers || {}) },
+  });
+}
+
 async function checkAndUpdatePunishment(env, userId) {
   if (!env.DB) throw new Error('数据库未绑定');
   const user = await env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId).first();
@@ -34,7 +42,7 @@ export async function onRequestPost(context) {
     const { token } = body;
 
     if (!token) {
-      return Response.json({ success: false, error: '无会话token' });
+      return jsonNoStore({ success: false, error: '无会话token' });
     }
 
     const session = await env.DB.prepare(
@@ -43,7 +51,14 @@ export async function onRequestPost(context) {
     ).bind(token).first();
 
     if (!session) {
-      return Response.json({ success: false, error: '会话已过期' });
+      return jsonNoStore({ success: false, error: '会话已过期' });
+    }
+
+    // V8.0 惩罚性隐身：隔离 / 停用账号的旧会话一律按「过期」处理（口径与 middleware 诱饵一致），
+    // 并撤销该账号全部会话；不暴露隔离状态
+    if (session.quarantined_at || session.deactivated_at) {
+      await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(session.user_id).run();
+      return jsonNoStore({ success: false, error: '会话已过期' });
     }
 
     // Token 轮换：删除旧 token，签发新 token（防止 token 被窃后长期有效）
@@ -57,9 +72,8 @@ export async function onRequestPost(context) {
     // 签发 Supabase JWT（用于 RLS 鉴权）
     const supabaseToken = await signSupabaseJWT(session.user_id, env);
 
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
+    // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
+    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
     const userAgent = context.request.headers.get('User-Agent') || '';
 
     await env.DB.prepare(
@@ -69,7 +83,7 @@ export async function onRequestPost(context) {
     const user = await checkAndUpdatePunishment(env, session.user_id);
 
     if (!user) {
-      return Response.json({ success: false, error: '用户不存在' });
+      return jsonNoStore({ success: false, error: '用户不存在' });
     }
 
     // 安全地移除 password 字段
@@ -91,8 +105,9 @@ export async function onRequestPost(context) {
       pat_suffix: user.pat_suffix
     };
 
-    return Response.json({ success: true, data: safeUser, token: newToken, supabase_token: supabaseToken });
+    return jsonNoStore({ success: true, data: safeUser, token: newToken, supabase_token: supabaseToken });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[auto-login] 服务器错误:', e);
+    return jsonNoStore({ success: false, error: '服务器错误，请稍后再试' });
   }
 }

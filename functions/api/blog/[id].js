@@ -128,7 +128,7 @@ export async function onRequestGet(context) {
 
     return jsonResponse({ success: true, data: post });
   } catch (e) {
-    return jsonResponse({ success: false, error: '服务器错误：' + e.message }, 500);
+    console.error('[[id].js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -278,7 +278,7 @@ export async function onRequestPut(context) {
 
     return jsonResponse({ success: true, data: updatedPost });
   } catch (e) {
-    return jsonResponse({ success: false, error: '更新失败：' + e.message }, 500);
+    console.error('[[id].js]', e); return jsonResponse({ success: false, error: '更新失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -357,7 +357,7 @@ export async function onRequestPatch(context) {
 
     return jsonResponse({ success: true, data: updatedPost, message });
   } catch (e) {
-    return jsonResponse({ success: false, error: '审核操作失败：' + e.message }, 500);
+    console.error('[[id].js]', e); return jsonResponse({ success: false, error: '审核操作失败：' + '服务器内部错误' }, 500);
   }
 }
 
@@ -409,6 +409,6 @@ export async function onRequestDelete(context) {
 
     return jsonResponse({ success: true, message: '博客文章已删除' });
   } catch (e) {
-    return jsonResponse({ success: false, error: '删除失败：' + e.message }, 500);
+    console.error('[[id].js]', e); return jsonResponse({ success: false, error: '删除失败：' + '服务器内部错误' }, 500);
   }
 }

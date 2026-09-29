@@ -57,7 +57,7 @@ export async function onRequestGet(context) {
       return Response.json({ success: true, data: results.results });
     }
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
   }
 }
 
@@ -94,7 +94,7 @@ export async function onRequestPost(context) {
 
     return Response.json({ success: true, data: page });
   } catch (e) {
-    return Response.json({ success: false, error: '创建失败：' + e.message });
+    console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '创建失败：' + '服务器内部错误' });
   }
 }
 
@@ -138,7 +138,7 @@ export async function onRequestPut(context) {
 
     return Response.json({ success: true, data: page });
   } catch (e) {
-    return Response.json({ success: false, error: '更新失败：' + e.message });
+    console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '更新失败：' + '服务器内部错误' });
   }
 }
 
@@ -174,6 +174,6 @@ export async function onRequestDelete(context) {
 
     return Response.json({ success: true });
   } catch (e) {
-    return Response.json({ success: false, error: '删除失败：' + e.message });
+    console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '删除失败：' + '服务器内部错误' });
   }
 }

@@ -4,6 +4,92 @@
 
 ---
 
+## v8.0 — 2026-09-29
+
+### 变更：注册登录简化（唯一昵称）+ 设备标记一机一号 + /developer 后台全通道鉴权（step-up/TOTP/审计）+ 惩罚性隐身诱饵 + 撞库多维限流 + 密钥出库（V8.0）
+
+九项规格一次交付（①注册登录简化 ②`__Host-` Cookie 设备标记/一机一号 ③Canvas/IP/登录/风控规范化 ④历史账号清理 ⑤`/developer` 后台+全通道服务端鉴权+step-up+TOTP MFA+审计 ⑥惩罚性隐身+诱饵响应 ⑦撞库多维限流 ⑧安全补齐 ⑨测试→文档→commit+push）。迁移 31/31 已应用生产 D1 + name_norm 回填 428/428；代码 45 文件改动（+876/−407）+ 13 个新文件。
+
+#### 一、注册/登录简化（唯一昵称）
+1. **`_lib/name.js` normalizeName 单一来源**：去零宽/NFC 归一/空白折叠/小写化 → `users.name_norm`；注册查重、昵称登录、资料改名、开发者后台搜索 4 处共用
+2. **`migrations/v8.0-foundation.sql`**（同步 `schema.sql` +115 行）：幂等 ALTER users +10 列、login_attempts +4 列，新表 devices/device_accounts/risk_events/admin_audit_log/stepup_tokens/cleanup_runs；name_norm 回填 428/428 后建 UNIQUE 索引（回填先行避免撞唯一约束）
+3. login.js：doubao_id 查无后 fallback `name_norm = ?` → 昵称可直接登录
+
+#### 二、设备标记 `__Host-dp_device` + 一机一号
+1. `devices` 表只存 token 的 sha256（原标记不落库不进日志）；`__Host-` 前缀强制 Secure + Path=/ + 无 Domain
+2. **device_accounts 部分唯一索引** `idx_device_accounts_one_active`：同设备同时仅 1 条 active，并发绕过由 DB 索引拒绝
+3. **POST /api/device/claim**：有标记幂等续期；无标记签发；同 IP 5/时、15/日 → 429（防脚本批量刷标记）
+4. **POST /api/device/rebind**：需登录；本机被封 403、账号隔离/停用 401（不透露状态）、标记已绑他人 409（必须开发者后台解绑，客户端无权抢绑）；同账号 24h ≤5 次成功重绑；均写 risk_events
+5. login.js 登录链路：banned 设备 → 403 + risk_events(score 60)；无标记服务端补签（签发限流时降级为不绑定而非拒绝登录，避免共享出口 IP 用户无法登录）；注册同链路接入
+6. 前端 index.html：`ensureDeviceMark()` 登录/注册前预换标记（失败不阻止提交，服务端兜底补签）+ `getCanvasHash()`；注销时 `removeDeviceLogin` 清除
+
+#### 三、Canvas/IP/登录/风控规范化
+- `login_attempts` 扩列 `asn/country/canvas_hash/device_hash`（Canvas 摘要 sha256 前 16 hex，原始指纹不进日志）
+- 新增 `risk_events`（register/login_ok/login_fail/device_claim/device_rebind/quarantine/cleanup/stepup/mfa，保留 90 天）与 `admin_audit_log`
+- IP 统一取 `CF-Connecting-IP` 单一来源
+
+#### 四、历史账号清理（dry_run → execute → restore）
+- **POST /api/developer/cleanup**：`dry_run` 产出清单落 `cleanup_runs`（绝不删）→ `execute` 必须引用已有 dry_run 的 run_id + `confirm` 二次确认，**软删**（`deactivated_at` + `purge_after` 默认 +30 天，不物理删行），单批 ≤50 由前端循环 → `restore` 按 execute run 回滚（重置两列）
+- 全程 step-up + admin_audit_log；无物理删除 → 无生产数据不可逆风险
+
+#### 五、`/developer` 后台 + 全通道服务端鉴权 + step-up + TOTP + 审计
+- 新增 `public/developer.html`（`_headers` 强制 no-store）+ `functions/api/developer/{gate,mfa,cleanup,quarantine,users,audit}.js`
+- **gate.js**：GET 匿名 → 200 `{is_developer:false}`（不泄露端点存在性差异）；POST step-up = 密码（已启用时 + TOTP 动态码）→ 10 分钟 `X-Stepup-Token`（`stepup_tokens` 表）；step-up 失败 ≥5 次/15 分钟 → 429
+- **_lib/devauth.js** `requireDeveloper(env, request, {stepup:true})` 统一入口，缺 token → 403 `{need_stepup:true}`；高危操作（cleanup/quarantine/mfa）全部强制 step-up
+- **_lib/totp.js** RFC 6238（base32 密钥存 `users.totp_secret`）+ `mfa.js` 绑定/解绑；**_lib/audit.js** → `admin_audit_log`，后台全操作可审计（audit.js 查询端点）
+
+#### 六、惩罚性隐身 + 诱饵响应
+- **`functions/_middleware.js`**：隔离（quarantined_at）/停用（deactivated_at）用户 → 撤销会话（sessions 清除）+ 全站统一 401 诱饵「请先登录」，不透露处置状态；rebind/login 分支同口径 401 泛化
+
+#### 七、撞库多维限流
+- `isLoginLocked`（identifier 失败 N 次 / IP 失败 N 次 / 单 IP 下 distinct identifier 数三维）+ `loginRiskNeedsChallenge` + `checkAndUpdatePunishment`
+- 触发 → 429「登录尝试过于频繁，请 15 分钟后再试」；失败尝试落 `login_attempts`（success=0）供限流与取证
+
+#### 八、安全补齐（密钥不入库 + 错误不泄密）
+1. **密钥出库**：MOSS/NIUTRANS/UAPI 三 key 先写入 Pages 环境变量（prod+preview 共 12 项）再删代码，改 `env?.X || ''` 读取；固定正则扫描 **58 文件 0 命中**；新增 `.env.example`（占位空值）；`.gitignore` 含 `.env`、`developer-sql-reference/`
+2. **错误不泄密**：codemod1 29 文件（拼接式 `+ e.message` → 固定文案 + 同缩进 `console.error`）、codemod2 9 文件 14 行（直接式）；translate.js:237 lastError 仅 console、客户端改「翻译失败: 所有翻译API均不可用」；proxy/ai 补 catch 日志 4 处；响应侧 `.stack` = 0，`.message` 残留仅内部逻辑/上游透传既定项（stt.js:69、translate.js:227/231、tmpfile/picgo detail slice 等，均已在 QA 清单列明）
+3. **缓存安全**：`no-store` 覆盖 11 文件 / 5 个 bearer 端点（login/refresh-supabase-token/auto-login/logout-all/recover）+ `public/_headers`（developer.html）
+
+#### 九、文档修正
+- README Matrix 描述漂移 3 处（L44 注释 / L297 环境变量行 / L364 功能声明）：functions 实际**零 `env.MATRIX` 读取**，`publish.js` 为简化版（只记录/返回房间 URL，不调用 Matrix API）→ 按现状口径修正
+
+#### QA（本轮交付证据）
+- 迁移：生产 D1 **31/31** 语句通过 + name_norm 回填 **428/428**；Pages env 12 变量（prod+preview）核验
+- 语法：49 个改动 JS 拷出 `%TEMP%` 逐个 `node --check` → **CHECKED=49 FAILED=0**；console.error 插入点变量作用域 `SCOPE_BAD=0`
+- 单测：`unit_test_libs.mjs` → **pass=43 fail=0**（normalizeName 16 项、PBKDF2 格式/校验/legacy、TOTP base32/otpauth/±1 窗口）
+- Playwright 静态渲染（本地 8765 静态服，测毕已关）：index.html「逗包用户广场」、developer.html「开发者后台」登录门渲染正常；console 仅预期静态服 `/api` 404/501 + favicon，0 pageerror；截图 `developer-static-render.png` 核对通过
+- 扫描：旧密钥 0、未跟踪新文件密钥 `SCAN_FILES=58 SECRET_HITS=0`、`.stack` 响应侧 0、`SCOPE_BAD=0`
+
+#### 部署 / 回滚
+- push → CF Pages Git 集成自动部署（部署机制以线上 smoke 实测为准）；D1 迁移已先行应用，代码为纯加法（新表/新列），旧列不受影响
+- 回滚：revert 代码即可（迁移幂等可保留）；清理操作有 `restore` 反向通道；无物理删除 → 不依赖数据备份
+
+#### 技术边界 / 阻塞项（如实记录）
+- **需轮换（阻塞，无平台权限）**：MOSS/NIUTRANS/UAPI 三 key 曾入公开 git 历史——工作区已清零但历史仍在 → 需在对应平台重新签发
+- **wrangler 不可用**（PATH/node_modules 均无）→ 本地 wrangler E2E 阻塞，以单测 + 静态渲染 + 线上 smoke 替代
+- TURNSTILE_SECRET / REGISTER_POW_SECRET 未配置 → 对应防护 fail-open（既有状态，本轮未改变）
+- 设备标记可被用户清 Cookie 重置（客户端标记固有边界）；Supabase JWT 吊销受 refresh token 生命周期限制；passkey 未实现；TOTP 密钥 DB 明文存储（base32）
+- `migrations/v8.0-foundation.sql` 注释引用的 `tools/backfill-name-norm` 目录不存在（历史遗留悬空引用，不阻塞）
+
+#### 修改文件
+| 文件 | 说明 |
+|------|------|
+| `migrations/v8.0-foundation.sql` | 新增：users/login_attempts 扩列、6 新表、name_norm 唯一索引 |
+| `schema.sql` | 同步 V8.0 结构（+115 行，幂等可重跑） |
+| `functions/_middleware.js` | 新增：隔离/停用 → 撤会话 + 401 诱饵 |
+| `functions/api/_lib/{name,password,totp,device,devauth,audit,turnstile}.js` | 新增 7 模块 |
+| `functions/api/developer/{gate,mfa,cleanup,quarantine,users,audit}.js` | 新增后台 6 端点（全 step-up + 审计） |
+| `functions/api/device/{claim,rebind}.js` | 新增：标记签发（限流）/受控重绑 |
+| `public/developer.html` + `public/_headers` | 新增后台页 + no-store |
+| `public/index.html` | ensureDeviceMark/getCanvasHash 接入登录注册 |
+| `functions/api/users/*`、`users.js`、`register-challenge.js` | 多维限流 / name_norm 兜底 / 设备链路 |
+| translate、stream、moss、proxy、ai 等 38 文件 | e.message 泄密 codemod + console.error |
+| `.env.example` / `.gitignore` | 新增密钥模板 + 忽略 .env/内部目录 |
+| `README.md` | Matrix 描述漂移 3 处修正 |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v7.3 — 2026-09-29
 
 ### 变更：D1 读放大治理（rowsRead 375 万暴涨）+ 着色器手机端性能优化（V7.3）

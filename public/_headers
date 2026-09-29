@@ -5,3 +5,6 @@
   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
   X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; script-src-elem 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+
+/developer.html
+  Cache-Control: no-store, max-age=0

@@ -7,6 +7,13 @@
 
 import { signSupabaseJWT, generateToken } from './_lib/jwt.js';
 import { verifyChallenge, consumeChallenge, isTorExitIP } from './_lib/pow.js';
+import { normalizeName } from './_lib/name.js';
+import {
+  resolveAuthDevice,
+  deviceSetCookie,
+  logRiskEvent,
+  cfMeta,
+} from './_lib/device.js';
 
 // V7.3 读放大防护：搜索接口按 IP 限频（进程内存计数，单个隔离实例内 60 次/分钟）
 const _searchRate = new Map();
@@ -49,21 +56,7 @@ function validateAvatarUrl(avatar) {
   return { valid: true, value: url };
 }
 
-// 昵称规范化：去除零宽字符、不可见字符，NFC 归一化，折叠空白，转小写
-// 用于检测视觉上完全一致的昵称（防止用特殊字符达到重复效果）
-function normalizeName(name) {
-  if (!name) return '';
-  // 去除零宽字符和不可见字符：ZWSP, ZWNJ, ZWJ, BOM, WJ, soft hyphen, 方向控制符等
-  let s = name.replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u200E\u200F\u202A-\u202E\u2061-\u2064]/g, '');
-  // NFC 归一化（合并组合字符序列）
-  s = s.normalize('NFC');
-  // 折叠所有空白（包括各种 Unicode 空格）为单个普通空格
-  s = s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
-  // 去除首尾空白
-  s = s.trim();
-  // 转小写用于比较
-  return s.toLowerCase();
-}
+// 昵称规范化统一走 _lib/name.js（注册查重 / name_norm 索引 / 昵称登录共用同一实现）
 
 // 昵称合法性检查：返回 { valid: bool, error: string }
 function validateName(name) {
@@ -208,7 +201,7 @@ export async function onRequestGet(context) {
 
     return Response.json({ success: true, data: results.results });
   } catch (e) {
-    return Response.json({ success: false, error: '服务器错误：' + e.message });
+    return Response.json({ success: false, error: '服务器错误，请稍后再试' });
   }
 }
 
@@ -239,9 +232,9 @@ export async function onRequestPost(context) {
     }
 
     // V11 修复：Turnstile 人机验证（配置了 TURNSTILE_SECRET 时强制校验）
-    const clientIP = context.request.headers.get('CF-Connecting-IP')
-      || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-      || 'unknown';
+    // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
+    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+    const cmeta = cfMeta(context.request);
     const turnstileResult = await verifyTurnstile(turnstile_token, env, clientIP);
     if (!turnstileResult.success) {
       return Response.json({ success: false, error: turnstileResult.error });
@@ -256,13 +249,12 @@ export async function onRequestPost(context) {
     if (!nameCheck.valid) {
       return Response.json({ success: false, error: nameCheck.error });
     }
-    // 检查昵称是否重复（规范化比较，防止视觉一致的昵称）
-    const allUsers = await env.DB.prepare(`SELECT name FROM users`).all();
-    const existingNames = (allUsers.results || []).map(r => r.name);
-    for (const existingName of existingNames) {
-      if (normalizeName(existingName) === nameCheck.normalized) {
-        return Response.json({ success: false, error: '该昵称已被使用，请换一个' });
-      }
+    // V8.0 昵称查重：走 name_norm 唯一索引（DB 层 UNIQUE 索引兜底并发）
+    const existingName = await env.DB.prepare(
+      `SELECT id FROM users WHERE name_norm = ?`
+    ).bind(nameCheck.normalized).first();
+    if (existingName) {
+      return Response.json({ success: false, error: '该昵称已被使用，请换一个' });
     }
     if (!password || password.length < 6 || password.length > 32) {
       return Response.json({ success: false, error: '密码长度必须为6-32位' });
@@ -271,16 +263,16 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '豆包号是必填项' });
     }
     
-    // 主页链接为必填项：必须是AI视频链接，不支持智能体链接
+    // V8.0 注册简化：AI视频链接改为选填（头像本就选填，均在设置中补全）
+    // 填写时仍只接受 AI 视频链接，不支持智能体链接
     const homepageUrl = agent_url ? String(agent_url).trim() : '';
-    if (!homepageUrl) {
-      return Response.json({ success: false, error: 'AI视频链接是必填项' });
-    }
-    if (/\/bot\//i.test(homepageUrl) || /doubao\.com\/bot/i.test(homepageUrl)) {
-      return Response.json({ success: false, error: '不支持AI智能体链接（/bot/），请填写AI视频链接' });
-    }
-    if (!isValidHttpUrl(homepageUrl)) {
-      return Response.json({ success: false, error: '主页链接格式不正确，请填写以 http:// 或 https:// 开头的链接' });
+    if (homepageUrl) {
+      if (/\/bot\//i.test(homepageUrl) || /doubao\.com\/bot/i.test(homepageUrl)) {
+        return Response.json({ success: false, error: '不支持AI智能体链接（/bot/），请填写AI视频链接' });
+      }
+      if (!isValidHttpUrl(homepageUrl)) {
+        return Response.json({ success: false, error: '主页链接格式不正确，请填写以 http:// 或 https:// 开头的链接' });
+      }
     }
 
     // V12 修复：校验头像 URL
@@ -312,12 +304,12 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '该网络的注册账号数量已达上限' });
     }
 
-    // 检查设备指纹（同一设备是否已注册过）
+    // 检查设备指纹（同一设备是否已注册过，FingerprintJS 辅助信号，保留）
     if (device_fingerprint) {
       const existingDevice = await env.DB.prepare(
         `SELECT id FROM users WHERE device_fingerprint = ?`
       ).bind(device_fingerprint).first();
-      
+
       if (existingDevice) {
         return Response.json({ success: false, error: '该设备/浏览器已注册过账号，每个设备只能注册一个账号' });
       }
@@ -327,29 +319,76 @@ export async function onRequestPost(context) {
     const existingDoubaoId = await env.DB.prepare(`SELECT id FROM users WHERE doubao_id = ?`).bind(doubao_id).first();
     if (existingDoubaoId) return Response.json({ success: false, error: '该豆包号已被注册' });
     
-    // 检查主页链接是否已被占用
-    const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(homepageUrl).first();
-    if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
+    // 检查主页链接是否已被占用（仅在填写时查重，空值入库为 NULL 不冲突）
+    if (homepageUrl) {
+      const existingAgentUrl = await env.DB.prepare(`SELECT id FROM users WHERE agent_url = ?`).bind(homepageUrl).first();
+      if (existingAgentUrl) return Response.json({ success: false, error: '该主页链接已被其他用户使用' });
+    }
+
+    // V8.0 第一方设备标记校验（服务端签发 __Host- Cookie，客户端无法编造有效标记）
+    // 放在所有业务校验之后、PoW 消耗之前：失败时不再浪费已解出的挑战
+    const dev = await resolveAuthDevice(env, context.request, clientIP);
+    if (dev.rateLimited) {
+      return Response.json({ success: false, error: '设备签发过于频繁，请稍后再试' }, { status: 429 });
+    }
+    if (dev.banned) {
+      await logRiskEvent(env, {
+        event_type: 'register', device_id: dev.device && dev.device.id,
+        ip: clientIP, ...cmeta, ua: context.request.headers.get('User-Agent') || '',
+        action: 'blocked', risk_score: 60, detail: { reason: 'banned_device' },
+      });
+      return Response.json({ success: false, error: '注册失败，请刷新页面重试' }, { status: 403 });
+    }
+    if (dev.bindingUserId) {
+      // 一机一号：该设备已有 active 账号绑定
+      return Response.json({ success: false, error: '该设备/浏览器已注册过账号，每个设备只能注册一个账号' });
+    }
+    // 之后的失败路径也要把新标记发回浏览器，避免重试时重复签发耗尽 IP 限流额度
+    const devCookie = (dev.fresh && dev.raw) ? deviceSetCookie(dev.raw) : null;
+    const errWithCookie = (error, status = 200) => {
+      const h = { 'Content-Type': 'application/json' };
+      if (devCookie) h['Set-Cookie'] = devCookie;
+      return new Response(JSON.stringify({ success: false, error }), { status, headers: h });
+    };
 
     const regUA = context.request.headers.get('User-Agent') || '';
 
     // V5.13：所有校验通过、即将落库——原子消耗 PoW 挑战（单次有效，防重放）
     if (powResult.id && !(await consumeChallenge(env, powResult.id))) {
-      return Response.json({ success: false, error: '注册验证已使用，请刷新页面重试' });
+      return errWithCookie('注册验证已使用，请刷新页面重试');
     }
 
-    // 创建用户（ID由数据库自动生成）；主页链接为空时存 NULL
+    // V8.0：用户 + 设备绑定同一事务落库（D1 batch 原子；一机一号并发由部分唯一索引拒绝）
     const hashedPassword = await hashPassword(password);
-    await env.DB.prepare(
-      `INSERT INTO users (name, password, doubao_id, agent_url, device_fingerprint, avatar, bio, registered_ip, last_login_ip, last_login_ua) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(name, hashedPassword, doubao_id, homepageUrl || null, device_fingerprint || null, safeAvatar, bio || null, clientIP, clientIP, regUA).run();
+    const newUserId = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+    const insertUserStmt = env.DB.prepare(
+      `INSERT INTO users (id, name, name_norm, password, doubao_id, agent_url, device_fingerprint, avatar, bio, registered_ip, last_login_ip, last_login_ua, last_active_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(newUserId, name, nameCheck.normalized, hashedPassword, doubao_id, homepageUrl || null, device_fingerprint || null, safeAvatar, bio || null, clientIP, clientIP, regUA);
+    const stmts = [insertUserStmt];
+    if (dev.device) {
+      stmts.push(env.DB.prepare(
+        `INSERT INTO device_accounts (device_id, user_id, status) VALUES (?, ?, 'active')`
+      ).bind(dev.device.id, newUserId));
+    }
+    let batchError = '';
+    try {
+      await env.DB.batch(stmts);
+    } catch (err) {
+      const msg = String(err && err.message || err);
+      if (msg.includes('name_norm')) batchError = '该昵称已被使用，请换一个';
+      else if (msg.includes('device_accounts')) batchError = '该设备/浏览器已注册过账号，每个设备只能注册一个账号';
+      else if (msg.includes('users.doubao_id')) batchError = '该豆包号已被注册';
+      else if (msg.includes('users.agent_url')) batchError = '该主页链接已被其他用户使用';
+      else throw err;
+    }
+    if (batchError) return errWithCookie(batchError);
 
-    // 通过 doubao_id 查询刚创建的用户
+    // 按 ID 查询刚创建的用户
     const user = await env.DB.prepare(
       `SELECT id, name, avatar, bio, doubao_id, agent_url, is_developer, privacy_setting, created_at, last_login_ip, pat_suffix 
-       FROM users WHERE doubao_id = ?`
-    ).bind(doubao_id).first();
+       FROM users WHERE id = ?`
+    ).bind(newUserId).first();
 
     // 创建会话（30天有效期）
     const token = generateToken();
@@ -361,8 +400,21 @@ export async function onRequestPost(context) {
     // 签发 Supabase JWT（用于 RLS 鉴权）
     const supabaseToken = await signSupabaseJWT(user.id, env);
 
-    return Response.json({ success: true, data: user, token, supabase_token: supabaseToken });
+    // V8.0：注册风险事件落库 + 新设备标记下发（已有标记的浏览器无需重发）
+    await logRiskEvent(env, {
+      event_type: 'register', user_id: user.id, device_id: dev.device && dev.device.id,
+      ip: clientIP, ...cmeta, ua: regUA, action: 'allowed',
+      risk_score: dev.fresh ? 10 : 0, detail: { fresh_device: !!dev.fresh },
+    });
+    const respHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+    if (dev.fresh && dev.raw) respHeaders['Set-Cookie'] = deviceSetCookie(dev.raw);
+
+    return new Response(
+      JSON.stringify({ success: true, data: user, token, supabase_token: supabaseToken }),
+      { status: 200, headers: respHeaders }
+    );
   } catch (e) {
-    return Response.json({ success: false, error: '注册失败：' + e.message });
+    console.error('[register] 注册失败:', e);
+    return Response.json({ success: false, error: '注册失败，请稍后再试' });
   }
 }
