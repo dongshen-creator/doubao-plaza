@@ -8,6 +8,20 @@
 import { signSupabaseJWT, generateToken } from './_lib/jwt.js';
 import { verifyChallenge, consumeChallenge, isTorExitIP } from './_lib/pow.js';
 
+// V7.3 读放大防护：搜索接口按 IP 限频（进程内存计数，单个隔离实例内 60 次/分钟）
+const _searchRate = new Map();
+function _searchRateLimited(ip) {
+  const now = Date.now();
+  let e = _searchRate.get(ip);
+  if (!e || now - e.win >= 60000) {
+    if (_searchRate.size >= 500) _searchRate.clear(); // 防止内存无界增长
+    e = { win: now, n: 0 };
+    _searchRate.set(ip, e);
+  }
+  e.n += 1;
+  return e.n > 60;
+}
+
 // 校验是否为合法的 http(s) 链接（豆包智能体链接或创作视频链接等均可）
 function isValidHttpUrl(url) {
   if (!url) return false;
@@ -120,6 +134,18 @@ export async function onRequestGet(context) {
     const doubaoId = url.searchParams.get('doubao_id') || '';
     const inviteCode = url.searchParams.get('invite_code') || '';
     const currentUserId = url.searchParams.get('current_user') || '';
+
+    // V7.3 读放大防护①：空条件查询（没有任何过滤条件的全量列表）直接返回空，
+    // 避免脚本用无参数请求反复全表扫描 users
+    if (!search && !doubaoId && !inviteCode) {
+      return Response.json({ success: true, data: [] });
+    }
+
+    // V7.3 读放大防护②：按 IP 对搜索接口限频（同实例内 60 次/分钟）
+    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (_searchRateLimited(clientIP)) {
+      return Response.json({ success: false, error: '搜索过于频繁，请稍后再试' }, { status: 429 });
+    }
 
     let whereClause = 'WHERE 1=1';
     const params = [];

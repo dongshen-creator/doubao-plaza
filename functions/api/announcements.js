@@ -6,7 +6,31 @@
 
 import { getAuthUserId } from './_lib/jwt.js';
 
+// ===== v7.3: 公告 GET 边缘缓存 60s（D1 读放大治理）=====
+// 写操作（POST/PUT/DELETE）成功后调用 purgeAnnouncementsCache 主动失效。
+// 注意：Cloudflare 各边缘节点缓存独立，delete 仅作用于当前节点，
+// 其余节点靠响应头 max-age=60 自然过期兜底（最坏 60s 陈旧，可接受）。
+function annCacheKey(request) {
+  const u = new URL(request.url);
+  u.search = '';
+  u.hash = '';
+  return new Request(u.toString(), { method: 'GET' });
+}
+
+function purgeAnnouncementsCache(context) {
+  try {
+    context.waitUntil(caches.default.delete(annCacheKey(context.request)));
+  } catch (e) { /* 失效失败不影响主流程，等 max-age 过期 */ }
+}
+
 export async function onRequestGet(context) {
+  // 缓存优先：命中直接返回，跳过 DB 检查与查询
+  const cacheKey = annCacheKey(context.request);
+  try {
+    const hit = await caches.default.match(cacheKey);
+    if (hit) return hit;
+  } catch (e) { /* 缓存不可用则回源 */ }
+
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
       status: 500,
@@ -40,7 +64,13 @@ export async function onRequestGet(context) {
         is_system: true
       });
     }
-    return Response.json({ success: true, data });
+    const response = new Response(JSON.stringify({ success: true, data }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' }
+    });
+    try {
+      context.waitUntil(caches.default.put(cacheKey, response.clone()));
+    } catch (e) { /* 缓存写入失败不影响本次响应 */ }
+    return response;
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误：' + e.message });
   }
@@ -93,6 +123,7 @@ export async function onRequestPost(context) {
     if (announcement && announcement.created_at) {
       announcement.created_at = announcement.created_at.replace(' ', 'T') + 'Z';
     }
+    purgeAnnouncementsCache(context);
     return Response.json({ success: true, data: announcement });
   } catch (e) {
     return Response.json({ success: false, error: '发布失败：' + e.message });
@@ -153,6 +184,7 @@ export async function onRequestPut(context) {
         if (announcement.updated_at) announcement.updated_at = announcement.updated_at.replace(' ', 'T') + 'Z';
         announcement.is_system = true;
       }
+      purgeAnnouncementsCache(context);
       return Response.json({ success: true, data: announcement });
     }
 
@@ -170,6 +202,7 @@ export async function onRequestPut(context) {
     if (announcement && announcement.updated_at) {
       announcement.updated_at = announcement.updated_at.replace(' ', 'T') + 'Z';
     }
+    purgeAnnouncementsCache(context);
     return Response.json({ success: true, data: announcement });
   } catch (e) {
     return Response.json({ success: false, error: '编辑失败：' + e.message });
@@ -209,6 +242,7 @@ export async function onRequestDelete(context) {
 
     await env.DB.prepare(`DELETE FROM announcements WHERE id = ?`).bind(id).run();
 
+    purgeAnnouncementsCache(context);
     return Response.json({ success: true });
   } catch (e) {
     return Response.json({ success: false, error: '删除失败：' + e.message });

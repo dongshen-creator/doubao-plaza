@@ -8468,6 +8468,13 @@ html.dark .modal-card { background: color-mix(in srgb, var(--tv-panel) 88%, tran
       if (t) onMove(t.clientX, t.clientY);
     }, { passive: true });
     var pollTick = 0;
+    // v7.3: resize 改事件驱动（+ 每120帧兜底轮询），避免每帧读 clientWidth/clientHeight 触发强制布局回流（手机端卡顿主因之一）
+    var _sizeDirty = true;
+    function _markSizeDirty() { _sizeDirty = true; }
+    window.addEventListener('resize', _markSizeDirty, { passive: true });
+    window.addEventListener('orientationchange', _markSizeDirty, { passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', _markSizeDirty, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) _sizeDirty = true; });
     function resize() {
       var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
@@ -8486,7 +8493,7 @@ html.dark .modal-card { background: color-mix(in srgb, var(--tv-panel) 88%, tran
       if (!shaderOn) return;
       try {
         if (!document.hidden) {
-          resize();
+          if (_sizeDirty || (pollTick % 120) === 0) { _sizeDirty = false; resize(); }
           var nowS = (now || 0) / 1000;
           var any = false;
           for (var i = 0; i < 8; i++) {
@@ -8497,7 +8504,8 @@ html.dark .modal-card { background: color-mix(in srgb, var(--tv-panel) 88%, tran
             }
           }
           ripActive = any;
-          if ((pollTick = (pollTick + 1) % 30) === 0) syncAcc();
+          // v7.3: syncAcc 从每30帧(0.5s)降至每600帧(≈10s)；主题/强调色切换已由 __npSyncAccent 事件驱动同步（applyThemeColor L6683 直调），此处仅作兜底
+          if ((pollTick = (pollTick + 1) % 600) === 0) syncAcc();
           gl.uniform2f(uRes, canvas.width, canvas.height);
           gl.uniform1f(uT, nowS);
           gl.uniform1f(uD, isDark() ? 1 : 0);

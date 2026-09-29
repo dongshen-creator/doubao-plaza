@@ -1211,10 +1211,31 @@ async function init() {
   loadUsageNotice();
   if (!localStorage.getItem('dp_announcement_seen')) showFirstLoginAnnouncements();
   renderContent();
-  checkUnreadAnnouncements();
-  setInterval(checkUnreadAnnouncements, 300000); // 每5分钟检查一次未读公告
-  blogPollNotifications();
-  setInterval(blogPollNotifications, 30000); // 每30秒检查一次博客通知
+  // v7.3: D1 轮询后台暂停 —— 隐藏标签页不发请求，回前台立即补一轮（带最小间隔防抖）
+  var _annLastRun = 0, _blogLastRun = 0;
+  function pollUnreadAnnouncements() {
+    if (document.hidden) return;
+    var t = Date.now();
+    if (t - _annLastRun < 60000) return; // 公告轮询最小间隔 60s（正常间隔 300s）
+    _annLastRun = t;
+    checkUnreadAnnouncements();
+  }
+  function pollBlogNotifications() {
+    if (document.hidden) return;
+    var t = Date.now();
+    if (t - _blogLastRun < 25000) return; // 博客通知最小间隔 25s（正常间隔 30s）
+    _blogLastRun = t;
+    blogPollNotifications();
+  }
+  pollUnreadAnnouncements();
+  setInterval(pollUnreadAnnouncements, 300000); // 每5分钟检查一次未读公告
+  pollBlogNotifications();
+  setInterval(pollBlogNotifications, 30000); // 每30秒检查一次博客通知
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    pollUnreadAnnouncements();
+    pollBlogNotifications();
+  });
   startUnreadPolling();
   if (notifEnabled && 'Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
@@ -1234,7 +1255,7 @@ async function init() {
   });
   setupChatViewportListeners();
   triggerCleanup();
-  setInterval(triggerCleanup, 3600000);
+  setInterval(function () { if (!document.hidden) triggerCleanup(); }, 3600000);
 
   // 迁移模式：未迁移主页链接的老用户显示迁移提示
   if (siteSettings.migration_mode === 'on' && currentUser && !currentUser.homepage_migrated) {
@@ -12813,6 +12834,13 @@ document.addEventListener('DOMContentLoaded', function() {
       if (t) onMove(t.clientX, t.clientY);
     }, { passive: true });
     var pollTick = 0;
+    // v7.3: resize 改事件驱动（+ 每120帧兜底轮询），避免每帧读 clientWidth/clientHeight 触发强制布局回流（手机端卡顿主因之一）
+    var _sizeDirty = true;
+    function _markSizeDirty() { _sizeDirty = true; }
+    window.addEventListener('resize', _markSizeDirty, { passive: true });
+    window.addEventListener('orientationchange', _markSizeDirty, { passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', _markSizeDirty, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) _sizeDirty = true; });
     function resize() {
       var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
@@ -12831,7 +12859,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!shaderOn) return;
       try {
         if (!document.hidden) {
-          resize();
+          if (_sizeDirty || (pollTick % 120) === 0) { _sizeDirty = false; resize(); }
           var nowS = (now || 0) / 1000;
           var any = false;
           for (var i = 0; i < 8; i++) {
@@ -12842,7 +12870,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
           ripActive = any;
-          if ((pollTick = (pollTick + 1) % 30) === 0) syncAcc();
+          // v7.3: syncAcc 从每30帧(0.5s)降至每600帧(≈10s)；主题/强调色切换已由 __npSyncAccent 事件驱动同步，此处仅作兜底
+          if ((pollTick = (pollTick + 1) % 600) === 0) syncAcc();
           gl.uniform2f(uRes, canvas.width, canvas.height);
           gl.uniform1f(uT, nowS);
           gl.uniform1f(uD, isDark() ? 1 : 0);

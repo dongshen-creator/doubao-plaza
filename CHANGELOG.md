@@ -4,6 +4,50 @@
 
 ---
 
+## v7.3 — 2026-09-29
+
+### 变更：D1 读放大治理（rowsRead 375 万暴涨）+ 着色器手机端性能优化（V7.3）
+
+背景：09-28 D1 rowsRead 达 3,756,758（正常日 1–50 万，暴涨约 11 倍），09-29 已回落 149,697。排查结论：无暴力破解（34 条 login_attempts 分散 11 个 IP）、无新增轮询代码、4 次部署 diff 无读放大改动 → **流量高峰 × 读放大端点（公告/搜索无缓存无频控、后台标签页仍轮询）**，非更新引入的代码回归。修复读放大根源 + 降低着色器每帧 CPU 开销。
+
+#### 一、D1 读放大修复（4 个文件）
+1. **`schema.sql`**：`users(registered_ip)` 新增索引 `idx_users_registered_ip`（已同步应用到线上 D1，索引清单 = doubao_id / agent_url / fingerprint / registered_ip）
+2. **`functions/api/users.js`**：搜索端点加 `_searchRate` 内存频控（60 次/分/IP，≥500 条自动清空防泄漏）+ 空查询短路（`!q && !doubaoId` 直接 429，不再全表扫；doSearch 前端 L4845 已有空查询提前 return，不破坏功能）；**注册查重（L260 `SELECT name`）决定保留不改**——normalizeName 语义无法下推 SQL，且已有 PoW+Turnstile+5 次/时/IP 门控，表仅 427 行
+3. **`functions/api/announcements.js`**：GET 加 Cloudflare Cache API 边缘缓存（`Cache-Control: public, max-age=60`，`caches.default.match` 命中直接返回跳过 D1）+ `annCacheKey`/`purgeAnnouncementsCache` helper；POST/PUT(`__system__`)/PUT(normal)/DELETE 四处**成功路径** return 前 `context.waitUntil(purge)` 主动失效（错误路径不缓存；禁止在 handler 顶部无条件 purge——未授权请求会成缓存击穿向量）。注意：CF 各边缘节点缓存独立，delete 仅清当前节点，其余靠 max-age 60s 自然过期兜底
+4. **`public/index.html` 轮询守卫**：`checkUnreadAnnouncements`(5min) / `blogPollNotifications`(30s) / `triggerCleanup`(1h) 三个 interval 回调包 `if (!document.hidden)`；新增 `visibilitychange` 回前台立即补拉（公告 60s、博客 25s 最小间隔防抖，防快速切标签页刷接口）。**未动**：Supabase `startUnreadPolling`（已有 hidden 30s/可见 10s 降频）、presence/onlineNotify/onlineCount（非 D1）
+
+#### 二、着色器算法优化（画面内容零改动，减缓手机卡顿）
+- **resize 事件驱动**（index + tavern 双文件同改）：原来**每帧**读 `canvas.clientWidth/clientHeight`（强制布局回流，手机端卡顿主因之一）→ 改为 `_sizeDirty` 脏标记，`resize`/`orientationchange`/`visualViewport.resize`/`visibilitychange(回前台)` 置脏，frame 内仅 `if (_sizeDirty || pollTick % 120 === 0)` 才执行 `resize()`（120 帧 ≈ 2s 兜底）
+- **syncAcc 降频**：`pollTick % 30`（每 0.5s 一次 `getComputedStyle` 强制样式重算）→ `% 600`（≈10s 兜底）；主题/强调色切换已由事件驱动同步——index `toggleTheme`/`applyThemeColor` → `syncMetaThemeColor` → `window.__npSyncAccent()`，tavern `applyThemeColor` L6683 直调，启动顺序 loadTheme/loadThemeColor 早于着色器 IIFE 由 IIFE 内初始 `syncAcc()` 覆盖
+- 保留每帧：`isDark()`/classList 读取（便宜）、`u_d`/`u_acc` uniform 更新
+- 不影响 `dp_shader` 开关（`_sizeDirty` 为 var 提升，`__npSetShader` 无需改动；事件在 shader off 期间仍正常置脏）
+
+#### 三、5 个疑似探针账号定性：**不是黑客，不封禁**
+- `testJWTuser`、`testJWTuser2`、`JWTtest_1822434251`、`JWTdecode_385303124`、`RLStest_884017574`
+- 均 2026-07-31 创建、同一 IPv6（`2001:da8:801d:f50e:...`）、fingerprint=null、零活动记录
+- 判定：JWT/RLS 安全能力自测账号，非当前攻击者（09-28 暴涨与它们无关，且 7-31 距今两月）
+- **不封禁**（无黑客行为证据）；根因修复见上第一部分——若后续出现真攻击，频控+索引+缓存+轮询守卫已就位
+
+#### QA（playwright 实测，本地 8766 静态服）
+- **事件驱动 resize**：index 1911×1074 → 视口改 900×700 后 1.2s 内 canvas 精确同步 900×700（= clientWidth×dpr）✓；tavern 同款 1911×1145 → 700×600 ✓
+- **主题事件链**：`applyThemeColor('blue')` → `--accent: #3B82F6` ✓、`toggleTheme` 暗色 → accent 同步 ✓（事件驱动 syncAcc 生效，无需等 600 帧兜底）
+- **dp_shader 开关**：`__npSetShader(false)` → `display:none`+`dp_shader='off'`，true 恢复；off 刷新后仍隐藏 ✓、恢复 on ✓
+- **隐藏标签页轮询 spy**（init script 伪造 `document.hidden=true` + fetch 钩子计数 `/api/announcements`、`/api/blog`）：隐藏期 4s+ **0 次请求** ✓；`visibilitychange` 置回可见后触发补拉 **1 次 `/api/announcements`** ✓（博客轮询因登出态 `!currentUser` 提前返回，属既有行为）
+- 截图视觉核对：亮橙（暖色流体）/亮蓝（Seascape 海面）/暗蓝（暗色海面）三主题画面正常、无布局破损；tavern 登录墙注入 token 后正常渲染 ✓
+- 0 pageerror（console 仅预期静态服 `/api/*` 404）
+
+#### 修改文件
+| 文件 | 说明 |
+|------|------|
+| `schema.sql` | `idx_users_registered_ip` 索引（已同步线上 D1） |
+| `functions/api/users.js` | 搜索 IP 频控 60/min + 空查询短路 429 |
+| `functions/api/announcements.js` | GET 边缘缓存 60s + 4 处写操作成功路径 purge |
+| `public/index.html` | 三轮询 hidden 守卫 + visibilitychange 补拉；shader resize 事件驱动 + syncAcc %600 |
+| `public/tavern.html` | shader resize 事件驱动 + syncAcc %600（镜像） |
+| `CHANGELOG.md` | 本记录 |
+
+---
+
 ## v7.2 — 2026-09-29
 
 ### 变更：恢复海洋蓝海面/水墨灰墨滴背景 + 新增着色器开关（V7.2）
