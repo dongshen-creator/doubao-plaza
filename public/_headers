@@ -8,3 +8,6 @@
 
 /developer.html
   Cache-Control: no-store, max-age=0
+
+/developer
+  Cache-Control: no-store, max-age=0
