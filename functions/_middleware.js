@@ -2,7 +2,7 @@
 // AUDIT FIX 对照：
 //   [6.7] /api/* 响应补齐安全头（Pages 函数不继承 _headers，实测 API 响应 0 个安全头）
 //   [6.8] 门禁（无证明 403）+ translate/tts/proxy 按 IP 限流 + 蜜罐假 401
-//   [7.1] 与 catch-all 404 JSON 配合（见 functions/api/[[...path]].js，修复未知路径回退 index.html）
+//   [7.1] 与 catch-all 404 JSON 配合（见 functions/api/[[path]].js，修复未知路径回退 index.html）
 // 职责顺序：蜜罐 → 限流 → Bearer 合并查询（隔离/停用/白名单）→ 门禁 → next()
 //   1) 蜜罐：/api/admin|debug|env|backup|config|internal（含子路径前缀）→
 //      与未登录完全一致的假 401（不暴露蜜罐身份）+ 记录 security_events(kind='honeypot')

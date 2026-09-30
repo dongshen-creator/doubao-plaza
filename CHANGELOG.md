@@ -26,7 +26,7 @@
 - 已核查：前端零 XMLHttpRequest/WebSocket/EventSource/form action；`sendBeaconPresence` 实为 `fetch keepalive:true`（patch 覆盖）；`cdn-assets` 对 html/svg 强制 `Content-Disposition: attachment` + CSP sandbox，无需 patch；旧缓存 HTML 无 patch → 403 直到硬刷新（可接受，刷新即恢复）
 
 #### 三、未知 API 路径 404 JSON（AUDIT FIX 6.8 / 7.1 / 10.1）
-- **新增 `functions/api/[[...path]].js`** catch-all：未被既有端点匹配的 `/api/*` → 404 `{success:false,error:'Not Found'}`（JSON），不再回退 SPA 返回 index.html 200 HTML；`_routes.json` 的 `/api/*` include 已覆盖，无需改动
+- **新增 `functions/api/[[path]].js`** catch-all（双括号 multipath，参数名仅限字母数字/下划线——wrangler 曾以 `[[...path]]` 含 `...` 拒绝构建）：未被既有端点匹配的 `/api/*` → 404 `{success:false,error:'接口不存在'}`（JSON），不再回退 SPA 返回 index.html 200 HTML；`_routes.json` 的 `/api/*` include 已覆盖，无需改动
 
 #### 四、SQL 迁移（3 个新文件 + schema.sql 同步）
 1. **`migrations/v9.0-gate.sql`**（已应用**生产 D1**，PRAGMA 复核通过；`schema.sql` 已同步）：`users.api_allowed INTEGER NOT NULL DEFAULT 0` 白名单列 + `security_events` 表（kind/ip/path/status/created_at，90 天保留）+ 索引；幂等 CREATE 段可重复执行，ALTER 段按单条下发忽略 duplicate column
@@ -58,7 +58,7 @@
 | 文件 | 动作 | 说明 |
 |------|------|------|
 | `functions/_middleware.js` | 修改 | 五段管线：蜜罐→限流→Bearer→gate→API 安全头 |
-| `functions/api/[[...path]].js` | 新增 | 未知 `/api/*` → 404 JSON catch-all |
+| `functions/api/[[path]].js` | 新增 | 未知 `/api/*` → 404 JSON catch-all（构建修复：`[[...path]]`→`[[path]]`） |
 | `functions/pages/[[id]].js` | 修改 | `fetchPatchHead()` 注入自定义页 |
 | `public/index.html` | 修改 | fetch patch + esc 单引号 + SRI×6 + og/canonical/JSON-LD/manifest |
 | `public/tavern.html` | 修改 | fetch patch + esc 单引号 + jszip SRI |
