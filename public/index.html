@@ -15,20 +15,68 @@
   <meta property="og:description" content="连接豆包智能体用户的社交平台">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="zh_CN">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:site_name" content="逗包用户广场">
+  <meta property="og:url" content="https://doubao-plaza.pages.dev/">
+  <meta property="og:image" content="https://doubao-plaza.pages.dev/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="逗包用户广场">
+  <meta name="twitter:description" content="连接豆包智能体用户的社交平台">
+  <meta name="twitter:image" content="https://doubao-plaza.pages.dev/og.png">
+  <link rel="canonical" href="https://doubao-plaza.pages.dev/">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"逗包用户广场","url":"https://doubao-plaza.pages.dev/","description":"连接豆包智能体用户的社交平台，支持实时聊天、好友系统、频道管理和自定义页面","inLanguage":"zh-CN"}</script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23F2622A'/><path d='M28 34c0-4.4 3.6-8 8-8h36c4.4 0 8 3.6 8 8v24c0 4.4-3.6 8-8 8H50l-14 12v-12h0c-4.4 0-8-3.6-8-8V34z' fill='%23FFF9F2'/><circle cx='42' cy='47' r='4' fill='%23F2622A'/><circle cx='58' cy='47' r='4' fill='%23F2622A'/></svg>">
   <!-- 编辑衬线字体（jsdelivr CDN，CSP 已放行）：Fraunces 拉丁标题 + LXGW WenKai 中文标题 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-regular.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-bold.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/400.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/600.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/700.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-regular.css" integrity="sha384-usAwS4GuP3EymPRjfL7yc7ZFZZl45NeR7Lbl/krLMVINoRHVKYgQG/6WTGXNyNOH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-bold.css" integrity="sha384-wvyC9BCHtJEZ8WmLkhXV9p66P71K/TY9GjKAotcuTWdws6Bxynnh1tNPyc5+N9yA" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/400.css" integrity="sha384-mRqDW3yEf05PJJCFvnOwtF5u6mMhCvx3okwrnfnUhH7moKkDWMqwZP5wfEuKxN7c" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/600.css" integrity="sha384-I4OievZS4FPqI1rcWjC/ZpTNRnLAF0mZ1cFnieu67j58OkJvK1Y0LnXCROd7DUSO" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/700.css" integrity="sha384-DW9io2KKfNxfAl3vJebp9jrOJLlMzLEt6K/NwepvemBQwL8T8JJ1C8M1UJBL7BfX" crossorigin="anonymous">
   <!-- Iconify 矢量图标运行时（自定义元素，动态注入自动升级） -->
-  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" integrity="sha384-GPb5RlngihS9H0z1D137JsvzmeZ7tCpWEF4t5YDoTZyMsPP8S7h7vFDh4XhheU83" crossorigin="anonymous" defer></script>
   <!-- SunEditor 富文本编辑器（本地静态资源，按需懒加载，见 ensureSunEditorLoaded） -->
   <link rel="preload" href="/vendor/suneditor/dist/suneditor.min.js" as="script">
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
+  <script>
+  /* AUDIT FIX v9.0 [6.7]: 门禁证明注入 —— 同源 /api fetch 自动携带 X-DP-Client 头（与 functions/_middleware.js gate 配套，须同版本上线） */
+  (function () {
+    if (window.__dpFetchPatched) return;
+    var orig = window.fetch;
+    if (typeof orig !== 'function') return;
+    function isApi(u) {
+      if (!u || u.indexOf('api') === -1) return false;
+      try {
+        var r = new URL(u, location.href);
+        if (r.origin !== location.origin) return false;
+        var p = r.pathname + r.search;
+        return p === '/api' || p.indexOf('/api/') === 0 || p.indexOf('/api?') === 0;
+      } catch (e) { return false; }
+    }
+    window.fetch = function (input, init) {
+      try {
+        var u = (typeof input === 'string') ? input
+          : (typeof URL !== 'undefined' && input instanceof URL) ? input.href
+          : (typeof Request !== 'undefined' && input instanceof Request) ? input.url
+          : (input && input.url) || '';
+        if (isApi(u)) {
+          var src = (init && init.headers)
+            ? init.headers
+            : (typeof Request !== 'undefined' && input instanceof Request) ? input.headers
+            : undefined;
+          var h = new Headers(src);
+          if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
+          init = Object.assign({}, init, { headers: h });
+        }
+      } catch (e) {}
+      return orig.call(this, input, init);
+    };
+    window.__dpFetchPatched = true;
+  })();
+  </script>
   <script>
   // KaTeX 本地静态加载（同源资源，规避外部 CDN 被 local address space 拦截）
   (function() {
@@ -748,7 +796,7 @@ async function patUser(targetUserId, targetUserName, targetSuffix) {
 }
 
 
-function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ── 安全 HTML 净化器 ──
 // 允许的标签白名单

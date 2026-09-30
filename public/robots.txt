@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /developer
+Disallow: /developer.html
+Disallow: /api/
+
+Sitemap: https://doubao-plaza.pages.dev/sitemap.xml

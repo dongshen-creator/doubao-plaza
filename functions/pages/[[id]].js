@@ -30,6 +30,33 @@ function loginWallHead() {
   '</script>';
 }
 
+// AUDIT FIX v9.0 [6.7]: 门禁证明注入 —— 自定义页同源 /api fetch 自动携带 X-DP-Client 头
+// 与 functions/_middleware.js gate 配套；无此头的同源 /api 请求会被 gate 403 拦截
+function fetchPatchHead() {
+  return '<script>(function(){' +
+    'if(window.__dpFetchPatched)return;' +
+    'var orig=window.fetch;if(typeof orig!=="function")return;' +
+    'function isApi(u){if(!u||u.indexOf("api")===-1)return false;' +
+    'try{var r=new URL(u,location.href);if(r.origin!==location.origin)return false;' +
+    'var p=r.pathname+r.search;' +
+    'return p==="/api"||p.indexOf("/api/")===0||p.indexOf("/api?")===0;}' +
+    'catch(e){return false;}}' +
+    'window.fetch=function(input,init){' +
+    'try{var u=(typeof input==="string")?input:' +
+    '(typeof URL!=="undefined"&&input instanceof URL)?input.href:' +
+    '(typeof Request!=="undefined"&&input instanceof Request)?input.url:' +
+    '(input&&input.url)||"";' +
+    'if(isApi(u)){var src=(init&&init.headers)?init.headers:' +
+    '(typeof Request!=="undefined"&&input instanceof Request)?input.headers:undefined;' +
+    'var h=new Headers(src);' +
+    'if(!h.has("X-DP-Client"))h.set("X-DP-Client","plaza-v1");' +
+    'init=Object.assign({},init,{headers:h});}' +
+    '}catch(e){}' +
+    'return orig.call(this,input,init);};' +
+    'window.__dpFetchPatched=true;' +
+    '})();</script>';
+}
+
 function injectIntoHTML(html, block) {
   // 注入到 <head> 开头（所有外部资源之前）
   var hMatch = html.match(/<head[\s>]/i);
@@ -91,7 +118,7 @@ export async function onRequestGet(context) {
           const ct = obj.httpMetadata?.contentType || getContentType(filePath);
           if (ct === 'text/html') {
             const html = await new Response(obj.body).text();
-            return new Response(injectIntoHTML(html, loginWallHead()), {
+            return new Response(injectIntoHTML(html, fetchPatchHead() + loginWallHead()), {
               headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' },
             });
           }
@@ -113,7 +140,7 @@ export async function onRequestGet(context) {
         ).bind(pageId).first();
 
         if (page) {
-          return new Response(injectIntoHTML(page.html_content, loginWallHead()), {
+          return new Response(injectIntoHTML(page.html_content, fetchPatchHead() + loginWallHead()), {
             headers: { 'Content-Type': 'text/html' },
           });
         }

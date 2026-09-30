@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>页面不存在 - 逗包用户广场</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #F7F3EC;
+      color: #2B2620;
+      font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      text-align: center;
+      padding: 24px;
+    }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E8E0D4;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(43, 38, 32, 0.08);
+      padding: 48px 40px;
+      max-width: 440px;
+      width: 100%;
+    }
+    .code {
+      font-size: 72px;
+      font-weight: 800;
+      color: #F2622A;
+      line-height: 1;
+      letter-spacing: 2px;
+    }
+    h1 { font-size: 20px; margin: 16px 0 8px; font-weight: 700; }
+    p { font-size: 14px; color: #7D7263; line-height: 1.7; }
+    .actions { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    a.btn {
+      display: inline-block;
+      padding: 10px 22px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    a.primary { background: #F2622A; color: #FFF9F2; box-shadow: 0 6px 16px rgba(242, 98, 42, 0.3); }
+    a.primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(242, 98, 42, 0.38); }
+    a.ghost { background: #FFF3EC; color: #C4531F; border: 1px solid #F3D8C8; }
+    a.ghost:hover { background: #FFE9DE; }
+    @media (prefers-reduced-motion: reduce) {
+      a.btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="code">404</div>
+    <h1>页面不存在</h1>
+    <p>你访问的地址没有对应内容，可能是链接失效或输入有误。</p>
+    <div class="actions">
+      <a class="btn primary" href="/">返回首页</a>
+      <a class="btn ghost" href="/tavern">去小酒馆</a>
+    </div>
+  </main>
+</body>
+</html>

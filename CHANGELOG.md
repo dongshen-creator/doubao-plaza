@@ -4,6 +4,84 @@
 
 ---
 
+## v9.0 — 2026-10-01
+
+### 变更：全站 API 门禁（X-DP-Client 同源证明 + Bearer 白名单）+ 蜜罐/限流/安全事件审计 + API 安全响应头 + 404 JSON catch-all + SEO/分享卡片/PWA 补齐 + CDN SRI + esc 单引号逃逸 + Supabase RLS 收紧（AUDIT FIX 第一轮）
+
+安全审计（audit-scorecard）高/中优修复一次交付：①`_middleware.js` 重写为「蜜罐→限流→Bearer 合并→gate→API 安全头」五段管线 ②三端 head 内联 fetch patch 自动携带 `X-DP-Client: plaza-v1` ③未知 `/api/*` 返回 404 JSON（不再落到 SPA HTML 200）④真实 robots.txt/sitemap.xml/manifest.json/404.html + og 图/PWA 图标 ⑤jsdelivr 12 处资源全部加 sha384 SRI ⑥esc() 补单引号逃逸 ⑦Supabase 24 张表 RLS 宽政策收紧为 authenticated。D1 迁移已应用生产并 PRAGMA 复核；Supabase RLS 迁移已应用（附幂等回滚快照）。
+
+#### 一、API 门禁 middleware（AUDIT FIX 6.7 / 6.8 / 7.1）
+- **`functions/_middleware.js` 重写**，执行顺序：
+  1. **蜜罐**：`/api/admin|debug|env|backup|config|internal` 前缀（精确匹配或 `path+'/'`）→ 假 401「请先登录」+ 记 `honeypot` 事件，不暴露端点差异
+  2. **限流**：translate(含 `/stream`) 30/分、moss/tts 10/分、`/api/tools/proxy` 60/分（60s 滑动窗口，内存 Map）→ 429 + `Retry-After` + 记 `rate_limited` 事件
+  3. **Bearer 合并**：`Authorization: Bearer` 且 `users.api_allowed=1` → 放行（脚本白名单，隔离检查隔离生效）；隔离/停用用户走既有 401 诱饵（不与 gate 403 混淆）
+  4. **gate**：证明 = `X-DP-Client: plaza-v1` + 请求头 `Origin` 存在时必须 `=== url.origin`；缺头/跨源 → 403 `{success:false,error:'Forbidden'}` + 记 `gate_403`（按 ip+path 内存去重，防刷爆表）。**豁免**：`/api/img-proxy`、`/api/ops/*`。**fail-closed**：白名单查询异常按未放行处理；隔离检查 fail-open（不阻断正常用户）
+  5. **API 安全头**：仅 `/api/*` 响应统一附加（`jsonError` 与 `wrapApiResponse` 两条出口）——`X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy: no-referrer`、`Permissions-Policy: camera=(), geolocation=(), microphone=(self)`、`Strict-Transport-Security: max-age=31536000; includeSubDomains`、`Content-Security-Policy: default-src 'none'; frame-ancestors 'self'; base-uri 'none'`；`new Response(res.body)` 透传保 SSE 流式，204/304 null body 安全
+- **审计事件** `security_events`：`waitUntil` 异步 INSERT，60s 全局 ≤100 条，>90 天记录以 1% 概率 DELETE 清理；kind ∈ `gate_403 | honeypot | rate_limited | quarantine_401`
+- **CORS 策略不变**（ACAO:* 56 处）：跨源 preflight 因无证明头被 gate 403，等效收紧，无需改端点
+
+#### 二、前端门禁证明 fetch patch（与 middleware 同版本上线）
+- **`public/index.html` / `public/tavern.html` / `public/developer.html`** head 最前端内联：包装 `window.fetch`，`isApi()` 快筛（`indexOf('api')` → `new URL` 同源校验 → `/api`、`/api/`、`/api?` 前缀）命中则 `new Headers` 合并注入 `X-DP-Client: plaza-v1`（已有则不覆盖）；`window.__dpFetchPatched = true` 幂等防重；全部 try/catch 包裹，异常时原样透传
+- **`functions/pages/[[id]].js`** 新增 `fetchPatchHead()` 并在两处 `injectIntoHTML` 组合注入（`fetchPatchHead() + loginWallHead()`），自定义页调 `/api` 不被 gate 403 误杀
+- 已核查：前端零 XMLHttpRequest/WebSocket/EventSource/form action；`sendBeaconPresence` 实为 `fetch keepalive:true`（patch 覆盖）；`cdn-assets` 对 html/svg 强制 `Content-Disposition: attachment` + CSP sandbox，无需 patch；旧缓存 HTML 无 patch → 403 直到硬刷新（可接受，刷新即恢复）
+
+#### 三、未知 API 路径 404 JSON（AUDIT FIX 6.8 / 7.1 / 10.1）
+- **新增 `functions/api/[[...path]].js`** catch-all：未被既有端点匹配的 `/api/*` → 404 `{success:false,error:'Not Found'}`（JSON），不再回退 SPA 返回 index.html 200 HTML；`_routes.json` 的 `/api/*` include 已覆盖，无需改动
+
+#### 四、SQL 迁移（3 个新文件 + schema.sql 同步）
+1. **`migrations/v9.0-gate.sql`**（已应用**生产 D1**，PRAGMA 复核通过；`schema.sql` 已同步）：`users.api_allowed INTEGER NOT NULL DEFAULT 0` 白名单列 + `security_events` 表（kind/ip/path/status/created_at，90 天保留）+ 索引；幂等 CREATE 段可重复执行，ALTER 段按单条下发忽略 duplicate column
+2. **`migrations/v9.0-rls-tighten.sql`**（已应用 **Supabase**，AUDIT FIX 6.6/6.2）：删除 audit_logs/todos 的 anon 专有政策、channel_join_requests 冗余「任何人可*」宽政策；其余 24 张表 `roles={public} qual='true'` 宽政策**原名原 cmd 原 qual** 重建为 `TO authenticated`（登录态行为不变，匿名直读写被 RLS 拦截）；`plugins` 保留公开可读（有意公开且无写政策）
+3. **`migrations/supabase-rls-rollback-v9.0.sql`**（回滚快照）：迁移前 `pg_policies` 全量导出，先 DROP IF EXISTS 再按原定义重建，对已迁移/未迁移两种状态均幂等恢复
+4. **前置验证**：index.html 全部 `.from()` 均在登录门卫后；`presence.js` 用 `signSupabaseJWT` 签发 authenticated JWT；tavern/developer 无 `.from()` 直连；6.1（三密钥轮换）无平台权限 → BLOCKED 仅记录
+
+#### 五、SEO / 分享卡片 / PWA 静态件（AUDIT FIX 8.1 / 8.2 / 8.3 / 10.1）
+- **新增 `public/robots.txt`**：Allow 全站 + Disallow `/developer`、`/developer.html`、`/api/`；**`public/sitemap.xml`**：`/` 与 `/tavern`（lastmod 2026-10-01）——此前被 SPA fallback 吞成 HTML 200，现为真实静态文件
+- **新增 `public/manifest.json`**（`_headers`/CSP 兼容）+ `public/404.html`（#F7F3EC 底 / #F2622A 404，返回首页/去小酒馆按钮，`noindex`，零 `/api` 调用）——未知路径由 Pages 404 机制接管（项目级设置，上线实测）
+- **新增 og/PWA 图 4 张**（PS 脚本生成并读图核验）：`og.png` 1200×630（橙底白聊天气泡 + 站名/标语/域名）、`icon-192.png`、`icon-512.png`（any+maskable）、`apple-touch-icon.png`
+- **`index.html` head L14-30 补齐**：`og:url`/`og:image`(绝对 URL→`/og.png`)/`og:image:width|height`/`og:site_name`、`twitter:card` 升级 `summary_large_image` + `twitter:image`、`rel=canonical`、`rel=manifest`、`rel=apple-touch-icon`、JSON-LD `WebSite`（`type="application/ld+json"`）
+
+#### 六、CDN SRI（AUDIT FIX 9.4）
+- **sha384 integrity + crossorigin="anonymous"**，哈希以 PS 逐文件下载现算（身份编码字节，magic 复核为明文非 gzip）：
+  - `index.html` 6 处：lxgw regular/bold、fraunces 400/600/700、iconify
+  - `developer.html` 5 处：lxgw regular/bold、fraunces 400/600、iconify
+  - `tavern.html` jszip 动态 script：`script.integrity` + `script.crossOrigin`（tavern transformers 动态 import 无法 SRI，pinned URL `@3.3.3` 缓解）
+- CSP 无需改动：`script-src` 已含 `https://cdn.jsdelivr.net` + `'unsafe-inline'`
+
+#### 七、XSS 输出编码（AUDIT FIX 6.3）
+- **`index.html` L787 / `tavern.html` L4413** `esc()` 尾部补 `.replace(/'/g,'&#39;')`，对齐 `developer.html` L383-387 既有的 `[&<>"']` 白名单口径（& < > " ' 五字符全逃逸，防单引号属性逃逸）
+
+#### 八、CSP / 路由核查（未改动项记录）
+- `public/_headers` 全文复核：`script-src` 已放行 jsdelivr 与 `unsafe-inline` → patch/SRI/JSON-LD 合规，**无需改**；developer no-store 规则保留
+- `functions/` 无根级 glob catch-all；text/html 服务点仅 `pages/[[id]].js`（已 patch）+ `cdn-assets`（attachment+sandbox，无需改）
+
+#### 变更文件表
+| 文件 | 动作 | 说明 |
+|------|------|------|
+| `functions/_middleware.js` | 修改 | 五段管线：蜜罐→限流→Bearer→gate→API 安全头 |
+| `functions/api/[[...path]].js` | 新增 | 未知 `/api/*` → 404 JSON catch-all |
+| `functions/pages/[[id]].js` | 修改 | `fetchPatchHead()` 注入自定义页 |
+| `public/index.html` | 修改 | fetch patch + esc 单引号 + SRI×6 + og/canonical/JSON-LD/manifest |
+| `public/tavern.html` | 修改 | fetch patch + esc 单引号 + jszip SRI |
+| `public/developer.html` | 修改 | fetch patch + SRI×5 |
+| `public/robots.txt` | 新增 | Allow/Disallow 规则 |
+| `public/sitemap.xml` | 新增 | `/` + `/tavern` |
+| `public/manifest.json` | 新增 | PWA manifest |
+| `public/404.html` | 新增 | 自定义 404 页 |
+| `public/og.png` | 新增 | 分享卡 1200×630 |
+| `public/icon-192.png` / `icon-512.png` / `apple-touch-icon.png` | 新增 | PWA/主屏图标 |
+| `migrations/v9.0-gate.sql` | 新增 | D1：api_allowed + security_events（已应用生产） |
+| `migrations/v9.0-rls-tighten.sql` | 新增 | Supabase RLS 收紧（已应用） |
+| `migrations/supabase-rls-rollback-v9.0.sql` | 新增 | RLS 回滚快照（幂等） |
+| `schema.sql` | 修改 | 同步 v9.0-gate.sql |
+
+#### QA（本轮交付证据）
+- **语法**：3 个 functions JS 拷 `%TEMP%` 改 `.mjs` 逐个 `node --check` → **SYNTAX OK ×3**；4 个 HTML 内联 script `new Function` 编译 → **19/19 通过 + JSON-LD 解析 OK**；`manifest.json` JSON.parse OK
+- **grep 复核**：SRI `integrity=` **12 处**（index 6 + developer 5 + tavern 1）；`fetchPatchHead` 4 处（定义 + 两处注入 + 调用）；esc 三文件口径一致
+- **D1 迁移**：v9.0-gate.sql 应用生产（db `79e0d03c-...`）+ PRAGMA 复核 ok；RLS 迁移应用 Supabase，回滚快照留存
+- **待线上 smoke**（部署后执行）：gate 403/带证明放行、蜜罐 401、限流 429、`/api/nope-xyz` 带头 404 JSON（不带 403）、`/api/features` 不被遮蔽、API 安全头 6 项、robots/sitemap/404.html 实测、三页 console 干净 + `__dpFetchPatched===true`、D1 `security_events` 有写入
+
+---
+
 ## v8.0 — 2026-09-29
 
 ### 变更：注册登录简化（唯一昵称）+ 设备标记一机一号 + /developer 后台全通道鉴权（step-up/TOTP/审计）+ 惩罚性隐身诱饵 + 撞库多维限流 + 密钥出库（V8.0）

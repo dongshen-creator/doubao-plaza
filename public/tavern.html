@@ -1,5 +1,41 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script>
+/* AUDIT FIX v9.0 [6.7]: 门禁证明注入 —— 同源 /api fetch 自动携带 X-DP-Client 头（与 functions/_middleware.js gate 配套，须同版本上线） */
+(function () {
+  if (window.__dpFetchPatched) return;
+  var orig = window.fetch;
+  if (typeof orig !== 'function') return;
+  function isApi(u) {
+    if (!u || u.indexOf('api') === -1) return false;
+    try {
+      var r = new URL(u, location.href);
+      if (r.origin !== location.origin) return false;
+      var p = r.pathname + r.search;
+      return p === '/api' || p.indexOf('/api/') === 0 || p.indexOf('/api?') === 0;
+    } catch (e) { return false; }
+  }
+  window.fetch = function (input, init) {
+    try {
+      var u = (typeof input === 'string') ? input
+        : (typeof URL !== 'undefined' && input instanceof URL) ? input.href
+        : (typeof Request !== 'undefined' && input instanceof Request) ? input.url
+        : (input && input.url) || '';
+      if (isApi(u)) {
+        var src = (init && init.headers)
+          ? init.headers
+          : (typeof Request !== 'undefined' && input instanceof Request) ? input.headers
+          : undefined;
+        var h = new Headers(src);
+        if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
+        init = Object.assign({}, init, { headers: h });
+      }
+    } catch (e) {}
+    return orig.call(this, input, init);
+  };
+  window.__dpFetchPatched = true;
+})();
+</script>
 <script>if(new URLSearchParams(location.search).get('embed')==='1'){document.documentElement.classList.add('embed-mode')}</script>
 <script>
 (function(){
@@ -4374,7 +4410,7 @@ function applyHL(el) {
   if (typeof hljs === 'undefined') return;
   el.querySelectorAll('pre code').forEach(b => { b.classList.add('hljs'); try{hljs.highlightElement(b)}catch{} });
 }
-function esc(s) { if(!s)return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { if(!s)return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // 头像渲染：支持 emoji（短文本）和图片 URL（data: 或 http）
 function renderAvatarHTML(avatar, fallback, extraClass) {
@@ -5690,6 +5726,8 @@ async function ensureJSZip() {
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+    script.integrity = 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG';
+    script.crossOrigin = 'anonymous';
     script.onload = resolve;
     script.onerror = () => reject(new Error('加载解压库(JSZip)失败'));
     document.head.appendChild(script);

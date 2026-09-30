@@ -350,6 +350,8 @@ ALTER TABLE users ADD COLUMN last_active_at TEXT;
 ALTER TABLE users ADD COLUMN totp_secret TEXT;
 ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN ip_backfilled_at TEXT;
+-- AUDIT FIX [6.3] 第三方脚本/API 直连白名单（0=仅同源带门禁证明, 1=Bearer 直连放行）
+ALTER TABLE users ADD COLUMN api_allowed INTEGER NOT NULL DEFAULT 0;
 
 -- login_attempts 扩展列（风控信号）
 ALTER TABLE login_attempts ADD COLUMN asn INTEGER;
@@ -440,3 +442,16 @@ CREATE TABLE IF NOT EXISTS cleanup_runs (
   started_at TEXT DEFAULT (datetime('now')),
   finished_at TEXT
 );
+
+-- AUDIT FIX [6.7/6.8] 门禁 403 / 蜜罐命中 / 限流审计事件（保留 90 天，中间件 1% 概率清理）
+CREATE TABLE IF NOT EXISTS security_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,               -- gate_403 | honeypot | rate_limited | quarantine_401
+  ip TEXT,
+  path TEXT,
+  user_id TEXT,
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_security_events_kind_time ON security_events(kind, created_at);
+CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at);
