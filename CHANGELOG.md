@@ -61,8 +61,8 @@
 | `functions/api/[[path]].js` | 新增 | 未知 `/api/*` → 404 JSON catch-all（构建修复：`[[...path]]`→`[[path]]`） |
 | `functions/pages/[[id]].js` | 修改 | `fetchPatchHead()` 注入自定义页 |
 | `public/index.html` | 修改 | fetch patch + esc 单引号 + SRI×6 + og/canonical/JSON-LD/manifest |
-| `public/tavern.html` | 修改 | fetch patch + esc 单引号 + jszip SRI |
-| `public/developer.html` | 修改 | fetch patch + SRI×5 |
+| `public/tavern.html` | 修改 | fetch patch + esc 单引号 + jszip SRI + favicon rel=icon（修 /favicon.ico 404 控制台报错） |
+| `public/developer.html` | 修改 | fetch patch + SRI×5 + favicon rel=icon（同上） |
 | `public/robots.txt` | 新增 | Allow/Disallow 规则 |
 | `public/sitemap.xml` | 新增 | `/` + `/tavern` |
 | `public/manifest.json` | 新增 | PWA manifest |
