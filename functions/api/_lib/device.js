@@ -2,7 +2,11 @@
 // - Cookie 名 __Host-dp_device（Secure + HttpOnly + Path=/，浏览器 JS 不可读）
 // - 数据库只存 sha256(raw token)，原始标记不入库、不写日志
 // - 一机一号由 device_accounts 的部分唯一索引在 DB 层保证（见 schema.sql）
-// - IP 只信 CF-Connecting-IP（Cloudflare 可信边缘），不接受 X-Forwarded-For
+// - IP 只信 CF-Connecting-IP（Cloudflare 可信边缘）或反代 Worker 覆盖的 X-DP-Real-IP
+//   （信任条件见 clientip.js：仅当边缘 CF-Connecting-IP 属 CF 官方网段时才采纳），
+//   不接受 X-Forwarded-For
+
+import { resolveClientIp } from './clientip.js';
 
 const COOKIE_NAME = '__Host-dp_device';
 const COOKIE_MAX_AGE = 400 * 24 * 60 * 60; // 400 天
@@ -12,7 +16,7 @@ const CLAIM_HOURLY_LIMIT = 5;
 const CLAIM_DAILY_LIMIT = 15;
 
 export function getClientIp(request) {
-  return request.headers.get('CF-Connecting-IP') || 'unknown';
+  return resolveClientIp(request) || 'unknown';
 }
 
 export function cfMeta(request) {

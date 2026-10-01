@@ -2505,9 +2505,13 @@ async function findOrCreatePrivateRoom(friendId, friendName) {
     console.error('创建私聊房间失败:', roomErr);
   } else {
     // V5.13 优化：两个成员写入并行执行（原先串行 await）
+    // V9.1 修复：PostgrestBuilder 是 thenable 但没有 .catch 方法，原写法会同步抛
+    // TypeError（"upsert(...).catch is not a function"）→ Promise.all 求值即炸 →
+    // 房间建了但成员行永远写不进去、currentRoomId 不落地、界面卡死在「正在打开会话…」。
+    // 用 Promise.resolve 包装做 thenable 接纳，恢复原有的吞错语义。
     await Promise.all([
-      __SB.from('chat_room_members').upsert(memA, { onConflict: 'room_id,user_id' }).catch(function(e){ console.error('私聊本人成员写入失败:', e); }),
-      __SB.from('chat_room_members').upsert(memB, { onConflict: 'room_id,user_id' }).catch(function(){})
+      Promise.resolve(__SB.from('chat_room_members').upsert(memA, { onConflict: 'room_id,user_id' })).catch(function(e){ console.error('私聊本人成员写入失败:', e); }),
+      Promise.resolve(__SB.from('chat_room_members').upsert(memB, { onConflict: 'room_id,user_id' })).then(function(r){ if (r && r.error) console.error('私聊对方成员写入失败:', r.error); }).catch(function(){})
     ]);
   }
   return roomId;
@@ -3501,8 +3505,8 @@ async function blogLoadAnnouncements() {
     if (!el) return;
     if (!res.success || !res.data || res.data.length === 0) { el.innerHTML = ''; return; }
     el.innerHTML = res.data.map(function(a) {
-      return '<div style="background:var(--accent-soft);border-left:3px solid var(--accent-color);padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">' +
-        '<div style="font-size:12px;color:var(--accent-color);font-weight:600;margin-bottom:4px"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon> ' + esc(a.created_by_name) + '</div>' +
+      return '<div style="background:var(--accent-bg);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">' +
+        '<div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon> ' + esc(a.created_by_name) + '</div>' +
         '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary)">' + renderRichContent(a.content) + '</div>' +
         '</div>';
     }).join('');
@@ -3516,7 +3520,7 @@ function blogRenderCard(p, isDev) {
   var canSeeStatus = isAuthor || isDev;
   var statusBadge = '';
   if (canSeeStatus && p.status === 'pending') {
-    statusBadge = '<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 待审核</span>';
+    statusBadge = '<span style="background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 待审核</span>';
   } else if (canSeeStatus && p.status === 'rejected') {
     statusBadge = '<span style="background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 已驳回</span>';
   }
@@ -3877,7 +3881,7 @@ async function blogShowPost(container, postId) {
     // 审核状态横幅（仅 pending / rejected 显示）
     var statusBanner = '';
     if (p.status === 'pending') {
-      statusBanner = '<div style="background:#FEF3C7;color:#92400E;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 此文章正在等待开发者审核</div>';
+      statusBanner = '<div style="background:var(--warning-bg);color:var(--warning);padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 此文章正在等待开发者审核</div>';
     } else if (p.status === 'rejected') {
       statusBanner = '<div style="background:var(--danger-bg);color:var(--danger);padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 此文章已被驳回：' + esc(p.reject_reason || p.reason || '未提供理由') + '</div>';
     }
@@ -3933,7 +3937,7 @@ function blogShowEditor(container, postId) {
   container.innerHTML =
     '<div style="max-width:100%;margin:0 auto">' +
       '<h3 style="font-size:18px;font-weight:700;margin-bottom:20px">' + (isEdit ? '编辑文章' : '写文章') + '</h3>' +
-      '<div id="blogDraftBar" style="display:none;margin-bottom:16px;padding:10px 14px;background:#FEF3C7;color:#92400E;border-radius:8px;font-size:13px">' +
+      '<div id="blogDraftBar" style="display:none;margin-bottom:16px;padding:10px 14px;background:var(--warning-bg);color:var(--warning);border-radius:8px;font-size:13px">' +
         '<iconify-icon icon="ph:floppy-disk-fill"></iconify-icon> 已恢复本地草稿（保存于 <span class="blog-draft-time"></span>）' +
         '<span style="float:right;cursor:pointer;color:var(--danger);font-size:12px;margin-left:12px" onclick="blogDiscardDraft()">清除草稿</span>' +
       '</div>' +
@@ -6496,7 +6500,7 @@ async function loadFeaturesManager() {
                 </div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:13px;font-weight:600;color:var(--text-primary);word-break:break-all">${esc(f.title)}</div>
-                  ${f.tool_type ? '<span style="font-size:10px;color:var(--accent-color);background:var(--accent-soft);padding:1px 6px;border-radius:4px">工具</span>' : ''}
+                  ${f.tool_type ? '<span style="font-size:10px;color:var(--accent);background:var(--accent-bg);padding:1px 6px;border-radius:4px">工具</span>' : ''}
                 </div>
               </div>
               <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">${esc(f.tool_type ? f.tool_type : f.link_url)}</div>
@@ -7954,14 +7958,22 @@ function appendNewMessages(roomId, newMsgs) {
     frag += renderMsgHTML(nm, roomId);
   }
   var atBottom = msgsEl.scrollTop >= msgsEl.scrollHeight - msgsEl.clientHeight - 100 || !msgsEl.scrollTop;
-  msgsEl.insertAdjacentHTML('beforeend', frag);
-  // 新消息入场动画
-  var adds = msgsEl.querySelectorAll('.chat-msg[data-eid]');
-  for (var s = adds.length - 1; s >= 0; s--) {
-    var ae = adds[s];
-    if (fresh.some(function(f) { return f.event_id === ae.getAttribute('data-eid'); })) ae.classList.add('chat-msg-new');
+  // V9.1 优化（公频卡顿）：用临时容器解析片段，拿到精确的新节点引用后整体挂载，
+  // 再只对新节点做入场动画 + KaTeX。原实现 insertAdjacentHTML 后 querySelectorAll
+  // 扫描整个消息列表（可达 200 条）逐个比对 fresh，且 applyLatex 重扫全容器——
+  // 每来一条消息就是一次 O(全部消息) 的扫描 + 全量 KaTeX 检查，活跃公频下累积卡顿。
+  var tmp = document.createElement('div');
+  tmp.innerHTML = frag;
+  var newNodes = Array.prototype.slice.call(tmp.childNodes);
+  while (tmp.firstChild) { msgsEl.appendChild(tmp.firstChild); }
+  for (var s = 0; s < newNodes.length; s++) {
+    var ae = newNodes[s];
+    if (ae.nodeType === 1 && ae.classList.contains('chat-msg')) {
+      ae.classList.add('chat-msg-new');
+      applyLatex(ae); // 只渲染新气泡的 LaTeX，旧气泡此前已渲染过
+      if (ae.getAttribute('data-eid')) _prevMsgEids.add(ae.getAttribute('data-eid'));
+    }
   }
-  applyLatex(msgsEl);
   if (atBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
   return true;
 }
@@ -8306,8 +8318,12 @@ function handleRealtimeMessage(roomId, msg) {
     // 仅非当前打开的会话增加未读数；当前会话直接标记已读
     if (chatState.currentRoomId === roomId && chatState.chatOpen) {
       room.unread = 0;
-      // 当前会话有新消息，立即渲染并标记已读
-      renderMessages(roomId);
+      // V9.1 修复（公频卡顿根因）：原每条 Realtime 消息都 renderMessages 全量重建
+      //（最多 200 条 innerHTML + 逐条正则/DOMParser 富文本处理 + KaTeX 全容器重扫 +
+      // 滚动锚点重算），活跃公频下主线程被反复打满，表现为严重卡顿/掉帧。
+      // 与轮询路径（pollNewMessages）一致改为增量追加，仅当 DOM 状态不满足
+      // 增量条件时才回退全量重绘。
+      if (!appendNewMessages(roomId, [newMsg])) renderMessages(roomId);
       markRead(roomId);
     } else {
       room.unread = (room.unread || 0) + 1;
@@ -11554,7 +11570,7 @@ async function createChannel() {
   if (setErr) { toast('创建失败(设置): ' + setErr.message, 'error'); return; }
   if (modeChoice === 'invite') {
     var code = 'inv_' + Date.now().toString(36).toUpperCase();
-    await __SB.from('channel_invites').insert({ id: code, room_id: roomId, invite_code: code, created_by: currentUser.id }).catch(function(){});
+    await Promise.resolve(__SB.from('channel_invites').insert({ id: code, room_id: roomId, invite_code: code, created_by: currentUser.id })).catch(function(){});
   }
   document.getElementById('createChannelModal').classList.add('hidden');
   chatState.currentRoomId = roomId;

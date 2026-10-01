@@ -18,6 +18,10 @@
 //      一次也不让 DB 抖动把全体用户误登出）；门禁 fail-closed（取不到白名单信息
 //      即按无证明处理 → 403，不允许 DB 故障放大为绕过门禁）。
 // security_events 保留 90 天：每次写入以 1% 概率执行过期清理（waitUntil 非阻塞）。
+// V9.1：真实客户端 IP 统一走 clientip.js resolveClientIp（反代 Worker 经 X-DP-Real-IP
+//   回传边缘真实 IP；仅当边缘 CF-Connecting-IP 属 CF 官方网段时采纳，直连不受影响）。
+
+import { resolveClientIp } from './api/_lib/clientip.js';
 
 const GATE_HEADER_NAME = 'X-DP-Client';
 const GATE_HEADER_VALUE = 'plaza-v1';
@@ -184,7 +188,7 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const path = url.pathname;
   const api = isApiPath(path);
-  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const ip = resolveClientIp(request) || '';
   const now = Date.now();
 
   // ---- 1) 蜜罐：假 401（与普通未登录口径完全一致），不进入限流/门禁 ----

@@ -4,6 +4,69 @@
 
 ---
 
+## v9.1 — 2026-10-01
+
+### 变更：4 项线上 bug 修复 + alias 反向代理 Worker（Error 1000 规避）+ 反代下真实客户端 IP 透传（限流/审计修复）+ tavern 硬编码地址相对化
+
+两批交付：①修复线上 4 个 bug（讲堂公告色块变量未定义、developer 整页滚动被 style.css 锁死、私聊开房 `.catch is not a function` 卡死、公频每条 Realtime 消息全量重绘卡顿）②新增 Worker `doubao-plaza-front` 反代 `cf.gallopingroad.top → doubao-plaza.pages.dev`（DNS 灰云 + 优选 IP 消除 Error 1000），并修复反代引入的边缘 IP 改写问题（X-DP-Real-IP 透传 + Functions 侧官方网段判定），tavern 6 处绝对地址改相对路径。
+
+#### 一、4 项 bug 修复（`public/index.html` / `public/developer.html`）
+1. **讲堂公告/草稿/状态徽章色块**：`blogLoadAnnouncements`/`blogRenderCard`/`blogShowPost`/`blogShowEditor`/`loadFeaturesManager` 中硬编码 `#FEF3C7`、未定义变量 `var(--accent-soft)`/`var(--accent-color)`（暗色下渲染为无效值）→ 统一改用既有 `var(--warning-bg)`/`var(--warning)`/`var(--accent-bg)`/`var(--accent)`/`var(--danger-bg)`/`var(--danger)`
+2. **developer 整页滚动**：`style.css` 全局 `body{height:100vh;overflow:hidden}`（为广场内部滚动容器设计）泄漏到独立文档 → `developer.html` `<style>` 首部补 `html,body{height:auto;overflow:visible;display:block}`
+3. **私聊开房卡死**：Supabase `PostgrestBuilder` 是 thenable 但**没有 `.catch` 方法**，`findOrCreatePrivateRoom` 的 `upsert(...).catch(...)` 同步抛 `TypeError` → 房间已建但成员行写不进去、界面卡死「正在打开会话…」；`createChannel` 的 `channel_invites` 同病 → 全部 `Promise.resolve(...)` 包装后恢复 `.then/.catch` 链（保留原吞错语义 + 新增 error 日志）
+4. **公频增量渲染（卡顿根因）**：`handleRealtimeMessage` 原每条消息调 `renderMessages` 全量重建（≤200 条 innerHTML + 逐条富文本处理 + KaTeX 全容器重渲染 + 滚动锚点）→ 改为与轮询路径一致的 `appendNewMessages` 增量追加，DOM 状态不满足增量条件时回退全量；`appendNewMessages` 自身也优化为「临时容器解析 → 精确新节点挂载 → 仅新气泡做入场动画 + 单点 KaTeX」，替代原 `insertAdjacentHTML` + 全容器 `querySelectorAll` O(全部消息) 扫描
+
+#### 二、alias 反向代理 Worker（Error 1000 规避）
+- **背景**：`cf.gallopingroad.top` 三域名方案经 E1-E4 实验淘汰；路由 `cf.gallopingroad.top/*` + DNS 灰云 CNAME（record `45ffc169...` → `cf.090227.xyz`，优选 IP `172.64.145.158`/`104.18.42.98`）指向 CF 边缘，Worker `doubao-plaza-front` 原样反代到上游 `doubao-plaza.pages.dev`
+- **`workers/doubao-plaza-front.js`（v9.1，multipart 部署成功，deployment `fc980ede`）**：
+  1. Origin 改写：仅 `Origin === 'https://cf.gallopingroad.top'` 改为上游域（使 middleware `originOk` 成立），其它 Origin 原样透传 → 上游 403（防恶意源借代理洗白）
+  2. Location 回写：上游 3xx 绝对 Location 改回 alias，防跳走
+  3. **IP 透传**（本版核心变更）：子请求进 pages.dev 边缘时 `CF-Connecting-IP` 被边缘**无条件改写**为 Worker 出口 IP（显式 `set` 无效，实测 `2a06:98c0:3600::103`）→ 改为 `headers.delete('X-DP-Real-IP')` 后 `set('X-DP-Real-IP', 边缘CF-Connecting-IP)`，客户端注入的同名头一律被覆盖
+  4. 其余请求头/响应头/流式透传（含 SSE）；Set-Cookie 无 Domain 属性自然归属 alias；上游异常 502 纯文本
+- **验证矩阵（curl 全过）**：`/` 200/721636；无证明头 403；alias Origin 过门禁 404（接口不存在）；evil Origin 403；`/chat/testroom123` 302 Location 回写 alias；两优选 IP `--resolve` 均 200
+
+#### 三、反代下真实客户端 IP 透传（限流/审计修复）
+- **问题**：反代后 Pages Functions 读到的 `CF-Connecting-IP` 全部变成 Worker 出口 IP → 按 IP 限流、注册上限、风控审计全部退化为「全站共用一个 IP」
+- **方案（X-DP-Real-IP + 官方网段判定，非共享密钥）**：仓库为公开仓库（代码内任何静态密钥会随 push 泄露）、`cloudflare_search` 确认 spec 无 Pages env 管理 API（密钥注入不可行）→ 否决 HMAC/密钥方案
+  - Worker 侧：见上文「IP 透传」
+  - **新增 `functions/api/_lib/clientip.js`**：`resolveClientIp(request)` —— 边缘 `CF-Connecting-IP` ∈ Cloudflare 官方网段（ips-v4 15 段 + ips-v6 7 段，2026-10-01 实抓，模块加载期预解析整数/字节比较）→ 判定经反代，信任 `X-DP-Real-IP`；否则（直连 pages.dev）→ 用 `CF-Connecting-IP`，忽略 `X-DP-Real-IP`（直连伪造无效）。`isCloudflareEgress(ip)` 导出备查
+  - **接线（8 处读点全收敛）**：`_middleware.js:187`（限流/蜜罐/gate 审计）、`_lib/device.js getClientIp`（login/rebind/claim/quarantine/mfa/gate/cleanup 经 import 自动传导）、`users.js` 搜索限频 + Turnstile、`recover.js`×2、`auto-login.js`；`grep headers.get('CF-Connecting-IP')` 全 functions 仅剩 clientip.js 内部 1 处
+  - **残余风险（记录在案）**：WARP / 自有 CF zone 中转（出口本身在官方网段内）可伪造 `X-DP-Real-IP`，影响面仅限按 IP 限流与审计粒度，**不涉及鉴权**（鉴权走 JWT/Cookie/设备标记）；反代出口若不在官方网段则回退边缘 IP，与反代上线前行为一致（无回归）
+- **兜底口径不变**：全部调用点保留 `|| 'unknown'` / `|| ''` 原兜底；不接受 `X-Forwarded-For`
+
+#### 四、tavern 硬编码地址相对化（`public/tavern.html`，6 处）
+- `L2201` 聊天背景图、`L2915` 渠道迁移 corsProxy、`L2935` defaultConfig、`L5470` `PROXY_URL`、`L5954` 代理下载 fetch → 全部改相对路径（`/pages/485b...`、`/api/proxy`、`/api/tools/fetch?url=`）
+- **`L2906` 迁移逻辑反转**：原「相对 → 绝对」迁移（alias 下会跳出到 pages.dev）改为「绝对 → 相对」（检测历史存量 `https://doubao-plaza.pages.dev/api/proxy` → 修为 `/api/proxy`）
+- **不改项**：`index.html` SEO（og/canonical/JSON-LD）、`sitemap.xml`、`robots.txt` 中 pages.dev 绝对地址保留（SEO 需要规范 URL）
+
+#### 五、部署与同步状态
+- **Worker `doubao-plaza-front`**：已部署（`fc980ede`，早于本 CHANGELOG）
+- **Pages**：本批 functions + 前端改动经 commit→push 触发部署（D1 IP 验证、Playwright 复验待部署 success 后执行）
+- `_routes.json` 无需改动（clientip.js 位于 `_lib`，非路由文件）；`_headers`/CSP 未动
+
+#### 变更文件表
+| 文件 | 动作 | 说明 |
+|------|------|------|
+| `functions/api/_lib/clientip.js` | 新增 | resolveClientIp/isCloudflareEgress + CF 官方网段（v4×15/v6×7）CIDR 预解析 |
+| `functions/_middleware.js` | 修改 | IP 读点接 resolveClientIp + 头注释 |
+| `functions/api/_lib/device.js` | 修改 | getClientIp → resolveClientIp（传导 7 个调用方） |
+| `functions/api/users.js` | 修改 | 搜索限频/Turnstile 两处 IP 读点 |
+| `functions/api/users/recover.js` | 修改 | 密保两处 IP 读点 |
+| `functions/api/users/auto-login.js` | 修改 | 登录 IP 写库读点 |
+| `workers/doubao-plaza-front.js` | 修改 | CF-Connecting-IP 回写改为 X-DP-Real-IP（delete+set） |
+| `public/index.html` | 修改 | 色块变量 + Promise.resolve×2 + 公频增量渲染 |
+| `public/developer.html` | 修改 | html/body 还原整页滚动 |
+| `public/tavern.html` | 修改 | 6 处绝对地址相对化 + 迁移方向反转 |
+| `CHANGELOG.md` | 修改 | 本条目 |
+
+#### QA（本轮）
+- **语法**：7 个改动 JS（5 functions + clientip + worker）拷 `.mjs` 逐个 `node --check` → **全部 OK**
+- **Worker 部署**：multipart `PUT .../workers/scripts/doubao-plaza-front` → `success:true`，tag `04cb7da2`，deployment `fc980ede`
+- **grep 复核**：functions 内 `headers.get('CF-Connecting-IP')` 仅剩 `clientip.js:119`；tavern 内 `doubao-plaza.pages.dev` 仅剩 `L2906` 迁移条件 1 处（有意保留）
+- **待部署后执行**：D1 新 path 触发 gate_403（alias+direct 对比，alias 记真实客户端 IP 非 `2a06:98c0::103`）；Playwright 复验 4 修复 + alias 门禁/蜜罐
+
+---
+
 ## v9.0 — 2026-10-01
 
 ### 变更：全站 API 门禁（X-DP-Client 同源证明 + Bearer 白名单）+ 蜜罐/限流/安全事件审计 + API 安全响应头 + 404 JSON catch-all + SEO/分享卡片/PWA 补齐 + CDN SRI + esc 单引号逃逸 + Supabase RLS 收紧（AUDIT FIX 第一轮）

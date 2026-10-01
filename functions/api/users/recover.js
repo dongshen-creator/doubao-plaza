@@ -3,6 +3,7 @@
 // POST /api/users/recover - 验证密保答案并重置密码（含多重防护）
 
 import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
+import { resolveClientIp } from '../_lib/clientip.js';
 
 // 统一 no-store JSON 响应：含 token 的响应禁止任何缓存
 function jsonNoStore(data, init = {}) {
@@ -86,7 +87,8 @@ export async function onRequestGet(context) {
     await ensureTables(env);
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+    // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
+    const clientIP = resolveClientIp(context.request) || 'unknown';
 
     // IP 频率限制：同 IP 每小时最多请求 10 次密保问题
     const ipRequests = await env.DB.prepare(
@@ -146,7 +148,8 @@ export async function onRequestPost(context) {
     await ensureTables(env);
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+    // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
+    const clientIP = resolveClientIp(context.request) || 'unknown';
 
     const body = await context.request.json().catch(() => ({}));
     const { user_id, security_answer, new_password } = body;

@@ -2,6 +2,7 @@
 // POST /api/users/auto-login
 
 import { signSupabaseJWT, generateToken, getAuthUserId } from '../_lib/jwt.js';
+import { resolveClientIp } from '../_lib/clientip.js';
 
 // 统一 no-store JSON 响应：含 token 的响应禁止任何缓存
 function jsonNoStore(data, init = {}) {
@@ -73,7 +74,8 @@ export async function onRequestPost(context) {
     const supabaseToken = await signSupabaseJWT(session.user_id, env);
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    const clientIP = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+    // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
+    const clientIP = resolveClientIp(context.request) || 'unknown';
     const userAgent = context.request.headers.get('User-Agent') || '';
 
     await env.DB.prepare(

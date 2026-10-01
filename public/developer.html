@@ -50,6 +50,9 @@
 <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" integrity="sha384-GPb5RlngihS9H0z1D137JsvzmeZ7tCpWEF4t5YDoTZyMsPP8S7h7vFDh4XhheU83" crossorigin="anonymous" defer></script>
 <style>
   * { box-sizing: border-box; }
+  /* style.css 的 body 锁定为 100vh+overflow:hidden（为广场内部滚动设计）；
+     开发者后台是独立文档、无内部滚动容器，需还原为整页滚动 */
+  html, body { height: auto; overflow: visible; display: block; }
   .wrap { max-width: 980px; margin: 0 auto; padding: 20px 20px 64px; }
 
   /* ── 顶栏 ── */
