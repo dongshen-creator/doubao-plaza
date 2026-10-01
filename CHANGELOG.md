@@ -59,11 +59,20 @@
 | `public/tavern.html` | 修改 | 6 处绝对地址相对化 + 迁移方向反转 |
 | `CHANGELOG.md` | 修改 | 本条目 |
 
-#### QA（本轮）
+#### QA（本轮，已全部执行）
 - **语法**：7 个改动 JS（5 functions + clientip + worker）拷 `.mjs` 逐个 `node --check` → **全部 OK**
 - **Worker 部署**：multipart `PUT .../workers/scripts/doubao-plaza-front` → `success:true`，tag `04cb7da2`，deployment `fc980ede`
 - **grep 复核**：functions 内 `headers.get('CF-Connecting-IP')` 仅剩 `clientip.js:119`；tavern 内 `doubao-plaza.pages.dev` 仅剩 `L2906` 迁移条件 1 处（有意保留）
-- **待部署后执行**：D1 新 path 触发 gate_403（alias+direct 对比，alias 记真实客户端 IP 非 `2a06:98c0::103`）；Playwright 复验 4 修复 + alias 门禁/蜜罐
+- **Pages 部署**：commit `517733d` → deployment `841b7f5b` → `latest_stage=deploy:success`
+- **D1 IP 验证（部署后，新 path 过 10 分钟去重）**：alias `/api/d1ipcheck9301` 记 `119.78.254.2`（真实客户端 IPv4）、direct `/api/d1ipcheck9302` 记 `2001:da8:801d:f46a:...:80d9`（真实客户端 IPv6），**均非 Worker 出口 `2a06:98c0::103`** → X-DP-Real-IP 透传生效，两边同返回 gate 403
+- **Playwright 复验（https://cf.gallopingroad.top）**：
+  1. **讲堂色块**：暗/亮双主题 computed style 实测，`--accent-bg/--warning-bg/--danger-bg` 全部解析为有效色值，`invalid=0`（修复前暗色下 `var(--accent-soft)` 未定义渲染无效）
+  2. **developer 滚动**：`html,body{overflow:visible;display:block}` 生效，400px 视口下 `scrollHeight>clientHeight` 且 `scrollTop` 可滚动（修复前被全局 `body{overflow:hidden;height:100vh}` 锁死）
+  3. **私聊开房**：搜索萨摩Dasiv → 点击私聊 → 「非好友私聊」会话头 + 输入框正常渲染，无卡「正在打开会话…」（修复前 `PostgrestBuilder.catch` TypeError 同步抛出）
+  4. **公频增量**：发送测试消息后，旧消息 DOM 节点 `isConnected=true`（保留未重建）+ 新气泡追加 → 走 `appendNewMessages` 增量路径，非全量重绘
+  5. **门禁/蜜罐**：alias `/api/d1ipcheck9301` → 403 JSON、`/api/admin` → 401 `{"success":false,"error":"请先登录"}` 与 direct 完全一致
+  6. **tavern 相对化**：网络请求零 `doubao-plaza.pages.dev`，背景图 `/pages/485b...` → 200，`/api/presence` alias 401 = direct 401
+- **既有问题（与本轮无关，未修）**：①zone 级 Web Analytics 注入的 `static.cloudflareinsights.com/beacon.min.js` 被 `_headers` CSP `script-src-elem` 拦截（仅控制台报错，不影响功能）②`/api/img-proxy` 对 `chat.freserafim.com`/`weibo.com` 返回 502——direct pages.dev 同样 502、上游自身 404，属上游资源失效
 
 ---
 
