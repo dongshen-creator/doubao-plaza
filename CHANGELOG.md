@@ -4,6 +4,59 @@
 
 ---
 
+## v9.3 — 2026-10-03
+
+### 变更：图链/视频链接自动识别渲染（B站/YouTube/Vimeo 播放器）+ 中国红主题改国潮色板 + 国旗飘扬 WebGL 着色器
+
+两项新功能落地。设计底座（噪点 / 磨砂玻璃 / 流体画布 / WccXDj 液态玻璃按钮）已于 V7.0、V14 就位，本版只补齐「媒体链接渲染」与「中国红主题」两块。
+
+#### 一、图链 / 视频链接自动识别并渲染（`public/index.html`）
+- **原状**：聊天消息 `linkify()` 仅按扩展名识别图片/视频/音频直链，**平台视频链接（B站/YouTube）一律降级为纯超链接**；`detectMediaType()` 的 iframe 分支直接把原始地址塞进 iframe（YT/B站页面地址无法播放）
+- **新增共享解析器 `parseMediaLink(raw)`**：返回 `{kind, src, raw, provider, label}`，`kind ∈ image | video | audio | embed | link`
+  - `embed`（平台播放器）：B站 `/video/BV{10位}` 与 `/video/av{数字}` → `player.bilibili.com/player.html?bvid=|aid=`；YouTube `watch?v=` / `youtu.be/` / `shorts|v|live|embed/`（ID 恒 11 位，边界断言防前缀误配）→ `youtube.com/embed/`；Vimeo `vimeo.com/{6位以上}` → `player.vimeo.com/video/`
+  - `image`：扩展名（含 query/hash 剥离前仅取 pathPart）+ 已知图床 `MEDIA_IMG_HOSTS` + 路径特征段（`/image/ /img/ /upload/ /cdn-assets/ /photo/`）
+  - 直链媒体统一走既有 `imgProxyUrl()` 代理，规避 PNA / 防盗链 / CORS；**平台 iframe 不走代理**
+  - 非法协议（`ftp:`、`javascript:` 等）与无法识别者一律 `link`，超链接文本经 `esc()` 转义
+- **`linkify()` 重写**：新增 `renderMediaEmbed()` 渲染 `.media-embed`（Iconify `ph:play-circle` 来源条 + 来源平台名 + `ph:arrow-square-out` 回原站 + 16:9 iframe，provider 记在 `data-provider`）；`generateMediaHTML()` 的 iframe 分支同步改走 `parseMediaLink()` 取播放器地址
+- **CSP**：`public/_headers` 的 `frame-src` 原仅 `'self' https://challenges.cloudflare.com`（外站 iframe 一律被拦），新增 `player.bilibili.com` / `www.youtube.com` / `www.youtube-nocookie.com` / `player.vimeo.com` / `player.twitch.tv`
+- **顺带修**：`onInsertUrlChange()` 的 `#insertTypeLabel` 误用 `==` 比较（`=` 被写成 `==`，赋值从未发生，类型标签永不刷新）→ 改回 `=`
+
+#### 二、中国红主题改国潮色板（`public/style.css` / `public/index.html`）
+- 色板取自 [Chinese Color Atlas](https://chinesecoloratlas.com)（Chroma Cathay，MIT）：品牌「朱红 zhu-hong `#FF4C00`」、辅助「金色 jin-se `#EACD76`」、面「月白 yue-bai `#D6ECF0` / 象牙白 xiang-ya-bai `#FFFBF0`」、暗底「玄色 xuan-se `#622A1D`」；替代原自拟的 `#D42B20` / `#F2644C` 玫瑰红
+- 亮色：`--accent #FF4C00`、`--bg-primary #FFFBF0`、`--bg-tertiary #F3E7D4`；暗色：`--accent #FF7A33`、`--bg-primary #1C110D`、`--bg-tertiary #4A2C20`。**全无紫 / 无靛蓝**，符合 AGENTS.md 配色禁令
+- 主题按钮色块与 `THEME_COLORS` 中 `red.color` 同步为 `#FF4C00`（2 处 HTML + 1 处 JS）
+
+#### 三、国旗飘扬着色器（`public/index.html`，`#flag-canvas`）
+- 布料波动质感参考 Shadertoy `7dSBD3`，独立 WebGL 层，**仅 `body.theme-red` 激活**（其余主题 `display:none` 且停 rAF）；`syncMetaThemeColor()` 内调 `window.__npFlagSync()`，与既有 `__npSyncAccent` 同一套钩子
+- 实现要点：高度场三频正弦叠加，振幅沿旗尾按 `x^1.5` 增长（旗杆侧固定）；有限差分求法线做布料明暗 + 各向异性高光 + 经纬织纹 + 旗尾自阴影；五角星按国标坐标（大星 `(0.5, 0.3333)` R `0.1667`，四小星 x `0.6333`、y `0.1333/0.2667/0.4/0.5333` R `0.05`，均按 3:2 归一）逐颗指向大星；星形用内外半径解析式 `rho(t)` 求边，任意角距均可，**不依赖外部 SDF 库**
+- **加旗杆与顶端金球**：无杆时低透明度下旗面读作「红色幽灵方块」，加杆后一眼可辨国旗；圆柱用 `sqrt(1-u²)` 伪高光
+- 插入在 `.noise-overlay` 之前（同为 `z-index:-1`，DOM 在前故绘制在下），噪点层仍压于旗面之上统一施加织物颗粒；`prefers-reduced-motion` 下不创建
+- 版面：桌面 `flagW = min(0.44W, 0.86H)`、中心 `(0.238, 0.46)`，落在登录卡左侧使五星不被遮挡；窄屏 `ar<0.9` 走 `min(0.68W, 0.52H)`、中心 `(0.46, 0.30)`
+
+#### 修改文件
+| 文件 | 变更 |
+|---|---|
+| `public/index.html` | `parseMediaLink()` / `renderMediaEmbed()` / `linkify()` 重写；`generateMediaHTML()` iframe 分支接共享解析器；`onInsertUrlChange()` `==` → `=`；`syncMetaThemeColor()` 增 `__npFlagSync()` 钩子；新增国旗 WebGL script 块；主题色块与 `THEME_COLORS` 改 `#FF4C00` |
+| `public/style.css` | `.theme-red` / `body.theme-red` / `body.dark.theme-red` 换国潮色板；新增 `.media-embed*` 播放器样式 + `#flag-canvas` 层 |
+| `public/_headers` | CSP `frame-src` 增 5 个播放器域名 |
+| `CHANGELOG.md` | 本节 |
+
+#### 验证记录（Playwright + Chromium，`http://127.0.0.1:8931`，`/api` 全 mock）
+- **inline script 语法门禁**：`node check_inline_scripts.js` → **ALL_PASS**（8 块，行 44/80/155/238/544/13471/13594/14060）
+- **URL 分类 14/14 全对**：B站 BV/av（含 `?spm_id_from=` 后缀）、YouTube `watch?v`/`youtu.be`/`shorts`、Vimeo、带 query 的 `.JPG`、`.mp4`/`.mp3`、picsum、普通页、`ftp:`、`javascript:` 均判为 `link`
+- **渲染**：1 条消息内 2 个 `.media-embed` + 2 个 iframe，`src` 分别为 `player.bilibili.com/player.html?bvid=BV1xx411c7mD&autoplay=0&high_quality=1`、`youtube.com/embed/dQw4w9WgXcQ?rel=0`，`data-provider` 为 `bilibili`/`youtube`；同消息内图片链接仍渲染 `<img>`
+- **XSS 复核**：payload `"><img src=x onerror=alert(1)> <script>alert(2)</script>` 经真实管线 `processPlainText()`（内部 `esc()` 先转义）后，`&lt;img…&gt;` 以字面文本呈现，`querySelectorAll('script').length === 0`，DOM 中唯一 `<img>` 是 linkify 自身生成、其 `onerror` 为合法兜底 `imageFailToLink()`，**无 alert 触发**（两处调用点 `processPlainText` L1082 与 `renderMessages` L1174 均先 `esc()`）
+- **国旗几何**：PNG 解码取红旗包围盒 `x36 y207 w563 h415`，与 shader 数学预测（`ce`/`regH` 推出 y214→631、宽 563=`flagW`）一致
+- **门控**：8 主题逐一 `applyThemeColor()`，`red`=`ON`，其余 7 个全 `off`；切暗色后仍 `ON`
+- **控制台**：亮色 / 暗色 / 桌面 1280×820 / 移动 390×844 四种组合均 **0 error**
+- **视觉**：国旗在 390×844 与 1280×820 下均确认五星位置正确、旗杆与金球在顶端、旗面呈波动明暗
+
+#### 已知取舍
+- `b23.tv` 短链、B站动态 `opus/` 页、直播间（`live.bilibili.com`）不做客户端解析——服务端不返回可直取的 BV 号，降级为普通链接；避免 SSRF 式探测
+- 主题色板中仍有 `theme-purple`（8 主题之一，为用户可选主题色而非默认渐变）。彻底移除会破坏已存 `dp_theme_color` 的用户偏好，本版未动，留待后续单独决策
+
+---
+
 ## v9.1 — 2026-10-01
 
 ### 变更：4 项线上 bug 修复 + alias 反向代理 Worker（Error 1000 规避）+ 反代下真实客户端 IP 透传（限流/审计修复）+ tavern 硬编码地址相对化

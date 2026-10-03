@@ -1113,8 +1113,12 @@ body{font-family:'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei',
 
 .theme-cyan{--accent:#06B6D4;--accent-light:#22D3EE;--accent-gradient:linear-gradient(135deg,#06B6D4,#22D3EE);--accent-bg:rgba(6,182,212,0.08);--accent-bg-hover:rgba(6,182,212,0.04);--accent-shadow:rgba(6,182,212,0.35);--border-focus:#06B6D4}
 .dark.theme-cyan{--accent:#06B6D4;--accent-light:#22D3EE;--accent-gradient:linear-gradient(135deg,#06B6D4,#22D3EE);--accent-bg:rgba(6,182,212,0.12);--accent-bg-hover:rgba(6,182,212,0.06);--accent-shadow:rgba(6,182,212,0.25);--border-focus:#06B6D4}
-.theme-red{--accent:#D42B20;--accent-light:#F2644C;--accent-gradient:linear-gradient(135deg,#D42B20,#F2644C);--accent-bg:rgba(212,43,32,0.08);--accent-bg-hover:rgba(212,43,32,0.04);--accent-shadow:rgba(212,43,32,0.35);--border-focus:#D42B20}
-.dark.theme-red{--accent:#FF5245;--accent-light:#FF8A73;--accent-gradient:linear-gradient(135deg,#FF5245,#FF8A73);--accent-bg:rgba(255,82,69,0.12);--accent-bg-hover:rgba(255,82,69,0.06);--accent-shadow:rgba(255,82,69,0.25);--border-focus:#FF5245}
+/* V9.3 中国红 · 国潮色板（Chinese Color Atlas / Chroma Cathay, MIT）
+   品牌取「朱红 zhu-hong #FF4C00」，辅助「金色 jin-se #EACD76」，
+   状态「胭脂 yan-zhi #9D2933」，面「月白 yue-bai #D6ECF0 / 象牙白 xiang-ya-bai #FFFBF0」，
+   字「青黛 qing-dai #45465E」，暗色底「玄色 xuan-se #622A1D」。全无紫无靛。*/
+.theme-red{--accent:#FF4C00;--accent-light:#EACD76;--accent-gradient:linear-gradient(135deg,#FF4C00,#EACD76);--accent-bg:rgba(255,76,0,0.08);--accent-bg-hover:rgba(255,76,0,0.04);--accent-shadow:rgba(255,76,0,0.35);--border-focus:#FF4C00}
+.dark.theme-red{--accent:#FF7A33;--accent-light:#EACD76;--accent-gradient:linear-gradient(135deg,#FF7A33,#EACD76);--accent-bg:rgba(255,122,51,0.12);--accent-bg-hover:rgba(255,122,51,0.06);--accent-shadow:rgba(255,122,51,0.25);--border-focus:#FF7A33}
 .theme-ink{--accent:#464B52;--accent-light:#6E747C;--accent-gradient:linear-gradient(135deg,#464B52,#6E747C);--accent-bg:rgba(70,75,82,0.08);--accent-bg-hover:rgba(70,75,82,0.04);--accent-shadow:rgba(70,75,82,0.35);--border-focus:#464B52;--text-on-accent:#FAFAFB}
 .dark.theme-ink{--accent:#A7ADB8;--accent-light:#C9CED6;--accent-gradient:linear-gradient(135deg,#A7ADB8,#C9CED6);--accent-bg:rgba(167,173,184,0.12);--accent-bg-hover:rgba(167,173,184,0.06);--accent-shadow:rgba(167,173,184,0.25);--border-focus:#A7ADB8;--text-on-accent:#1A1D22}
 
@@ -1129,8 +1133,8 @@ body.theme-pink:not(.dark){--bg-primary:#F6EAE8;--bg-secondary:rgba(254,243,242,
 body.dark.theme-pink{--bg-primary:#251719;--bg-secondary:rgba(44,28,29,0.78);--bg-tertiary:#3D2829;--bg-hover:#4F3235;--bg-input:#362224;--nav-bg:rgba(39,24,26,0.72);--modal-bg:rgba(43,27,28,0.92);--chat-recv-bubble:rgba(54,35,35,0.85);--chat-recv-border:#58393C;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#321F21 0%,rgba(32,27,21,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#2E161D 0%,rgba(18,15,11,0) 62%);--glow-orange:rgba(236,72,153,0.14);--glow-cyan:rgba(244,145,194,0.09);--glow-violet:rgba(189,58,122,0.1)}
 body.theme-cyan:not(.dark){--bg-primary:#EBF0EB;--bg-secondary:rgba(243,248,245,0.78);--bg-tertiary:#DCE5DE;--bg-hover:#CDDED7;--bg-input:#E3EBE5;--nav-bg:rgba(243,248,245,0.72);--modal-bg:rgba(243,248,245,0.92);--chat-recv-bubble:rgba(240,248,245,0.85);--chat-recv-border:#C5D9D3;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#ECF6F5 0%,rgba(253,251,247,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#D1E1DA 0%,rgba(239,231,219,0) 62%);--glow-orange:rgba(6,182,212,0.12);--glow-cyan:rgba(106,211,229,0.07);--glow-violet:rgba(5,146,170,0.1)}
 body.dark.theme-cyan{--bg-primary:#151E1D;--bg-secondary:rgba(28,36,33,0.78);--bg-tertiary:#26332F;--bg-hover:#2E413E;--bg-input:#212C29;--nav-bg:rgba(23,31,30,0.72);--modal-bg:rgba(26,35,33,0.92);--chat-recv-bubble:rgba(35,44,40,0.85);--chat-recv-border:#364944;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#1E2926 0%,rgba(32,27,21,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#102525 0%,rgba(18,15,11,0) 62%);--glow-orange:rgba(6,182,212,0.14);--glow-cyan:rgba(106,211,229,0.09);--glow-violet:rgba(5,146,170,0.1)}
-body.theme-red:not(.dark){--bg-primary:#F5E9E2;--bg-secondary:rgba(253,242,236,0.78);--bg-tertiary:#EDDAD0;--bg-hover:#E8CCC0;--bg-input:#F2E1D8;--nav-bg:rgba(253,242,236,0.72);--modal-bg:rgba(253,242,236,0.92);--chat-recv-bubble:rgba(252,239,234,0.85);--chat-recv-border:#E4C4B8;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#FAECE8 0%,rgba(253,251,247,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#EBCFC3 0%,rgba(239,231,219,0) 62%);--glow-orange:rgba(212,43,32,0.12);--glow-cyan:rgba(229,128,121,0.07);--glow-violet:rgba(170,34,26,0.1)}
-body.dark.theme-red{--bg-primary:#261713;--bg-secondary:rgba(46,29,23,0.78);--bg-tertiary:#3F2921;--bg-hover:#513329;--bg-input:#38231C;--nav-bg:rgba(40,24,20,0.72);--modal-bg:rgba(44,28,22,0.92);--chat-recv-bubble:rgba(55,36,29,0.85);--chat-recv-border:#5B3A2F;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#342019 0%,rgba(32,27,21,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#311813 0%,rgba(18,15,11,0) 62%);--glow-orange:rgba(255,82,69,0.14);--glow-cyan:rgba(255,151,143,0.09);--glow-violet:rgba(204,66,55,0.1)}
+body.theme-red:not(.dark){--bg-primary:#FFFBF0;--bg-secondary:rgba(246,240,228,0.78);--bg-tertiary:#F3E7D4;--bg-hover:#EFE0C8;--bg-input:#FBF3E4;--nav-bg:rgba(255,251,240,0.72);--modal-bg:rgba(255,251,240,0.92);--chat-recv-bubble:rgba(250,243,231,0.85);--chat-recv-border:#E7D3B4;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#FFF6E4 0%,rgba(255,251,240,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#F6E3C6 0%,rgba(214,237,240,0) 62%);--glow-orange:rgba(255,76,0,0.12);--glow-cyan:rgba(79,164,174,0.07);--glow-violet:rgba(157,41,51,0.1)}
+body.dark.theme-red{--bg-primary:#1C110D;--bg-secondary:rgba(43,27,21,0.78);--bg-tertiary:#4A2C20;--bg-hover:#5C382A;--bg-input:#38231A;--nav-bg:rgba(38,23,18,0.72);--modal-bg:rgba(45,28,22,0.92);--chat-recv-bubble:rgba(64,38,29,0.85);--chat-recv-border:#6B4130;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#3A231A 0%,rgba(28,17,13,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#331812 0%,rgba(20,13,10,0) 62%);--glow-orange:rgba(255,122,51,0.14);--glow-cyan:rgba(123,207,166,0.08);--glow-violet:rgba(234,205,118,0.1)}
 body.theme-ink:not(.dark){--bg-primary:#F1F1F2;--bg-secondary:rgba(255,255,255,0.78);--bg-tertiary:#E7E7E9;--bg-hover:#DEDEE1;--bg-input:#ECECEE;--text-primary:#1F2124;--text-secondary:#4B5057;--text-muted:#71767D;--text-faint:#9CA0A6;--border-strong:#DCDCDF;--scrollbar-thumb:#C6C7CB;--nav-bg:rgba(255,255,255,0.72);--modal-bg:rgba(255,255,255,0.92);--chat-recv-bubble:#FAFAFB;--chat-recv-border:#E4E4E7;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#FCFCFD 0%,rgba(252,252,253,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#E9E9EB 0%,rgba(233,233,235,0) 62%);--glow-orange:rgba(70,75,82,0.10);--glow-cyan:rgba(110,116,124,0.07);--glow-violet:rgba(70,75,82,0.09)}
 body.dark.theme-ink{--bg-primary:#15161A;--bg-secondary:rgba(26,27,31,0.72);--bg-tertiary:#212329;--bg-hover:#2A2C33;--bg-input:#1C1E23;--text-primary:#E9EAEC;--text-secondary:#BEC1C7;--text-muted:#93979E;--text-faint:#6C7077;--border-strong:#33353B;--scrollbar-thumb:#4A4C52;--nav-bg:rgba(18,19,22,0.72);--modal-bg:rgba(24,25,29,0.92);--chat-recv-bubble:rgba(35,37,43,0.85);--chat-recv-border:#34363D;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#1C1E22 0%,rgba(28,30,34,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#121317 0%,rgba(18,19,23,0) 62%);--glow-orange:rgba(167,173,184,0.12);--glow-cyan:rgba(201,206,214,0.08);--glow-violet:rgba(167,173,184,0.10)}
 
@@ -2617,4 +2621,68 @@ body.dark.theme-ink .noise-overlay { opacity: .07; }
 @media (prefers-reduced-motion: reduce){
   .wf-card{transition:none}
   .wf-card:hover{transform:none}
+}
+
+/* ═══════════════════════════════════════════════════════════
+   V9.3 媒体链接自动渲染（B站 / YouTube / Vimeo 平台播放器）
+   16:9 内嵌 + 极简来源条；直接媒体沿用既有内联圆角样式
+   ═══════════════════════════════════════════════════════════ */
+.media-embed{
+  margin:6px 0;
+  max-width:100%;
+  border:1px solid var(--border-color);
+  border-radius:10px;
+  overflow:hidden;
+  background:var(--bg-tertiary);
+}
+.media-embed-bar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--text-muted);
+  background:var(--bg-hover);
+  border-bottom:1px solid var(--border-color);
+}
+.media-embed-bar iconify-icon{color:var(--accent)}
+.media-embed-bar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 来源条右侧回原站按钮：命中区域扩大到 32px，满足触屏点击尺寸 */
+.media-embed-bar a{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  margin:-8px -6px -8px 0;
+  border-radius:7px;
+  color:var(--text-muted);
+  transition:color .18s, background .18s;
+}
+.media-embed-bar a:hover{color:var(--accent);background:var(--accent-bg)}
+.media-embed-bar a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.media-embed-frame{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+.media-embed-frame iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+  display:block;
+}
+
+/* ── V9.3 国旗飘扬层（WebGL，仅 theme-red 激活；JS 控制 display 切换） ── */
+#flag-canvas{
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .40;
+}
+body.dark #flag-canvas{opacity:.46}
+@media (prefers-reduced-motion: reduce){
+  #flag-canvas{display:none}
 }
