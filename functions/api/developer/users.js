@@ -6,7 +6,7 @@ import { requireDeveloper, devJson, devErr } from '../_lib/devauth.js';
 import { writeAdminAudit } from '../_lib/audit.js';
 import { normalizeName } from '../_lib/name.js';
 
-const USER_COLS = `id, name, doubao_id, is_developer, created_at, last_login_at,
+const USER_COLS = `id, name, doubao_id, is_developer, is_global_admin, created_at, last_login_at,
   last_login_ip, registered_ip, quarantined_at, quarantine_reason, deactivated_at`;
 
 // LIKE 通配符转义（配合 ESCAPE '\'）
@@ -21,7 +21,7 @@ async function searchUsers(env, q) {
     `SELECT ${USER_COLS} FROM users
      WHERE id = ?
         OR (name_norm IS NOT NULL AND name_norm = ?)
-        OR name LIKE ? ESCAPE '\'
+        OR name LIKE ? ESCAPE '\\'
         OR (registered_ip IS NOT NULL AND registered_ip = ?)
         OR (last_login_ip IS NOT NULL AND last_login_ip = ?)
      ORDER BY last_login_at DESC
@@ -102,6 +102,7 @@ export async function onRequestGet(context) {
       await writeAdminAudit(env, {
         actorId: gate.userId, action: 'search_user', target: id,
         detail: { mode: 'detail' },
+        request,
       });
       return devJson({ success: true, data: detail });
     }
@@ -112,6 +113,7 @@ export async function onRequestGet(context) {
     await writeAdminAudit(env, {
       actorId: gate.userId, action: 'search_user',
       detail: { mode: 'search', hits: results.length, len: q.length },
+      request,
     });
     return devJson({ success: true, data: { users: results } });
   } catch (e) {

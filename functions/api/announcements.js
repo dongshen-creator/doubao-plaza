@@ -100,8 +100,8 @@ export async function onRequestPost(context) {
     }
 
     // 验证当前用户是开发者
-    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
-    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
+    const user = await env.DB.prepare(`SELECT is_developer, is_global_admin FROM users WHERE id = ?`).bind(authUserId).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true || user.is_global_admin === 1 || user.is_global_admin === '1' || user.is_global_admin === true)) {
       return Response.json({ success: false, error: '只有开发者才能发布公告' });
     }
 
@@ -157,8 +157,8 @@ export async function onRequestPut(context) {
     }
 
     // 验证当前用户是开发者
-    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
-    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
+    const user = await env.DB.prepare(`SELECT is_developer, is_global_admin FROM users WHERE id = ?`).bind(authUserId).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true || user.is_global_admin === 1 || user.is_global_admin === '1' || user.is_global_admin === true)) {
       return Response.json({ success: false, error: '只有开发者才能编辑公告' });
     }
 
@@ -235,8 +235,8 @@ export async function onRequestDelete(context) {
     if (!authUserId) {
       return Response.json({ success: false, error: '请先登录' }, { status: 401 });
     }
-    const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(authUserId).first();
-    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true)) {
+    const user = await env.DB.prepare(`SELECT is_developer, is_global_admin FROM users WHERE id = ?`).bind(authUserId).first();
+    if (!user || !(user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true || user.is_global_admin === 1 || user.is_global_admin === '1' || user.is_global_admin === true)) {
       return Response.json({ success: false, error: '只有开发者才能删除公告' }, { status: 403 });
     }
 

@@ -20,12 +20,12 @@ export async function onRequestGet(context) {
     let rows;
     if (action) {
       rows = await env.DB.prepare(
-        `SELECT id, actor_id, action, target, detail, created_at FROM admin_audit_log
+        `SELECT id, actor_id, action, target, detail, ip, ua, created_at FROM admin_audit_log
          WHERE action = ? ORDER BY created_at DESC LIMIT ?`
       ).bind(action, limit).all();
     } else {
       rows = await env.DB.prepare(
-        `SELECT id, actor_id, action, target, detail, created_at FROM admin_audit_log
+        `SELECT id, actor_id, action, target, detail, ip, ua, created_at FROM admin_audit_log
          ORDER BY created_at DESC LIMIT ?`
       ).bind(limit).all();
     }
@@ -33,6 +33,7 @@ export async function onRequestGet(context) {
     await writeAdminAudit(env, {
       actorId: gate.userId, action: 'audit_view',
       detail: { filter: action || 'all', limit },
+      request,
     });
 
     return devJson({ success: true, data: (rows && rows.results) || [] });

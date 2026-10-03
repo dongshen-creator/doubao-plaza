@@ -15,6 +15,7 @@ import {
   cfMeta,
 } from './_lib/device.js';
 import { resolveClientIp } from './_lib/clientip.js';
+import { verifyTurnstile } from './_lib/turnstile.js';
 
 // V7.3 读放大防护：搜索接口按 IP 限频（进程内存计数，单个隔离实例内 60 次/分钟）
 const _searchRate = new Map();
@@ -73,29 +74,6 @@ function validateName(name) {
     return { valid: false, error: '昵称不能仅包含标点符号或空白' };
   }
   return { valid: true, normalized };
-}
-
-// V11 修复：Cloudflare Turnstile 人机验证
-async function verifyTurnstile(token, env, remoteIP) {
-  // 如果未配置 Turnstile 密钥，跳过验证（向后兼容）
-  if (!env.TURNSTILE_SECRET) return { success: true, skipped: true };
-  if (!token) return { success: false, error: '请完成人机验证' };
-  try {
-    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        secret: env.TURNSTILE_SECRET,
-        response: token,
-        remoteip: remoteIP || '',
-      }),
-    });
-    const data = await resp.json();
-    if (data.success) return { success: true };
-    return { success: false, error: '人机验证失败，请重试' };
-  } catch (e) {
-    return { success: false, error: '人机验证服务异常' };
-  }
 }
 
 async function hashPassword(password) {
@@ -387,7 +365,7 @@ export async function onRequestPost(context) {
 
     // 按 ID 查询刚创建的用户
     const user = await env.DB.prepare(
-      `SELECT id, name, avatar, bio, doubao_id, agent_url, is_developer, privacy_setting, created_at, last_login_ip, pat_suffix 
+      `SELECT id, name, avatar, bio, doubao_id, agent_url, is_developer, is_global_admin, privacy_setting, created_at, last_login_ip, pat_suffix 
        FROM users WHERE id = ?`
     ).bind(newUserId).first();
 

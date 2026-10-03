@@ -45,14 +45,15 @@ async function getAuthUserId(env, request) {
   return session ? session.user_id : null;
 }
 
-// 检查用户是否为开发者（is_developer === 1）
+// 检查用户是否为站务管理员（is_developer 或 is_global_admin，v9.2）
 async function isDeveloper(env, userId) {
   if (!env || !env.DB || !userId) return false;
   const user = await env.DB.prepare(
-    `SELECT is_developer FROM users WHERE id = ?`
+    `SELECT is_developer, is_global_admin FROM users WHERE id = ?`
   ).bind(userId).first();
   if (!user) return false;
-  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true;
+  return user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true
+    || user.is_global_admin === 1 || user.is_global_admin === '1' || user.is_global_admin === true;
 }
 
 // ===== 预检请求 =====

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   invite_code TEXT,
   pat_suffix TEXT DEFAULT '',
   is_developer INTEGER DEFAULT 0,
+  is_global_admin INTEGER DEFAULT 0,
   privacy_setting TEXT DEFAULT 'searchable',
   punished_until TEXT,
   punish_reason TEXT,
@@ -209,6 +210,7 @@ CREATE TABLE IF NOT EXISTS chat_admins (
 
 -- users 表补列
 ALTER TABLE users ADD COLUMN is_developer INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN is_global_admin INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN pat_suffix TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN invite_code TEXT;
 ALTER TABLE users ADD COLUMN punished_until TEXT;
@@ -419,6 +421,8 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   action TEXT NOT NULL,
   target TEXT,
   detail TEXT,
+  ip TEXT,
+  ua TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON admin_audit_log(actor_id, created_at);

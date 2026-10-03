@@ -97,6 +97,7 @@ export async function onRequestPost(context) {
       doubao_id: user.doubao_id,
       agent_url: user.agent_url,
       is_developer: user.is_developer,
+      is_global_admin: user.is_global_admin || 0,
       privacy_setting: user.privacy_setting,
       invite_code: user.invite_code,
       created_at: user.created_at,

@@ -9,8 +9,9 @@ import { getAuthUserId } from '../_lib/jwt.js';
 
 async function isDeveloper(env, userId) {
   if (!userId) return false;
-  const user = await env.DB.prepare(`SELECT is_developer FROM users WHERE id = ?`).bind(userId).first();
-  return user && (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true);
+  const user = await env.DB.prepare(`SELECT is_developer, is_global_admin FROM users WHERE id = ?`).bind(userId).first();
+  return user && (user.is_developer === 1 || user.is_developer === '1' || user.is_developer === true
+    || user.is_global_admin === 1 || user.is_global_admin === '1' || user.is_global_admin === true);
 }
 
 function getContentType(filename) {

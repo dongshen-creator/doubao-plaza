@@ -20,7 +20,7 @@ function parseReport(s) {
 }
 
 // ── 预演 ──
-async function dryRun(env, gate, inactiveDays) {
+async function dryRun(env, gate, request, inactiveDays) {
   const days = Math.floor(Number(inactiveDays));
   if (!Number.isFinite(days) || days < MIN_DAYS || days > MAX_DAYS) {
     return devErr(`不活跃阈值需在 ${MIN_DAYS}-${MAX_DAYS} 天之间`, 400);
@@ -39,6 +39,7 @@ async function dryRun(env, gate, inactiveDays) {
      WHERE deactivated_at IS NULL
        AND quarantined_at IS NULL
        AND is_developer = 0
+       AND COALESCE(is_global_admin, 0) = 0
        AND COALESCE(last_active_at, last_login_at, created_at) <= ?
      ORDER BY last_seen ASC
      LIMIT ?`
@@ -53,6 +54,7 @@ async function dryRun(env, gate, inactiveDays) {
        SUM(CASE WHEN deactivated_at IS NOT NULL THEN 1 ELSE 0 END) AS already_softdeleted,
        SUM(CASE WHEN quarantined_at IS NOT NULL THEN 1 ELSE 0 END) AS quarantined,
        SUM(CASE WHEN is_developer = 1 THEN 1 ELSE 0 END) AS developers,
+       SUM(CASE WHEN COALESCE(is_global_admin, 0) = 1 THEN 1 ELSE 0 END) AS global_admins,
        COUNT(*) AS total
      FROM users`
   ).first();
@@ -67,6 +69,7 @@ async function dryRun(env, gate, inactiveDays) {
       already_softdeleted: (excl && excl.already_softdeleted) || 0,
       quarantined: (excl && excl.quarantined) || 0,
       developers: (excl && excl.developers) || 0,
+      global_admins: (excl && excl.global_admins) || 0,
     },
     // 名单 = 备份清单：软删不删行，本快照用于执行前核对与事后恢复对照
     candidates,
@@ -82,6 +85,7 @@ async function dryRun(env, gate, inactiveDays) {
   await writeAdminAudit(env, {
     actorId: gate.userId, action: 'cleanup_dryrun', target: runId,
     detail: { threshold_days: days, total: candidates.length },
+    request,
   });
 
   return devJson({ success: true, data: { run_id: runId, report } });
@@ -157,6 +161,7 @@ async function execute(env, gate, request, runId, confirm) {
        AND deactivated_at IS NULL
        AND quarantined_at IS NULL
        AND is_developer = 0
+       AND COALESCE(is_global_admin, 0) = 0
        AND COALESCE(last_active_at, last_login_at, created_at) <= ?`
   ).bind(...ids, report.cutoff).all();
   const eligibleIds = ((elig && elig.results) || []).map((r) => r.id);
@@ -200,6 +205,7 @@ async function execute(env, gate, request, runId, confirm) {
     actorId: gate.userId, action: 'cleanup_execute', target: ex.id,
     detail: { batch: exReport.batches, just_processed: eligibleIds.length,
               just_skipped: skippedNow.length, remaining },
+    request,
   });
 
   if (remaining <= 0) {
@@ -231,7 +237,7 @@ async function execute(env, gate, request, runId, confirm) {
 }
 
 // ── 恢复（按执行名单回滚软删） ──
-async function restore(env, gate, runId) {
+async function restore(env, gate, request, runId) {
   const ex = await env.DB.prepare(
     `SELECT id, report FROM cleanup_runs WHERE id = ? AND mode = 'execute'`
   ).bind(String(runId || '').slice(0, 64)).first();
@@ -255,6 +261,7 @@ async function restore(env, gate, runId) {
   await writeAdminAudit(env, {
     actorId: gate.userId, action: 'cleanup_restore', target: ex.id,
     detail: { requested: ids.length, restored },
+    request,
   });
   return devJson({ success: true, data: { run_id: ex.id, restored, requested: ids.length } });
 }
@@ -305,11 +312,11 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const action = String(body.action || '');
 
-    if (action === 'dry_run') return dryRun(env, gate, body.inactive_days);
+    if (action === 'dry_run') return dryRun(env, gate, request, body.inactive_days);
     if (action === 'execute') {
       return execute(env, gate, request, body.run_id, body.confirm);
     }
-    if (action === 'restore') return restore(env, gate, body.run_id);
+    if (action === 'restore') return restore(env, gate, request, body.run_id);
 
     return devErr('未知操作', 400);
   } catch (e) {

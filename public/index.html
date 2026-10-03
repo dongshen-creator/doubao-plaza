@@ -347,6 +347,9 @@
   </main>
 </div>
 
+<!-- v9.2 站点页脚（全局设置驱动：站点信息/页脚链接/社交/备案/liuyan 聚合分类） -->
+<footer class="site-footer" id="siteFooter" style="display:none" aria-label="站点页脚"></footer>
+
 <!-- 移动端遮罩层（浮动FAB已移除，☰按钮在各视图header中） -->
 <div class="mobile-overlay-mask" id="mobileOverlayMask" onclick="closeMobilePanels()"></div>
 
@@ -480,6 +483,8 @@
       <button class="tab" onclick="switchSettingsTab('friends',this)"><iconify-icon icon="ph:users-three-fill"></iconify-icon> 好友 <span class="tab-count" id="friendsBadge">0</span></button>
       <button class="tab" onclick="switchSettingsTab('channels',this)"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> 频道 <span class="tab-count" id="settingsChannelsBadge">0</span></button>
       <button class="tab" onclick="switchSettingsTab('blocks',this)"><iconify-icon icon="ph:prohibit-fill"></iconify-icon> 黑名单 <span class="tab-count" id="blocksBadge">0</span></button>
+      <!-- v9.2 全局设置（站点信息/页脚/SEO/社交/其他）：仅站务管理员可见，loadSettings 控制显隐 -->
+      <button class="tab" id="settingsSiteTab" style="display:none" onclick="switchSettingsTab('site',this)"><iconify-icon icon="ph:globe-hemisphere-west-fill"></iconify-icon> 全局</button>
     </div>
     <div id="settingsContent" style="max-height:60vh;overflow-y:auto"></div>
   </div>
@@ -515,6 +520,7 @@
       <button class="tab" onclick="switchDevTab('pages',this)"><iconify-icon icon="ph:file-text-fill"></iconify-icon> 本地页面</button>
       <button class="tab" onclick="switchDevTab('tempmode',this)"><iconify-icon icon="ph:lightning-fill"></iconify-icon> 临时模式</button>
       <button class="tab" onclick="switchDevTab('publicchannels',this)"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 公开频道</button>
+      <button class="tab" onclick="switchDevTab('globaladmins',this)"><iconify-icon icon="ph:shield-check-fill"></iconify-icon> 全局管理员</button>
     </div>
     <div id="developerContent" style="max-height:500px;overflow-y:auto"></div>
   </div>
@@ -731,7 +737,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
     html += '<button class="btn btn-blue btn-full" onclick="window.open(\'' + escAttr(userInfo.agent_url) + '\',\'_blank\')"><iconify-icon icon="ph:link-simple"></iconify-icon> 跳转主页</button>';
   }
   if (isSelf) {
-    html += '<button class="btn btn-orange btn-full" onclick="document.getElementById(\'userPopupModal\').remove();showModal(\'settings\')"><iconify-icon icon="ph:house-fill"></iconify-icon> 这是我的主页</button>';
+    html += '<button class="btn btn-orange btn-full" onclick="document.getElementById(\'userPopupModal\').remove();openPatSuffixSettings()"><iconify-icon icon="ph:hand-waving-fill"></iconify-icon> 拍一拍设置</button>';
     html += '<button class="btn btn-gray btn-full" onclick="showShareCardPicker()"><iconify-icon icon="ph:identification-card-fill"></iconify-icon> 分享名片</button>';
     html += '<button class="btn btn-gray btn-full" onclick="showShareChannelPicker()"><iconify-icon icon="ph:megaphone-fill"></iconify-icon> 分享频道</button>';
   } else {
@@ -768,6 +774,23 @@ function closeUserPopup() {
   if (p) p.remove();
 }
 
+// 资料卡「拍一拍设置」入口：打开设置并聚焦拍一拍后缀输入框。
+// loadSettings 是异步的（要等通知接口返回才渲染账号页），所以轮询等待输入框出现。
+function openPatSuffixSettings() {
+  showModal('settings');
+  var tries = 0;
+  var iv = setInterval(function () {
+    var el = document.getElementById('patSuffixInput');
+    if (el) {
+      clearInterval(iv);
+      el.scrollIntoView({ block: 'center' });
+      el.focus();
+    } else if (++tries > 40) {
+      clearInterval(iv);
+    }
+  }, 100);
+}
+
 async function patUser(targetUserId, targetUserName, targetSuffix) {
   if (!currentUser || !chatState.currentRoomId) return;
   await window.__ensureSupabaseSession();
@@ -793,6 +816,48 @@ async function patUser(targetUserId, targetUserName, targetSuffix) {
     setMsgCache(chatState.currentRoomId, chatState.messages[chatState.currentRoomId]);
     renderMessages(chatState.currentRoomId);
   }
+}
+
+// 头像快拍：单击拍一拍（延时触发，给双击留出取消窗口），双击打开资料卡并取消待发送的拍，避免误触
+var __avatarPat = { timer: null, info: null, lastClick: 0, lastPatId: '', lastPatAt: 0 };
+function avatarMsgClick(ev, userId, userName, userAvatar, doubaoId) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  if (!currentUser || !userId) return;
+  if (userId === currentUser.id) { showUserPopup(userId, userName, userAvatar, doubaoId); return; }
+  var now = Date.now();
+  var pendingSame = !!(__avatarPat.timer && __avatarPat.info && __avatarPat.info.id === userId);
+  if (pendingSame && now - __avatarPat.lastClick < 380) {
+    // 双击同一头像：取消待发送的拍一拍，改为打开资料卡，避免误触
+    clearTimeout(__avatarPat.timer); __avatarPat.timer = null;
+    __avatarPat.info = null;
+    __avatarPat.lastClick = now;
+    showUserPopup(userId, userName, userAvatar, doubaoId);
+    return;
+  }
+  // 单击（或切换到另一头像）：取消之前挂起的拍，重新计时
+  if (__avatarPat.timer) { clearTimeout(__avatarPat.timer); __avatarPat.timer = null; __avatarPat.info = null; }
+  __avatarPat.lastClick = now;
+  // 同一人 1 秒冷却：慢速重复点击不连拍
+  if (__avatarPat.lastPatId === userId && now - __avatarPat.lastPatAt < 1000) return;
+  __avatarPat.info = { id: userId, name: userName };
+  __avatarPat.timer = setTimeout(function () {
+    __avatarPat.timer = null;
+    var info = __avatarPat.info;
+    __avatarPat.info = null;
+    if (!info) return;
+    __avatarPat.lastPatId = info.id;
+    __avatarPat.lastPatAt = Date.now();
+    avatarPatWithSuffix(info.id, info.name);
+  }, 380);
+}
+// 带目标后缀拍一拍（与资料卡里的拍一拍保持一致，拉取失败时按无后缀拍）
+async function avatarPatWithSuffix(userId, userName) {
+  var suffix = '';
+  try {
+    var res = await api('/api/users/' + userId);
+    if (res && res.success && res.data) suffix = res.data.pat_suffix || '';
+  } catch (e) {}
+  patUser(userId, userName, suffix);
 }
 
 
@@ -1035,6 +1100,60 @@ function renderRichText(text) {
   return processPlainText(text);
 }
 
+// ── 高光色块归一化：暗色模式下保持色块原样、保证文字可读 ──
+// 背景是纯色（非白、非透明、非 var/渐变）的元素视为高光色块：
+// 打上 data-dp-hl 后，style.css 里的暗色覆写规则对其失效（:not([data-dp-hl])），
+// 色块底色原样保留；缺文字色或对比不足时补一个安全色（亮底配深字、暗底配亮字）。
+function dpParseColor(v) {
+  if (!v) return null;
+  v = String(v).trim().toLowerCase();
+  if (v.indexOf('var(') >= 0 || v.indexOf('gradient') >= 0 || v.indexOf('url(') >= 0) return null;
+  var m = v.match(/^#([0-9a-f]{3})$/);
+  if (m) return { r: parseInt(m[1].charAt(0) + m[1].charAt(0), 16), g: parseInt(m[1].charAt(1) + m[1].charAt(1), 16), b: parseInt(m[1].charAt(2) + m[1].charAt(2), 16) };
+  m = v.match(/^#([0-9a-f]{6})$/);
+  if (m) return { r: parseInt(m[1].substr(0, 2), 16), g: parseInt(m[1].substr(2, 2), 16), b: parseInt(m[1].substr(4, 2), 16) };
+  m = v.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+\s*)?\s*\)$/);
+  if (m) return { r: +m[1], g: +m[2], b: +m[3] };
+  var named = { black: [0, 0, 0], white: [255, 255, 255], yellow: [255, 255, 0], red: [255, 0, 0], green: [0, 128, 0], lime: [0, 255, 0], blue: [0, 0, 255], gray: [128, 128, 128], grey: [128, 128, 128], orange: [255, 165, 0], pink: [255, 192, 203], purple: [128, 0, 128], cyan: [0, 255, 255], navy: [0, 0, 128], teal: [0, 128, 128], maroon: [128, 0, 0], olive: [128, 128, 0], silver: [192, 192, 192] };
+  if (named[v]) return { r: named[v][0], g: named[v][1], b: named[v][2] };
+  return null;
+}
+function dpLum(c) {
+  function f(ch) { ch /= 255; return ch <= 0.03928 ? ch / 12.92 : Math.pow((ch + 0.055) / 1.055, 2.4); }
+  return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+}
+function dpContrast(a, b) {
+  var la = dpLum(a), lb = dpLum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+function normalizeHighlights(root) {
+  if (!root || !root.querySelectorAll) return;
+  var nodes = root.querySelectorAll('mark, [style*="background"]');
+  var darkTxt = { r: 32, g: 24, b: 11 }, lightTxt = { r: 247, g: 240, b: 225 };
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var bg = dpParseColor(el.style && el.style.backgroundColor);
+    if (!bg) continue; // var()/渐变/透明：随主题自适配，不动
+    if (bg.r >= 240 && bg.g >= 240 && bg.b >= 240) continue; // 白/近白底：保留原有"白底转深色"逻辑
+    var safe = dpContrast(darkTxt, bg) >= dpContrast(lightTxt, bg) ? '#20180B' : '#F7F0E1';
+    var bgRaw = el.style.backgroundColor;
+    el.setAttribute('data-dp-hl', '1');
+    // !important 内联值压过 style.css 暗色覆写（同源下 style 属性重要声明优先级最高）
+    el.style.setProperty('background-color', bgRaw, 'important');
+    var own = dpParseColor(el.style.color);
+    el.style.setProperty('color', (own && dpContrast(own, bg) >= 3) ? el.style.color : safe, 'important');
+    // 高光内部带内联文字色、且无自带背景的后代：一并锁定，避免暗色覆写把字刷白
+    var kids = el.querySelectorAll('[style]');
+    for (var j = 0; j < kids.length; j++) {
+      if (kids[j].style.backgroundColor || kids[j].style.backgroundImage) continue; // 自带背景的由主循环/原有白底规则处理
+      var kc = dpParseColor(kids[j].style.color);
+      if (!kc) continue;
+      kids[j].setAttribute('data-dp-hl', '1');
+      kids[j].style.setProperty('color', dpContrast(kc, bg) >= 3 ? kids[j].style.color : safe, 'important');
+    }
+  }
+}
+
 // 对 HTML 中的文本节点做 linkify 和 @提及，不碰标签属性
 function processHtmlTextNodes(html) {
   var parser = new DOMParser();
@@ -1067,6 +1186,7 @@ function processHtmlTextNodes(html) {
     }
   }
   processTextNodes(root);
+  normalizeHighlights(root);
   return root.innerHTML;
 }
 function escJS(s) { if (!s) return ''; return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
@@ -1153,8 +1273,23 @@ function loadUsageNotice() {
   }
 }
 
-// 站点设置（维护模式 / 迁移模式）
-var siteSettings = { maintenance_mode: 'off', migration_mode: 'off' };
+// 站点设置（维护模式 / 迁移模式 + v9.2 全局设置五栏公开键）
+var siteSettings = {
+  maintenance_mode: 'off',
+  migration_mode: 'off',
+  site_name: '',
+  site_slogan: '',
+  site_logo_url: '',
+  site_icp: '',
+  footer_text: '',
+  footer_links: '[]',
+  seo_title: '',
+  seo_description: '',
+  seo_keywords: '',
+  social_links: '[]',
+  liuyan_enabled: 'on',
+  liuyan_exclude: '宠物,娱乐,AI',
+};
 
 async function init() {
   // V6b 修复：清除旧的 PicGo key（不再存储在 localStorage）
@@ -1197,10 +1332,14 @@ async function init() {
     });
   }
 
-  // 拉取站点设置（维护模式 / 迁移模式）
+  // 拉取站点设置（维护/迁移模式 + v9.2 全局设置公开键），成功后应用品牌与页脚
   try {
     const ss = await fetch('/api/site-settings').then(r => r.json());
-    if (ss.success) siteSettings = ss.data;
+    if (ss.success && ss.data) {
+      siteSettings = Object.assign({}, siteSettings, ss.data);
+      if (typeof applySiteBranding === 'function') applySiteBranding();
+      if (typeof renderSiteFooter === 'function') renderSiteFooter();
+    }
   } catch (e) {}
 
   // Try auto login
@@ -1239,7 +1378,7 @@ async function init() {
   })();
 
   // 紧急下线：非开发者看到维护页面，不继续初始化
-  if (siteSettings.maintenance_mode === 'on' && !isDeveloper()) {
+  if (siteSettings.maintenance_mode === 'on' && !isSiteAdmin()) {
     showMaintenancePage();
     return;
   }
@@ -1501,7 +1640,7 @@ function updateNavbar() {
   if (currentUser) {
     el.innerHTML = `
       <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:pointer;padding:6px 10px" onclick="showOnlineUsers()" title="点击查看在线用户"></span>
-      ${isDeveloper() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 开发者</button>' : ''}
+      ${isSiteAdmin() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 开发者</button>' : ''}
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
       <div class="nav-user" onclick="showModal('settings')" title="设置">
@@ -1522,12 +1661,22 @@ function updateNavbar() {
   if (typeof tabbarUpdateAuthState === 'function') tabbarUpdateAuthState();
   // 同步活动栏开发者按钮
   var devBtn = document.getElementById('actBarDeveloperBtn');
-  if (devBtn) devBtn.style.display = isDeveloper() ? '' : 'none';
+  if (devBtn) devBtn.style.display = isSiteAdmin() ? '' : 'none';
 }
 
 function isDeveloper() {
   if (!currentUser) return false;
   return currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1';
+}
+
+// v9.2 全局管理员：前端入口与开发者同权展示（后端 devauth 强制校验）
+function isGlobalAdmin() {
+  if (!currentUser) return false;
+  return currentUser.is_global_admin === 1 || currentUser.is_global_admin === true || currentUser.is_global_admin === '1';
+}
+
+function isSiteAdmin() {
+  return isDeveloper() || isGlobalAdmin();
 }
 
 // 撤回权限：开发者全局可撤回 | 频道创建者/管理员频道内可撤回 | 普通用户仅撤回自己的
@@ -3317,7 +3466,9 @@ function weatherCodeToText(code) {
 }
 
 // ===== 小肥羊讲堂（博客系统）=====
-var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null, currentCategory: null, categories: [], editorState: null, listPage: 1, listHasMore: false, listLoading: false };
+var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null, currentCategory: null, categories: [], editorState: null, listPage: 1, listHasMore: false, listLoading: false,
+  viewMode: (function() { try { return localStorage.getItem('blog_view_mode') === 'waterfall' ? 'waterfall' : 'list'; } catch(e) { return 'list'; } })(),
+  cardMode: (function() { try { return localStorage.getItem('blog_card_mode') === 'book' ? 'book' : 'column'; } catch(e) { return 'column'; } })() };
 
 // 博客独立视图渲染（左侧导航栏入口）
 function renderBlogView(sidebar, main) {
@@ -3328,12 +3479,21 @@ function renderBlogView(sidebar, main) {
     return;
   }
 
-  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+  var isDev = isSiteAdmin();
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
 
-  // 侧边栏：公告 + 快捷操作
+  // 侧边栏：搜索置顶（展开时隐藏其余段）+ 其余功能段
   sidebar.classList.add('has-content');
   sidebar.innerHTML =
+    '<div class="sidebar-section" id="blogSearchSection">' +
+      '<div class="sidebar-section-title"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 搜索</div>' +
+      '<div class="search-wrap" style="position:relative">' +
+        '<input id="blogSearchInput" type="text" placeholder="搜索文章..." style="width:100%;padding:8px 30px 8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px" onfocus="blogSearchExpand()" oninput="blogSearchSyncClear()" onkeydown="blogSearchKeydown(event)">' +
+        '<span class="blog-search-clear" id="blogSearchClearBtn" style="display:none" onclick="blogSearchClear()"><iconify-icon icon="ph:x-fill"></iconify-icon></span>' +
+      '</div>' +
+      '<div id="blogSearchPanel" class="blog-search-panel" style="display:none"></div>' +
+    '</div>' +
+    '<div id="blogSidebarRest">' +
     '<div class="sidebar-section">' +
       '<div class="sidebar-section-title"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon> 小肥羊讲堂</div>' +
       '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowList(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon"><iconify-icon icon="ph:clipboard-text-fill"></iconify-icon></span><span class="sidebar-item-text">文章列表</span></div>' +
@@ -3351,11 +3511,8 @@ function renderBlogView(sidebar, main) {
       '<div id="blogSidebarCategories" style="font-size:12px;color:var(--text-faint)">加载中...</div>' +
     '</div>' +
     '<div class="sidebar-section">' +
-      '<div class="sidebar-section-title"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 搜索</div>' +
-      '<input id="blogSearchInput" type="text" placeholder="搜索文章..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px" onkeyup="if(event.key===\'Enter\')blogLoadList()">' +
-    '</div>' +
-    '<div class="sidebar-section">' +
       '<div id="blogSidebarAnnouncements" style="font-size:12px;color:var(--text-faint)">加载公告中...</div>' +
+    '</div>' +
     '</div>';
 
   // 主区域：博客内容
@@ -3375,6 +3532,106 @@ function renderBlogView(sidebar, main) {
   blogLoadSidebarCategories();
   // 加载侧边栏公告摘要
   blogLoadSidebarAnnouncements();
+}
+
+// ===== 小肥羊讲堂：侧栏搜索（展开/历史/推荐）=====
+function blogGetSearchHistory() {
+  try { var h = JSON.parse(localStorage.getItem('blog_search_history') || '[]'); return Array.isArray(h) ? h : []; } catch(e) { return []; }
+}
+function blogSaveSearchHistory(q) {
+  if (!q) return;
+  try {
+    var h = blogGetSearchHistory().filter(function(x) { return x !== q; });
+    h.unshift(q);
+    if (h.length > 10) h = h.slice(0, 10);
+    localStorage.setItem('blog_search_history', JSON.stringify(h));
+  } catch(e) {}
+}
+function blogClearSearchHistory() {
+  try { localStorage.removeItem('blog_search_history'); } catch(e) {}
+  blogSearchRenderPanel();
+}
+function blogSearchExpand() {
+  var rest = document.getElementById('blogSidebarRest');
+  if (rest) rest.style.display = 'none';
+  var panel = document.getElementById('blogSearchPanel');
+  if (panel) { panel.style.display = ''; blogSearchRenderPanel(); }
+  blogSearchSyncClear();
+  // 点击搜索区外自动收起（只绑定一次）
+  if (!window.__blogSearchOutsideBound) {
+    window.__blogSearchOutsideBound = true;
+    document.addEventListener('click', function(e) {
+      var sec = document.getElementById('blogSearchSection');
+      if (sec && !sec.contains(e.target)) blogSearchCollapse();
+    });
+  }
+}
+function blogSearchCollapse() {
+  var rest = document.getElementById('blogSidebarRest');
+  if (rest) rest.style.display = '';
+  var panel = document.getElementById('blogSearchPanel');
+  if (panel) panel.style.display = 'none';
+}
+function blogSearchSyncClear() {
+  var input = document.getElementById('blogSearchInput');
+  var btn = document.getElementById('blogSearchClearBtn');
+  if (btn && input) btn.style.display = input.value.trim() ? '' : 'none';
+}
+function blogSearchClear() {
+  var input = document.getElementById('blogSearchInput');
+  if (input) { input.value = ''; input.focus(); }
+  blogSearchSyncClear();
+}
+function blogSearchKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); blogSearchSubmit(); }
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    var input = document.getElementById('blogSearchInput');
+    if (input && input.value.trim()) { input.value = ''; blogSearchSyncClear(); blogSearchRenderPanel(); }
+    else { if (input) input.blur(); blogSearchCollapse(); }
+  } else { blogSearchSyncClear(); }
+}
+function blogSearchSubmit() {
+  var input = document.getElementById('blogSearchInput');
+  var q = input ? input.value.trim() : '';
+  if (q) blogSaveSearchHistory(q);
+  // 同步主区搜索框（若在列表页）
+  var mainInput = document.getElementById('blogSearchInputMain');
+  if (mainInput) mainInput.value = q;
+  if (input) input.blur();
+  blogSearchCollapse();
+  blogSearchSyncClear();
+  if (blogState.currentView === 'list') { blogLoadList(); }
+  else if (blogState.container) { blogShowList(blogState.container); }
+}
+function blogSearchPick(q) {
+  var input = document.getElementById('blogSearchInput');
+  if (input) input.value = q;
+  blogSearchSubmit();
+}
+function blogSearchRenderPanel() {
+  var panel = document.getElementById('blogSearchPanel');
+  if (!panel) return;
+  var hist = blogGetSearchHistory();
+  var recos = (blogState.categories && blogState.categories.length)
+    ? blogState.categories.slice(0, 8).map(function(c) { return c.name; })
+    : ['教程', '攻略', '公告', '新手指南'];
+  var html = '';
+  if (hist.length) {
+    html += '<div class="blog-search-group"><div class="blog-search-group-title"><iconify-icon icon="ph:clock-counter-clockwise-fill"></iconify-icon> 搜索历史<button class="blog-search-clearhist" onclick="blogClearSearchHistory()">清空</button></div>' +
+      '<div class="blog-search-chips">' + hist.map(function(q) {
+        return '<button class="blog-search-chip" data-q="' + esc(q) + '"><iconify-icon icon="ph:magnifying-glass"></iconify-icon> ' + esc(q) + '</button>';
+      }).join('') + '</div></div>';
+  }
+  html += '<div class="blog-search-group"><div class="blog-search-group-title"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 推荐搜索</div>' +
+    '<div class="blog-search-chips">' + recos.map(function(q) {
+      return '<button class="blog-search-chip" data-q="' + esc(q) + '"><iconify-icon icon="ph:fire-fill"></iconify-icon> ' + esc(q) + '</button>';
+    }).join('') + '</div></div>';
+  panel.innerHTML = html;
+  // data-q 属性委托（避免把引号拼进 onclick）
+  panel.querySelectorAll('.blog-search-chip').forEach(function(btn) {
+    btn.addEventListener('click', function() { blogSearchPick(this.getAttribute('data-q') || ''); });
+  });
 }
 
 // 侧边栏公告摘要
@@ -3412,7 +3669,7 @@ async function blogShowList(container) {
     window.__blogSunEditor = null;
   }
   blogState.currentView = 'list';
-  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+  var isDev = isSiteAdmin();
   var isPunished = currentUser && currentUser.privacy_setting === 'punished_stealth';
   container.innerHTML =
     '<div id="blogListView">' +
@@ -3425,7 +3682,19 @@ async function blogShowList(container) {
         '</div>' +
       '</div>' +
       '<div id="blogAnnouncementMgr" style="display:none;margin-bottom:16px"></div>' +
-      '<input id="blogSearchInput" type="text" placeholder="搜索文章..." style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;margin-bottom:16px" onkeyup="if(event.key===\'Enter\')blogLoadList()">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<input id="blogSearchInputMain" type="text" placeholder="搜索文章..." style="flex:1;min-width:180px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px" onkeydown="if(event.key===\'Enter\')blogLoadList()">' +
+        '<div class="blog-view-toggle" role="tablist" aria-label="视图切换">' +
+          '<button class="wf-toggle-btn' + (blogState.viewMode === 'list' ? ' active' : '') + '" onclick="blogSetViewMode(\'list\')" title="列表视图"><iconify-icon icon="ph:list-bullets-fill"></iconify-icon> 列表</button>' +
+          '<button class="wf-toggle-btn' + (blogState.viewMode === 'waterfall' ? ' active' : '') + '" onclick="blogSetViewMode(\'waterfall\')" title="瀑布流视图"><iconify-icon icon="ph:columns-fill"></iconify-icon> 瀑布流</button>' +
+        '</div>' +
+        (blogState.viewMode === 'waterfall'
+          ? '<div class="blog-view-toggle" role="tablist" aria-label="卡片形态">' +
+              '<button class="wf-toggle-btn' + (blogState.cardMode === 'column' ? ' active' : '') + '" onclick="blogSetCardStyle(\'column\')" title="专栏横版卡"><iconify-icon icon="ph:article-fill"></iconify-icon> 专栏</button>' +
+              '<button class="wf-toggle-btn' + (blogState.cardMode === 'book' ? ' active' : '') + '" onclick="blogSetCardStyle(\'book\')" title="书籍竖版卡"><iconify-icon icon="ph:book-open-fill"></iconify-icon> 书籍</button>' +
+            '</div>'
+          : '') +
+      '</div>' +
       '<div id="blogListArea"><div style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div></div>' +
     '</div>';
   blogLoadAnnouncements();
@@ -3544,13 +3813,114 @@ function blogRenderCard(p, isDev) {
   '</div>';
 }
 
+// --- 视图/形态切换（持久化）---
+function blogSetViewMode(mode) {
+  blogState.viewMode = (mode === 'waterfall') ? 'waterfall' : 'list';
+  try { localStorage.setItem('blog_view_mode', blogState.viewMode); } catch(e) {}
+  if (blogState.container) blogShowList(blogState.container);
+}
+function blogSetCardStyle(style) {
+  blogState.cardMode = (style === 'book') ? 'book' : 'column';
+  try { localStorage.setItem('blog_card_mode', blogState.cardMode); } catch(e) {}
+  if (blogState.container) blogShowList(blogState.container);
+}
+
+// --- 搜索值：侧栏优先，回退主区 ---
+function blogGetSearchValue() {
+  var sidebar = document.getElementById('blogSearchInput');
+  if (sidebar && sidebar.value.trim()) return sidebar.value.trim();
+  var main = document.getElementById('blogSearchInputMain');
+  if (main) return main.value.trim();
+  return '';
+}
+
+// --- 渐变书封生成（非紫系 6 组，按文章 id 取色）---
+function blogCoverGrad(id) {
+  var grads = [
+    'linear-gradient(135deg, #ff8a4c 0%, #ff5e3a 100%)',
+    'linear-gradient(135deg, #2dd4bf 0%, #0e9aa7 100%)',
+    'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)',
+    'linear-gradient(135deg, #f472b6 0%, #e11d48 100%)',
+    'linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)',
+    'linear-gradient(135deg, #a3e635 0%, #16a34a 100%)'
+  ];
+  var n = 0;
+  var s = String(id == null ? '' : id);
+  for (var i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+  return grads[n % grads.length];
+}
+
+// --- 列表项渲染分派 ---
+function blogRenderItem(p, isDev) {
+  if (blogState.viewMode === 'waterfall') return blogRenderWaterfallCard(p, isDev);
+  return blogRenderCard(p, isDev);
+}
+
+// --- 瀑布流卡片（专栏=横版杂志卡 / 书籍=竖版书封卡）---
+function blogRenderWaterfallCard(p, isDev) {
+  var tags = blogParseTags(p.tags);
+  var isAuthor = currentUser && p.author_id == currentUser.id;
+  var canSeeStatus = isAuthor || isDev;
+  var statusBadge = '';
+  if (canSeeStatus && p.status === 'pending') {
+    statusBadge = '<span class="wf-badge wf-badge-warn"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 待审核</span>';
+  } else if (canSeeStatus && p.status === 'rejected') {
+    statusBadge = '<span class="wf-badge wf-badge-danger"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 已驳回</span>';
+  }
+  var catName = p.category_name || blogCategoryName(p.category_id);
+  var open = 'blogShowPost(blogState.container,' + p.id + ')';
+  var meta = '<div class="wf-meta"><span>' + esc(p.author_name) + '</span><span>· ' + blogFormatDate(p.created_at) + '</span><span><iconify-icon icon="ph:eye-fill"></iconify-icon> ' + (p.views || 0) + '</span></div>';
+
+  if (blogState.cardMode === 'book') {
+    var cover;
+    if (p.cover_image) {
+      cover = '<div class="wf-cover" style="background:' + blogCoverGrad(p.id) + '">' +
+        '<img src="' + imgProxyUrl(esc(p.cover_image)) + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<div class="wf-cover-title">' + esc(p.title) + '</div>' +
+      '</div>';
+    } else {
+      cover = '<div class="wf-cover wf-gen" style="background:' + blogCoverGrad(p.id) + '">' +
+        '<div class="wf-gen-spine"></div>' +
+        '<div class="wf-gen-title">' + esc(p.title) + '</div>' +
+        '<div class="wf-gen-author">' + esc(p.author_name) + '</div>' +
+      '</div>';
+    }
+    return '<div class="wf-card wf-book" onclick="' + open + '">' +
+      cover +
+      '<div class="wf-book-body">' +
+        '<div class="wf-title">' + esc(p.title) + '</div>' +
+        meta +
+        (catName || statusBadge ? '<div class="wf-foot">' + (catName ? '<span class="wf-cat">' + esc(catName) + '</span>' : '') + statusBadge + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // 专栏：横版杂志卡
+  var media = p.cover_image
+    ? '<div class="wf-media" style="background:' + blogCoverGrad(p.id) + '"><img src="' + imgProxyUrl(esc(p.cover_image)) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></div>'
+    : '<div class="wf-media wf-media-gen" style="background:' + blogCoverGrad(p.id) + '"><span>' + esc(p.title) + '</span></div>';
+  return '<div class="wf-card wf-col" onclick="' + open + '">' +
+    media +
+    '<div class="wf-col-body">' +
+      '<div class="wf-title">' + esc(p.title) + '</div>' +
+      (p.summary ? '<div class="wf-summary">' + esc(p.summary) + '</div>' : '') +
+      meta +
+      ((catName || tags.length || statusBadge) ? '<div class="wf-foot">' +
+        (catName ? '<span class="wf-cat">' + esc(catName) + '</span>' : '') +
+        tags.slice(0, 3).map(function(t) { return '<span class="wf-tag">' + esc(t) + '</span>'; }).join('') +
+        statusBadge +
+      '</div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
 // --- 加载博客列表（支持分页加载更多）---
 async function blogLoadList(loadMore) {
-  var searchInput = document.getElementById('blogSearchInput');
-  var search = searchInput ? searchInput.value.trim() : '';
+  var search = blogGetSearchValue();
   var area = document.getElementById('blogListArea');
   if (!area) return;
-  var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+  var isDev = isSiteAdmin();
+  var wfMode = blogState.viewMode === 'waterfall';
   // 加载更多时防止重复请求
   if (loadMore && (blogState.listLoading || !blogState.listHasMore)) return;
   var page = loadMore ? blogState.listPage + 1 : 1;
@@ -3559,7 +3929,8 @@ async function blogLoadList(loadMore) {
     blogState.listLoading = true;
     if (moreEl) moreEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-faint);font-size:13px">加载中...</div>';
   } else {
-    area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">加载中...</div>';
+    area.className = wfMode ? 'blog-waterfall mode-' + blogState.cardMode : '';
+    area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)' + (wfMode ? ';column-span:all' : '') + '">加载中...</div>';
   }
   try {
     var url = '/api/blog?page=' + page + '&page_size=20';
@@ -3585,6 +3956,7 @@ async function blogLoadList(loadMore) {
 
     if (page === 1) {
       if (posts.length === 0) {
+        area.className = '';
         area.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">' + (search ? '没有找到相关文章' : '还没有文章，快来写第一篇吧！') + '</div>';
         blogState.listPage = 1;
         blogState.listHasMore = false;
@@ -3596,12 +3968,26 @@ async function blogLoadList(loadMore) {
         var tb = new Date((b.created_at || '').replace(' ', 'T')).getTime() || 0;
         return tb - ta;
       });
-      area.innerHTML = posts.map(function(p) { return blogRenderCard(p, isDev); }).join('');
+      var itemsHtml = posts.map(function(p) { return blogRenderItem(p, isDev); }).join('');
+      if (wfMode) {
+        area.className = 'blog-waterfall mode-' + blogState.cardMode;
+        area.innerHTML = '<div id="blogWaterfallGrid">' + itemsHtml + '</div>';
+      } else {
+        area.className = '';
+        area.innerHTML = itemsHtml;
+      }
     } else {
-      // 追加渲染：插入到加载更多区域之前
-      var cardsHtml = posts.map(function(p) { return blogRenderCard(p, isDev); }).join('');
-      if (moreEl) moreEl.insertAdjacentHTML('beforebegin', cardsHtml);
-      else area.insertAdjacentHTML('beforeend', cardsHtml);
+      // 追加渲染：列表插入到加载更多之前；瀑布流追加进 grid
+      var cardsHtml = posts.map(function(p) { return blogRenderItem(p, isDev); }).join('');
+      if (wfMode) {
+        var grid = document.getElementById('blogWaterfallGrid');
+        if (grid) grid.insertAdjacentHTML('beforeend', cardsHtml);
+        else area.insertAdjacentHTML('beforeend', cardsHtml);
+      } else if (moreEl) {
+        moreEl.insertAdjacentHTML('beforebegin', cardsHtml);
+      } else {
+        area.insertAdjacentHTML('beforeend', cardsHtml);
+      }
     }
 
     blogState.listPage = page;
@@ -3875,7 +4261,7 @@ async function blogShowPost(container, postId) {
     var p = res.data;
     var tags = blogParseTags(p.tags);
     var isAuthor = currentUser && p.author_id == currentUser.id;
-    var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+    var isDev = isSiteAdmin();
     var canManage = isAuthor || isDev;
 
     // 审核状态横幅（仅 pending / rejected 显示）
@@ -4401,7 +4787,7 @@ async function blogLoadComments(postId) {
   try {
     var res = await api('/api/blog/comments?post_id=' + postId);
     var comments = (res.success && res.data) ? res.data : [];
-    var isDev = currentUser && (currentUser.is_developer === 1 || currentUser.is_developer === true || currentUser.is_developer === '1');
+    var isDev = isSiteAdmin();
 
     // 构建嵌套评论树
     var topComments = comments.filter(function(c) { return !c.parent_id || c.parent_id === 0; });
@@ -5343,6 +5729,11 @@ async function loadSettings() {
     document.getElementById('settingsNotifications').innerHTML = '';
   }
   
+  // v9.2 全局设置：第5个「全局」tab 仅站务管理员可见（非管理员强制回账号栏）
+  var siteTabBtn = document.getElementById('settingsSiteTab');
+  if (siteTabBtn) siteTabBtn.style.display = isSiteAdmin() ? '' : 'none';
+  if (!isSiteAdmin() && settingsTab === 'site') settingsTab = 'account';
+
   switchSettingsTab('account');
 }
 
@@ -5892,8 +6283,8 @@ let devTab = 'announcements';
 
 async function showModal(name) {
   if (name === 'developer') {
-    if (!isDeveloper()) {
-      toast('只有开发者才能访问此功能', 'error');
+    if (!isSiteAdmin()) {
+      toast('仅开发者或全局管理员可访问', 'error');
       return;
     }
     document.getElementById('developerModal').style.display = 'flex';
@@ -6032,6 +6423,8 @@ async function loadDeveloperContent() {
     await loadTempModeManager();
   } else if (devTab === 'publicchannels') {
     await loadPublicChannelsManager();
+  } else if (devTab === 'globaladmins') {
+    await loadGlobalAdminsManager();
   } else {
     await loadPagesManager();
   }
@@ -6042,11 +6435,205 @@ async function switchDevTab(tab, btnEl) {
   document.querySelectorAll('#developerModal .tab').forEach(t => t.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
   else {
-    const tabMap = { announcements: 0, features: 1, pages: 2, tempmode: 3, publicchannels: 4 };
+    const tabMap = { announcements: 0, features: 1, pages: 2, tempmode: 3, publicchannels: 4, globaladmins: 5 };
     const tabIndex = tabMap[tab] ?? 0;
     document.querySelectorAll('#developerModal .tab')[tabIndex]?.classList.add('active');
   }
   await loadDeveloperContent();
+}
+
+// ===== 全局管理员管理（v9.2） =====
+var _gaState = { q: '' };
+var _gaStepupResolver = null;
+
+// 带会话 + step-up 的原生请求（api() 会丢掉 status/need_stepup，故单列）
+async function _gaFetch(path, options) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('dp_token');
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const st = sessionStorage.getItem('dp_stepup');
+  if (st) headers['X-Stepup-Token'] = st;
+  const res = await fetch(path, Object.assign({}, options, { headers: headers }));
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  return { status: res.status, data: data };
+}
+
+// 内嵌二次验证框（密码，需 TOTP 时展开动态码行）→ 拿到新 stepup_token
+function _gaStepup() {
+  return new Promise(function(resolve) {
+    const box = document.getElementById('gaStepupBox');
+    if (!box) { resolve(null); return; }
+    box.style.display = '';
+    const err = document.getElementById('gaStepupErr');
+    if (err) err.innerHTML = '';
+    const totpRow = document.getElementById('gaTotpRow');
+    if (totpRow) totpRow.style.display = 'none';
+    const pwd = document.getElementById('gaStepupPwd');
+    if (pwd) { pwd.value = ''; pwd.focus(); }
+    _gaStepupResolver = resolve;
+  });
+}
+
+function _gaStepupClose(token) {
+  const box = document.getElementById('gaStepupBox');
+  if (box) box.style.display = 'none';
+  const r = _gaStepupResolver;
+  _gaStepupResolver = null;
+  if (r) r(token);
+}
+
+async function _gaStepupSubmit() {
+  const pwd = (document.getElementById('gaStepupPwd') || {}).value || '';
+  const totp = (document.getElementById('gaStepupTotp') || {}).value || '';
+  const errEl = document.getElementById('gaStepupErr');
+  if (!pwd) { if (errEl) errEl.innerHTML = '<div class="form-error">请输入密码</div>'; return; }
+  try {
+    const r = await _gaFetch('/api/developer/gate', {
+      method: 'POST',
+      body: JSON.stringify({ password: pwd, totp: totp || undefined }),
+    });
+    if (r.status === 200 && r.data && r.data.success && r.data.data && r.data.data.stepup_token) {
+      sessionStorage.setItem('dp_stepup', r.data.data.stepup_token);
+      _gaStepupClose(r.data.data.stepup_token);
+      return;
+    }
+    const msg = (r.data && r.data.error) || ('验证失败 (' + r.status + ')');
+    if (r.data && r.data.need_totp) {
+      const row = document.getElementById('gaTotpRow');
+      if (row) row.style.display = '';
+    }
+    if (errEl) errEl.innerHTML = '<div class="form-error">' + esc(msg) + '</div>';
+  } catch (e) {
+    if (errEl) errEl.innerHTML = '<div class="form-error">' + esc(e.message || '网络错误') + '</div>';
+  }
+}
+
+// grant / revoke：need_stepup 时弹内嵌验证并重试一次
+async function _gaAction(action, userId) {
+  const doFetch = function() {
+    return _gaFetch('/api/developer/global-admins', {
+      method: 'POST',
+      body: JSON.stringify({ action: action, user_id: userId }),
+    });
+  };
+  let r;
+  try {
+    r = await doFetch();
+  } catch (e) {
+    toast(e.message || '网络错误', 'error');
+    return;
+  }
+  if (r.status === 403 && r.data && r.data.need_stepup) {
+    const tok = await _gaStepup();
+    if (!tok) { toast('已取消身份验证', 'info'); return; }
+    try { r = await doFetch(); } catch (e2) { toast(e2.message || '网络错误', 'error'); return; }
+  }
+  if (r.status === 200 && r.data && r.data.success) {
+    toast(action === 'grant' ? '已授予全局管理员' : '已撤销全局管理员', 'success');
+    _gaState.q = '';
+    await loadGlobalAdminsManager();
+  } else {
+    toast((r.data && r.data.error) || ('操作失败 (' + r.status + ')'), 'error');
+  }
+}
+
+function gaGrant(userId) { _gaAction('grant', userId); }
+function gaRevoke(userId) { _gaAction('revoke', userId); }
+
+async function gaSearch() {
+  const inp = document.getElementById('gaSearchInput');
+  _gaState.q = inp ? inp.value.trim() : '';
+  await loadGlobalAdminsManager();
+}
+
+async function loadGlobalAdminsManager() {
+  const el = document.getElementById('developerContent');
+  if (!el) return;
+  const q = _gaState.q;
+  let r;
+  try {
+    r = await _gaFetch('/api/developer/global-admins' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  } catch (e) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text-faint)">网络错误：' + esc(e.message || '') + '</div>';
+    return;
+  }
+  if (!(r.status === 200 && r.data && r.data.success)) {
+    el.innerHTML = '<div style="padding:16px;color:var(--danger)">' + esc((r.data && r.data.error) || ('加载失败 (' + r.status + ')')) + '</div>';
+    return;
+  }
+  const admins = r.data.data.admins || [];
+  const matches = r.data.data.matches || [];
+  const canGrant = isDeveloper();
+
+  const flag = function(text, color) {
+    return '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:' + color + '22;color:' + color + '">' + text + '</span>';
+  };
+
+  let html = '<div style="padding:14px">';
+
+  // 搜索行
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px">'
+    + '<input class="input" id="gaSearchInput" placeholder="搜索账号 / 豆包ID" value="' + esc(q) + '" style="flex:1;font-size:13px" onkeydown="if(event.key===\'Enter\')gaSearch()">'
+    + '<button class="btn btn-sm btn-orange" onclick="gaSearch()"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 搜索</button>'
+    + '</div>';
+
+  // 内嵌二次验证框
+  html += '<div id="gaStepupBox" style="display:none;margin-bottom:12px;padding:12px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-primary)">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:8px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 二次验证</div>'
+    + '<div style="display:flex;gap:6px;margin-bottom:6px">'
+    + '<input type="password" id="gaStepupPwd" class="input" placeholder="登录密码" maxlength="32" style="flex:1;font-size:13px" autocomplete="current-password">'
+    + '<button class="btn btn-sm btn-orange" onclick="_gaStepupSubmit()">确认</button>'
+    + '<button class="btn btn-sm btn-gray" onclick="_gaStepupClose(null)">取消</button>'
+    + '</div>'
+    + '<div id="gaTotpRow" style="display:none;margin-bottom:6px"><input id="gaStepupTotp" class="input" placeholder="动态验证码" maxlength="6" inputmode="numeric" style="width:100%;font-size:13px"></div>'
+    + '<div id="gaStepupErr"></div>'
+    + '</div>';
+
+  // 搜索结果
+  if (q) {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:6px"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 搜索结果</div>';
+    if (!matches.length) {
+      html += '<div style="font-size:12px;color:var(--text-faint);padding:6px 0 12px">无匹配账号</div>';
+    } else {
+      matches.forEach(function(m) {
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:6px;background:var(--bg-primary)">'
+          + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + esc(m.name || '') + '</div>'
+          + '<div style="font-size:11px;color:var(--text-faint)">' + esc(m.doubao_id || '') + '</div></div>'
+          + (m.is_developer ? flag('开发者', 'var(--accent)') : '')
+          + (m.is_global_admin ? flag('已授权', 'var(--success)') : '')
+          + (m.locked ? flag('已限制', 'var(--danger)') : '')
+          + (canGrant && !m.is_developer && !m.is_global_admin && !m.locked
+              ? '<button class="btn btn-sm btn-orange" onclick="gaGrant(\'' + m.id + '\')"><iconify-icon icon="ph:shield-check-fill"></iconify-icon> 授予</button>'
+              : '')
+          + '</div>';
+      });
+    }
+    html += '<div style="height:1px;background:var(--border-color);margin:10px 0"></div>';
+  }
+
+  // 当前列表
+  html += '<div style="font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:6px"><iconify-icon icon="ph:shield-check-fill"></iconify-icon> 当前全局管理员（' + admins.length + '）</div>';
+  if (!admins.length) {
+    html += '<div style="font-size:12px;color:var(--text-faint);padding:6px 0">暂无，搜索账号后授予</div>';
+  } else {
+    admins.forEach(function(a) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:6px;background:var(--bg-primary)">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + esc(a.name || '') + '</div>'
+        + '<div style="font-size:11px;color:var(--text-faint)">' + esc(a.doubao_id || '') + '</div></div>'
+        + (a.is_developer === 1 || a.is_developer === '1' || a.is_developer === true ? flag('开发者', 'var(--accent)') : '')
+        + (canGrant && !(a.is_developer === 1 || a.is_developer === '1' || a.is_developer === true)
+            ? '<button class="btn btn-sm btn-gray" onclick="gaRevoke(\'' + a.id + '\')"><iconify-icon icon="ph:shield-slash-fill"></iconify-icon> 撤销</button>'
+            : '')
+        + '</div>';
+    });
+  }
+
+  if (!canGrant) {
+    html += '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">全局管理员可查看名单；授予与撤销仅限开发者操作</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 // ===== 公开频道管理 =====
@@ -7596,7 +8183,8 @@ async function renderChatContextPanel(room) {
   var isAdmin = room.is_admin;
   var isOwner = room.created_by === currentUser.id;
   var isDev = isDeveloper();
-  var canManage = isAdmin || isOwner || isDev;
+  var isSiteAdm = isSiteAdmin();
+  var canManage = isAdmin || isOwner || isSiteAdm;
 
   // 权限身份标签
   var roleTag = '';
@@ -8103,15 +8691,16 @@ function renderMsgHTML(m, roomId) {
     moreActions += '<div class="chat-more-menu-item chat-more-danger" onclick="event.stopPropagation();recallMessage(\'' + eid + '\',\'' + rid + '\')"><iconify-icon icon="ph:trash-fill"></iconify-icon> 撤回</div>';
   }
   var moreBtn = moreActions ? '<div class="chat-more-wrapper" onclick="event.stopPropagation();var m=this.querySelector(\'.chat-more-menu\');if(m.style.display===\'block\'){m.style.display=\'none\'}else{m.style.display=\'block\'}" style="position:relative;display:inline-block"><button class="chat-msg-action">⋯</button><div class="chat-more-menu" style="display:none">' + moreActions + '</div></div>' : '';
+  var avatarClickAttr = ' onclick="avatarMsgClick(event,\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender || '') + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')"';
   var avatarHtml;
   if (isMine) {
     avatarHtml = currentUser.avatar
-      ? '<img class="chat-msg-avatar" src="' + imgProxyUrl(esc(currentUser.avatar)) + '" onerror="this.style.display=\'none\'" alt="">'
-      : '<div class="chat-msg-avatar" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(currentUser.name.charAt(0)) + '</div>';
+      ? '<img class="chat-msg-avatar"' + avatarClickAttr + ' src="' + imgProxyUrl(esc(currentUser.avatar)) + '" onerror="this.style.display=\'none\'" alt="">'
+      : '<div class="chat-msg-avatar"' + avatarClickAttr + ' style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(currentUser.name.charAt(0)) + '</div>';
   } else if (m.sender_avatar) {
-    avatarHtml = '<img class="chat-msg-avatar" src="' + imgProxyUrl(esc(m.sender_avatar)) + '" onerror="this.style.display=\'none\'" alt="">';
+    avatarHtml = '<img class="chat-msg-avatar"' + avatarClickAttr + ' src="' + imgProxyUrl(esc(m.sender_avatar)) + '" onerror="this.style.display=\'none\'" alt="">';
   } else {
-    avatarHtml = '<div class="chat-msg-avatar" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(m.sender.charAt(0)) + '</div>';
+    avatarHtml = '<div class="chat-msg-avatar"' + avatarClickAttr + ' style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);color:#fff;font-size:14px;font-weight:700">' + esc(m.sender.charAt(0)) + '</div>';
   }
   return '<div class="chat-msg ' + side + '" data-eid="' + esc(m.event_id || '') + '">' +
     '<div class="chat-msg-inner" style="display:flex;align-items:flex-start;gap:8px' + (isMine ? ';flex-direction:row-reverse' : '') + '">' +
@@ -9917,7 +10506,7 @@ async function setChannelAdmin(targetUserId) {
   if (!chatState.currentRoomId) return;
   var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
   if (myLevel < 2) { toast('只有频道创建者及以上才能设置管理员', 'error'); return; }
-  const { error } = await __SB.from('chat_admins').insert({ id: 'admin_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), room_id: chatState.currentRoomId, user_id: targetUserId, set_by: currentUser.id });
+  const { error } = await __SB.from('chat_admins').upsert({ id: 'admin_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), room_id: chatState.currentRoomId, user_id: targetUserId, set_by: currentUser.id }, { onConflict: 'room_id,user_id' });
   if (error) { toast('设置失败: ' + error.message, 'error'); return; }
   loadRoomMemberList(chatState.currentRoomId);
   toast('已设为管理员', 'success');
@@ -11940,7 +12529,7 @@ switchSettingsTab = function(tab, btnEl) {
   if (btnEl) btnEl.classList.add('active');
   else {
     var els = document.querySelectorAll('#settingsModal .tab');
-    var idxMap = { account: 0, friends: 1, channels: 2, blocks: 3 };
+    var idxMap = { account: 0, friends: 1, channels: 2, blocks: 3, site: 4 };
     var idx = idxMap[tab] !== undefined ? idxMap[tab] : 0;
     if (els[idx]) els[idx].classList.add('active');
   }
@@ -11957,8 +12546,384 @@ switchSettingsTab = function(tab, btnEl) {
     loadChannelsWithGroups(el);
   } else if (tab === 'blocks') {
     loadBlocksTab(el);
+  } else if (tab === 'site') {
+    // v9.2 全局设置五栏
+    renderSiteSettingsTab(el);
   }
 };
+
+// ===== v9.2 全局设置五栏（站点信息/页脚/SEO/社交/其他） =====
+var gsData = { footer: [], social: [] };   // 页脚链接 / 社交链接行编辑缓冲
+var gsLiuyanState = true;                  // liuyan 聚合开关（编辑态）
+
+function gsParseArr(v) {
+  if (Array.isArray(v)) return v;
+  try { var a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function gsVal(id) { var el = document.getElementById(id); return el ? String(el.value).trim() : ''; }
+function gsLinkOk(u) { return typeof u === 'string' && u.length > 0 && u.length <= 300 && (/^https?:\/\//i.test(u) || u.charAt(0) === '/'); }
+
+function gsHdr(icon, title, key) {
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+    '<div style="width:32px;height:32px;border-radius:10px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px;flex-shrink:0"><iconify-icon icon="' + icon + '"></iconify-icon></div>' +
+    '<div style="flex:1;font-size:14px;font-weight:600;color:var(--text-primary)">' + title + '</div>' +
+    '<button class="btn btn-orange btn-sm" id="gsSave_' + key + '" onclick="saveSiteSection(\'' + key + '\')">保存</button></div>';
+}
+function gsField(label, id, val, placeholder, maxLen, hint) {
+  return '<div class="form-group" style="margin-bottom:12px"><label class="form-label">' + label + '</label>' +
+    '<input class="input" id="' + id + '" maxlength="' + maxLen + '" value="' + esc(val || '') + '" placeholder="' + esc(placeholder) + '">' +
+    (hint ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">' + hint + '</div>' : '') + '</div>';
+}
+function gsBtnSm() { return 'background:var(--bg-input);border:1px solid var(--border);color:var(--text-primary)'; }
+
+// 行编辑器：把 DOM 行回填进 gsData[kind]
+function gsSyncRows(kind) {
+  var cid = kind === 'social' ? 'gsSocialRows' : 'gsFooterRows';
+  var c = document.getElementById(cid);
+  if (!c) return;
+  var out = [];
+  c.querySelectorAll('.gs-row').forEach(function(r) {
+    var iconEl = r.querySelector('.gs-i-icon');
+    var labelEl = r.querySelector('.gs-i-label');
+    var urlEl = r.querySelector('.gs-i-url');
+    var item = { label: labelEl ? labelEl.value.trim() : '', url: urlEl ? urlEl.value.trim() : '' };
+    if (iconEl) item.icon = iconEl.value.trim();
+    out.push(item);
+  });
+  gsData[kind] = out;
+}
+function gsRenderLinkRows(kind) {
+  var cid = kind === 'social' ? 'gsSocialRows' : 'gsFooterRows';
+  var c = document.getElementById(cid);
+  if (!c) return;
+  var items = gsData[kind] || [];
+  if (!items.length) {
+    c.innerHTML = '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">暂无条目，点击下方按钮添加</div>';
+    return;
+  }
+  c.innerHTML = items.map(function(it, i) {
+    var iconCol = kind === 'social'
+      ? '<input class="input gs-i-icon" placeholder="ph:xxx" maxlength="60" value="' + esc(it.icon || '') + '" style="width:130px;flex-shrink:0">'
+      : '';
+    return '<div class="gs-row" style="display:flex;gap:6px;margin-bottom:8px;align-items:center">' +
+      iconCol +
+      '<input class="input gs-i-label" placeholder="' + (kind === 'social' ? '名称(≤20字)' : '链接文字(≤40字)') + '" maxlength="' + (kind === 'social' ? 20 : 40) + '" value="' + esc(it.label || '') + '" style="width:130px;flex-shrink:0">' +
+      '<input class="input gs-i-url" placeholder="https://... 或 /path" maxlength="300" value="' + esc(it.url || '') + '" style="flex:1;min-width:0">' +
+      '<button class="btn btn-sm" style="color:var(--danger);flex-shrink:0" title="删除" onclick="gsRemoveRow(\'' + kind + '\',' + i + ')"><iconify-icon icon="ph:trash-fill"></iconify-icon></button></div>';
+  }).join('');
+}
+function gsAddRow(kind) {
+  gsSyncRows(kind);
+  if (kind === 'social') {
+    if (gsData.social.length >= 8) { toast('社交链接最多 8 条', 'error'); return; }
+    gsData.social.push({ icon: 'ph:link-simple-fill', label: '', url: '' });
+  } else {
+    if (gsData.footer.length >= 10) { toast('页脚链接最多 10 条', 'error'); return; }
+    gsData.footer.push({ label: '', url: '' });
+  }
+  gsRenderLinkRows(kind);
+}
+function gsRemoveRow(kind, i) {
+  gsSyncRows(kind);
+  gsData[kind].splice(i, 1);
+  gsRenderLinkRows(kind);
+}
+
+function gsSetLiuyan(on) {
+  gsLiuyanState = !!on;
+  var onBtn = document.getElementById('gsLiuyanOn');
+  var offBtn = document.getElementById('gsLiuyanOff');
+  if (onBtn) onBtn.className = 'btn btn-sm ' + (on ? 'btn-green' : 'btn-gray');
+  if (offBtn) offBtn.className = 'btn btn-sm ' + (on ? 'btn-gray' : 'btn-red');
+}
+
+function renderSiteSettingsTab(el) {
+  if (!isSiteAdmin()) {
+    el.innerHTML = '<div class="warning-box"><iconify-icon icon="ph:shield-warning-fill"></iconify-icon> 仅站务管理员可访问全局设置。</div>';
+    return;
+  }
+  var S = siteSettings || {};
+  gsData.footer = gsParseArr(S.footer_links);
+  gsData.social = gsParseArr(S.social_links);
+  gsLiuyanState = S.liuyan_enabled !== 'off';
+
+  el.innerHTML =
+    // ── 1 站点信息 ──
+    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:buildings-fill', '站点信息', 'site') +
+      gsField('站点名称', 'gsSiteName', S.site_name, '留空则使用默认「逗包用户广场」', 50) +
+      gsField('站点标语', 'gsSiteSlogan', S.site_slogan, '一句话介绍，展示在页脚', 120) +
+      gsField('Logo 图片链接', 'gsSiteLogoUrl', S.site_logo_url, 'https://... 或 / 相对路径', 300, '留空使用默认图标；需 http(s):// 或 / 开头') +
+      gsField('备案号', 'gsSiteIcp', S.site_icp, '如：京ICP备00000000号', 60, '留空则页脚不展示备案号') +
+    '</div>' +
+    // ── 2 页脚 ──
+    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:align-bottom', '页脚', 'footer') +
+      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">页脚文本</label>' +
+      '<textarea class="input" id="gsFooterText" rows="2" maxlength="1000" placeholder="页脚说明文字（≤1000字）" style="width:100%;resize:vertical">' + esc(S.footer_text || '') + '</textarea></div>' +
+      '<div class="form-group" style="margin-bottom:0"><label class="form-label">页脚链接（≤10 条）</label><div id="gsFooterRows"></div>' +
+      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsAddRow(\'footer\')"><iconify-icon icon="ph:plus-fill"></iconify-icon> 添加链接</button></div>' +
+    '</div>' +
+    // ── 3 SEO ──
+    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:magnifying-glass-fill', 'SEO', 'seo') +
+      gsField('SEO 标题', 'gsSeoTitle', S.seo_title, '搜索引擎展示标题（≤70字）', 70, '留空则使用「站点名称 - 描述」') +
+      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">SEO 描述</label>' +
+      '<textarea class="input" id="gsSeoDesc" rows="2" maxlength="200" placeholder="搜索结果摘要（≤200字）" style="width:100%;resize:vertical">' + esc(S.seo_description || '') + '</textarea></div>' +
+      gsField('SEO 关键词', 'gsSeoKw', S.seo_keywords, '逗号分隔，如：豆包,社交,广场', 200) +
+    '</div>' +
+    // ── 4 社交 ──
+    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:share-network-fill', '社交链接', 'social') +
+      '<div class="form-group" style="margin-bottom:0"><label class="form-label">社交入口（≤8 条，展示于页脚）</label><div id="gsSocialRows"></div>' +
+      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsAddRow(\'social\')"><iconify-icon icon="ph:plus-fill"></iconify-icon> 添加社交链接</button>' +
+      '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">图标填写 Iconify 名称（如 ph:github-logo-fill），留空则使用默认链接图标</div></div>' +
+    '</div>' +
+    // ── 5 其他（liuyan 聚合） ──
+    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:sliders-horizontal-fill', '其他', 'other') +
+      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">liuyan.coze.site 内容分类聚合</label>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+        '<button class="btn btn-sm ' + (gsLiuyanState ? 'btn-green' : 'btn-gray') + '" id="gsLiuyanOn" onclick="gsSetLiuyan(true)"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 开启聚合</button>' +
+        '<button class="btn btn-sm ' + (gsLiuyanState ? 'btn-gray' : 'btn-red') + '" id="gsLiuyanOff" onclick="gsSetLiuyan(false)"><iconify-icon icon="ph:prohibit-fill"></iconify-icon> 关闭聚合</button>' +
+      '</div></div>' +
+      gsField('过滤关键词', 'gsLiuyanExclude', S.liuyan_exclude != null ? S.liuyan_exclude : '宠物,娱乐,AI', '逗号分隔，命中的分类/频道/标签将被剔除', 100, '命中的分类会整类剔除，分类下命中频道单独剔除，标签命中剔除') +
+      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsPreviewLiuyan()"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 预览聚合结果</button>' +
+      '<div id="gsLiuyanPreview" style="margin-top:10px"></div>' +
+    '</div>';
+
+  gsRenderLinkRows('footer');
+  gsRenderLinkRows('social');
+}
+
+// 「其他」栏：实时预览服务端聚合结果（过滤词以服务端 site_settings 为准，保存后刷新预览）
+async function gsPreviewLiuyan() {
+  var box = document.getElementById('gsLiuyanPreview');
+  if (!box) return;
+  box.innerHTML = '<div style="font-size:12px;color:var(--text-faint)">聚合加载中…</div>';
+  try {
+    var res = await fetch('/api/liuyan').then(function(r) { return r.json(); });
+    if (!res.success) { box.innerHTML = '<div style="font-size:12px;color:var(--danger)">' + esc(res.error || '聚合失败') + '</div>'; return; }
+    var d = res.data || {};
+    if (d.enabled === false) { box.innerHTML = '<div style="font-size:12px;color:var(--text-faint)">聚合当前处于关闭状态</div>'; return; }
+    var cats = d.categories || [], tags = d.tags || [];
+    var catChips = cats.map(function(c) {
+      return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--bg-input);border:1px solid var(--border);font-size:12px;color:var(--text-primary)">' +
+        esc(c.name) + '<span style="color:var(--text-faint);font-size:11px">' + ((c.channels || []).length) + '频道</span></span>';
+    }).join('');
+    var tagChips = tags.map(function(t) {
+      return '<span style="display:inline-flex;padding:2px 8px;border-radius:999px;background:var(--accent-bg);font-size:11px;color:var(--accent)">' + esc(t) + '</span>';
+    }).join('');
+    box.innerHTML =
+      '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">已过滤关键词：' + esc((d.exclude || []).join('、') || '无') + ' · 分类 ' + cats.length + ' 个 · 标签 ' + tags.length + ' 个</div>' +
+      (catChips ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' + catChips + '</div>' : '<div style="font-size:12px;color:var(--text-faint)">无匹配分类</div>') +
+      (tagChips ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + tagChips + '</div>' : '');
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:12px;color:var(--danger)">' + esc(e.message) + '</div>';
+  }
+}
+
+// 分段保存：每次 PUT 只提交当前栏的白名单键
+async function saveSiteSection(key) {
+  if (!isSiteAdmin()) { toast('无权修改站点设置', 'error'); return; }
+  var body = {}, err = '';
+  if (key === 'site') {
+    body.site_name = gsVal('gsSiteName');
+    body.site_slogan = gsVal('gsSiteSlogan');
+    body.site_logo_url = gsVal('gsSiteLogoUrl');
+    body.site_icp = gsVal('gsSiteIcp');
+    if (body.site_logo_url && !gsLinkOk(body.site_logo_url)) err = 'Logo 链接需以 http(s):// 或 / 开头';
+  } else if (key === 'footer') {
+    var ft = document.getElementById('gsFooterText');
+    body.footer_text = ft ? ft.value.trim() : '';
+    gsSyncRows('footer');
+    var fl = gsData.footer.filter(function(it) { return it.label || it.url; });
+    if (fl.length > 10) err = '页脚链接最多 10 条';
+    for (var i = 0; !err && i < fl.length; i++) {
+      if (!fl[i].label) err = '页脚链接第 ' + (i + 1) + ' 条缺少链接文字';
+      else if (fl[i].label.length > 40) err = '页脚链接文字不能超过 40 字';
+      else if (!gsLinkOk(fl[i].url)) err = '页脚链接第 ' + (i + 1) + ' 条地址需以 http(s):// 或 / 开头';
+    }
+    body.footer_links = fl;
+  } else if (key === 'seo') {
+    body.seo_title = gsVal('gsSeoTitle');
+    var sd = document.getElementById('gsSeoDesc');
+    body.seo_description = sd ? sd.value.trim() : '';
+    body.seo_keywords = gsVal('gsSeoKw');
+  } else if (key === 'social') {
+    gsSyncRows('social');
+    var sl = gsData.social.filter(function(it) { return it.label || it.url; });
+    if (sl.length > 8) err = '社交链接最多 8 条';
+    for (var j = 0; !err && j < sl.length; j++) {
+      if (!sl[j].label) err = '社交链接第 ' + (j + 1) + ' 条缺少名称';
+      else if (sl[j].label.length > 20) err = '社交链接名称不能超过 20 字';
+      else if ((sl[j].icon || '').length > 60) err = '图标名称不能超过 60 字符';
+      else if (!gsLinkOk(sl[j].url)) err = '社交链接第 ' + (j + 1) + ' 条地址需以 http(s):// 或 / 开头';
+    }
+    body.social_links = sl;
+  } else if (key === 'other') {
+    body.liuyan_enabled = gsLiuyanState ? 'on' : 'off';
+    body.liuyan_exclude = gsVal('gsLiuyanExclude');
+  } else {
+    toast('未知的设置分组', 'error');
+    return;
+  }
+  if (err) { toast(err, 'error'); return; }
+
+  var btn = document.getElementById('gsSave_' + key);
+  if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
+  try {
+    var res = await api('/api/site-settings', { method: 'PUT', body: JSON.stringify(body) });
+    if (res.success) {
+      Object.assign(siteSettings, body);
+      toast('站点设置已保存');
+      if (typeof applySiteBranding === 'function') applySiteBranding();
+      if (typeof renderSiteFooter === 'function') renderSiteFooter();
+      if (key === 'other') gsPreviewLiuyan();
+    } else {
+      toast(res.error || '保存失败', 'error');
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+  }
+}
+
+// ===== v9.2 品牌应用（SEO/title/meta/logo，全局设置驱动） =====
+function applySiteBranding() {
+  var S = siteSettings || {};
+  var name = String(S.site_name || '').trim();
+  var seoTitle = String(S.seo_title || '').trim();
+  var seoDesc = String(S.seo_description || '').trim();
+  var seoKw = String(S.seo_keywords || '').trim();
+
+  document.title = seoTitle || (name ? name + ' - 逗包用户广场' : '逗包用户广场');
+
+  function setMeta(attr, key, val) {
+    if (!val) return;
+    var m = document.querySelector('meta[' + attr + '="' + key + '"]');
+    if (m) m.setAttribute('content', val);
+  }
+  if (seoDesc) {
+    setMeta('name', 'description', seoDesc);
+    setMeta('property', 'og:description', seoDesc);
+    setMeta('name', 'twitter:description', seoDesc);
+  }
+  if (seoTitle || name) {
+    var t = seoTitle || (name + ' - 逗包用户广场');
+    setMeta('property', 'og:title', t);
+    setMeta('name', 'twitter:title', t);
+  }
+  if (name) setMeta('property', 'og:site_name', name);
+  if (seoKw) setMeta('name', 'keywords', seoKw);
+
+  var logoText = document.querySelector('.logo-text');
+  if (logoText) logoText.textContent = name || '逗包用户广场';
+
+  var logoIcon = document.querySelector('.logo-icon');
+  if (logoIcon) {
+    if (!logoIcon.dataset.origHtml) logoIcon.dataset.origHtml = logoIcon.innerHTML;
+    var logoUrl = String(S.site_logo_url || '').trim();
+    if (logoUrl && (/^https?:\/\//i.test(logoUrl) || logoUrl.charAt(0) === '/')) {
+      logoIcon.innerHTML = '<img src="' + esc(logoUrl) + '" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" onerror="this.parentElement.innerHTML=this.parentElement.dataset.origHtml">';
+    } else {
+      logoIcon.innerHTML = logoIcon.dataset.origHtml;
+    }
+  }
+}
+
+// ===== v9.2 站点页脚渲染 =====
+function renderSiteFooter() {
+  var f = document.getElementById('siteFooter');
+  if (!f) return;
+  var S = siteSettings || {};
+  var name = String(S.site_name || '').trim();
+  var slogan = String(S.site_slogan || '').trim();
+  var footText = String(S.footer_text || '').trim();
+  var icp = String(S.site_icp || '').trim();
+  var links = gsParseArr(S.footer_links);
+  var socials = gsParseArr(S.social_links);
+  var wantLiuyan = S.liuyan_enabled !== 'off';
+
+  var hasStatic = !!(name || slogan || footText || icp || links.length || socials.length);
+  if (!hasStatic && !wantLiuyan) { f.style.display = 'none'; f.innerHTML = ''; document.body.classList.remove('has-footer'); return; }
+
+  var logoUrl = String(S.site_logo_url || '').trim();
+  var html = '<div class="site-footer-inner">';
+
+  html += '<div class="site-footer-row">';
+  if (name || slogan) {
+    html += '<div class="site-footer-brand">';
+    if (logoUrl && (/^https?:\/\//i.test(logoUrl) || logoUrl.charAt(0) === '/')) {
+      html += '<img class="site-footer-logo" src="' + esc(logoUrl) + '" alt="" onerror="this.remove()">';
+    }
+    if (name) html += '<span class="site-footer-name">' + esc(name) + '</span>';
+    if (slogan) html += '<span class="site-footer-slogan">' + esc(slogan) + '</span>';
+    html += '</div>';
+  }
+  if (links.length) {
+    html += '<nav class="site-footer-links" aria-label="页脚链接">' + links.map(function(l) {
+      var u = String(l && l.url || '');
+      if (!u) return '';
+      var ext = /^https?:\/\//i.test(u);
+      return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + esc(l.label || u) + '</a>';
+    }).join('') + '</nav>';
+  }
+  if (socials.length) {
+    html += '<div class="site-footer-social">' + socials.map(function(s) {
+      var u = String(s && s.url || '');
+      if (!u) return '';
+      var icon = /^[a-z0-9-]+:[a-z0-9-]+$/i.test(String(s.icon || '')) ? s.icon : 'ph:link-simple-fill';
+      return '<a class="site-footer-social-btn" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" title="' + esc(s.label || '') + '" aria-label="' + esc(s.label || '') + '"><iconify-icon icon="' + esc(icon) + '"></iconify-icon>' + (s.label ? '<span>' + esc(s.label) + '</span>' : '') + '</a>';
+    }).join('') + '</div>';
+  }
+  html += '</div>';
+
+  if (wantLiuyan) html += '<div class="site-footer-liuyan" id="siteFooterLiuyan"><span class="site-footer-liuyan-loading">聚合分类加载中…</span></div>';
+  else html += '<div class="site-footer-liuyan" id="siteFooterLiuyan" style="display:none"></div>';
+
+  var metaBits = [];
+  if (footText) metaBits.push(esc(footText));
+  if (icp) metaBits.push('<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">' + esc(icp) + '</a>');
+  if (metaBits.length) html += '<div class="site-footer-meta">' + metaBits.join('<span class="site-footer-sep">·</span>') + '</div>';
+
+  html += '</div>';
+  f.innerHTML = html;
+  f.style.display = '';
+  document.body.classList.add('has-footer');
+
+  if (wantLiuyan) loadFooterLiuyan();
+}
+
+// liuyan 聚合分类 chips（服务端已过滤宠物/娱乐/AI 等关键词）
+async function loadFooterLiuyan() {
+  var box = document.getElementById('siteFooterLiuyan');
+  if (!box) return;
+  try {
+    var res = await fetch('/api/liuyan').then(function(r) { return r.json(); });
+    if (!res.success) { box.style.display = 'none'; return; }
+    var d = res.data || {};
+    if (d.enabled === false) { box.style.display = 'none'; return; }
+    var cats = (d.categories || []).filter(function(c) { return c && (c.name || '').trim(); });
+    var tags = d.tags || [];
+    if (!cats.length && !tags.length) { box.style.display = 'none'; return; }
+    var html = '';
+    if (cats.length) {
+      html += '<span class="site-footer-liuyan-label"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 聚合分类</span>';
+      html += cats.map(function(c) {
+        var dot = /^#[0-9a-f]{3,8}$/i.test(String(c.color || '')) ? c.color : 'var(--accent)';
+        return '<a class="site-footer-chip" href="https://liuyan.coze.site/" target="_blank" rel="noopener noreferrer" title="' + esc(c.name) + ' · ' + ((c.channels || []).length) + ' 频道">' +
+          '<span class="site-footer-chip-dot" style="background:' + dot + '"></span>' + esc(c.name) + '</a>';
+      }).join('');
+    }
+    if (tags.length) {
+      html += '<span class="site-footer-liuyan-label site-footer-liuyan-label-tags"><iconify-icon icon="ph:tag-fill"></iconify-icon> 标签</span>';
+      html += tags.slice(0, 12).map(function(t) {
+        return '<a class="site-footer-chip site-footer-chip-tag" href="https://liuyan.coze.site/" target="_blank" rel="noopener noreferrer">' + esc(t) + '</a>';
+      }).join('');
+    }
+    box.innerHTML = html;
+    box.style.display = '';
+  } catch (e) {
+    box.style.display = 'none';
+  }
+}
 
 function settingsAccountHTML() {
   var html = '<div class="card" style="margin-bottom:16px;padding:16px">' +

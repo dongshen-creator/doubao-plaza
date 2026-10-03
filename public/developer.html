@@ -37,6 +37,8 @@
   };
   window.__dpFetchPatched = true;
 })();
+/* 安全后台：未登录零收发，直接 404（后续资源请求被导航取消） */
+try { if (!localStorage.getItem('dp_token')) location.replace('/404.html'); } catch (e) {}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
@@ -257,8 +259,8 @@
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>目标</th><th>详情</th></tr></thead>
-          <tbody id="auditBody"><tr><td colspan="5" style="color:var(--text-faint);text-align:center">点击「查询」加载</td></tr></tbody>
+          <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>目标</th><th>IP</th><th>详情</th></tr></thead>
+          <tbody id="auditBody"><tr><td colspan="6" style="color:var(--text-faint);text-align:center">点击「查询」加载</td></tr></tbody>
         </table>
       </div>
       <div class="err-line" id="auditErr"></div>
@@ -418,8 +420,15 @@ $('logoutBtn').addEventListener('click', function () {
 });
 
 /* ═══════════ API 封装（自动挂会话 + step-up，need_stepup 时弹验证后重试一次） ═══════════ */
+var devAuthorized = false;
 function devApi(path, opts, _retried) {
   opts = opts || {};
+  /* 未授权零收发：除 gate 门禁探测外，本地直接拒绝 */
+  if (!devAuthorized && String(path).indexOf('/api/developer/gate') !== 0) {
+    var _deny = new Error('未授权：请先通过安全后台身份验证');
+    _deny.unauthorized = true;
+    return Promise.reject(_deny);
+  }
   var headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
   var tk = localStorage.getItem('dp_token');
   if (tk) headers['Authorization'] = 'Bearer ' + tk;
@@ -523,6 +532,11 @@ function showDeny(title, msg) {
   $('denyMsg').textContent = msg;
   $('denyPanel').style.display = '';
   $('devMain').style.display = 'none';
+  /* 未授权态：清空 MFA 敏感内容并隐藏密钥面板 */
+  pendingSecret = null;
+  $('mfaSecretVal').textContent = '';
+  $('mfaOtpauth').textContent = '';
+  $('mfaSecretPanel').style.display = 'none';
 }
 
 function renderGate() {
@@ -549,19 +563,23 @@ function refreshGateStatus() {
 }
 
 function loadGate() {
+  /* 未登录：零收发，直接 404（不发起任何 API 请求） */
   if (!localStorage.getItem('dp_token')) {
-    showDeny('请先登录', '开发者后台需要有效会话，请先在首页登录。');
+    location.replace('/404.html');
     return;
   }
   devApi('/api/developer/gate').then(function (r) {
     if (!r.data || !r.data.is_developer) {
-      showDeny('无访问权限', '当前会话无效，或该账号不具备开发者权限（权限由服务端强制校验）。');
+      /* 会话无效 / 非开发者 / 隔离停用：不再收发，跳 404 */
+      location.replace('/404.html');
       return;
     }
+    devAuthorized = true;
     gateData = r.data;
     $('denyPanel').style.display = 'none';
     $('devMain').style.display = '';
     renderGate();
+    cuLoadRuns();
   }).catch(function (e) {
     showDeny('加载失败', e.message || '无法连接服务器。');
   });
@@ -634,12 +652,12 @@ function loadAudit() {
   var limit = $('auditLimit').value;
   var qs = 'limit=' + encodeURIComponent(limit) + (action ? '&action=' + encodeURIComponent(action) : '');
   $('auditErr').textContent = '';
-  $('auditBody').innerHTML = '<tr><td colspan="5" style="color:var(--text-faint);text-align:center">加载中…</td></tr>';
+  $('auditBody').innerHTML = '<tr><td colspan="6" style="color:var(--text-faint);text-align:center">加载中…</td></tr>';
 
   devApi('/api/developer/audit?' + qs).then(function (r) {
     var rows = r.data || [];
     if (!rows.length) {
-      $('auditBody').innerHTML = '<tr><td colspan="5" style="color:var(--text-faint);text-align:center">暂无记录</td></tr>';
+      $('auditBody').innerHTML = '<tr><td colspan="6" style="color:var(--text-faint);text-align:center">暂无记录</td></tr>';
       return;
     }
     $('auditBody').innerHTML = rows.map(function (row) {
@@ -650,6 +668,7 @@ function loadAudit() {
         '<td class="mono">' + esc(row.actor_id) + '</td>' +
         '<td><span class="tag' + (String(row.action).indexOf('fail') >= 0 || row.action === 'blocked' ? ' dim' : '') + '">' + esc(row.action) + '</span></td>' +
         '<td class="mono">' + esc(row.target || '-') + '</td>' +
+'<td class="mono" title="' + esc(row.ua || '') + '">' + esc(row.ip || '-') + '</td>' +
         '<td class="detail" title="' + esc(detail) + '">' + esc(detailShort || '-') + '</td>' +
         '</tr>';
     }).join('');
@@ -904,7 +923,6 @@ function cuRestore(runId) {
 
 $('cuDryBtn').addEventListener('click', cuDryRun);
 $('cuExecBtn').addEventListener('click', cuExecute);
-cuLoadRuns();
 
 /* ═══════════ 启动 ═══════════ */
 loadGate();

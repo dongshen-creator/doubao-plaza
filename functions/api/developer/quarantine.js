@@ -52,6 +52,7 @@ export async function onRequestPost(context) {
       await writeAdminAudit(env, {
         actorId: gate.userId, action: 'quarantine', target: targetId,
         detail: { reason, target_name: target.name },
+        request,
       });
       await logRiskEvent(env, {
         event_type: 'quarantine', user_id: targetId, ip, ...cmeta, ua,
@@ -71,6 +72,7 @@ export async function onRequestPost(context) {
       await writeAdminAudit(env, {
         actorId: gate.userId, action: 'unquarantine', target: targetId,
         detail: { target_name: target.name },
+        request,
       });
       await logRiskEvent(env, {
         event_type: 'quarantine_lift', user_id: targetId, ip, ...cmeta, ua,

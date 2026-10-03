@@ -6,7 +6,7 @@ import { getAuthUserId, generateToken } from '../_lib/jwt.js';
 import { verifyPassword } from '../_lib/password.js';
 import { totpVerify } from '../_lib/totp.js';
 import { writeAdminAudit } from '../_lib/audit.js';
-import { requireDeveloper, devJson, devErr, isDeveloperFlag } from '../_lib/devauth.js';
+import { requireDeveloper, devJson, devErr, isSiteAdmin } from '../_lib/devauth.js';
 import { logRiskEvent, getClientIp, cfMeta } from '../_lib/device.js';
 
 export async function onRequestGet(context) {
@@ -16,9 +16,9 @@ export async function onRequestGet(context) {
     const userId = await getAuthUserId(env, request);
     if (!userId) return devJson({ success: true, data: { is_developer: false } });
     const user = await env.DB.prepare(
-      `SELECT id, name, is_developer, totp_enabled, quarantined_at, deactivated_at FROM users WHERE id = ?`
+      `SELECT id, name, is_developer, is_global_admin, totp_enabled, quarantined_at, deactivated_at FROM users WHERE id = ?`
     ).bind(userId).first();
-    const isDev = !!(user && isDeveloperFlag(user.is_developer) && !user.quarantined_at && !user.deactivated_at);
+    const isDev = !!(user && isSiteAdmin(user) && !user.quarantined_at && !user.deactivated_at);
     if (!isDev) return devJson({ success: true, data: { is_developer: false } });
     const su = await env.DB.prepare(
       `SELECT 1 AS ok FROM stepup_tokens WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1`
@@ -27,6 +27,7 @@ export async function onRequestGet(context) {
       success: true,
       data: {
         is_developer: true,
+        is_global_admin: !!user.is_global_admin,
         name: user.name,
         totp_enabled: !!user.totp_enabled,
         stepup_valid: !!su,
@@ -70,7 +71,7 @@ export async function onRequestPost(context) {
 
     const passOk = await verifyPassword(password, user.password);
     if (!passOk) {
-      await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup_fail', detail: { reason: 'bad_password' } });
+      await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup_fail', detail: { reason: 'bad_password' }, request });
       await logRiskEvent(env, {
         event_type: 'stepup', user_id: gate.userId, ip, ...cmeta, ua,
         action: 'blocked', risk_score: 40, detail: { reason: 'bad_password' },
@@ -82,7 +83,7 @@ export async function onRequestPost(context) {
       if (!totp) return devErr('请输入动态验证码', 401, { need_totp: true });
       const okTotp = await totpVerify(user.totp_secret, totp);
       if (!okTotp) {
-        await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup_fail', detail: { reason: 'bad_totp' } });
+        await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup_fail', detail: { reason: 'bad_totp' }, request });
         await logRiskEvent(env, {
           event_type: 'stepup', user_id: gate.userId, ip, ...cmeta, ua,
           action: 'blocked', risk_score: 45, detail: { reason: 'bad_totp' },
@@ -103,7 +104,7 @@ export async function onRequestPost(context) {
        VALUES (?, ?, 'devops', strftime('%Y-%m-%d %H:%M:%S', 'now', '+10 minutes'))`
     ).bind(token, gate.userId).run();
 
-    await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup', detail: { totp: !!user.totp_enabled } });
+    await writeAdminAudit(env, { actorId: gate.userId, action: 'stepup', detail: { totp: !!user.totp_enabled }, request });
     await logRiskEvent(env, {
       event_type: 'stepup', user_id: gate.userId, ip, ...cmeta, ua,
       action: 'allowed', risk_score: 0, detail: { totp: !!user.totp_enabled },

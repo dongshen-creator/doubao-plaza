@@ -61,7 +61,7 @@ export async function onRequestPost(context) {
       await env.DB.prepare(
         `UPDATE users SET totp_secret = ? WHERE id = ?`
       ).bind(secret, gate.userId).run();
-      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_setup' });
+      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_setup', request });
       // otpauth 深链含密钥，只能返回给完成 step-up 的本人，不进审计
       return devJson({
         success: true,
@@ -76,12 +76,12 @@ export async function onRequestPost(context) {
       if (!u || !u.totp_secret) return devErr('请先生成密钥', 400);
       if (u.totp_enabled) return devErr('双因素认证已启用', 400);
       if (!code || !(await totpVerify(u.totp_secret, code))) {
-        await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_enable_fail' });
+        await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_enable_fail', request });
         await mfaRisk('blocked', { op: 'enable', reason: 'bad_code' }, 35);
         return devErr('验证码错误', 400);
       }
       await env.DB.prepare(`UPDATE users SET totp_enabled = 1 WHERE id = ?`).bind(gate.userId).run();
-      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_enable' });
+      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_enable', request });
       await mfaRisk('allowed', { op: 'enable' });
       return devJson({ success: true });
     }
@@ -92,14 +92,14 @@ export async function onRequestPost(context) {
       ).bind(gate.userId).first();
       if (!u || !u.totp_enabled) return devErr('双因素认证未启用', 400);
       if (!code || !(await totpVerify(u.totp_secret, code))) {
-        await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_disable_fail' });
+        await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_disable_fail', request });
         await mfaRisk('blocked', { op: 'disable', reason: 'bad_code' }, 35);
         return devErr('验证码错误', 400);
       }
       await env.DB.prepare(
         `UPDATE users SET totp_enabled = 0, totp_secret = NULL WHERE id = ?`
       ).bind(gate.userId).run();
-      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_disable' });
+      await writeAdminAudit(env, { actorId: gate.userId, action: 'mfa_disable', request });
       await mfaRisk('allowed', { op: 'disable' });
       return devJson({ success: true });
     }
