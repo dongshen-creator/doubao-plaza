@@ -347,8 +347,6 @@
   </main>
 </div>
 
-<!-- v9.2 站点页脚（全局设置驱动：站点信息/页脚链接/社交/备案/liuyan 聚合分类） -->
-<footer class="site-footer" id="siteFooter" style="display:none" aria-label="站点页脚"></footer>
 
 <!-- 移动端遮罩层（浮动FAB已移除，☰按钮在各视图header中） -->
 <div class="mobile-overlay-mask" id="mobileOverlayMask" onclick="closeMobilePanels()"></div>
@@ -483,8 +481,6 @@
       <button class="tab" onclick="switchSettingsTab('friends',this)"><iconify-icon icon="ph:users-three-fill"></iconify-icon> 好友 <span class="tab-count" id="friendsBadge">0</span></button>
       <button class="tab" onclick="switchSettingsTab('channels',this)"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> 频道 <span class="tab-count" id="settingsChannelsBadge">0</span></button>
       <button class="tab" onclick="switchSettingsTab('blocks',this)"><iconify-icon icon="ph:prohibit-fill"></iconify-icon> 黑名单 <span class="tab-count" id="blocksBadge">0</span></button>
-      <!-- v9.2 全局设置（站点信息/页脚/SEO/社交/其他）：仅站务管理员可见，loadSettings 控制显隐 -->
-      <button class="tab" id="settingsSiteTab" style="display:none" onclick="switchSettingsTab('site',this)"><iconify-icon icon="ph:globe-hemisphere-west-fill"></iconify-icon> 全局</button>
     </div>
     <div id="settingsContent" style="max-height:60vh;overflow-y:auto"></div>
   </div>
@@ -1338,7 +1334,6 @@ async function init() {
     if (ss.success && ss.data) {
       siteSettings = Object.assign({}, siteSettings, ss.data);
       if (typeof applySiteBranding === 'function') applySiteBranding();
-      if (typeof renderSiteFooter === 'function') renderSiteFooter();
     }
   } catch (e) {}
 
@@ -5729,12 +5724,17 @@ async function loadSettings() {
     document.getElementById('settingsNotifications').innerHTML = '';
   }
   
-  // v9.2 全局设置：第5个「全局」tab 仅站务管理员可见（非管理员强制回账号栏）
-  var siteTabBtn = document.getElementById('settingsSiteTab');
-  if (siteTabBtn) siteTabBtn.style.display = isSiteAdmin() ? '' : 'none';
-  if (!isSiteAdmin() && settingsTab === 'site') settingsTab = 'account';
 
   switchSettingsTab('account');
+}
+
+// v9.4：栏目多时 .tabs 横向滚动，切换后把选中项滚进可视区（block:'nearest' 避免整页被带着滚）
+function revealActiveTab(btnEl) {
+  try {
+    if (btnEl && typeof btnEl.scrollIntoView === 'function') {
+      btnEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  } catch (e) {}
 }
 
 async function switchSettingsTab(tab, btnEl) {
@@ -5746,6 +5746,7 @@ async function switchSettingsTab(tab, btnEl) {
     var _els = document.querySelectorAll('#settingsModal .tab');
     if (_els[_idxMap[tab] !== undefined ? _idxMap[tab] : 0]) _els[_idxMap[tab] !== undefined ? _idxMap[tab] : 0].classList.add('active');
   }
+  revealActiveTab(btnEl || document.querySelector('#settingsModal .tab.active'));
 
   const el = document.getElementById('settingsContent');
 
@@ -5847,7 +5848,7 @@ async function switchSettingsTab(tab, btnEl) {
           <button class="btn btn-sm" onclick="setThemeColor('purple')" style="background:#8B5CF6;color:#fff;border:2px solid transparent" id="themeBtn-purple">典雅紫</button>
           <button class="btn btn-sm" onclick="setThemeColor('pink')" style="background:#EC4899;color:#fff;border:2px solid transparent" id="themeBtn-pink">樱花粉</button>
           <button class="btn btn-sm" onclick="setThemeColor('cyan')" style="background:#06B6D4;color:#fff;border:2px solid transparent" id="themeBtn-cyan">青碧色</button>
-          <button class="btn btn-sm" onclick="setThemeColor('red')" style="background:#FF4C00;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>
+          <button class="btn btn-sm" onclick="setThemeColor('red')" style="background:#C3272B;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>
           <button class="btn btn-sm" onclick="setThemeColor('ink')" style="background:#6E747C;color:#fff;border:2px solid transparent" id="themeBtn-ink">水墨灰</button>
         </div>
       </div>
@@ -6439,6 +6440,7 @@ async function switchDevTab(tab, btnEl) {
     const tabIndex = tabMap[tab] ?? 0;
     document.querySelectorAll('#developerModal .tab')[tabIndex]?.classList.add('active');
   }
+  revealActiveTab(btnEl || document.querySelector('#developerModal .tab.active'));
   await loadDeveloperContent();
 }
 
@@ -12597,244 +12599,8 @@ switchSettingsTab = function(tab, btnEl) {
     loadChannelsWithGroups(el);
   } else if (tab === 'blocks') {
     loadBlocksTab(el);
-  } else if (tab === 'site') {
-    // v9.2 全局设置五栏
-    renderSiteSettingsTab(el);
   }
 };
-
-// ===== v9.2 全局设置五栏（站点信息/页脚/SEO/社交/其他） =====
-var gsData = { footer: [], social: [] };   // 页脚链接 / 社交链接行编辑缓冲
-var gsLiuyanState = true;                  // liuyan 聚合开关（编辑态）
-
-function gsParseArr(v) {
-  if (Array.isArray(v)) return v;
-  try { var a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
-}
-function gsVal(id) { var el = document.getElementById(id); return el ? String(el.value).trim() : ''; }
-function gsLinkOk(u) { return typeof u === 'string' && u.length > 0 && u.length <= 300 && (/^https?:\/\//i.test(u) || u.charAt(0) === '/'); }
-
-function gsHdr(icon, title, key) {
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
-    '<div style="width:32px;height:32px;border-radius:10px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px;flex-shrink:0"><iconify-icon icon="' + icon + '"></iconify-icon></div>' +
-    '<div style="flex:1;font-size:14px;font-weight:600;color:var(--text-primary)">' + title + '</div>' +
-    '<button class="btn btn-orange btn-sm" id="gsSave_' + key + '" onclick="saveSiteSection(\'' + key + '\')">保存</button></div>';
-}
-function gsField(label, id, val, placeholder, maxLen, hint) {
-  return '<div class="form-group" style="margin-bottom:12px"><label class="form-label">' + label + '</label>' +
-    '<input class="input" id="' + id + '" maxlength="' + maxLen + '" value="' + esc(val || '') + '" placeholder="' + esc(placeholder) + '">' +
-    (hint ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">' + hint + '</div>' : '') + '</div>';
-}
-function gsBtnSm() { return 'background:var(--bg-input);border:1px solid var(--border);color:var(--text-primary)'; }
-
-// 行编辑器：把 DOM 行回填进 gsData[kind]
-function gsSyncRows(kind) {
-  var cid = kind === 'social' ? 'gsSocialRows' : 'gsFooterRows';
-  var c = document.getElementById(cid);
-  if (!c) return;
-  var out = [];
-  c.querySelectorAll('.gs-row').forEach(function(r) {
-    var iconEl = r.querySelector('.gs-i-icon');
-    var labelEl = r.querySelector('.gs-i-label');
-    var urlEl = r.querySelector('.gs-i-url');
-    var item = { label: labelEl ? labelEl.value.trim() : '', url: urlEl ? urlEl.value.trim() : '' };
-    if (iconEl) item.icon = iconEl.value.trim();
-    out.push(item);
-  });
-  gsData[kind] = out;
-}
-function gsRenderLinkRows(kind) {
-  var cid = kind === 'social' ? 'gsSocialRows' : 'gsFooterRows';
-  var c = document.getElementById(cid);
-  if (!c) return;
-  var items = gsData[kind] || [];
-  if (!items.length) {
-    c.innerHTML = '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">暂无条目，点击下方按钮添加</div>';
-    return;
-  }
-  c.innerHTML = items.map(function(it, i) {
-    var iconCol = kind === 'social'
-      ? '<input class="input gs-i-icon" placeholder="ph:xxx" maxlength="60" value="' + esc(it.icon || '') + '" style="width:130px;flex-shrink:0">'
-      : '';
-    return '<div class="gs-row" style="display:flex;gap:6px;margin-bottom:8px;align-items:center">' +
-      iconCol +
-      '<input class="input gs-i-label" placeholder="' + (kind === 'social' ? '名称(≤20字)' : '链接文字(≤40字)') + '" maxlength="' + (kind === 'social' ? 20 : 40) + '" value="' + esc(it.label || '') + '" style="width:130px;flex-shrink:0">' +
-      '<input class="input gs-i-url" placeholder="https://... 或 /path" maxlength="300" value="' + esc(it.url || '') + '" style="flex:1;min-width:0">' +
-      '<button class="btn btn-sm" style="color:var(--danger);flex-shrink:0" title="删除" onclick="gsRemoveRow(\'' + kind + '\',' + i + ')"><iconify-icon icon="ph:trash-fill"></iconify-icon></button></div>';
-  }).join('');
-}
-function gsAddRow(kind) {
-  gsSyncRows(kind);
-  if (kind === 'social') {
-    if (gsData.social.length >= 8) { toast('社交链接最多 8 条', 'error'); return; }
-    gsData.social.push({ icon: 'ph:link-simple-fill', label: '', url: '' });
-  } else {
-    if (gsData.footer.length >= 10) { toast('页脚链接最多 10 条', 'error'); return; }
-    gsData.footer.push({ label: '', url: '' });
-  }
-  gsRenderLinkRows(kind);
-}
-function gsRemoveRow(kind, i) {
-  gsSyncRows(kind);
-  gsData[kind].splice(i, 1);
-  gsRenderLinkRows(kind);
-}
-
-function gsSetLiuyan(on) {
-  gsLiuyanState = !!on;
-  var onBtn = document.getElementById('gsLiuyanOn');
-  var offBtn = document.getElementById('gsLiuyanOff');
-  if (onBtn) onBtn.className = 'btn btn-sm ' + (on ? 'btn-green' : 'btn-gray');
-  if (offBtn) offBtn.className = 'btn btn-sm ' + (on ? 'btn-gray' : 'btn-red');
-}
-
-function renderSiteSettingsTab(el) {
-  if (!isSiteAdmin()) {
-    el.innerHTML = '<div class="warning-box"><iconify-icon icon="ph:shield-warning-fill"></iconify-icon> 仅站务管理员可访问全局设置。</div>';
-    return;
-  }
-  var S = siteSettings || {};
-  gsData.footer = gsParseArr(S.footer_links);
-  gsData.social = gsParseArr(S.social_links);
-  gsLiuyanState = S.liuyan_enabled !== 'off';
-
-  el.innerHTML =
-    // ── 1 站点信息 ──
-    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:buildings-fill', '站点信息', 'site') +
-      gsField('站点名称', 'gsSiteName', S.site_name, '留空则使用默认「逗包用户广场」', 50) +
-      gsField('站点标语', 'gsSiteSlogan', S.site_slogan, '一句话介绍，展示在页脚', 120) +
-      gsField('Logo 图片链接', 'gsSiteLogoUrl', S.site_logo_url, 'https://... 或 / 相对路径', 300, '留空使用默认图标；需 http(s):// 或 / 开头') +
-      gsField('备案号', 'gsSiteIcp', S.site_icp, '如：京ICP备00000000号', 60, '留空则页脚不展示备案号') +
-    '</div>' +
-    // ── 2 页脚 ──
-    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:align-bottom', '页脚', 'footer') +
-      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">页脚文本</label>' +
-      '<textarea class="input" id="gsFooterText" rows="2" maxlength="1000" placeholder="页脚说明文字（≤1000字）" style="width:100%;resize:vertical">' + esc(S.footer_text || '') + '</textarea></div>' +
-      '<div class="form-group" style="margin-bottom:0"><label class="form-label">页脚链接（≤10 条）</label><div id="gsFooterRows"></div>' +
-      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsAddRow(\'footer\')"><iconify-icon icon="ph:plus-fill"></iconify-icon> 添加链接</button></div>' +
-    '</div>' +
-    // ── 3 SEO ──
-    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:magnifying-glass-fill', 'SEO', 'seo') +
-      gsField('SEO 标题', 'gsSeoTitle', S.seo_title, '搜索引擎展示标题（≤70字）', 70, '留空则使用「站点名称 - 描述」') +
-      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">SEO 描述</label>' +
-      '<textarea class="input" id="gsSeoDesc" rows="2" maxlength="200" placeholder="搜索结果摘要（≤200字）" style="width:100%;resize:vertical">' + esc(S.seo_description || '') + '</textarea></div>' +
-      gsField('SEO 关键词', 'gsSeoKw', S.seo_keywords, '逗号分隔，如：豆包,社交,广场', 200) +
-    '</div>' +
-    // ── 4 社交 ──
-    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:share-network-fill', '社交链接', 'social') +
-      '<div class="form-group" style="margin-bottom:0"><label class="form-label">社交入口（≤8 条，展示于页脚）</label><div id="gsSocialRows"></div>' +
-      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsAddRow(\'social\')"><iconify-icon icon="ph:plus-fill"></iconify-icon> 添加社交链接</button>' +
-      '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">图标填写 Iconify 名称（如 ph:github-logo-fill），留空则使用默认链接图标</div></div>' +
-    '</div>' +
-    // ── 5 其他（liuyan 聚合） ──
-    '<div class="card" style="margin-bottom:16px;padding:16px">' + gsHdr('ph:sliders-horizontal-fill', '其他', 'other') +
-      '<div class="form-group" style="margin-bottom:12px"><label class="form-label">liuyan.coze.site 内容分类聚合</label>' +
-      '<div style="display:flex;gap:8px;margin-bottom:10px">' +
-        '<button class="btn btn-sm ' + (gsLiuyanState ? 'btn-green' : 'btn-gray') + '" id="gsLiuyanOn" onclick="gsSetLiuyan(true)"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 开启聚合</button>' +
-        '<button class="btn btn-sm ' + (gsLiuyanState ? 'btn-gray' : 'btn-red') + '" id="gsLiuyanOff" onclick="gsSetLiuyan(false)"><iconify-icon icon="ph:prohibit-fill"></iconify-icon> 关闭聚合</button>' +
-      '</div></div>' +
-      gsField('过滤关键词', 'gsLiuyanExclude', S.liuyan_exclude != null ? S.liuyan_exclude : '宠物,娱乐,AI', '逗号分隔，命中的分类/频道/标签将被剔除', 100, '命中的分类会整类剔除，分类下命中频道单独剔除，标签命中剔除') +
-      '<button class="btn btn-sm" style="' + gsBtnSm() + '" onclick="gsPreviewLiuyan()"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon> 预览聚合结果</button>' +
-      '<div id="gsLiuyanPreview" style="margin-top:10px"></div>' +
-    '</div>';
-
-  gsRenderLinkRows('footer');
-  gsRenderLinkRows('social');
-}
-
-// 「其他」栏：实时预览服务端聚合结果（过滤词以服务端 site_settings 为准，保存后刷新预览）
-async function gsPreviewLiuyan() {
-  var box = document.getElementById('gsLiuyanPreview');
-  if (!box) return;
-  box.innerHTML = '<div style="font-size:12px;color:var(--text-faint)">聚合加载中…</div>';
-  try {
-    var res = await fetch('/api/liuyan').then(function(r) { return r.json(); });
-    if (!res.success) { box.innerHTML = '<div style="font-size:12px;color:var(--danger)">' + esc(res.error || '聚合失败') + '</div>'; return; }
-    var d = res.data || {};
-    if (d.enabled === false) { box.innerHTML = '<div style="font-size:12px;color:var(--text-faint)">聚合当前处于关闭状态</div>'; return; }
-    var cats = d.categories || [], tags = d.tags || [];
-    var catChips = cats.map(function(c) {
-      return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--bg-input);border:1px solid var(--border);font-size:12px;color:var(--text-primary)">' +
-        esc(c.name) + '<span style="color:var(--text-faint);font-size:11px">' + ((c.channels || []).length) + '频道</span></span>';
-    }).join('');
-    var tagChips = tags.map(function(t) {
-      return '<span style="display:inline-flex;padding:2px 8px;border-radius:999px;background:var(--accent-bg);font-size:11px;color:var(--accent)">' + esc(t) + '</span>';
-    }).join('');
-    box.innerHTML =
-      '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">已过滤关键词：' + esc((d.exclude || []).join('、') || '无') + ' · 分类 ' + cats.length + ' 个 · 标签 ' + tags.length + ' 个</div>' +
-      (catChips ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' + catChips + '</div>' : '<div style="font-size:12px;color:var(--text-faint)">无匹配分类</div>') +
-      (tagChips ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + tagChips + '</div>' : '');
-  } catch (e) {
-    box.innerHTML = '<div style="font-size:12px;color:var(--danger)">' + esc(e.message) + '</div>';
-  }
-}
-
-// 分段保存：每次 PUT 只提交当前栏的白名单键
-async function saveSiteSection(key) {
-  if (!isSiteAdmin()) { toast('无权修改站点设置', 'error'); return; }
-  var body = {}, err = '';
-  if (key === 'site') {
-    body.site_name = gsVal('gsSiteName');
-    body.site_slogan = gsVal('gsSiteSlogan');
-    body.site_logo_url = gsVal('gsSiteLogoUrl');
-    body.site_icp = gsVal('gsSiteIcp');
-    if (body.site_logo_url && !gsLinkOk(body.site_logo_url)) err = 'Logo 链接需以 http(s):// 或 / 开头';
-  } else if (key === 'footer') {
-    var ft = document.getElementById('gsFooterText');
-    body.footer_text = ft ? ft.value.trim() : '';
-    gsSyncRows('footer');
-    var fl = gsData.footer.filter(function(it) { return it.label || it.url; });
-    if (fl.length > 10) err = '页脚链接最多 10 条';
-    for (var i = 0; !err && i < fl.length; i++) {
-      if (!fl[i].label) err = '页脚链接第 ' + (i + 1) + ' 条缺少链接文字';
-      else if (fl[i].label.length > 40) err = '页脚链接文字不能超过 40 字';
-      else if (!gsLinkOk(fl[i].url)) err = '页脚链接第 ' + (i + 1) + ' 条地址需以 http(s):// 或 / 开头';
-    }
-    body.footer_links = fl;
-  } else if (key === 'seo') {
-    body.seo_title = gsVal('gsSeoTitle');
-    var sd = document.getElementById('gsSeoDesc');
-    body.seo_description = sd ? sd.value.trim() : '';
-    body.seo_keywords = gsVal('gsSeoKw');
-  } else if (key === 'social') {
-    gsSyncRows('social');
-    var sl = gsData.social.filter(function(it) { return it.label || it.url; });
-    if (sl.length > 8) err = '社交链接最多 8 条';
-    for (var j = 0; !err && j < sl.length; j++) {
-      if (!sl[j].label) err = '社交链接第 ' + (j + 1) + ' 条缺少名称';
-      else if (sl[j].label.length > 20) err = '社交链接名称不能超过 20 字';
-      else if ((sl[j].icon || '').length > 60) err = '图标名称不能超过 60 字符';
-      else if (!gsLinkOk(sl[j].url)) err = '社交链接第 ' + (j + 1) + ' 条地址需以 http(s):// 或 / 开头';
-    }
-    body.social_links = sl;
-  } else if (key === 'other') {
-    body.liuyan_enabled = gsLiuyanState ? 'on' : 'off';
-    body.liuyan_exclude = gsVal('gsLiuyanExclude');
-  } else {
-    toast('未知的设置分组', 'error');
-    return;
-  }
-  if (err) { toast(err, 'error'); return; }
-
-  var btn = document.getElementById('gsSave_' + key);
-  if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
-  try {
-    var res = await api('/api/site-settings', { method: 'PUT', body: JSON.stringify(body) });
-    if (res.success) {
-      Object.assign(siteSettings, body);
-      toast('站点设置已保存');
-      if (typeof applySiteBranding === 'function') applySiteBranding();
-      if (typeof renderSiteFooter === 'function') renderSiteFooter();
-      if (key === 'other') gsPreviewLiuyan();
-    } else {
-      toast(res.error || '保存失败', 'error');
-    }
-  } catch (e) {
-    toast(e.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '保存'; }
-  }
-}
 
 // ===== v9.2 品牌应用（SEO/title/meta/logo，全局设置驱动） =====
 function applySiteBranding() {
@@ -12879,103 +12645,6 @@ function applySiteBranding() {
   }
 }
 
-// ===== v9.2 站点页脚渲染 =====
-function renderSiteFooter() {
-  var f = document.getElementById('siteFooter');
-  if (!f) return;
-  var S = siteSettings || {};
-  var name = String(S.site_name || '').trim();
-  var slogan = String(S.site_slogan || '').trim();
-  var footText = String(S.footer_text || '').trim();
-  var icp = String(S.site_icp || '').trim();
-  var links = gsParseArr(S.footer_links);
-  var socials = gsParseArr(S.social_links);
-  var wantLiuyan = S.liuyan_enabled !== 'off';
-
-  var hasStatic = !!(name || slogan || footText || icp || links.length || socials.length);
-  if (!hasStatic && !wantLiuyan) { f.style.display = 'none'; f.innerHTML = ''; document.body.classList.remove('has-footer'); return; }
-
-  var logoUrl = String(S.site_logo_url || '').trim();
-  var html = '<div class="site-footer-inner">';
-
-  html += '<div class="site-footer-row">';
-  if (name || slogan) {
-    html += '<div class="site-footer-brand">';
-    if (logoUrl && (/^https?:\/\//i.test(logoUrl) || logoUrl.charAt(0) === '/')) {
-      html += '<img class="site-footer-logo" src="' + esc(logoUrl) + '" alt="" onerror="this.remove()">';
-    }
-    if (name) html += '<span class="site-footer-name">' + esc(name) + '</span>';
-    if (slogan) html += '<span class="site-footer-slogan">' + esc(slogan) + '</span>';
-    html += '</div>';
-  }
-  if (links.length) {
-    html += '<nav class="site-footer-links" aria-label="页脚链接">' + links.map(function(l) {
-      var u = String(l && l.url || '');
-      if (!u) return '';
-      var ext = /^https?:\/\//i.test(u);
-      return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + esc(l.label || u) + '</a>';
-    }).join('') + '</nav>';
-  }
-  if (socials.length) {
-    html += '<div class="site-footer-social">' + socials.map(function(s) {
-      var u = String(s && s.url || '');
-      if (!u) return '';
-      var icon = /^[a-z0-9-]+:[a-z0-9-]+$/i.test(String(s.icon || '')) ? s.icon : 'ph:link-simple-fill';
-      return '<a class="site-footer-social-btn" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" title="' + esc(s.label || '') + '" aria-label="' + esc(s.label || '') + '"><iconify-icon icon="' + esc(icon) + '"></iconify-icon>' + (s.label ? '<span>' + esc(s.label) + '</span>' : '') + '</a>';
-    }).join('') + '</div>';
-  }
-  html += '</div>';
-
-  if (wantLiuyan) html += '<div class="site-footer-liuyan" id="siteFooterLiuyan"><span class="site-footer-liuyan-loading">聚合分类加载中…</span></div>';
-  else html += '<div class="site-footer-liuyan" id="siteFooterLiuyan" style="display:none"></div>';
-
-  var metaBits = [];
-  if (footText) metaBits.push(esc(footText));
-  if (icp) metaBits.push('<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">' + esc(icp) + '</a>');
-  if (metaBits.length) html += '<div class="site-footer-meta">' + metaBits.join('<span class="site-footer-sep">·</span>') + '</div>';
-
-  html += '</div>';
-  f.innerHTML = html;
-  f.style.display = '';
-  document.body.classList.add('has-footer');
-
-  if (wantLiuyan) loadFooterLiuyan();
-}
-
-// liuyan 聚合分类 chips（服务端已过滤宠物/娱乐/AI 等关键词）
-async function loadFooterLiuyan() {
-  var box = document.getElementById('siteFooterLiuyan');
-  if (!box) return;
-  try {
-    var res = await fetch('/api/liuyan').then(function(r) { return r.json(); });
-    if (!res.success) { box.style.display = 'none'; return; }
-    var d = res.data || {};
-    if (d.enabled === false) { box.style.display = 'none'; return; }
-    var cats = (d.categories || []).filter(function(c) { return c && (c.name || '').trim(); });
-    var tags = d.tags || [];
-    if (!cats.length && !tags.length) { box.style.display = 'none'; return; }
-    var html = '';
-    if (cats.length) {
-      html += '<span class="site-footer-liuyan-label"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 聚合分类</span>';
-      html += cats.map(function(c) {
-        var dot = /^#[0-9a-f]{3,8}$/i.test(String(c.color || '')) ? c.color : 'var(--accent)';
-        return '<a class="site-footer-chip" href="https://liuyan.coze.site/" target="_blank" rel="noopener noreferrer" title="' + esc(c.name) + ' · ' + ((c.channels || []).length) + ' 频道">' +
-          '<span class="site-footer-chip-dot" style="background:' + dot + '"></span>' + esc(c.name) + '</a>';
-      }).join('');
-    }
-    if (tags.length) {
-      html += '<span class="site-footer-liuyan-label site-footer-liuyan-label-tags"><iconify-icon icon="ph:tag-fill"></iconify-icon> 标签</span>';
-      html += tags.slice(0, 12).map(function(t) {
-        return '<a class="site-footer-chip site-footer-chip-tag" href="https://liuyan.coze.site/" target="_blank" rel="noopener noreferrer">' + esc(t) + '</a>';
-      }).join('');
-    }
-    box.innerHTML = html;
-    box.style.display = '';
-  } catch (e) {
-    box.style.display = 'none';
-  }
-}
-
 function settingsAccountHTML() {
   var html = '<div class="card" style="margin-bottom:16px;padding:16px">' +
     '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px"><iconify-icon icon="ph:user-fill"></iconify-icon> 个人信息</div>' +
@@ -13005,7 +12674,7 @@ function settingsAccountHTML() {
     '<button class="btn btn-sm" onclick="setThemeColor(\'purple\')" style="background:#8B5CF6;color:#fff;border:2px solid transparent" id="themeBtn-purple">典雅紫</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'pink\')" style="background:#EC4899;color:#fff;border:2px solid transparent" id="themeBtn-pink">樱花粉</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'cyan\')" style="background:#06B6D4;color:#fff;border:2px solid transparent" id="themeBtn-cyan">青碧色</button>' +
-    '<button class="btn btn-sm" onclick="setThemeColor(\'red\')" style="background:#FF4C00;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>' +
+    '<button class="btn btn-sm" onclick="setThemeColor(\'red\')" style="background:#C3272B;color:#fff;border:2px solid transparent" id="themeBtn-red">中国红</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'ink\')" style="background:#6E747C;color:#fff;border:2px solid transparent" id="themeBtn-ink">水墨灰</button>' +
     '</div></div>' +
     '<div class="form-group"><label class="form-label">聊天背景</label>' +
@@ -13287,7 +12956,7 @@ var THEME_COLORS = [
   { id: 'purple', name: '典雅紫', color: '#8B5CF6' },
   { id: 'pink', name: '樱花粉', color: '#EC4899' },
   { id: 'cyan', name: '青碧色', color: '#06B6D4' },
-  { id: 'red', name: '中国红', color: '#FF4C00' },
+  { id: 'red', name: '中国红', color: '#C3272B' },
   { id: 'ink', name: '水墨灰', color: '#6E747C' }
 ];
 
@@ -13314,8 +12983,7 @@ function syncMetaThemeColor() {
     var mc = document.querySelector('meta[name="theme-color"]');
     if (mc && acc) mc.setAttribute('content', acc);
     if (typeof window.__npSyncAccent === 'function') window.__npSyncAccent();
-    // V9.3：主题色切到中国红时启动/停止国旗飘扬着色器
-    if (typeof window.__npFlagSync === 'function') window.__npFlagSync();
+    if (typeof window.__npSilkAccent === 'function') window.__npSilkAccent();
   } catch (e) {}
 }
 
@@ -14058,16 +13726,17 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <script>
-/* V9.3 中国红 · 国旗飘扬（布料波动质感参考 Shadertoy 7dSBD3）
-   仅 body.theme-red 时运行；其余主题 display:none 且停rAF。
-   插入位置在 .noise-overlay 之前，使噪点层仍压在旗面之上做织物纹理。 */
+/* V9.4 丝绸飘动质感层（纯布料波纹，无旗形 / 无五星 / 无旗杆）
+   保留原有背景（流体画布 L1 + 噪点 L2 + 磨砂玻璃 L3）不动，本层只在噪点之下叠一层缎面光泽。
+   指针 / 触摸移动即「风吹拂过」：注入环状波前推开织物并局部提亮；另有极弱环境风让绸面自然呼吸。
+   低频纹理 → 内部按 0.62 倍分辨率渲染，dpr 上限 1，控制移动端开销。 */
 (function () {
-  function die() { try { var c = document.getElementById('flag-canvas'); if (c && c.parentNode) c.parentNode.removeChild(c); } catch (e) {} }
+  function die() { try { var c = document.getElementById('silk-canvas'); if (c && c.parentNode) c.parentNode.removeChild(c); } catch (e) {} }
   try {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!document.body || !window.requestAnimationFrame) return;
     var canvas = document.createElement('canvas');
-    canvas.id = 'flag-canvas';
+    canvas.id = 'silk-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     var opts = { alpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' };
     var gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
@@ -14081,106 +13750,74 @@ document.addEventListener('DOMContentLoaded', function() {
     var vs = compile(gl.VERTEX_SHADER, 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}');
     var fs = compile(gl.FRAGMENT_SHADER, [
       'precision mediump float;',
-      'uniform vec2 u_res;uniform float u_t;uniform float u_d;',
-      // 国潮色板：中国红主题取朱红 / 赤金 / 缃色 / 金色
-      'const vec3 C_DEEP=vec3(0.871,0.161,0.063);',
-      'const vec3 C_ZHU=vec3(1.000,0.298,0.000);',
-      'const vec3 C_GOLD=vec3(0.949,0.745,0.271);',
-      'const vec3 C_XIANG=vec3(0.949,0.478,0.271);',
-      // 五角星：按内外半径与尖角夹角解析求边界半径，t 为到最近尖角的角距
-      'float starMask(vec2 p,float R){',
-      ' const float P=1.25663706;',
-      ' const float TH=0.62831853;',
-      ' float rIn=R*0.381966;',
-      ' float r=length(p);',
-      ' float a=atan(p.y,p.x);',
-      ' float t=abs(mod(a+P*0.5,P)-P*0.5);',
-      ' float den=rIn*sin(TH-t)+R*sin(t);',
-      ' float rho=R*rIn*sin(TH)/max(den,1e-5);',
-      ' float aa=R*0.055;',
-      ' return 1.0-smoothstep(rho-aa,rho+aa,r);',
+      'uniform vec2 u_res;uniform float u_t;uniform float u_d;uniform float u_op;',
+      'uniform vec4 u_gust[6];',
+      'uniform vec3 u_acc;',
+      'float h21(vec2 p){',
+      ' vec3 q=fract(vec3(p.xyx)*0.1031);',
+      ' q+=dot(q,q.yzx+33.33);',
+      ' return fract((q.x+q.y)*q.z);',
       '}',
-      // dir 为尖端方向（旗帜坐标，y 向下）
-      'float drawStar(vec2 f,vec2 c,float R,vec2 dir){',
-      ' vec2 q=vec2(f.x-c.x,-(f.y-c.y));',
-      ' float a=atan(-dir.y,dir.x)-1.5707963;',
-      ' float cs=cos(a),sn=sin(a);',
-      ' q=vec2(q.x*cs-q.y*sn,q.x*sn+q.y*cs);',
-      ' return starMask(q,R);',
+      'float nval(vec2 q){',
+      ' vec2 i=floor(q),f=fract(q);',
+      ' vec2 u=f*f*(3.0-2.0*f);',
+      ' return mix(mix(h21(i),h21(i+vec2(1.0,0.0)),u.x),mix(h21(i+vec2(0.0,1.0)),h21(i+vec2(1.0,1.0)),u.x),u.y);',
       '}',
-      // 布料高度场：三频叠加，振幅沿旗尾（x→1.5）按 x^1.5 增长，旗杆侧固定
-      'float clothH(vec2 f,float t){',
-      ' float x=clamp(f.x/1.5,0.0,1.0);',
-      ' float a=sin(x*6.5-t*2.0);',
-      ' float b=sin(x*13.0-t*3.1+f.y*2.2);',
-      ' float c=sin(x*22.0-t*4.4+f.y*3.7);',
-      ' return (a*0.55+b*0.30+c*0.15)*pow(x,1.5);',
+      'float fbm(vec2 q){',
+      ' float s=0.0,a=0.5;',
+      ' for(int i=0;i<4;i++){s+=a*nval(q);q=q*2.03+vec2(1.7,9.2);a*=0.5;}',
+      ' return s;',
+      '}',
+      // 阵风场：以指针为圆心、随时间外扩的环状波前
+      'float gust(vec2 p,float t){',
+      ' float s=0.0;',
+      ' for(int i=0;i<6;i++){',
+      '  vec4 g=u_gust[i];',
+      '  if(g.w<=0.001)continue;',
+      '  float age=t-g.z;',
+      '  if(age<0.0||age>1.7)continue;',
+      '  float d=length(p-g.xy);',
+      '  float r=age*0.85;',
+      '  float ring=exp(-pow((d-r)*4.2,2.0));',
+      '  float fade=(1.0-age/1.7)*smoothstep(0.0,0.06,age);',
+      '  s+=g.w*ring*fade;',
+      ' }',
+      ' return s;',
+      '}',
+      // 缎面褶皱高度场：横向强拉伸成长条竖褶，两级 fbm 扭曲去机械感
+      'float silkH(vec2 p,float t){',
+      ' vec2 q=p;',
+      ' q.x*=0.34;',
+      ' float w1=fbm(q*1.7+vec2(t*0.021,t*0.008));',
+      ' float w2=fbm(q*4.1-vec2(t*0.033,t*0.014));',
+      ' float f=sin(q.x*3.4+w1*5.2+w2*2.1+t*0.12);',
+      ' float f2=sin(q.x*7.9-w2*3.4-t*0.07);',
+      ' return f*0.72+f2*0.28;',
       '}',
       'void main(){',
-      ' vec2 px=gl_FragCoord.xy;',
+      ' vec2 uv=gl_FragCoord.xy/u_res;',
+      ' float asp=u_res.x/u_res.y;',
+      ' vec2 p=vec2(uv.x*asp,uv.y);',
       ' float t=u_t;',
-      ' float ar=u_res.x/u_res.y;',
-      ' float flagW=(ar<0.9)?min(0.68*u_res.x,0.52*u_res.y):min(0.44*u_res.x,0.86*u_res.y);',
-      ' float flagH=flagW*2.0/3.0;',
-      ' float cxF=(ar<0.9)?0.46:0.238;',
-      ' float cyF=(ar<0.9)?0.30:0.46;',
-      ' vec2 c0=vec2(u_res.x*(cxF+0.014*sin(t*0.17)),u_res.y*(cyF+0.012*cos(t*0.13)));',
-      ' float poleW=flagW*0.026;',
-      ' float poleExt=poleW*2.8;',
-      // gl_FragCoord.y 向上增长：orgF 取旗面「上边」，f.y 向下增长，保证五星位于左上
-      ' vec2 orgF=vec2(c0.x-flagW*0.5,c0.y+flagH*0.5);',
-      ' vec2 orgE=vec2(orgF.x-poleW,orgF.y+poleExt);',
-      ' float regW=flagW+poleW;',
-      ' float regH=flagH+poleExt;',
-      ' vec2 ce=orgE+vec2(regW*0.5,-regH*0.5);',
-      ' vec2 dE=vec2(regW*0.5,regH*0.5)-abs(px-ce);',
-      ' float inF=smoothstep(0.0,1.5,min(dE.x,dE.y));',
-      ' if(inF<=0.003){gl_FragColor=vec4(0.0);return;}',
-      // 旗杆：金属圆柱 + 顶端金球，让「国旗」一眼可辨而非红色幽灵方块
-      ' if(px.x<orgF.x){',
-      '  float u=(px.x-orgE.x)/poleW;',
-      '  float cyl=sqrt(max(0.0,1.0-pow(u*2.0-1.0,2.0)));',
-      '  vec3 poleC=mix(vec3(0.180,0.145,0.118),vec3(0.831,0.639,0.251),cyl*cyl);',
-      '  float ballR=poleW*1.30;',
-      '  vec2 bc=vec2(orgE.x+ballR*1.02,orgE.y+ballR*0.95);',
-      '  float ball=1.0-smoothstep(-1.2,1.2,length(px-bc)-ballR);',
-      '  poleC=mix(poleC,vec3(0.949,0.784,0.337)*(0.68+0.46*cyl),ball);',
-      '  gl_FragColor=vec4(poleC,inF*0.96);',
-      '  return;',
-      ' }',
-      ' vec2 f=vec2((px.x-orgF.x)/flagW*1.5,(orgF.y-px.y)/flagH);',
-      ' float e=0.010;',
-      ' float h=clothH(f,t);',
-      ' float hx=clothH(f+vec2(e,0.0),t);',
-      ' float hy=clothH(f+vec2(0.0,e),t);',
-      ' float AMP=0.30;',
-      ' vec3 N=normalize(vec3(-(hx-h)/e*AMP,-(hy-h)/e*AMP,1.0));',
-      ' vec3 L=normalize(vec3(-0.35,0.50,0.79));',
-      ' float diff=0.58+0.42*max(dot(N,L),0.0);',
+      ' float g=gust(p,t);',
+      ' vec2 sp=p+vec2(g*0.30,g*0.14);',
+      ' float e=0.004;',
+      ' float h=silkH(sp,t);',
+      ' float hx=silkH(sp+vec2(e,0.0),t);',
+      ' float hy=silkH(sp+vec2(0.0,e),t);',
+      ' float amp=0.055+g*0.085;',
+      ' vec3 N=normalize(vec3(-(hx-h)/e*amp,-(hy-h)/e*amp,1.0));',
+      ' vec3 L=normalize(vec3(-0.34,0.44,0.83));',
       ' vec3 Hv=normalize(L+vec3(0.0,0.0,1.0));',
-      ' float spec=pow(max(dot(N,Hv),0.0),46.0);',
-      ' vec3 red=mix(C_DEEP,C_ZHU,clamp(0.42+0.58*(h*0.5+0.5),0.0,1.0));',
-      ' red=mix(red,red*1.18,u_d*0.55);',
-      ' vec2 LC=vec2(0.5,0.3333333);',
-      ' vec2 s1=vec2(0.6333333,0.1333333);',
-      ' vec2 s2=vec2(0.6333333,0.2666667);',
-      ' vec2 s3=vec2(0.6333333,0.4000000);',
-      ' vec2 s4=vec2(0.6333333,0.5333333);',
-      ' float stars=drawStar(f,LC,0.1666667,vec2(0.0,-1.0));',
-      ' stars=max(stars,drawStar(f,s1,0.05,normalize(LC-s1)));',
-      ' stars=max(stars,drawStar(f,s2,0.05,normalize(LC-s2)));',
-      ' stars=max(stars,drawStar(f,s3,0.05,normalize(LC-s3)));',
-      ' stars=max(stars,drawStar(f,s4,0.05,normalize(LC-s4)));',
-      ' vec3 gold=mix(C_GOLD,C_XIANG,clamp(0.5+0.5*h,0.0,1.0));',
-      ' vec3 col=mix(red,gold,clamp(stars,0.0,1.0));',
-      ' col*=diff;',
-      ' col+=vec3(1.0,0.94,0.82)*spec*0.30;',
-      ' float weave=sin(f.x*760.0)*sin(f.y*560.0);',
-      ' col*=1.0+weave*0.018;',
-      ' float x=clamp(f.x/1.5,0.0,1.0);',
-      ' col*=1.0-0.20*smoothstep(0.45,1.0,x);',
-      ' col*=1.0-0.10*smoothstep(0.10,0.0,x);',
-      ' gl_FragColor=vec4(col,inF*0.92);',
+      ' float ndh=max(dot(N,Hv),0.0);',
+      ' float diff=0.5+0.5*max(dot(N,L),0.0);',
+      ' float spec=pow(ndh,26.0);',
+      ' float sheen=pow(ndh,96.0);',
+      ' float lum=diff*0.40+spec*0.32+sheen*0.28+g*0.90;',
+      ' vec3 col=mix(vec3(1.0),u_acc,0.20+0.28*u_d);',
+      ' col=mix(col*diff,vec3(1.0),sheen*0.55);',
+      ' float a=clamp(lum,0.0,1.0)*u_op;',
+      ' gl_FragColor=vec4(col,a);',
       '}'
     ].join('\n'));
     var prog = gl.createProgram();
@@ -14196,50 +13833,123 @@ document.addEventListener('DOMContentLoaded', function() {
     var uRes = gl.getUniformLocation(prog, 'u_res');
     var uT = gl.getUniformLocation(prog, 'u_t');
     var uD = gl.getUniformLocation(prog, 'u_d');
+    var uOp = gl.getUniformLocation(prog, 'u_op');
+    var uAcc = gl.getUniformLocation(prog, 'u_acc');
+    var uGust = gl.getUniformLocation(prog, 'u_gust[0]');
 
-    // 插到噪点层之前 → 同为 z-index:-1 时国旗在噪点之下，纹理仍由噪点统一施加
+    // 与噪点层同为 z-index:-1，插在其前 → 绘制在噪点之下，噪点仍做统一颗粒
     var noise = document.querySelector('.noise-overlay');
     if (noise && noise.parentNode) noise.parentNode.insertBefore(canvas, noise);
     else document.body.appendChild(canvas);
 
-    var active = false, queued = false;
+    var SCALE = 0.62;                       // 低频纹理，降分辨率省算力
+    var gustBuf = new Float32Array(24);     // 6 组 * 4
+    var gustIdx = 0;
+    function pushGust(cx, cy, amp) {
+      var vw = window.innerWidth, vh = window.innerHeight;
+      if (!vw || !vh) return;
+      var i = (gustIdx++ % 6) * 4;
+      gustBuf[i] = (cx / vw) * (vw / vh);   // 与着色器 p 同坐标系（y 向上）
+      gustBuf[i + 1] = 1 - cy / vh;
+      gustBuf[i + 2] = performance.now() / 1000;
+      gustBuf[i + 3] = amp;
+    }
+    var lastX = -1e4, lastY = -1e4, lastT = 0;
+    function onMove(x, y) {
+      var now = performance.now();
+      var dx = x - lastX, dy = y - lastY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 26 && now - lastT < 95) return;   // 节流，避免塞满 6 槽
+      pushGust(x, y, Math.max(0.30, Math.min(1.0, 0.34 + dist / 90)));
+      lastX = x; lastY = y; lastT = now;
+    }
+    window.addEventListener('pointermove', function (e) { onMove(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener('touchmove', function (e) {
+      var t = e.touches && e.touches[0];
+      if (t) onMove(t.clientX, t.clientY);
+    }, { passive: true });
+
+    // 极弱环境风：无交互时绸面也会缓慢起伏
+    var ambientAt = performance.now() + 1200;
+    function ambient(now) {
+      if (now < ambientAt) return;
+      ambientAt = now + 1900 + Math.random() * 1400;
+      var vw = window.innerWidth, vh = window.innerHeight;
+      pushGust(vw * (0.18 + Math.random() * 0.64), vh * (0.20 + Math.random() * 0.60), 0.26 + Math.random() * 0.16);
+    }
+
+    var accRGB = [0.949, 0.384, 0.165];
+    function hex2v(s) {
+      s = String(s || '').trim();
+      if (s.charAt(0) === '#') {
+        if (s.length === 7) {
+          var n = parseInt(s.slice(1), 16);
+          if (isNaN(n)) return null;
+          return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+        }
+        if (s.length === 4) {
+          var r = parseInt(s.slice(1), 16), g = parseInt(s.slice(2), 16), b = parseInt(s.slice(3), 16);
+          if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+          return [(r * 17) / 255, (g * 17) / 255, (b * 17) / 255];
+        }
+        return null;
+      }
+      var m = s.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+      if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+      return null;
+    }
+    function syncAcc() {
+      try {
+        var rgb = hex2v(getComputedStyle(document.body).getPropertyValue('--accent'));
+        if (rgb) accRGB = rgb;
+      } catch (e) {}
+    }
+    syncAcc();
+    window.__npSilkAccent = syncAcc;
+
     function isDark() {
       var el = document.documentElement;
       return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
     }
+    var sizeDirty = true;
+    function markDirty() { sizeDirty = true; }
+    window.addEventListener('resize', markDirty, { passive: true });
+    window.addEventListener('orientationchange', markDirty, { passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', markDirty, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) sizeDirty = true; });
+
     function resize() {
-      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-      var h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+      var w = Math.max(1, Math.round(canvas.clientWidth * SCALE));
+      var h = Math.max(1, Math.round(canvas.clientHeight * SCALE));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        gl.viewport(0, 0, w, h);
+      }
+      sizeDirty = false;
     }
-    function schedule() { if (!queued && active) { queued = true; requestAnimationFrame(frame); } }
+    var queued = false;
+    function schedule() { if (!queued) { queued = true; requestAnimationFrame(frame); } }
+    var tick = 0;
     function frame(now) {
       queued = false;
-      if (!active) return;
       try {
         if (!document.hidden) {
-          resize();
+          ambient(now || 0);
+          if (sizeDirty || (tick % 90) === 0) resize();
+          tick = (tick + 1) % 100000;
           gl.uniform2f(uRes, canvas.width, canvas.height);
           gl.uniform1f(uT, (now || 0) / 1000);
-          gl.uniform1f(uD, isDark() ? 1 : 0);
+          var d = isDark() ? 1 : 0;
+          gl.uniform1f(uD, d);
+          gl.uniform1f(uOp, d ? 0.62 : 0.50);
+          gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
+          gl.uniform4fv(uGust, gustBuf);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
       } catch (err) { die(); return; }
       schedule();
     }
-    // 主题色切换时由 syncMetaThemeColor() 调用；首屏由 loadThemeColor() 之后触发
-    window.__npFlagSync = function () {
-      var on = !!(document.body && document.body.classList.contains('theme-red'));
-      if (on === active) { if (on) schedule(); return; }
-      active = on;
-      canvas.style.display = on ? '' : 'none';
-      if (on) { resize(); schedule(); }
-    };
-    window.addEventListener('resize', function () { if (active) resize(); }, { passive: true });
-    window.addEventListener('orientationchange', function () { if (active) resize(); }, { passive: true });
-    canvas.style.display = 'none';
-    window.__npFlagSync();
+    schedule();
   } catch (e) {
     die();
   }

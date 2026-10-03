@@ -4,6 +4,66 @@
 
 ---
 
+## v9.4 — 2026-10-03
+
+### 变更：国旗改为纯丝绸飘动质感层 + 中国红配色重做 + 删除站点页脚与设置「全局」栏 + 栏目横向滚动
+
+四项改动 + 一处版式微调。上一版把「国旗」当主体做错了方向：本版只保留飘动质感，去掉国旗图形本身。
+
+#### 一、丝绸飘动质感层（`public/index.html` + `public/style.css`）
+- **删除**：五星、旗杆、旗面矩形裁剪、朱红配色、主题门控（`__npFlagSync`）。原 `#flag-canvas` 整块移除
+- **改为** `#silk-canvas`：全屏缎面褶皱波纹，保留原有背景（流体画布 L1 + 噪点 L2 + 磨砂玻璃 L3）不动，只在噪点之下叠一层光泽
+  - 高度场：横向强拉伸（`q.x *= 0.34`）成竖长褶 + 两级 fbm 扭曲去机械感 + 双频正弦叠加
+  - 着色：有限差分求法线 → 漫反射 + 两段高光（26 次幂宽高光 / 96 次幂窄缎光），`lum` 逐像素调制 alpha → **只留缎面反光，不糊背景**
+  - 染色取 `--accent`（弱化到 20%/暗色 48%），随主题变化但不抢主色
+- **指针 = 风吹拂过**：`pointermove` / `touchmove` 注入 6 组环形波前（`u_gust[6]`，xy=位置 z=起始秒 w=强度），波前随时间外扩 `r = age*0.85`，推开织物采样点 `sp = p + g*0.30` 并局部提亮（`g*0.90`）；节流 26px / 95ms；另有 1.9~3.3s 一次的极弱环境风，无交互时绸面也自然呼吸
+- **性能**：低频纹理 → 内部 0.62 倍分辨率渲染、dpr 上限 1（画布 1280×820 → 内部 794×508），移动端额外一层 WebGL 的开销可控
+- 常驻生效（不再按主题启停），主题色切换时由 `syncMetaThemeColor()` 调 `__npSilkAccent()` 同步染色
+
+#### 二、中国红配色重做（`public/style.css` / `public/index.html`）
+- **上一版问题**：品牌取朱红 `#FF4C00`（偏橘的亮红），而流体画布按 `--accent` 22% 把整屏染成同一种橙红，宣纸底与墨色对比被冲掉 → 满屏红橙，确如反馈的「不伦不类」
+- **本版原则**：① 底用宣纸本色，不用红染，红只做点缀；② 主色取沉稳朱砂「赤 chi `#C3272B`」替代刺眼亮橘红；③ 辅色「缃色 `#C9A227`」泥金只用于高光；④ 暗色底取玄色 `#622A1D` 压暗
+- 亮色 `--accent #C3272B` / `--bg-primary #EFE6D8` / `--bg-tertiary #E3D6C2`；暗色 `--accent #D2543F` / `--bg-primary #171310` / `--bg-tertiary #3A2F27`。全无紫无靛
+- 主题按钮色块与 `THEME_COLORS.red` 同步为 `#C3272B`（2 处 HTML + 1 处 JS）
+
+#### 三、删除站点页脚（`site-footer`）
+用户反馈该元素累赘。删除：footer 元素、`renderSiteFooter()`、`loadFooterLiuyan()`、2 处调用、`has-footer` 身体类、style.css 全部 25 条 `.site-footer*` 规则（共 148 行）。保留 `applySiteBranding()`（品牌 / SEO / logo 仍由 `site-settings` 驱动）
+
+#### 四、删除设置面板「全局」栏
+- 删除 tab 按钮 `#settingsSiteTab`、`loadSettings` 内的显隐控制、`switchSettingsTab` 的 `tab==='site'` 分支
+- 一并清除已成死代码的整段实现（13 个顶层定义）：`gsData` / `gsLiuyanState` / `gsParseArr` / `gsVal` / `gsLinkOk` / `gsHdr` / `gsField` / `gsBtnSm` / `gsSyncRows` / `gsRenderLinkRows` / `gsAddRow` / `gsRemoveRow` / `gsSetLiuyan` / `renderSiteSettingsTab` / `gsPreviewLiuyan` / `saveSiteSection`（-13492 字节）
+- 保留 `applySiteBranding` / `settingsAccountHTML` / `isSiteAdmin` / `siteSettings`（维护模式、迁移模式、品牌仍依赖）
+
+#### 五、栏目过多时横向滚动（`.tabs`）
+- 右上角栏目选择（设置 4 栏、开发者 6 栏）此前 `.tab{flex:1}` 等分挤压，栏目一多就难用 → 改 `flex:0 0 auto` + `white-space:nowrap` + `overflow-x:auto`，配 6px 细滚动条（`scrollbar-width:thin` + WebKit thumb）
+- 新增 `revealActiveTab()`：切换栏目后 `scrollIntoView({block:'nearest'})` 把选中项滚入可视区，`block:'nearest'` 避免整页被带着滚
+- 顺带把 `.tab` 的 `transition:all` 收窄为 `transition:color/background/box-shadow`（`all` 会连带动画布局属性）
+
+#### 六、版式质感微调（参考《想提高UI界面质感？15个版式设计技巧》）
+- **③「线条分割 vs 空间分割」**：`.chat-settings-row` / `.tool-weather-day` 去掉逐行 `border-bottom`，改用行距分组；仅在相邻行间保留一条更淡的分隔（55% 透明），末行不描边
+- **⑪「色彩对比」**：设置行 hover 用 4% 强度的 `--accent` 淡色底表达，不靠描边
+
+#### 修改文件
+| 文件 | 变更 |
+|---|---|
+| `public/index.html` | 删 `#flag-canvas` 整块 → `#silk-canvas` 丝绸层；删 `renderSiteFooter`/`loadFooterLiuyan`/`settingsSiteTab` 及调用；删全局设置 13 个 `gs*` 定义与 `tab==='site'` 分支；新增 `revealActiveTab()`；`syncMetaThemeColor()` 改调 `__npSilkAccent()`；主题色块与 `THEME_COLORS` 改 `#C3272B` |
+| `public/style.css` | `.theme-red` 三行换中式配色；删全部 `.site-footer*`；`#flag-canvas` → `#silk-canvas`；`.tabs` 改横向滚动 + 细滚动条；新增列表空间分割与 hover 色底 |
+| `CHANGELOG.md` | 本节 |
+
+#### 验证记录（Playwright + Chromium，`http://127.0.0.1:8931`，`/api` 全 mock）
+- **inline script 语法门禁**：`node check_inline_scripts.js` → **ALL_PASS**（8 块，行 44/80/155/238/540/13139/13262/13728）
+- **丝绸层**：`#silk-canvas` 存在、`z-index:-1`、`display:block`、内部画布 794×508（0.62 倍）；`#flag-canvas` 已不存在；指针划过 400×300 区域 PNG 字节变化 48075（ratio 0.9932）
+- **配色**：亮色 `accent #C3272B` / `accentLight #C9A227` / `bg #EFE6D8` / `bgTertiary #E3D6C2`（暗色 `#D2543F` / `#171310` / `#3A2F27`）
+- **删除项**：`#siteFooter` 不存在、`#settingsSiteTab` 不存在、`typeof renderSiteFooter === 'undefined'`、`typeof renderSiteSettingsTab === 'undefined'`、body 无 `has-footer`
+- **栏目滚动**：390px 下设置面板 `scrollWidth 382 > clientWidth 317`，`scrollLeft` 实测滚到 64.67（上限 65）；1280px 下开发者面板 6 栏 `591 > 463`。设置栏实测仅剩 4 个（账号/好友/频道/黑名单）
+- **控制台**：桌面 1280×820 与移动 390×844 均 **0 error**
+
+#### 备注
+- 本轮未改动 v9.3 的媒体链接自动识别渲染（`parseMediaLink`）与其 CSP 放行，已回归确认不受影响
+- `theme-purple`（典雅紫 `#8B5CF6`）仍在 8 主题中，违反配色禁令；彻底移除会破坏已存 `dp_theme_color` 的用户偏好，仍未处理
+
+---
+
 ## v9.3 — 2026-10-03
 
 ### 变更：图链/视频链接自动识别渲染（B站/YouTube/Vimeo 播放器）+ 中国红主题改国潮色板 + 国旗飘扬 WebGL 着色器
