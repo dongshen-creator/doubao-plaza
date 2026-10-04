@@ -624,7 +624,10 @@ body{font-family:'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei',
 .tabs::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px}
 .tabs::-webkit-scrollbar-thumb:hover{background:var(--text-faint)}
 .tab{
-  flex:0 0 auto;                 /* 不再等分拉伸：栏目多时保持自然宽度并可横向滚动 */
+  /* V9.5 改 1 0 auto：栏少时仍等分撑满（原样），栏多时不压缩、自然宽度 + 横向滚动。
+     之前用 0 0 auto 会让所有主题的 tab 都不再撑满，属外溢改动，已改回可伸缩。*/
+  flex:1 0 auto;
+  min-width:max-content;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1156,8 +1159,8 @@ body{font-family:'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei',
      ③ 辅色取「缃色 xiang-se #F0C239 / 金色 jin-se #EACD76」泥金，只用于高光与强调
      ④ 暗色底取「玄色 xuan-se #622A1D + 墨」压暗，不做亮红
    色值参考 Chinese Color Atlas（Chroma Cathay, MIT），全无紫无靛。*/
-.theme-red{--accent:#C3272B;--accent-light:#C9A227;--accent-gradient:linear-gradient(135deg,#C3272B,#C9A227);--accent-bg:rgba(195,39,43,0.07);--accent-bg-hover:rgba(195,39,43,0.035);--accent-shadow:rgba(122,34,28,0.28);--border-focus:#C3272B}
-.dark.theme-red{--accent:#D2543F;--accent-light:#C9A227;--accent-gradient:linear-gradient(135deg,#D2543F,#C9A227);--accent-bg:rgba(210,84,63,0.10);--accent-bg-hover:rgba(210,84,63,0.05);--accent-shadow:rgba(210,84,63,0.22);--border-focus:#D2543F}
+.theme-red{--accent:#C3272B;--accent-light:#C9A227;--accent-gradient:linear-gradient(135deg,#C3272B,#C9A227);--accent-bg:rgba(195,39,43,0.07);--accent-bg-hover:rgba(195,39,43,0.035);--accent-shadow:rgba(122,34,28,0.28);--border-focus:#C9A227}
+.dark.theme-red{--accent:#D2543F;--accent-light:#C9A227;--accent-gradient:linear-gradient(135deg,#D2543F,#C9A227);--accent-bg:rgba(210,84,63,0.10);--accent-bg-hover:rgba(210,84,63,0.05);--accent-shadow:rgba(210,84,63,0.22);--border-focus:#C9A227}
 .theme-ink{--accent:#464B52;--accent-light:#6E747C;--accent-gradient:linear-gradient(135deg,#464B52,#6E747C);--accent-bg:rgba(70,75,82,0.08);--accent-bg-hover:rgba(70,75,82,0.04);--accent-shadow:rgba(70,75,82,0.35);--border-focus:#464B52;--text-on-accent:#FAFAFB}
 .dark.theme-ink{--accent:#A7ADB8;--accent-light:#C9CED6;--accent-gradient:linear-gradient(135deg,#A7ADB8,#C9CED6);--accent-bg:rgba(167,173,184,0.12);--accent-bg-hover:rgba(167,173,184,0.06);--accent-shadow:rgba(167,173,184,0.25);--border-focus:#A7ADB8;--text-on-accent:#1A1D22}
 
@@ -1172,8 +1175,63 @@ body.theme-pink:not(.dark){--bg-primary:#F6EAE8;--bg-secondary:rgba(254,243,242,
 body.dark.theme-pink{--bg-primary:#251719;--bg-secondary:rgba(44,28,29,0.78);--bg-tertiary:#3D2829;--bg-hover:#4F3235;--bg-input:#362224;--nav-bg:rgba(39,24,26,0.72);--modal-bg:rgba(43,27,28,0.92);--chat-recv-bubble:rgba(54,35,35,0.85);--chat-recv-border:#58393C;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#321F21 0%,rgba(32,27,21,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#2E161D 0%,rgba(18,15,11,0) 62%);--glow-orange:rgba(236,72,153,0.14);--glow-cyan:rgba(244,145,194,0.09);--glow-violet:rgba(189,58,122,0.1)}
 body.theme-cyan:not(.dark){--bg-primary:#EBF0EB;--bg-secondary:rgba(243,248,245,0.78);--bg-tertiary:#DCE5DE;--bg-hover:#CDDED7;--bg-input:#E3EBE5;--nav-bg:rgba(243,248,245,0.72);--modal-bg:rgba(243,248,245,0.92);--chat-recv-bubble:rgba(240,248,245,0.85);--chat-recv-border:#C5D9D3;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#ECF6F5 0%,rgba(253,251,247,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#D1E1DA 0%,rgba(239,231,219,0) 62%);--glow-orange:rgba(6,182,212,0.12);--glow-cyan:rgba(106,211,229,0.07);--glow-violet:rgba(5,146,170,0.1)}
 body.dark.theme-cyan{--bg-primary:#151E1D;--bg-secondary:rgba(28,36,33,0.78);--bg-tertiary:#26332F;--bg-hover:#2E413E;--bg-input:#212C29;--nav-bg:rgba(23,31,30,0.72);--modal-bg:rgba(26,35,33,0.92);--chat-recv-bubble:rgba(35,44,40,0.85);--chat-recv-border:#364944;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#1E2926 0%,rgba(32,27,21,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#102525 0%,rgba(18,15,11,0) 62%);--glow-orange:rgba(6,182,212,0.14);--glow-cyan:rgba(106,211,229,0.09);--glow-violet:rgba(5,146,170,0.1)}
-body.theme-red:not(.dark){--bg-primary:#EFE6D8;--bg-secondary:rgba(245,238,226,0.80);--bg-tertiary:#E3D6C2;--bg-hover:#DACBB3;--bg-input:#F2E9DB;--nav-bg:rgba(247,241,230,0.74);--modal-bg:rgba(247,241,230,0.93);--chat-recv-bubble:rgba(244,236,223,0.86);--chat-recv-border:#D8C7AC;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#F6EFE1 0%,rgba(247,241,230,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#E4D6BE 0%,rgba(239,230,218,0) 62%);--glow-orange:rgba(195,39,43,0.10);--glow-cyan:rgba(201,162,39,0.05);--glow-violet:rgba(122,34,28,0.07)}
-body.dark.theme-red{--bg-primary:#171310;--bg-secondary:rgba(38,31,26,0.80);--bg-tertiary:#3A2F27;--bg-hover:#4A3B30;--bg-input:#2C241E;--nav-bg:rgba(30,25,21,0.74);--modal-bg:rgba(34,28,24,0.93);--chat-recv-bubble:rgba(52,42,35,0.86);--chat-recv-border:#5B4A3D;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#2A211B 0%,rgba(23,19,16,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#201915 0%,rgba(16,13,11,0) 62%);--glow-orange:rgba(210,84,63,0.10);--glow-cyan:rgba(201,162,39,0.06);--glow-violet:rgba(122,34,28,0.08)}
+/* V9.5 中国红：国旗红底 + 宣纸（不透明 UI）/ 琉璃（透明 UI）/ 国画皴染（三重质感，仅 theme-red）
+   底色绛红，文字转宣纸色；--bg-tertiary 系列=宣纸，--bg-secondary/--nav-bg=红釉琉璃；
+   --np-base-grad 用墨色皴染 + 右下暖光做国画底。配色沿用朱砂 chi #C3272B / 泥金 xiang-se #C9A227 / 玄色 xuan-se #622A1D */
+body.theme-red{
+  --text-primary:#F6EBD9;
+  --text-secondary:rgba(246,235,217,0.86);
+  --text-muted:rgba(246,235,217,0.68);
+  --text-faint:rgba(246,235,217,0.46);
+  --border-color:rgba(246,235,217,0.16);
+  --border-strong:rgba(246,235,217,0.30);
+  --scrollbar-thumb:rgba(246,235,217,0.26);
+  --bg-primary:#8C1A12;
+  --bg-tertiary:#EFE2CB;
+  --bg-hover:#E4D3B4;
+  --bg-input:#F2E6D0;
+  --modal-bg:#F2E6D0;
+  --chat-recv-bubble:#F2E6D0;
+  --chat-recv-border:#C9AE84;
+  --bg-secondary:rgba(255,214,186,0.13);
+  --nav-bg:rgba(104,17,12,0.52);
+  --np-panel-hi:rgba(255,232,208,0.30);
+  --np-blur:blur(15px) saturate(1.75);
+  --np-base-grad:
+    radial-gradient(900px 620px at 84% 108%, rgba(255,178,120,0.16) 0%, rgba(255,178,120,0) 60%),
+    radial-gradient(760px 520px at 8% 88%, rgba(40,10,6,0.34) 0%, rgba(40,10,6,0) 62%),
+    linear-gradient(158deg, #A8271B 0%, #8C1A12 46%, #6E120C 100%);
+  --glow-orange:rgba(201,162,39,0.10);
+  --glow-cyan:rgba(255,214,186,0.05);
+  --glow-violet:rgba(60,14,8,0.12);
+}
+body.dark.theme-red{
+  --text-primary:#F2E4CF;
+  --text-secondary:rgba(242,228,207,0.84);
+  --text-muted:rgba(242,228,207,0.64);
+  --text-faint:rgba(242,228,207,0.42);
+  --border-color:rgba(242,228,207,0.14);
+  --border-strong:rgba(242,228,207,0.26);
+  --scrollbar-thumb:rgba(242,228,207,0.22);
+  --bg-primary:#450906;
+  --bg-tertiary:#E7D6B8;
+  --bg-hover:#D9C39C;
+  --bg-input:#EADCBE;
+  --modal-bg:#EADCBE;
+  --chat-recv-bubble:#EADCBE;
+  --chat-recv-border:#B99C72;
+  --bg-secondary:rgba(255,196,164,0.10);
+  --nav-bg:rgba(58,9,6,0.58);
+  --np-panel-hi:rgba(255,226,200,0.22);
+  --np-blur:blur(15px) saturate(1.7);
+  --np-base-grad:
+    radial-gradient(900px 620px at 84% 108%, rgba(255,150,96,0.13) 0%, rgba(255,150,96,0) 60%),
+    radial-gradient(760px 520px at 8% 88%, rgba(16,4,2,0.46) 0%, rgba(16,4,2,0) 62%),
+    linear-gradient(158deg, #5E0F0A 0%, #450906 52%, #2E0503 100%);
+  --glow-orange:rgba(201,162,39,0.09);
+  --glow-cyan:rgba(255,200,170,0.04);
+  --glow-violet:rgba(0,0,0,0.20);
+}
 body.theme-ink:not(.dark){--bg-primary:#F1F1F2;--bg-secondary:rgba(255,255,255,0.78);--bg-tertiary:#E7E7E9;--bg-hover:#DEDEE1;--bg-input:#ECECEE;--text-primary:#1F2124;--text-secondary:#4B5057;--text-muted:#71767D;--text-faint:#9CA0A6;--border-strong:#DCDCDF;--scrollbar-thumb:#C6C7CB;--nav-bg:rgba(255,255,255,0.72);--modal-bg:rgba(255,255,255,0.92);--chat-recv-bubble:#FAFAFB;--chat-recv-border:#E4E4E7;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#FCFCFD 0%,rgba(252,252,253,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#E9E9EB 0%,rgba(233,233,235,0) 62%);--glow-orange:rgba(70,75,82,0.10);--glow-cyan:rgba(110,116,124,0.07);--glow-violet:rgba(70,75,82,0.09)}
 body.dark.theme-ink{--bg-primary:#15161A;--bg-secondary:rgba(26,27,31,0.72);--bg-tertiary:#212329;--bg-hover:#2A2C33;--bg-input:#1C1E23;--text-primary:#E9EAEC;--text-secondary:#BEC1C7;--text-muted:#93979E;--text-faint:#6C7077;--border-strong:#33353B;--scrollbar-thumb:#4A4C52;--nav-bg:rgba(18,19,22,0.72);--modal-bg:rgba(24,25,29,0.92);--chat-recv-bubble:rgba(35,37,43,0.85);--chat-recv-border:#34363D;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#1C1E22 0%,rgba(28,30,34,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#121317 0%,rgba(18,19,23,0) 62%);--glow-orange:rgba(167,173,184,0.12);--glow-cyan:rgba(201,206,214,0.08);--glow-violet:rgba(167,173,184,0.10)}
 
@@ -2579,31 +2637,133 @@ body.dark.theme-ink .noise-overlay { opacity: .07; }
 }
 
 /* ═══════════════════════════════════════════════════════════
-   V9.4 版式质感微调
-   参考《想提高UI界面质感？15个版式设计技巧》：
-   ③「线条分割 vs 空间分割」——分割线给人压迫感，空间分割更轻松
-     → 列表行之间改用行距分组，去掉逐行细线
-   ⑪「色彩对比」——行状态用极轻色底变化表达，不靠描边
+   V9.5 关闭着色器后的固定背景
+   反馈：设置里关掉着色器会把背景一起"关掉"（其实只剩一层几乎看不见的
+   --np-base-grad 径向渐变，观感上像背景没了）。
+   处理：着色器关闭时给 body 加 .shaders-off，用**静态**的分层渐变接管，
+   仍然有明确的底色与光影，但不依赖任何动画/画布。
+   ═══════════════════════════════════════════════════════════ */
+body.shaders-off{
+  background-image:
+    var(--np-base-grad),
+    radial-gradient(1100px 760px at 12% -6%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(168deg, rgba(0,0,0,0) 42%, rgba(0,0,0,0.055) 100%);
+  background-attachment:fixed, fixed, fixed;
+  background-repeat:no-repeat;
+  background-size:cover;
+}
+body.dark.shaders-off{
+  background-image:
+    var(--np-base-grad),
+    radial-gradient(1100px 760px at 12% -6%, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(168deg, rgba(0,0,0,0) 42%, rgba(0,0,0,0.16) 100%);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   V9.5 中国红材质：宣纸 / 琉璃 / 国画（全部限定 body.theme-red）
+   ② 不透明/基底 UI → 宣纸：纤维纹 + 暖白宣色 + 内阴影毛边
+   ③ 透明 UI       → 琉璃：红釉半透 + 釉面流光高光 + 泛红描边
+   ④ 底/点缀       → 国画：墨色皴染 + 宣纸暗纹 + 泥金描点
    ═══════════════════════════════════════════════════════════ */
 
-/* ③ 设置行 / 天气行：空间分割替代细分割线 */
-.chat-settings-row,
-.tool-weather-day{
-  border-bottom:0;
-  padding:12px 0;
-}
-.chat-settings-row + .chat-settings-row,
-.tool-weather-day + .tool-weather-day{
-  border-top:1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
-}
-/* 末行不重复描边 */
-.chat-settings-row:last-child,
-.tool-weather-day:last-child{
-  border-bottom:0;
+/* 宣纸纤维纹理（SVG feTurbulence + 细横纹，data-URI 无外部请求） */
+body.theme-red{
+  --xuan-paper:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='0.42'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(94deg, rgba(120,86,44,0.045) 0 2px, rgba(120,86,44,0) 2px 7px),
+    repeating-linear-gradient(2deg, rgba(120,86,44,0.035) 0 1px, rgba(120,86,44,0) 1px 11px);
 }
 
-/* ⑪ 极轻色底代替描边表达 hover / 选中 */
-.chat-settings-row:hover{
-  background:color-mix(in srgb, var(--accent) 4%, transparent);
-  border-radius:8px;
+/* ② 宣纸：不透明基底 UI —— 模态 / 输入框 / 标签栏 / 收到的气泡
+      （对应 token：--modal-bg、--bg-input、--bg-tertiary、--chat-recv-bubble，均为不透明暖白） */
+body.theme-red .modal,
+body.theme-red .input,
+body.theme-red .chat-input,
+body.theme-red .dev-input,
+body.theme-red .dev-textarea,
+body.theme-red .tool-field input,
+body.theme-red .tool-field textarea,
+body.theme-red .tool-field select,
+body.theme-red .tabs{
+  background-image:var(--xuan-paper);
+  background-blend-mode:multiply;
+  box-shadow:
+    inset 0 0 0 1px rgba(120,86,44,0.13),
+    inset 0 1px 3px rgba(120,86,44,0.10),
+    0 1px 3px rgba(60,20,10,0.10);
 }
+/* ③ 琉璃：半透明 UI —— 卡片 / 导航 / 侧栏 / 面板头
+      （对应 token：--bg-secondary、--nav-bg，均为半透明红釉） */
+body.theme-red .card,
+body.theme-red .navbar,
+body.theme-red .activity-bar,
+body.theme-red .app-sidebar,
+body.theme-red .chat-view-header,
+body.theme-red .chat-header,
+body.theme-red .chat-input-area,
+body.theme-red .chat-view-input,
+body.theme-red .chat-room-list,
+body.theme-red .tool-panel-header{
+  background-image:
+    linear-gradient(150deg, rgba(255,226,200,0.16) 0%, rgba(255,226,200,0) 38%),
+    linear-gradient(24deg, rgba(120,20,12,0.30) 0%, rgba(120,20,12,0) 52%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,236,214,0.34),
+    inset 0 0 0 1px rgba(255,214,186,0.16),
+    inset 0 -14px 26px rgba(90,14,8,0.16);
+}
+body.theme-red .navbar{border-bottom-color:rgba(255,214,186,0.20)}
+
+/* 宣纸面上的文字必须回到墨色 —— 红底用的浅色字在浅纸上不可读 */
+body.theme-red .modal,
+body.theme-red .input,
+body.theme-red .chat-input,
+body.theme-red .dev-input,
+body.theme-red .dev-textarea,
+body.theme-red .tool-field input,
+body.theme-red .tool-field textarea,
+body.theme-red .tool-field select,
+body.theme-red .tabs,
+body.theme-red .chat-msg-received{
+  --text-primary:#2B211A;
+  --text-secondary:#4C3D31;
+  --text-muted:#6B5A4A;
+  --text-faint:#93806D;
+  --border-color:rgba(43,33,26,0.14);
+  --border-strong:rgba(43,33,26,0.24);
+}
+
+/* ④ 国画：墨色皴染暗纹 + 暖光晕，压在红底之上 */
+body.theme-red::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  z-index:-2;
+  pointer-events:none;
+  opacity:.5;
+  background-image:
+    repeating-linear-gradient(58deg, rgba(30,6,3,0.055) 0 1px, rgba(30,6,3,0) 1px 13px),
+    radial-gradient(680px 480px at 22% 76%, rgba(28,6,3,0.30) 0%, rgba(28,6,3,0) 68%),
+    radial-gradient(520px 400px at 88% 18%, rgba(255,190,140,0.10) 0%, rgba(255,190,140,0) 64%);
+}
+
+/* 泥金点缀：标题与选中项走金线，代替普通描边 */
+body.theme-red .modal-title,
+body.theme-red .tool-panel-title{color:var(--accent-light)}
+body.theme-red .tab.active{
+  box-shadow:
+    inset 0 1px 0 rgba(255,240,220,0.5),
+    inset 0 0 0 1px rgba(201,162,39,0.42);
+}
+/* 红底上的链接改用泥金：朱砂链接压在绛红底上几乎看不见。
+   宣纸面（模态/标签栏/输入框/收到气泡）内仍用朱砂保持可读性。 */
+body.theme-red a{color:var(--accent-light) !important}
+body.theme-red .modal a,
+body.theme-red .tabs a,
+body.theme-red .input a,
+body.theme-red .chat-input a,
+body.theme-red .chat-msg-received a{color:var(--accent) !important}
+
+/* 中国红下的滚动条：暖金调 */
+body.theme-red ::-webkit-scrollbar-thumb{background:rgba(201,162,39,0.34)}
+body.theme-red ::-webkit-scrollbar-thumb:hover{background:rgba(201,162,39,0.52)}

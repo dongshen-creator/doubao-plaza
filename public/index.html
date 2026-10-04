@@ -12984,6 +12984,8 @@ function syncMetaThemeColor() {
     if (mc && acc) mc.setAttribute('content', acc);
     if (typeof window.__npSyncAccent === 'function') window.__npSyncAccent();
     if (typeof window.__npSilkAccent === 'function') window.__npSilkAccent();
+    // V9.5：飘扬层仅中国红启用，主题切换后需重新判定
+    if (typeof window.__npSilkSync === 'function') window.__npSilkSync();
   } catch (e) {}
 }
 
@@ -13558,6 +13560,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var uIdle = gl.getUniformLocation(prog, 'u_idle');
     var modeVal = 0;
     var pmx = -10, pmy = -10;
+    // V9.5：中国红改用「飘扬层」作自己的特色着色器，故流体画布在中国红下让位，
+    // 否则它的近白基底会整片盖住 body 的国旗红底（表现为粉灰而非红底）。
+    function isRedTheme() { return !!document.body && document.body.classList.contains('theme-red'); }
     function syncMode() {
       try {
         var b = document.body, m = 0;
@@ -13567,6 +13572,7 @@ document.addEventListener('DOMContentLoaded', function() {
           else if (b.classList.contains('theme-ink')) m = 3;
         }
         modeVal = m;
+        if (canvas) canvas.style.display = (shaderOn && !isRedTheme()) ? '' : 'none';
       } catch (e) {}
     }
     var accRGB = [0.949, 0.384, 0.165];
@@ -13601,6 +13607,7 @@ document.addEventListener('DOMContentLoaded', function() {
     syncAcc();
     window.__npSyncAccent = syncAcc;
     // 着色器开关：dp_shader=off 时隐藏 canvas 并停止 rAF（默认开启）
+    // V9.5：同时给 body 加 shaders-off —— 关闭着色器不等于关掉背景，改由固定静态背景接管
     var shaderOn = localStorage.getItem('dp_shader') !== 'off';
     var frameQueued = false;
     function scheduleFrame() {
@@ -13610,8 +13617,20 @@ document.addEventListener('DOMContentLoaded', function() {
       shaderOn = !!on;
       try { localStorage.setItem('dp_shader', shaderOn ? 'on' : 'off'); } catch (e) {}
       if (canvas) canvas.style.display = shaderOn ? '' : 'none';
+try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
+    // 首屏若就是中国红：scheduleFrame 会直接跳过，frame() 永不执行 → 此处显式同步一次，
+    // 保证流体画布让位、飘扬层接管（否则红底会被近白流体基底盖成粉灰）
+    syncMode();
+    if (shaderOn && !isRedTheme()) scheduleFrame();
+    // 主题是在 async init() 里才写上的，可能晚于本脚本定义 __npSyncAccent → 钩子被跳过。
+    // 用 MutationObserver 监听 body.class，与脚本执行顺序解耦，首屏/后续切换都必定生效。
+    if (window.MutationObserver && document.body) {
+      try { new MutationObserver(function () { syncMode(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    }
+      if (typeof window.__npSilkSync === 'function') window.__npSilkSync();
       if (shaderOn) scheduleFrame();
     };
+    try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     var ripBuf = new Float32Array(32);
     var ripIdx = 0;
     var ripActive = false;
@@ -13661,7 +13680,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (t) onMove(t.clientX, t.clientY);
     }, { passive: true });
     var pollTick = 0;
-    // v7.3: resize 改事件驱动（+ 每120帧兜底轮询），避免每帧读 clientWidth/clientHeight 触发强制布局回流（手机端卡顿主因之一）
+    // v9.5: resize 改事件驱动（+ 每120帧兜底轮询），避免每帧读 clientWidth/clientHeight 触发强制布局回流（手机端卡顿主因之一）
+    // v9.5: 追加像素预算上限——高 DPI / 大屏下 dpr 1.5 会让全屏着色器缓冲涨到数百万像素，
+    //       是「运行很卡」的主因（软性模糊背景不需要那么高分辨率）。按总像素数反推缩放系数。
+    var MAX_PIXELS = 2100000;
     var _sizeDirty = true;
     function _markSizeDirty() { _sizeDirty = true; }
     window.addEventListener('resize', _markSizeDirty, { passive: true });
@@ -13669,9 +13691,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.visualViewport) window.visualViewport.addEventListener('resize', _markSizeDirty, { passive: true });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) _sizeDirty = true; });
     function resize() {
+      var cw = canvas.clientWidth || window.innerWidth || 1;
+      var ch = canvas.clientHeight || window.innerHeight || 1;
       var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      var w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-      var h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      var budget = Math.sqrt(MAX_PIXELS / Math.max(1, cw * ch));   // 允许的缩放系数
+      var k = Math.min(dpr, budget);
+      var w = Math.max(1, Math.round(cw * k));
+      var h = Math.max(1, Math.round(ch * k));
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w; canvas.height = h;
         gl.viewport(0, 0, w, h);
@@ -13686,9 +13712,15 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!shaderOn) return;
       try {
         if (!document.hidden) {
-          if (_sizeDirty || (pollTick % 120) === 0) { _sizeDirty = false; resize(); }
-          var nowS = (now || 0) / 1000;
-          var any = false;
+          // 中国红让位给飘扬层。循环保持续帧、每帧自校正 display，
+          // 不依赖 class 变更事件（主题可能在脚本注册观察器之前就已写上）。
+          var red = isRedTheme();
+          if (red) { if (canvas && canvas.style.display !== 'none') canvas.style.display = 'none'; }
+          else if (canvas && canvas.style.display === 'none') canvas.style.display = '';
+          if (!red) {
+            if (_sizeDirty || (pollTick % 120) === 0) { _sizeDirty = false; resize(); }
+            var nowS = (now || 0) / 1000;
+            var any = false;
           for (var i = 0; i < 8; i++) {
             var b = i * 4;
             if (ripBuf[b + 3] > 0) {
@@ -13710,6 +13742,7 @@ document.addEventListener('DOMContentLoaded', function() {
           gl.uniform1f(uIdle, nowS - lastInteract);
           gl.uniform4fv(uInk, inkBuf);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
         }
       } catch (err) {
         die();
@@ -13787,12 +13820,12 @@ document.addEventListener('DOMContentLoaded', function() {
       // 缎面褶皱高度场：横向强拉伸成长条竖褶，两级 fbm 扭曲去机械感
       'float silkH(vec2 p,float t){',
       ' vec2 q=p;',
-      ' q.x*=0.34;',
-      ' float w1=fbm(q*1.7+vec2(t*0.021,t*0.008));',
-      ' float w2=fbm(q*4.1-vec2(t*0.033,t*0.014));',
-      ' float f=sin(q.x*3.4+w1*5.2+w2*2.1+t*0.12);',
-      ' float f2=sin(q.x*7.9-w2*3.4-t*0.07);',
-      ' return f*0.72+f2*0.28;',
+' q.x*=0.52;',
+      ' float w1=fbm(q*2.6+vec2(t*0.021,t*0.008));',
+      ' float w2=fbm(q*5.4-vec2(t*0.033,t*0.014));',
+' float f=sin(q.x*5.4+w1*4.6+w2*2.0+t*0.16);',
+      ' float f2=sin(q.x*11.0-w2*3.0-t*0.09);',
+      ' return f*0.70+f2*0.30;',
       '}',
       'void main(){',
       ' vec2 uv=gl_FragCoord.xy/u_res;',
@@ -13813,11 +13846,13 @@ document.addEventListener('DOMContentLoaded', function() {
       ' float diff=0.5+0.5*max(dot(N,L),0.0);',
       ' float spec=pow(ndh,26.0);',
       ' float sheen=pow(ndh,96.0);',
-      ' float lum=diff*0.40+spec*0.32+sheen*0.28+g*0.90;',
+      ' float lum=diff*0.06+spec*0.34+sheen*0.42+g*0.60;',
       ' vec3 col=mix(vec3(1.0),u_acc,0.20+0.28*u_d);',
       ' col=mix(col*diff,vec3(1.0),sheen*0.55);',
-      ' float a=clamp(lum,0.0,1.0)*u_op;',
-      ' gl_FragColor=vec4(col,a);',
+' float a=clamp(lum,0.0,1.0)*u_op;',
+      // 必须输出预乘 alpha：WebGL 上下文 premultipliedAlpha 默认为 true，
+      // 若直接给非预乘的 col + 低 alpha，合成端按 dst*(1-a)+col 计算 → 低透明度也会把底色冲白。
+' gl_FragColor=vec4(col*a,a);',
       '}'
     ].join('\n'));
     var prog = gl.createProgram();
@@ -13907,6 +13942,22 @@ document.addEventListener('DOMContentLoaded', function() {
     syncAcc();
     window.__npSilkAccent = syncAcc;
 
+// v9.5：飘扬层是中国红专属，其他主题沿用各自已有的流体着色器 → 按 theme-red 门控
+    // 叠加全局着色器开关（dp_shader=off）与暗色判定，任一不满足即停 rAF
+    var active = false, queued = false;
+    function wantActive() {
+      return localStorage.getItem('dp_shader') !== 'off'
+        && !!document.body && document.body.classList.contains('theme-red');
+    }
+    function sync() {
+      var on = wantActive();
+      if (on === active) { if (on) schedule(); return; }
+      active = on;
+      canvas.style.display = on ? '' : 'none';
+      if (on) { resize(); schedule(); }
+    }
+    window.__npSilkSync = sync;
+
     function isDark() {
       var el = document.documentElement;
       return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
@@ -13927,29 +13978,43 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       sizeDirty = false;
     }
-    var queued = false;
-    function schedule() { if (!queued) { queued = true; requestAnimationFrame(frame); } }
+    function schedule() { if (!queued && active) { queued = true; requestAnimationFrame(frame); } }
     var tick = 0;
+    var lastDraw = 0;
+    // v9.5：限帧到 ~30fps —— 绸面是低频缓动纹理，60fps 无视觉收益却翻倍占用 GPU
+    var FRAME_MS = 33;
     function frame(now) {
       queued = false;
+      if (!active) return;
       try {
         if (!document.hidden) {
           ambient(now || 0);
           if (sizeDirty || (tick % 90) === 0) resize();
           tick = (tick + 1) % 100000;
-          gl.uniform2f(uRes, canvas.width, canvas.height);
-          gl.uniform1f(uT, (now || 0) / 1000);
-          var d = isDark() ? 1 : 0;
-          gl.uniform1f(uD, d);
-          gl.uniform1f(uOp, d ? 0.62 : 0.50);
-          gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
-          gl.uniform4fv(uGust, gustBuf);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          if ((now - lastDraw) >= FRAME_MS) {
+            lastDraw = now;
+            gl.uniform2f(uRes, canvas.width, canvas.height);
+            gl.uniform1f(uT, now / 1000);
+            var d = isDark() ? 1 : 0;
+            gl.uniform1f(uD, d);
+            // v9.5：绸面是"红绸上的反光"，不是一层白雾。配合预乘 alpha 输出，
+// 0.14 左右即可保住国旗红底，只在褶皱高光与阵风处提亮。
+gl.uniform1f(uOp, d ? 0.18 : 0.14);
+            gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
+            gl.uniform4fv(uGust, gustBuf);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
         }
       } catch (err) { die(); return; }
       schedule();
     }
-    schedule();
+    canvas.style.display = 'none';
+    sync();
+    // 主题可能在本脚本之后才由 async init() 写入（此时 __npSilkSync 钩子尚未定义而被跳过），
+    // 故用 MutationObserver 监听 body.class，与执行顺序解耦。
+    if (window.MutationObserver && document.body) {
+      try { new MutationObserver(function () { sync(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    }
   } catch (e) {
     die();
   }
