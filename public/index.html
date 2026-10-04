@@ -12986,6 +12986,9 @@ function syncMetaThemeColor() {
     if (typeof window.__npSilkAccent === 'function') window.__npSilkAccent();
     // V9.5：飘扬层仅中国红启用，主题切换后需重新判定
     if (typeof window.__npSilkSync === 'function') window.__npSilkSync();
+    // V9.6：指雾笔只在青碧色 / 水墨灰启用，且配色（--accent / 暗色）变了要重画雾
+    if (typeof window.__npFogAccent === 'function') window.__npFogAccent();
+    if (typeof window.__npFogSync === 'function') window.__npFogSync();
   } catch (e) {}
 }
 
@@ -13563,6 +13566,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // V9.5：中国红改用「飘扬层」作自己的特色着色器，故流体画布在中国红下让位，
     // 否则它的近白基底会整片盖住 body 的国旗红底（表现为粉灰而非红底）。
     function isRedTheme() { return !!document.body && document.body.classList.contains('theme-red'); }
+    // V9.6 青碧色 / 水墨灰：指针交互从「水纹涟漪」换成「指雾笔」（独立 Canvas 凝雾层），
+    // 故这两个主题不再驱动 rip() 涟漪；背景美术（mode0 柔光色块 / mode3 水墨山水）保持不动。
+    function isFogTheme() {
+      var b = document.body;
+      return !!b && (b.classList.contains('theme-cyan') || b.classList.contains('theme-ink'));
+    }
     function syncMode() {
       try {
         var b = document.body, m = 0;
@@ -13628,6 +13637,8 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       try { new MutationObserver(function () { syncMode(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
     }
       if (typeof window.__npSilkSync === 'function') window.__npSilkSync();
+    // V9.6 指雾笔：dp_shader=off 时凝雾层也必须一并撤掉
+    if (typeof window.__npFogSync === 'function') window.__npFogSync();
       if (shaderOn) scheduleFrame();
     };
     try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
@@ -13735,7 +13746,7 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
           gl.uniform1f(uT, nowS);
           gl.uniform1f(uD, isDark() ? 1 : 0);
           gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
-          gl.uniform1f(uRo, ripActive ? 1 : 0);
+          gl.uniform1f(uRo, (ripActive && !isFogTheme()) ? 1 : 0);
           gl.uniform4fv(uRip, ripBuf);
           gl.uniform1f(uMode, modeVal);
           gl.uniform2f(uM, pmx, pmy);
@@ -13784,8 +13795,8 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     var fs = compile(gl.FRAGMENT_SHADER, [
       'precision mediump float;',
       'uniform vec2 u_res;uniform float u_t;uniform float u_d;uniform float u_op;',
-      'uniform vec4 u_gust[6];',
       'uniform vec3 u_acc;',
+      'uniform vec2 u_wpt;uniform float u_wst;uniform vec2 u_wdir;',
       'float h21(vec2 p){',
       ' vec3 q=fract(vec3(p.xyx)*0.1031);',
       ' q+=dot(q,q.yzx+33.33);',
@@ -13801,21 +13812,13 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ' for(int i=0;i<4;i++){s+=a*nval(q);q=q*2.03+vec2(1.7,9.2);a*=0.5;}',
       ' return s;',
       '}',
-      // 阵风场：以指针为圆心、随时间外扩的环状波前
-      'float gust(vec2 p,float t){',
-      ' float s=0.0;',
-      ' for(int i=0;i<6;i++){',
-      '  vec4 g=u_gust[i];',
-      '  if(g.w<=0.001)continue;',
-      '  float age=t-g.z;',
-      '  if(age<0.0||age>1.7)continue;',
-      '  float d=length(p-g.xy);',
-      '  float r=age*0.85;',
-      '  float ring=exp(-pow((d-r)*4.2,2.0));',
-      '  float fade=(1.0-age/1.7)*smoothstep(0.0,0.06,age);',
-      '  s+=g.w*ring*fade;',
-      ' }',
-      ' return s;',
+      // 微风场：风心缓动跟随指针，高斯衰减成一团；沿风向行进的波让风"流动"而不是钉在原地
+      'float breeze(vec2 p,float t){',
+      ' if(u_wst<=0.001)return 0.0;',
+      ' vec2 d=p-u_wpt;',
+      ' float fall=exp(-dot(d,d)*5.0);',
+      ' float wave=0.55+0.45*sin(dot(d,u_wdir)*7.0-t*2.6);',
+      ' return fall*u_wst*wave;',
       '}',
       // 缎面褶皱高度场：横向强拉伸成长条竖褶，两级 fbm 扭曲去机械感
       'float silkH(vec2 p,float t){',
@@ -13832,8 +13835,8 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ' float asp=u_res.x/u_res.y;',
       ' vec2 p=vec2(uv.x*asp,uv.y);',
       ' float t=u_t;',
-      ' float g=gust(p,t);',
-      ' vec2 sp=p+vec2(g*0.30,g*0.14);',
+      ' float g=breeze(p,t);',
+      ' vec2 sp=p+u_wdir*(g*0.26)+vec2(0.0,g*0.10);',
       ' float e=0.004;',
       ' float h=silkH(sp,t);',
       ' float hx=silkH(sp+vec2(e,0.0),t);',
@@ -13870,7 +13873,9 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     var uD = gl.getUniformLocation(prog, 'u_d');
     var uOp = gl.getUniformLocation(prog, 'u_op');
     var uAcc = gl.getUniformLocation(prog, 'u_acc');
-    var uGust = gl.getUniformLocation(prog, 'u_gust[0]');
+    var uWpt = gl.getUniformLocation(prog, 'u_wpt');
+    var uWst = gl.getUniformLocation(prog, 'u_wst');
+    var uWdir = gl.getUniformLocation(prog, 'u_wdir');
 
     // 与噪点层同为 z-index:-1，插在其前 → 绘制在噪点之下，噪点仍做统一颗粒
     var noise = document.querySelector('.noise-overlay');
@@ -13878,24 +13883,43 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     else document.body.appendChild(canvas);
 
     var SCALE = 0.62;                       // 低频纹理，降分辨率省算力
-    var gustBuf = new Float32Array(24);     // 6 组 * 4
-    var gustIdx = 0;
-    function pushGust(cx, cy, amp) {
-      var vw = window.innerWidth, vh = window.innerHeight;
-      if (!vw || !vh) return;
-      var i = (gustIdx++ % 6) * 4;
-      gustBuf[i] = (cx / vw) * (vw / vh);   // 与着色器 p 同坐标系（y 向上）
-      gustBuf[i + 1] = 1 - cy / vh;
-      gustBuf[i + 2] = performance.now() / 1000;
-      gustBuf[i + 3] = amp;
-    }
+
+    /* V9.6 微风：一团跟着指针走的风，不再用环状阵风。
+       风心用临界阻尼追踪指针 → 看起来是"风跟着手走"而不是"钉在手心"；
+       风力随移速起伏并在停手后 1.6s 内自然消散；风向 = 指针速度方向平滑值。 */
+    var tx = -1e4, ty = -1e4;      // 指针目标（p 坐标：x 已乘纵横比，y 向上）
+    var wx = -1e4, wy = -1e4;      // 实际风心（追踪中）
+    var wst = 0;                   // 风力 0..1
+    var wdx = 1, wdy = 0;          // 风向单位向量
+    var lastMove = -1e4;
     var lastX = -1e4, lastY = -1e4, lastT = 0;
+
+    function toP(cx, cy) {
+      var vw = window.innerWidth, vh = window.innerHeight;
+      if (!vw || !vh) return null;
+      return [(cx / vw) * (vw / vh), 1 - cy / vh];   // 与着色器 p 同坐标系
+    }
     function onMove(x, y) {
       var now = performance.now();
+      var p = toP(x, y);
+      if (!p) return;
       var dx = x - lastX, dy = y - lastY;
       var dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 26 && now - lastT < 95) return;   // 节流，避免塞满 6 槽
-      pushGust(x, y, Math.max(0.30, Math.min(1.0, 0.34 + dist / 90)));
+      var dt = Math.max(1, now - lastT);
+      if (wx < -9000) { wx = p[0]; wy = p[1]; }       // 首次直接落位，别从屏幕外飞进来
+      tx = p[0]; ty = p[1];
+      lastMove = now;
+      if (dist < 0.5) return;
+      // 风力跟移速走（px/ms → 0..1），带上限避免甩一下过曝
+      var spd = dist / dt;
+      wst = Math.min(1, wst + spd * 0.55);
+      // 风向平滑跟随指针速度方向
+      var vx = dx, vy = -dy;                          // 屏幕 y 向下 → p 空间 y 向上
+      var m = Math.sqrt(vx * vx + vy * vy) || 1;
+      wdx = wdx * 0.72 + (vx / m) * 0.28;
+      wdy = wdy * 0.72 + (vy / m) * 0.28;
+      var mm = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+      wdx /= mm; wdy /= mm;
       lastX = x; lastY = y; lastT = now;
     }
     window.addEventListener('pointermove', function (e) { onMove(e.clientX, e.clientY); }, { passive: true });
@@ -13904,14 +13928,6 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       if (t) onMove(t.clientX, t.clientY);
     }, { passive: true });
 
-    // 极弱环境风：无交互时绸面也会缓慢起伏
-    var ambientAt = performance.now() + 1200;
-    function ambient(now) {
-      if (now < ambientAt) return;
-      ambientAt = now + 1900 + Math.random() * 1400;
-      var vw = window.innerWidth, vh = window.innerHeight;
-      pushGust(vw * (0.18 + Math.random() * 0.64), vh * (0.20 + Math.random() * 0.60), 0.26 + Math.random() * 0.16);
-    }
 
     var accRGB = [0.949, 0.384, 0.165];
     function hex2v(s) {
@@ -13988,20 +14004,28 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       if (!active) return;
       try {
         if (!document.hidden) {
-          ambient(now || 0);
           if (sizeDirty || (tick % 90) === 0) resize();
           tick = (tick + 1) % 100000;
           if ((now - lastDraw) >= FRAME_MS) {
             lastDraw = now;
+            // 风心临界阻尼追踪指针：风"跟着手走"，停手后风力在 ~1.6s 内自然消散
+            if (wx > -9000) {
+              wx += (tx - wx) * 0.085;
+              wy += (ty - wy) * 0.085;
+            }
+            if (now - lastMove > 180) wst *= 0.93;
+            if (wst < 0.02) wst = 0;
             gl.uniform2f(uRes, canvas.width, canvas.height);
             gl.uniform1f(uT, now / 1000);
             var d = isDark() ? 1 : 0;
             gl.uniform1f(uD, d);
             // v9.5：绸面是"红绸上的反光"，不是一层白雾。配合预乘 alpha 输出，
-// 0.14 左右即可保住国旗红底，只在褶皱高光与阵风处提亮。
-gl.uniform1f(uOp, d ? 0.18 : 0.14);
+            // 0.14 左右即可保住国旗红底，只在褶皱高光与风心处提亮。
+            gl.uniform1f(uOp, d ? 0.18 : 0.14);
             gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
-            gl.uniform4fv(uGust, gustBuf);
+            gl.uniform2f(uWpt, wx, wy);
+            gl.uniform1f(uWst, wst);
+            gl.uniform2f(uWdir, wdx, wdy);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
           }
         }
@@ -14015,6 +14039,279 @@ gl.uniform1f(uOp, d ? 0.18 : 0.14);
     if (window.MutationObserver && document.body) {
       try { new MutationObserver(function () { sync(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
     }
+  } catch (e) {
+    die();
+  }
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   V9.6 指雾笔 · 青碧色 / 水墨灰 专属
+   反馈：这两个主题的指针交互还是「水纹涟漪」，换成 InternalBeyond
+   同款的「指雾笔」—— 背景上盖一层不均匀的凝雾，指针划过擦出清晰
+   背景，停手后雾再慢慢回凝。背景美术本身（mode0 柔光色块 /
+   mode3 水墨山水）一律不动，只换指针交互这一层。
+
+   实现取舍（本站已反馈卡顿，先算成本再画）：
+   · 擦除走 pointermove 增量 destination-out —— 只画新线段，不重绘全屏
+   · 淡出回凝走 400ms 定时全量重绘 —— 擦痕留 6s，末 2s 渐隐
+   · 不用 rAF：凝雾是静止层，常驻绘制循环纯属浪费
+   · 0.75 降采样：雾是软质地看不出来，但省 44% 像素
+   · 无擦痕且尺寸没变时一次全量重绘都不做
+   ═══════════════════════════════════════════════════════════ */
+(function () {
+  function die() {
+    try {
+      var c = document.getElementById('fog-canvas');
+      if (c && c.parentNode) c.parentNode.removeChild(c);
+    } catch (e) {}
+  }
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!document.body) return;
+    var canvas = document.createElement('canvas');
+    canvas.id = 'fog-canvas';
+    canvas.setAttribute('aria-hidden', 'true');
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    // 插在 .noise-overlay 之前：z-index 同为 -1，DOM 靠前 → 噪点仍压在雾上，
+    // 雾压在 #fluid-canvas(-2) 上，正文层级完全不受影响。
+    var noise = document.querySelector('.noise-overlay');
+    if (noise && noise.parentNode) noise.parentNode.insertBefore(canvas, noise);
+    else document.body.appendChild(canvas);
+    canvas.style.display = 'none';
+
+    var SCALE = 0.75;
+    var W = 1, H = 1, lastCW = 0, lastCH = 0;
+    var active = false, dirty = true;
+    var LIFE = 6000, FADE = 2000;
+    var strokes = [], cur = null;
+    var sig = '';
+
+    function isFogTheme() {
+      var b = document.body;
+      return !!b && (b.classList.contains('theme-cyan') || b.classList.contains('theme-ink'));
+    }
+    function wantActive() {
+      var off = false;
+      try { off = localStorage.getItem('dp_shader') === 'off'; } catch (e) {}
+      return !off && isFogTheme();
+    }
+    function isDark() {
+      var el = document.documentElement;
+      return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
+    }
+
+    // 雾色：把背景朝中性冷灰"散射"过去 —— 亮色下压暗、暗色下提亮，
+    // 擦除后对比恢复，指针才会"擦出东西"。掺一点强调色让雾属于这个主题。
+    var fogRGB = '196,212,222', fogA = 0.70, speckA = 0.55;
+    function syncFogStyle() {
+      var dark = isDark();
+      var r = dark ? 146 : 196, g = dark ? 164 : 212, b = dark ? 178 : 222;
+      fogA = dark ? 0.26 : 0.70;
+      speckA = dark ? 0.42 : 0.55;
+      try {
+        var s = String(getComputedStyle(document.body).getPropertyValue('--accent') || '').trim();
+        var n = null;
+        if (s.charAt(0) === '#' && s.length === 7) {
+          var v = parseInt(s.slice(1), 16);
+          if (!isNaN(v)) n = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+        }
+        if (n) {
+          var k = dark ? 0.20 : 0.14;
+          r = Math.round(n[0] * k + r * (1 - k));
+          g = Math.round(n[1] * k + g * (1 - k));
+          b = Math.round(n[2] * k + b * (1 - k));
+        }
+      } catch (e) {}
+      fogRGB = r + ',' + g + ',' + b;
+      var ns = fogRGB + '|' + fogA + '|' + speckA;
+      var changed = ns !== sig;
+      sig = ns;
+      return changed;
+    }
+
+    // 冷凝水珠颗粒：128×128 可平铺，让雾有质感（纯平会像 bug）
+    var tile = null;
+    function buildTile() {
+      var t = document.createElement('canvas');
+      t.width = t.height = 128;
+      var c = t.getContext('2d');
+      if (!c) { tile = null; return; }
+      var dark = isDark();
+      for (var i = 0; i < 300; i++) {
+        var x = Math.random() * 128, y = Math.random() * 128;
+        var big = Math.random() < 0.07;
+        var rr = 0.6 + Math.random() * (big ? 3.4 : 1.6);
+        var lit = Math.random() < (dark ? 0.8 : 0.55);
+        c.fillStyle = lit
+          ? 'rgba(255,255,255,' + (0.08 + Math.random() * 0.26).toFixed(3) + ')'
+          : 'rgba(110,140,155,' + (0.05 + Math.random() * 0.13).toFixed(3) + ')';
+        c.beginPath(); c.arc(x, y, rr, 0, 6.2832); c.fill();
+      }
+      tile = c.createPattern(t, 'repeat');
+    }
+
+    function setSize() {
+      var cw = Math.max(1, Math.round(window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 1));
+      var ch = Math.max(1, Math.round(window.innerHeight || (document.documentElement && document.documentElement.clientHeight) || 1));
+      lastCW = cw; lastCH = ch; W = cw; H = ch;
+      var bw = Math.max(1, Math.round(cw * SCALE));
+      var bh = Math.max(1, Math.round(ch * SCALE));
+      if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
+      // 降采样只影响 backing store，逻辑坐标仍是 CSS px
+      ctx.setTransform(bw / cw, 0, 0, bh / ch, 0, 0);
+    }
+    function sizeChanged() {
+      return (window.innerWidth || 1) !== lastCW || (window.innerHeight || 1) !== lastCH;
+    }
+
+    function blotch(nx, ny, nr, a) {
+      var x = W * nx, y = H * ny, r = Math.max(W, H) * nr;
+      var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(' + fogRGB + ',' + a + ')');
+      g.addColorStop(1, 'rgba(' + fogRGB + ',0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    function paintHaze() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(' + fogRGB + ',' + fogA + ')';
+      ctx.fillRect(0, 0, W, H);
+      // 四团不均匀雾斑（凝雾从来不是平的）
+      blotch(0.16, 0.20, 0.52, fogA * 0.24);
+      blotch(0.84, 0.72, 0.56, fogA * 0.20);
+      blotch(0.58, 0.10, 0.42, fogA * 0.18);
+      blotch(0.30, 0.90, 0.46, fogA * 0.16);
+      if (tile) {
+        ctx.globalAlpha = speckA;
+        ctx.fillStyle = tile;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+      }
+      // 玻璃四周先起雾
+      var g = ctx.createRadialGradient(W * 0.5, H * 0.46, Math.min(W, H) * 0.24, W * 0.5, H * 0.5, Math.max(W, H) * 0.76);
+      g.addColorStop(0, 'rgba(' + fogRGB + ',0)');
+      g.addColorStop(1, 'rgba(' + fogRGB + ',' + (fogA * 0.40) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    // 两遍描边做软边：宽而淡 + 窄而实 → 手指擦玻璃的圆润边缘
+    function strokePath(pts, w, mul) {
+      if (!pts.length) return;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      if (pts.length === 1) ctx.lineTo(pts[0].x + 0.02, pts[0].y);
+      ctx.globalAlpha = 0.34 * mul;
+      ctx.lineWidth = w * 2.0;
+      ctx.stroke();
+      ctx.globalAlpha = 0.96 * mul;
+      ctx.lineWidth = w;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    function brushW() {
+      return Math.max(14, Math.min(46, Math.min(W, H) * 0.035));
+    }
+    function repaint() {
+      if (sizeChanged()) setSize();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, H);
+      paintHaze();
+      var now = performance.now(), alive = [];
+      for (var i = 0; i < strokes.length; i++) {
+        var s = strokes[i];
+        var a = (LIFE - (now - s.lastT)) / FADE;
+        if (a <= 0) continue;
+        if (a > 1) a = 1;
+        strokePath(s.pts, s.w, a);
+        alive.push(s);
+      }
+      strokes = alive;
+      dirty = false;
+    }
+    function onMove(e) {
+      if (!active) { cur = null; return; }
+      var x = e.clientX, y = e.clientY;
+      if (typeof x !== 'number' || typeof y !== 'number') return;
+      var now = performance.now();
+      var fresh = !cur || (now - cur.lastT) > 700;
+      if (!fresh) {
+        var p = cur.pts, last = p[p.length - 1];
+        // 断点保护：瞬移（切 tab / iframe 抢焦点）不该连一条直线
+        if (Math.abs(x - last.x) > 360 || Math.abs(y - last.y) > 360) fresh = true;
+      }
+      if (fresh) {
+        cur = { lastT: now, w: brushW(), pts: [{ x: x, y: y }] };
+        if (strokes.length > 400) strokes.splice(0, strokes.length - 400);
+        strokes.push(cur);
+        strokePath(cur.pts, cur.w, 1);
+      } else {
+        var q = cur.pts, l = q[q.length - 1];
+        q.push({ x: x, y: y });
+        strokePath([l, { x: x, y: y }], cur.w, 1);
+        cur.lastT = now;
+      }
+      dirty = true;
+    }
+    function sync() {
+      var on = wantActive();
+      if (on === active) {
+        if (on && dirty) repaint();
+        return;
+      }
+      active = on;
+      canvas.style.display = on ? '' : 'none';
+      cur = null;
+      strokes.length = 0;
+      if (on) {
+        syncFogStyle();
+        buildTile();
+        dirty = true;
+        repaint();
+      } else {
+        ctx.clearRect(0, 0, W, H);
+        dirty = true;
+      }
+    }
+    window.__npFogSync = sync;
+    window.__npFogAccent = function () {
+      if (!active) return;
+      if (syncFogStyle()) { buildTile(); dirty = true; repaint(); }
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('resize', function () { dirty = true; }, { passive: true });
+    window.addEventListener('orientationchange', function () { dirty = true; }, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) dirty = true; });
+
+    setInterval(function () {
+      if (!active || document.hidden) return;
+      if (strokes.length || dirty) repaint();
+    }, 400);
+
+    // 主题在 async init() 里才写入，可能晚于本脚本 → MutationObserver 解耦。
+    // 同时盯 <html>（暗色）与 <body>（主题 / shaders-off）。
+    // 只在配色真的变了才重建噪点并全量重绘，普通 class 变化直接忽略。
+    function onClass() {
+      if (!wantActive()) { if (active) sync(); return; }
+      if (!active) { sync(); return; }
+      if (syncFogStyle()) { buildTile(); dirty = true; repaint(); }
+    }
+    if (window.MutationObserver) {
+      try {
+        if (document.documentElement) new MutationObserver(onClass).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        if (document.body) new MutationObserver(onClass).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      } catch (e) {}
+    }
+    sync();
   } catch (e) {
     die();
   }

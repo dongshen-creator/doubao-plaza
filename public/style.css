@@ -2636,6 +2636,20 @@ body.dark.theme-ink .noise-overlay { opacity: .07; }
   #silk-canvas{display:none}
 }
 
+/* ── V9.6 指雾笔：青碧色 / 水墨灰 的凝雾层（Canvas 2D，指针擦除） ──
+   与 #silk-canvas 同为 z-index:-1，靠 DOM 靠前排在 .noise-overlay 之下，
+   于是层次是：流体(-2) → 凝雾(-1) → 噪点(-1) → 正文。不动任何正文层级。 */
+#fog-canvas{
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce){
+  #fog-canvas{display:none}
+}
+
 /* ═══════════════════════════════════════════════════════════
    V9.5 关闭着色器后的固定背景
    反馈：设置里关掉着色器会把背景一起"关掉"（其实只剩一层几乎看不见的
