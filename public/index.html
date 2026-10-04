@@ -356,7 +356,7 @@
   <div class="modal modal-lg">
     <div class="modal-header">
       <div style="width:36px;height:36px;border-radius:12px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;color:var(--accent)"><iconify-icon icon="ph:megaphone-fill"></iconify-icon></div>
-      <div><div class="modal-title">使用须知</div><div style="font-size:11px;color:var(--text-faint)">首次使用前请阅读</div></div>
+      <div><div class="modal-title">使用须知</div><div style="font-size:12px;color:var(--text-faint)">首次使用前请阅读</div></div>
       <button class="modal-close" onclick="closeModal('announcement')"><iconify-icon icon="ph:x"></iconify-icon></button>
     </div>
     <div id="announcementContent" class="dp-rich-content">
@@ -724,7 +724,7 @@ async function showUserPopup(userId, userName, userAvatar, doubaoId) {
   }
   html += '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-top:8px">' + esc(userName) + '</div>';
   if (doubaoId) html += '<div style="font-size:12px;color:var(--text-faint)">@' + esc(doubaoId) + '</div>';
-  html += '<div style="font-size:11px;margin-top:4px;color:' + (onlineText ? (isOnlineNow ? '#4C7A5A' : 'var(--text-faint)') : 'var(--text-faint)') + '">' + (onlineText || '') + '</div>';
+  html += '<div style="font-size:12px;margin-top:4px;color:' + (onlineText ? (isOnlineNow ? '#4C7A5A' : 'var(--text-faint)') : 'var(--text-faint)') + '">' + (onlineText || '') + '</div>';
   html += renderBio(bio);
   html += '</div>';
   html += '<div style="display:flex;flex-direction:column;gap:6px">';
@@ -2253,8 +2253,8 @@ async function showOnlineUsers() {
         + '<div style="display:flex;align-items:center;gap:10px">'
         + avatarHTML(u, true, true)
         + '<div style="flex:1;min-width:0">'
-        + '<div class="list-item-name" style="font-size:14px">' + esc(u.name || '未知用户') + (isSelf ? ' <span style="font-size:11px;color:var(--text-faint)">(你)</span>' : '') + '</div>'
-        + '<div style="font-size:11px;color:var(--success)"><iconify-icon icon="ph:circle-fill" style="color:var(--success)"></iconify-icon> ' + timeStr + '</div>'
+        + '<div class="list-item-name" style="font-size:14px">' + esc(u.name || '未知用户') + (isSelf ? ' <span style="font-size:12px;color:var(--text-faint)">(你)</span>' : '') + '</div>'
+        + '<div style="font-size:12px;color:var(--success)"><iconify-icon icon="ph:circle-fill" style="color:var(--success)"></iconify-icon> ' + timeStr + '</div>'
         + '</div></div></div>';
     }).join('');
 
@@ -2544,7 +2544,7 @@ async function openPrivateChatInFriends(friendId, friendName, isFriend) {
             <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:14px"><iconify-icon icon="ph:user-fill"></iconify-icon></div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(friendName)}</div>
-              <div style="font-size:11px;color:var(--text-faint)">${isFriend ? '私聊' : '非好友私聊 · 对方回复前只能发一条'}</div>
+              <div id="privateChatSubtitle" style="font-size:12px;color:var(--text-faint)">${isFriend ? '私聊' : '非好友私聊 · 对方回复前只能发一条'}</div>
             </div>
             <button id="privateChatMenuBtn" title="设置" aria-label="设置" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:4px 6px;line-height:1"><iconify-icon icon="ph:gear-fill"></iconify-icon></button>
           </div>
@@ -2670,7 +2670,7 @@ function updateNonFriendChatStatus(roomId, friendName) {
   if (hasOtherReplied) {
     // 对方已回复，解除限制
     chatState._isNonFriendChat = false;
-    var subtitle = document.querySelector('#chatViewHeader div[style*="font-size:11px"]');
+    var subtitle = document.getElementById('privateChatSubtitle');
     if (subtitle) subtitle.textContent = '私聊';
     var inputEl = document.getElementById('chatInput');
     if (inputEl) { inputEl.disabled = false; inputEl.placeholder = '输入消息…'; }
@@ -2830,7 +2830,7 @@ async function loadChannelJoinRequests() {
   section.style.display = '';
   var headerEl = document.getElementById('joinRequestsHeader');
   if (headerEl) {
-    headerEl.innerHTML = '<iconify-icon icon="ph:envelope-simple-fill"></iconify-icon> 入群申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
+    headerEl.innerHTML = '<iconify-icon icon="ph:envelope-simple-fill"></iconify-icon> 入群申请 <span style="font-size:11px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
   }
 
   var listEl = document.getElementById('channelJoinRequests');
@@ -2860,8 +2860,8 @@ async function loadChannelJoinRequests() {
         '<div class="friend-request-id">→ ' + esc(roomName) + '</div>' +
       '</div>' +
       '<div class="friend-request-actions">' +
-        '<button class="btn btn-green btn-sm" style="font-size:11px;padding:4px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>' +
-        '<button class="btn btn-gray btn-sm" style="font-size:11px;padding:4px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>' +
+        '<button class="btn btn-green btn-sm" style="font-size:12px;padding:4px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>' +
+        '<button class="btn btn-gray btn-sm" style="font-size:12px;padding:4px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -2902,12 +2902,12 @@ async function renderChannelJoinBanner(roomId) {
     var user = users[i] || {};
     var name = user.name || req.user_id.substring(0, 8);
     var _popupCall = 'showUserPopup(\'' + escAttr(req.user_id) + '\',\'' + escAttr(user.name || '') + '\',\'' + escAttr(user.avatar || '') + '\',\'' + escAttr(user.doubao_id || '') + '\')';
-    var avatar = user.avatar ? '<img src="' + imgProxyUrl(esc(user.avatar)) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="' + _popupCall + '">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer" onclick="' + _popupCall + '">' + esc(name.charAt(0) || '?') + '</div>';
+    var avatar = user.avatar ? '<img src="' + imgProxyUrl(esc(user.avatar)) + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="' + _popupCall + '">' : '<div style="width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer" onclick="' + _popupCall + '">' + esc(name.charAt(0) || '?') + '</div>';
     inner += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">' +
       avatar +
       '<span style="font-size:12px;flex:1;color:var(--text-primary);cursor:pointer" onclick="' + _popupCall + '">' + esc(name) + '</span>' +
-      '<button class="btn btn-green btn-sm" style="font-size:10px;padding:2px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>' +
-      '<button class="btn btn-gray btn-sm" style="font-size:10px;padding:2px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>' +
+      '<button class="btn btn-green btn-sm" style="font-size:11px;padding:2px 8px" onclick="approveJoinRequest(\'' + req.id + '\',\'' + req.room_id + '\',\'' + req.user_id + '\')" title="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>' +
+      '<button class="btn btn-gray btn-sm" style="font-size:11px;padding:2px 8px" onclick="rejectJoinRequest(\'' + req.id + '\')" title="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>' +
     '</div>';
   });
   banner.innerHTML = inner;
@@ -3201,7 +3201,7 @@ async function openToolPanel(toolId, title) {
   var isAi = (tool.api_type === 'ai_chat' || tool.api_type === 'ai_image');
   var historySection = '';
   if (tool.supports_history && getLocalAIHistory(toolId).length > 0) {
-    historySection = '<div style="margin-top:8px;font-size:11px"><a href="javascript:clearLocalAIHistory(\'' + toolId + '\')" style="color:var(--danger)">清空对话历史</a></div>';
+    historySection = '<div style="margin-top:8px;font-size:12px"><a href="javascript:clearLocalAIHistory(\'' + toolId + '\')" style="color:var(--danger)">清空对话历史</a></div>';
   }
 
   main.innerHTML =
@@ -3498,7 +3498,7 @@ function renderBlogView(sidebar, main) {
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogToggleAnnouncementMgr()"><span class="sidebar-item-icon"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon></span><span class="sidebar-item-text">管理公告</span></div>' : '') +
     '</div>' +
     '<div class="sidebar-section">' +
-      '<div class="sidebar-section-title" style="display:flex;align-items:center;justify-content:space-between"><span><iconify-icon icon="ph:bell-fill"></iconify-icon> 博客通知</span><span id="blogNotifUnreadBadge" style="background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;display:none">0</span></div>' +
+      '<div class="sidebar-section-title" style="display:flex;align-items:center;justify-content:space-between"><span><iconify-icon icon="ph:bell-fill"></iconify-icon> 博客通知</span><span id="blogNotifUnreadBadge" style="background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;display:none">0</span></div>' +
       '<div id="blogSidebarNotifications" style="font-size:12px;color:var(--text-faint)">加载中...</div>' +
     '</div>' +
     '<div class="sidebar-section">' +
@@ -3638,7 +3638,7 @@ async function blogLoadSidebarAnnouncements() {
     if (!el) return;
     if (data.success && data.data && data.data.length > 0) {
       el.innerHTML = data.data.map(function(a) {
-        return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="color:var(--text-secondary)">' + esc(a.content.substring(0, 60)) + (a.content.length > 60 ? '...' : '') + '</div><div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + esc(a.created_by_name) + '</div></div>';
+        return '<div style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="color:var(--text-secondary)">' + esc(a.content.substring(0, 60)) + (a.content.length > 60 ? '...' : '') + '</div><div style="font-size:12px;color:var(--text-faint);margin-top:2px">' + esc(a.created_by_name) + '</div></div>';
       }).join('');
     } else {
       el.innerHTML = '暂无公告';
@@ -3724,8 +3724,8 @@ async function blogToggleAnnouncementMgr() {
       list.forEach(function(a) {
         html += '<div style="display:flex;align-items:start;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
           '<div style="flex:1"><div class="dp-rich-content" style="font-size:12px">' + renderRichContent(a.content) + '</div>' +
-          '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">' + esc(a.created_by_name) + ' · ' + blogFormatDate(a.created_at) + '</div></div>' +
-          '<button onclick="blogDeleteAnnouncement(' + a.id + ')" style="font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer">删除</button>' +
+          '<div style="font-size:12px;color:var(--text-faint);margin-top:4px">' + esc(a.created_by_name) + ' · ' + blogFormatDate(a.created_at) + '</div></div>' +
+          '<button onclick="blogDeleteAnnouncement(' + a.id + ')" style="font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer">删除</button>' +
         '</div>';
       });
     }
@@ -3784,18 +3784,18 @@ function blogRenderCard(p, isDev) {
   var canSeeStatus = isAuthor || isDev;
   var statusBadge = '';
   if (canSeeStatus && p.status === 'pending') {
-    statusBadge = '<span style="background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 待审核</span>';
+    statusBadge = '<span style="background:var(--warning-bg);color:var(--warning);padding:2px 8px;border-radius:4px;font-size:12px;margin-left:6px"><iconify-icon icon="ph:hourglass-fill"></iconify-icon> 待审核</span>';
   } else if (canSeeStatus && p.status === 'rejected') {
-    statusBadge = '<span style="background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 已驳回</span>';
+    statusBadge = '<span style="background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:12px;margin-left:6px"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 已驳回</span>';
   }
   var catName = p.category_name || blogCategoryName(p.category_id);
-  var catBadge = catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px"><iconify-icon icon="ph:tag-fill"></iconify-icon> ' + esc(catName) + '</span>' : '';
+  var catBadge = catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:12px"><iconify-icon icon="ph:tag-fill"></iconify-icon> ' + esc(catName) + '</span>' : '';
   return '<div class="card blog-list-card" style="margin-bottom:12px;cursor:pointer;padding:16px" onclick="blogShowPost(blogState.container,' + p.id + ')">' +
     (p.cover_image ? '<div style="margin-bottom:12px"><img src="' + imgProxyUrl(esc(p.cover_image)) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\';this.parentNode.style.display=\'none\'"></div>' : '') +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
       '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<iconify-icon icon=ph:user-fill></iconify-icon>\'">' : '<iconify-icon icon=ph:user-fill></iconify-icon>') + '</div>' +
       '<span style="font-size:13px;font-weight:600;color:var(--text-secondary)">' + esc(p.author_name) + '</span>' +
-      '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
+      '<span style="font-size:12px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
       statusBadge +
     '</div>' +
     '<h4 style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--text-primary)">' + esc(p.title) + '</h4>' +
@@ -4117,10 +4117,10 @@ function blogRenderSidebarNotifications() {
     var timeStr = blogFormatDate(g.latestTs);
     var avatarHtml = latest.sender_avatar
       ? '<img src="' + imgProxyUrl(esc(latest.sender_avatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<iconify-icon icon=ph:user-fill></iconify-icon>\'">'
-      : '<span style="font-size:10px"><iconify-icon icon="ph:user-fill"></iconify-icon></span>';
+      : '<span style="font-size:11px"><iconify-icon icon="ph:user-fill"></iconify-icon></span>';
     var unreadStyle = g.unreadCount > 0 ? 'font-weight:600;' : '';
     var unreadDot = g.unreadCount > 0 ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>' : '';
-    var countBadge = g.items.length > 1 ? '<span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:10px">' + g.items.length + '条</span>' : '';
+    var countBadge = g.items.length > 1 ? '<span style="font-size:11px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:10px">' + g.items.length + '条</span>' : '';
     var contentPreview = esc(latest.content.length > 50 ? latest.content.substring(0, 50) + '...' : latest.content);
     // 合并通知的 sender 显示
     var senderDisplay = g.items.length > 1
@@ -4135,11 +4135,11 @@ function blogRenderSidebarNotifications() {
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:4px">' + unreadDot +
           '<span style="font-size:12px;' + unreadStyle + 'color:var(--text-primary)">' + senderDisplay + '</span>' +
-          '<span style="font-size:10px;color:var(--text-faint)">评论了</span>' +
+          '<span style="font-size:11px;color:var(--text-faint)">评论了</span>' +
           countBadge +
         '</div>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + contentPreview + '</div>' +
-        '<div style="font-size:10px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><iconify-icon icon="ph:file-text-fill"></iconify-icon> ' + esc(g.post_title) + ' · ' + timeStr + '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + contentPreview + '</div>' +
+        '<div style="font-size:11px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><iconify-icon icon="ph:file-text-fill"></iconify-icon> ' + esc(g.post_title) + ' · ' + timeStr + '</div>' +
       '</div>' +
       '<button onclick="event.stopPropagation();blogDeleteNotification(' + latest.id + ')" title="删除" style="position:absolute;top:4px;right:4px;background:none;border:none;font-size:12px;cursor:pointer;color:var(--text-faint);opacity:0.5;padding:2px 4px;line-height:1" ' +
         'onmouseover="this.style.opacity=1;this.style.color=\'var(--danger)\'" onmouseout="this.style.opacity=0.5;this.style.color=\'var(--text-faint)\'"><iconify-icon icon="ph:x"></iconify-icon></button>' +
@@ -4148,11 +4148,11 @@ function blogRenderSidebarNotifications() {
   }
 
   if (groupOrder.length > 8) {
-    html += '<div style="text-align:center;padding:6px;font-size:11px;color:var(--text-faint)">还有 ' + (groupOrder.length - 8) + ' 篇文章的通知</div>';
+    html += '<div style="text-align:center;padding:6px;font-size:12px;color:var(--text-faint)">还有 ' + (groupOrder.length - 8) + ' 篇文章的通知</div>';
   }
 
   // 操作按钮行
-  html += '<div style="display:flex;justify-content:center;gap:12px;padding:6px;font-size:11px">';
+  html += '<div style="display:flex;justify-content:center;gap:12px;padding:6px;font-size:12px">';
   if (blogNotifState.unreadCount > 0) {
     html += '<span style="color:var(--accent);cursor:pointer" onclick="blogMarkAllNotificationsRead()">全部已读</span>';
   }
@@ -4334,7 +4334,7 @@ function blogShowEditor(container, postId) {
         '<div style="flex:1;min-width:200px">' +
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">封面图片URL（可选）</label>' +
           '<input id="blogCoverInput" type="text" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px">' +
-          '<div style="font-size:11px;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:lightbulb-fill"></iconify-icon> 建议先上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
+          '<div style="font-size:12px;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:lightbulb-fill"></iconify-icon> 建议先上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -4343,9 +4343,9 @@ function blogShowEditor(container, postId) {
       '</div>' +
       '<div style="margin-bottom:16px">' +
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文 ' +
-        '<span style="font-size:11px;font-weight:400;color:var(--text-faint)">（支持 LaTeX：用 $...$ 行内公式，$$...$$ 独立公式）</span>' +
+        '<span style="font-size:12px;font-weight:400;color:var(--text-faint)">（支持 LaTeX：用 $...$ 行内公式，$$...$$ 独立公式）</span>' +
         '</label>' +
-        '<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px"><iconify-icon icon="ph:camera-fill"></iconify-icon> <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
+        '<div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px"><iconify-icon icon="ph:camera-fill"></iconify-icon> <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
         '<textarea id="blogContentTextarea" style="width:100%;height:400px;display:none"></textarea>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -4894,15 +4894,15 @@ function blogRenderComment(c, isDev, depth, replyMap) {
         '<div style="' + (isReply ? 'background:var(--bg-hover);' : 'background:var(--bg-card);border:1px solid var(--border);') + 'border-radius:12px;padding:10px 14px;transition:background 0.15s">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
             '<span style="font-size:' + (isReply ? 12 : 13) + 'px;font-weight:600;color:var(--text-primary)">' + esc(c.user_name) + '</span>' +
-            (isReply ? '<span style="font-size:11px;color:var(--text-faint);padding:1px 6px;background:var(--bg-tertiary);border-radius:4px">回复</span>' : '') +
-            '<span style="font-size:11px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
-            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 8px;border-radius:4px;opacity:0.55;transition:opacity 0.2s" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=0.55">删除</button>' : '') +
+            (isReply ? '<span style="font-size:12px;color:var(--text-faint);padding:1px 6px;background:var(--bg-tertiary);border-radius:4px">回复</span>' : '') +
+            '<span style="font-size:12px;color:var(--text-faint)">' + blogFormatDate(c.created_at) + '</span>' +
+            (canDelete ? '<button onclick="blogDeleteComment(' + c.id + ')" style="margin-left:auto;font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer;padding:2px 8px;border-radius:4px;opacity:0.55;transition:opacity 0.2s" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=0.55">删除</button>' : '') +
           '</div>' +
           '<div class="dp-rich-content" style="font-size:' + (isReply ? 12 : 13) + 'px;color:var(--text-secondary);word-break:break-word;line-height:1.6">' + renderRichContent(c.content) + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:12px;margin-top:4px;padding-left:4px">' +
-          '<button onclick="blogShowReplyBox(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')" style="font-size:11px;color:var(--text-faint);background:none;border:none;cursor:pointer;padding:2px 0;transition:color 0.2s;font-weight:500" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-faint)\'"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> 回复</button>' +
-          (replies.length > 0 ? '<span style="font-size:11px;color:var(--text-faint);padding:2px 0">· ' + replies.length + ' 条回复</span>' : '') +
+          '<button onclick="blogShowReplyBox(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')" style="font-size:12px;color:var(--text-faint);background:none;border:none;cursor:pointer;padding:2px 0;transition:color 0.2s;font-weight:500" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-faint)\'"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> 回复</button>' +
+          (replies.length > 0 ? '<span style="font-size:12px;color:var(--text-faint);padding:2px 0">· ' + replies.length + ' 条回复</span>' : '') +
         '</div>' +
         '<div id="blogReplyBox_' + c.id + '" style="display:none;margin-top:8px">' +
           '<div style="display:flex;gap:8px;align-items:flex-start">' +
@@ -4910,8 +4910,8 @@ function blogRenderComment(c, isDev, depth, replyMap) {
             '<div style="flex:1;min-width:0">' +
               '<textarea id="blogReplyInput_' + c.id + '" placeholder="回复 ' + esc(c.user_name) + '..." style="width:100%;min-height:42px;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;transition:all 0.2s;outline:none" onfocus="this.style.borderColor=\'var(--accent)\';this.style.boxShadow=\'0 0 0 2px var(--accent-bg)\'" onblur="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'"></textarea>' +
               '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">' +
-                '<button class="btn btn-gray" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="document.getElementById(\'blogReplyBox_' + c.id + '\').style.display=\'none\'">取消</button>' +
-                '<button class="btn btn-orange" style="font-size:11px;padding:4px 14px;border-radius:6px" onclick="blogSubmitReply(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')">回复</button>' +
+                '<button class="btn btn-gray" style="font-size:12px;padding:4px 14px;border-radius:6px" onclick="document.getElementById(\'blogReplyBox_' + c.id + '\').style.display=\'none\'">取消</button>' +
+                '<button class="btn btn-orange" style="font-size:12px;padding:4px 14px;border-radius:6px" onclick="blogSubmitReply(' + c.id + ',' + (c.post_id || blogState.currentPostId) + ')">回复</button>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -5067,8 +5067,8 @@ async function blogShowReviewPanel(container) {
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
           '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden;flex-shrink:0">' + (p.author_avatar ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" style="width:100%;height:100%;object-fit:cover">' : '<iconify-icon icon="ph:user-fill"></iconify-icon>') + '</div>' +
           '<span style="font-size:13px;font-weight:600">' + esc(p.author_name) + '</span>' +
-          '<span style="font-size:11px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
-          (catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:11px"><iconify-icon icon="ph:tag-fill"></iconify-icon> ' + esc(catName) + '</span>' : '') +
+          '<span style="font-size:12px;color:var(--text-faint)">· ' + blogFormatDate(p.created_at) + '</span>' +
+          (catName ? '<span style="background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:4px;font-size:12px"><iconify-icon icon="ph:tag-fill"></iconify-icon> ' + esc(catName) + '</span>' : '') +
         '</div>' +
         '<h4 style="font-size:16px;font-weight:700;margin-bottom:6px">' + esc(p.title) + '</h4>' +
         (p.summary ? '<p style="font-size:13px;color:var(--text-faint);line-height:1.5;margin-bottom:10px">' + esc(p.summary) + '</p>' : '') +
@@ -5151,8 +5151,8 @@ async function blogLoadCategoryMgrList() {
             '<div style="font-size:14px;font-weight:600">' + esc(c.name) + '</div>' +
             (c.description ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px">' + esc(c.description) + '</div>' : '') +
           '</div>' +
-          '<button class="btn btn-gray" style="font-size:11px;padding:4px 10px" onclick="blogEditCategory(' + c.id + ')">编辑</button>' +
-          '<button class="btn btn-gray" style="font-size:11px;padding:4px 10px;color:var(--danger)" onclick="blogDeleteCategory(' + c.id + ')">删除</button>' +
+          '<button class="btn btn-gray" style="font-size:12px;padding:4px 10px" onclick="blogEditCategory(' + c.id + ')">编辑</button>' +
+          '<button class="btn btn-gray" style="font-size:12px;padding:4px 10px;color:var(--danger)" onclick="blogDeleteCategory(' + c.id + ')">删除</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -5295,7 +5295,7 @@ async function loadAnnouncements() {
               '</div>' +
               '<div class="ann-body" style="' + (expanded ? '' : 'display:none') + '">' +
                 '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-top:8px">' + renderRichContent(a.content) + '</div>' +
-                '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
+                '<div style="font-size:12px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
               '</div>' +
             '</div>';
           }).join('')}
@@ -5339,14 +5339,14 @@ async function showFirstLoginAnnouncements() {
         overlay.innerHTML = '<div class="modal modal-lg">' +
           '<div class="modal-header">' +
           '<div style="width:36px;height:36px;border-radius:12px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon></div>' +
-          '<div><div class="modal-title">网站公告</div><div style="font-size:11px;color:var(--text-faint)">欢迎来到逗包用户广场</div></div>' +
+          '<div><div class="modal-title">网站公告</div><div style="font-size:12px;color:var(--text-faint)">欢迎来到逗包用户广场</div></div>' +
           '<button class="modal-close" onclick="' + dismiss + '"><iconify-icon icon="ph:x"></iconify-icon></button>' +
           '</div>' +
           allAnns.map(function(a) {
             return '<div class="card" style="margin-bottom:12px">' +
               '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">' + (a.is_system ? '<iconify-icon icon="ph:push-pin-fill"></iconify-icon> ' : '') + esc(a.title) + '</div>' +
               '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all">' + renderRichContent(a.content) + '</div>' +
-              '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
+              '<div style="font-size:12px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
               '</div>';
           }).join('') +
           '<button class="btn btn-orange btn-full" style="margin-top:20px" onclick="' + dismiss + '">我已知晓</button>' +
@@ -5426,7 +5426,7 @@ function userCardHTML(user, index) {
   if (user.last_login_at) {
     var lastLogin = new Date(user.last_login_at.replace ? user.last_login_at.replace(' ', 'T') + 'Z' : user.last_login_at);
     var isOnline = Date.now() - lastLogin.getTime() < 30 * 60 * 1000;
-    onlineHtml = '<span style="font-size:10px;color:' + (isOnline ? 'var(--success)' : 'var(--text-faint)') + ';margin-left:4px">' + (isOnline ? '<iconify-icon icon="ph:circle-fill" style="color:var(--success)"></iconify-icon>' : '<iconify-icon icon="ph:circle-fill" style="color:var(--text-faint)"></iconify-icon>') + '</span>';
+    onlineHtml = '<span style="font-size:11px;color:' + (isOnline ? 'var(--success)' : 'var(--text-faint)') + ';margin-left:4px">' + (isOnline ? '<iconify-icon icon="ph:circle-fill" style="color:var(--success)"></iconify-icon>' : '<iconify-icon icon="ph:circle-fill" style="color:var(--text-faint)"></iconify-icon>') + '</span>';
   }
   
   return `
@@ -5557,7 +5557,7 @@ async function loadFriendRequests() {
     }
     
     if (headerEl) {
-      headerEl.innerHTML = '<iconify-icon icon="ph:envelope-simple-fill"></iconify-icon> 好友申请 <span style="font-size:10px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
+      headerEl.innerHTML = '<iconify-icon icon="ph:envelope-simple-fill"></iconify-icon> 好友申请 <span style="font-size:11px;color:var(--accent);background:var(--accent-shadow);padding:1px 6px;border-radius:8px">' + requests.length + '</span>';
     }
     
     el.innerHTML = requests.map(r => `
@@ -5568,8 +5568,8 @@ async function loadFriendRequests() {
               <div class="friend-request-id">${esc(r.friend?.doubao_id || r.friend?.id)}</div>
             </div>
             <div class="friend-request-actions">
-              <button class="btn btn-green btn-sm" style="font-size:11px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'accept')" title="通过" aria-label="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>
-              <button class="btn btn-gray btn-sm" style="font-size:11px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'reject')" title="拒绝" aria-label="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>
+              <button class="btn btn-green btn-sm" style="font-size:12px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'accept')" title="通过" aria-label="通过"><iconify-icon icon="ph:check-circle-fill"></iconify-icon></button>
+              <button class="btn btn-gray btn-sm" style="font-size:12px;padding:4px 8px" onclick="handleFriendRequest('${r.id}', 'reject')" title="拒绝" aria-label="拒绝"><iconify-icon icon="ph:x-circle-fill"></iconify-icon></button>
             </div>
           </div>
         `).join('');
@@ -5626,7 +5626,7 @@ async function loadMyFriends() {
     
     el.innerHTML = `
       <div class="anim-up">
-        <div class="section-label" style="cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:4px" onclick="toggleSection('friends')">${localStorage.getItem('dp_collapsed_friends') === '1' ? '▶' : '▼'} <span><iconify-icon icon="ph:users-three-fill"></iconify-icon> 我的好友</span> <span style="font-size:11px;color:var(--text-faint);background:var(--bg-input);padding:1px 8px;border-radius:10px">${filteredFriends.length}</span></div>
+        <div class="section-label" style="cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:4px" onclick="toggleSection('friends')">${localStorage.getItem('dp_collapsed_friends') === '1' ? '▶' : '▼'} <span><iconify-icon icon="ph:users-three-fill"></iconify-icon> 我的好友</span> <span style="font-size:12px;color:var(--text-faint);background:var(--bg-input);padding:1px 8px;border-radius:10px">${filteredFriends.length}</span></div>
         <div id="friendsContent" style="${localStorage.getItem('dp_collapsed_friends') === '1' ? 'display:none' : ''}">
           ${groupHtml}
           <div class="friend-list-compact">
@@ -5788,12 +5788,12 @@ async function switchSettingsTab(tab, btnEl) {
             <input class="input" id="newName" placeholder="输入新昵称" value="${esc(currentUser.name || '')}" maxlength="20" style="flex:1">
             <button class="btn btn-orange btn-sm" onclick="updateProfile('name')" id="saveNameBtn">保存</button>
           </div>
-          <div id="nameCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div>
+          <div id="nameCooldownHint" style="font-size:12px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div>
         </div>
         <div class="form-group"><label class="form-label">自我介绍</label>
           <textarea class="input" id="newBio" placeholder="编辑你的自我介绍（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">${esc(currentUser.bio || '')}</textarea>
           <button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile('bio')" id="saveBioBtn">保存自我介绍</button>
-          <div id="bioCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div>
+          <div id="bioCooldownHint" style="font-size:12px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div>
         </div>
       </div>
       <div class="form-group"><label class="form-label">修改密码</label>
@@ -5804,7 +5804,7 @@ async function switchSettingsTab(tab, btnEl) {
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 密保问题</div>
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div>
         <div class="form-group" style="margin-bottom:8px">
           <label class="form-label" style="font-size:12px">选择密保问题</label>
           <select class="input" id="securityQuestion" style="width:100%">
@@ -5823,14 +5823,14 @@ async function switchSettingsTab(tab, btnEl) {
           <input class="input" id="securityAnswer" type="text" placeholder="输入密保答案（支持中文）" maxlength="50" style="width:100%">
         </div>
         <button class="btn btn-orange btn-sm btn-full" onclick="saveSecurityQuestion()" id="saveSecQBtn">设置密保</button>
-        <div id="securityQuestionStatus" style="font-size:11px;color:var(--text-faint);margin-top:6px"></div>
+        <div id="securityQuestionStatus" style="font-size:12px;color:var(--text-faint);margin-top:6px"></div>
       </div>
       <div class="form-group"><label class="form-label">白名单邀请码</label>
         <div style="display:flex;gap:8px">
           <input class="input" id="whitelistCode" placeholder="设置白名单模式的邀请码" value="${esc(currentUser.invite_code || '')}" style="flex:1">
           <button class="btn btn-blue btn-sm" onclick="setWhitelistCode()">保存</button>
         </div>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div>
       </div>
       <div class="form-group"><label class="form-label">隐私模式</label>
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
@@ -5838,7 +5838,7 @@ async function switchSettingsTab(tab, btnEl) {
           <button class="btn btn-sm ${currentUser.privacy_setting === 'whitelist' || currentUser.privacy_setting === 'punished_whitelist' ? 'btn-blue' : 'btn-gray'}" onclick="setPrivacy('whitelist')"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 白名单</button>
           <button class="btn btn-sm ${currentUser.privacy_setting === 'stealth' || currentUser.privacy_setting === 'punished_stealth' ? 'btn-gray' : 'btn-gray'}" onclick="setPrivacy('stealth')"><iconify-icon icon="ph:ghost-fill"></iconify-icon> 隐身</button>
         </div>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:6px">当前：${getPrivacyLabel(currentUser.privacy_setting)}</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-top:6px">当前：${getPrivacyLabel(currentUser.privacy_setting)}</div>
       </div>
       <div class="form-group"><label class="form-label">主题色</label>
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
@@ -5861,7 +5861,7 @@ async function switchSettingsTab(tab, btnEl) {
           <input type="text" id="chatBgUrl" placeholder="或输入图片URL" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px">
           <button class="btn btn-sm btn-orange" onclick="setChatBgUrl()">应用</button>
         </div>
-        <div id="chatBgStatus" style="font-size:11px;color:var(--text-secondary);margin-top:4px"></div>
+        <div id="chatBgStatus" style="font-size:12px;color:var(--text-secondary);margin-top:4px"></div>
       </div>
       <div class="form-group"><label class="form-label">功能显示设置</label>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div>
@@ -5880,7 +5880,7 @@ async function switchSettingsTab(tab, btnEl) {
           <input type="checkbox" id="chatKeyboardLiftToggle" ${chatKeyboardLift ? 'checked' : ''} onchange="toggleChatKeyboardLift()">
           键盘弹出时自动抬起输入框，避免被遮挡
         </label>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div>
       </div>
       <div class="form-group">
         <label class="form-label">背景着色器</label>
@@ -5888,7 +5888,7 @@ async function switchSettingsTab(tab, btnEl) {
           <input type="checkbox" id="shaderToggle" ${localStorage.getItem('dp_shader') !== 'off' ? 'checked' : ''} onchange="toggleShader()">
           显示动态涟漪背景动画（关闭后隐藏动效背景）
         </label>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 最近登录</div>
@@ -6569,7 +6569,7 @@ async function loadGlobalAdminsManager() {
   const canGrant = isDeveloper();
 
   const flag = function(text, color) {
-    return '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:' + color + '22;color:' + color + '">' + text + '</span>';
+    return '<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;background:' + color + '22;color:' + color + '">' + text + '</span>';
   };
 
   let html = '<div style="padding:14px">';
@@ -6601,7 +6601,7 @@ async function loadGlobalAdminsManager() {
       matches.forEach(function(m) {
         html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:6px;background:var(--bg-primary)">'
           + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + esc(m.name || '') + '</div>'
-          + '<div style="font-size:11px;color:var(--text-faint)">' + esc(m.doubao_id || '') + '</div></div>'
+          + '<div style="font-size:12px;color:var(--text-faint)">' + esc(m.doubao_id || '') + '</div></div>'
           + (m.is_developer ? flag('开发者', 'var(--accent)') : '')
           + (m.is_global_admin ? flag('已授权', 'var(--success)') : '')
           + (m.locked ? flag('已限制', 'var(--danger)') : '')
@@ -6622,7 +6622,7 @@ async function loadGlobalAdminsManager() {
     admins.forEach(function(a) {
       html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:6px;background:var(--bg-primary)">'
         + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + esc(a.name || '') + '</div>'
-        + '<div style="font-size:11px;color:var(--text-faint)">' + esc(a.doubao_id || '') + '</div></div>'
+        + '<div style="font-size:12px;color:var(--text-faint)">' + esc(a.doubao_id || '') + '</div></div>'
         + (a.is_developer === 1 || a.is_developer === '1' || a.is_developer === true ? flag('开发者', 'var(--accent)') : '')
         + (canGrant && !(a.is_developer === 1 || a.is_developer === '1' || a.is_developer === true)
             ? '<button class="btn btn-sm btn-gray" onclick="gaRevoke(\'' + a.id + '\')"><iconify-icon icon="ph:shield-slash-fill"></iconify-icon> 撤销</button>'
@@ -6632,7 +6632,7 @@ async function loadGlobalAdminsManager() {
   }
 
   if (!canGrant) {
-    html += '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">全局管理员可查看名单；授予与撤销仅限开发者操作</div>';
+    html += '<div style="font-size:12px;color:var(--text-faint);margin-top:8px">全局管理员可查看名单；授予与撤销仅限开发者操作</div>';
   }
   html += '</div>';
   el.innerHTML = html;
@@ -6678,7 +6678,7 @@ async function loadPublicChannelsManager() {
   // 公开频道分组管理
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><iconify-icon icon="ph:folder-fill"></iconify-icon> 公开频道分组';
-  html += '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="addPublicChannelGroupPrompt()">+ 新建分组</button></div>';
+  html += '<button class="btn btn-sm btn-orange" style="font-size:12px" onclick="addPublicChannelGroupPrompt()">+ 新建分组</button></div>';
   var groupNames = Object.keys(publicGroups);
   if (groupNames.length) {
     html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">';
@@ -6687,7 +6687,7 @@ async function loadPublicChannelsManager() {
     });
     html += '</div>';
   } else {
-    html += '<div style="font-size:11px;color:var(--text-faint);margin-bottom:8px">暂无分组，公开频道将归入"默认分组"</div>';
+    html += '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">暂无分组，公开频道将归入"默认分组"</div>';
   }
   html += '</div>';
 
@@ -6709,7 +6709,7 @@ async function loadPublicChannelsManager() {
         '<div class="list-item-info"><div class="list-item-name">' + esc(r.name || '未命名频道') + '</div>' +
         '<div class="list-item-email">' + r.id.substring(0, 20) + '…' + (isPublic ? ' · <iconify-icon icon="ph:broadcast-fill"></iconify-icon> 已公开' : '') + '</div></div>' +
         '</div>' +
-        (isPublic ? '<select class="input" style="width:auto;max-width:150px;font-size:11px;padding:2px 6px" onchange="setPublicChannelGroup(\'' + r.id + '\', this.value)">' + groupOpts + '</select>' : '') +
+        (isPublic ? '<select class="input" style="width:auto;max-width:150px;font-size:12px;padding:2px 6px" onchange="setPublicChannelGroup(\'' + r.id + '\', this.value)">' + groupOpts + '</select>' : '') +
         '</div>';
     }).join('');
   }
@@ -6867,12 +6867,12 @@ async function loadAnnouncementsManager() {
       ${sysAnn ? `
         <div class="card" style="margin-bottom:16px;border-left:4px solid var(--accent);background:var(--accent-bg)">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">初始公告</span>
+            <span style="font-size:12px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-weight:600">初始公告</span>
             <span style="font-size:14px;font-weight:600;color:var(--text-primary)">${esc(sysAnn.title)}</span>
           </div>
           <div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(sysAnn.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;color:var(--text-faint)">${formatDate(sysAnn.created_at)}</div>
+            <div style="font-size:12px;color:var(--text-faint)">${formatDate(sysAnn.created_at)}</div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-blue btn-sm" onclick="devEditAnnouncementWithInsert('${escJS(sysAnn.id)}')"><iconify-icon icon="ph:paperclip-fill"></iconify-icon> 插入</button>
               <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${escJS(sysAnn.id)}')">编辑</button>
@@ -6886,7 +6886,7 @@ async function loadAnnouncementsManager() {
         <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="devAnnContent" placeholder="公告内容（支持HTML：图片、GIF、视频等）" rows="5" style="resize:vertical"></textarea></div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <button class="btn btn-blue btn-sm" onclick="toggleInsertPanel('devAnnContent')"><iconify-icon icon="ph:paperclip-fill"></iconify-icon> 插入</button>
-          <span style="font-size:11px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
+          <span style="font-size:12px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
         </div>
         <div id="devInsertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">文件链接</label>
@@ -6911,7 +6911,7 @@ async function loadAnnouncementsManager() {
           <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">${esc(a.title)}</div>
           <div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);word-break:break-all;margin-bottom:8px">${renderRichContent(a.content)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;color:var(--text-faint)">${formatDate(a.created_at)}</div>
+            <div style="font-size:12px;color:var(--text-faint)">${formatDate(a.created_at)}</div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-blue btn-sm" onclick="devEditAnnouncement('${a.id}')">编辑</button>
               <button class="btn btn-red btn-sm" onclick="devDeleteAnnouncement('${a.id}')">删除</button>
@@ -6981,7 +6981,7 @@ async function devEditAnnouncement(id) {
         <div class="form-group"><label class="form-label">内容</label><textarea class="input" id="editAnnContent" rows="5" style="resize:vertical">${esc(ann.content)}</textarea></div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <button class="btn btn-blue btn-sm" onclick="toggleInsertPanel('editAnnContent')"><iconify-icon icon="ph:paperclip-fill"></iconify-icon> 插入</button>
-          <span style="font-size:11px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
+          <span style="font-size:12px;color:var(--text-faint)">支持HTML标签：&lt;img&gt;、&lt;video&gt;、&lt;iframe&gt;等</span>
         </div>
         <div id="editInsertPanel" style="display:none;background:var(--bg-input);border-radius:12px;padding:12px;margin-bottom:12px">
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">文件链接</label>
@@ -7071,7 +7071,7 @@ async function loadFeaturesManager() {
             <option value="">-- 选择页面 --</option>
             ${pageOptions}
           </select>
-          ${pages.length === 0 ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">暂无本地页面，请先在"本地页面"标签创建</div>' : ''}
+          ${pages.length === 0 ? '<div style="font-size:12px;color:var(--text-faint);margin-top:4px">暂无本地页面，请先在"本地页面"标签创建</div>' : ''}
         </div>
         <div class="form-group" id="toolLinkGroup" style="display:none"><label class="form-label">选择工具 *</label>
           <select class="input" id="devFeatToolSelect">
@@ -7079,7 +7079,7 @@ async function loadFeaturesManager() {
             ${toolOptions}
           </select>
           <div id="toolConfigArea" style="margin-top:8px"></div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开，支持交互式操作</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开，支持交互式操作</div>
         </div>
         <button class="btn btn-orange btn-full" onclick="devAddFeature()">添加功能</button>
       </div>
@@ -7094,10 +7094,10 @@ async function loadFeaturesManager() {
                 </div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:13px;font-weight:600;color:var(--text-primary);word-break:break-all">${esc(f.title)}</div>
-                  ${f.tool_type ? '<span style="font-size:10px;color:var(--accent);background:var(--accent-bg);padding:1px 6px;border-radius:4px">工具</span>' : ''}
+                  ${f.tool_type ? '<span style="font-size:11px;color:var(--accent);background:var(--accent-bg);padding:1px 6px;border-radius:4px">工具</span>' : ''}
                 </div>
               </div>
-              <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">${esc(f.tool_type ? f.tool_type : f.link_url)}</div>
+              <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">${esc(f.tool_type ? f.tool_type : f.link_url)}</div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-blue btn-sm" style="flex:1" onclick="devEditFeature('${f.id}')">编辑</button>
                 <button class="btn btn-red btn-sm" style="flex:1" onclick="devDeleteFeature('${f.id}')">删除</button>
@@ -7234,7 +7234,7 @@ async function devEditFeature(id) {
         </div>
         <div class="form-group" id="editToolLinkGroup" style="${isTool ? '' : 'display:none'}"><label class="form-label">选择工具 *</label>
           <select class="input" id="editFeatToolSelect"><option value="">-- 选择工具 --</option>${toolOptions}</select>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-top:4px">网站工具在功能界面以工具面板形式打开</div>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-orange btn-full" style="flex:1" onclick="devUpdateFeature('${id}')">保存修改</button>
@@ -7300,24 +7300,24 @@ async function loadPagesManager() {
         <div class="section-label"><iconify-icon icon="ph:file-text-fill"></iconify-icon> 创建新页面</div>
         <div class="form-group"><label class="form-label">页面标题 *</label><input class="input" id="devPageTitle" placeholder="页面名称" maxlength="50"></div>
         <div class="form-group"><label class="form-label">HTML 代码 *</label><textarea class="input" id="devPageHtml" placeholder="<div>你的HTML代码</div>" rows="10" style="resize:vertical;font-family:monospace;font-size:12px"></textarea></div>
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:12px">支持标签：div, span, p, h1-h6, img, a, style, script 等</div>
+        <div style="font-size:12px;color:var(--text-faint);margin-bottom:12px">支持标签：div, span, p, h1-h6, img, a, style, script 等</div>
         <button class="btn btn-orange btn-full" onclick="devCreatePage()">创建页面</button>
       </div>
       <div class="card" style="margin-bottom:16px;padding:16px;background:var(--bg-input)">
         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px"><iconify-icon icon="ph:book-open-text-fill"></iconify-icon> API 调用文档</div>
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">
           <p style="margin-bottom:8px"><strong>获取当前登录用户信息：</strong></p>
-          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/users/auto-login', {
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">fetch('/api/users/auto-login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ token: localStorage.getItem('dp_token') })
 }).then(r => r.json()).then(data => console.log(data));</pre>
           <p style="margin:8px 0"><strong>获取所有用户：</strong></p>
-          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/users').then(r => r.json()).then(data => console.log(data));</pre>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">fetch('/api/users').then(r => r.json()).then(data => console.log(data));</pre>
           <p style="margin:8px 0"><strong>获取网站公告：</strong></p>
-          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/announcements').then(r => r.json()).then(data => console.log(data));</pre>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">fetch('/api/announcements').then(r => r.json()).then(data => console.log(data));</pre>
           <p style="margin:8px 0"><strong>获取功能列表：</strong></p>
-          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:11px">fetch('/api/features').then(r => r.json()).then(data => console.log(data));</pre>
+          <pre style="background:#1a1a2e;color:#e5e7eb;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">fetch('/api/features').then(r => r.json()).then(data => console.log(data));</pre>
           <p style="margin-top:8px;color:var(--text-faint)">提示：所有 API 返回格式为 { success: true/false, data: ..., error: ... }</p>
         </div>
       </div>
@@ -7327,7 +7327,7 @@ async function loadPagesManager() {
           ${pages.map(p => `
             <div class="card" style="padding:12px">
               <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px;word-break:break-all">${esc(p.title)}</div>
-              <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">/pages/${p.id}</div>
+              <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px;word-break:break-all">/pages/${p.id}</div>
               <div style="display:flex;gap:6px">
                 <a href="/pages/${p.id}" target="_blank" class="btn btn-green btn-sm">预览</a>
                 <button class="btn btn-blue btn-sm" onclick="devEditPage('${p.id}')">编辑</button>
@@ -8221,30 +8221,30 @@ async function renderChatContextPanel(room) {
       <div class="ctx-section">
         <div class="ctx-section-title">基础信息</div>
         <div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道名称</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道名称</div>
           <div style="display:flex;gap:4px">
             <input id="editRoomName" class="input" value="${esc(room.name || '')}" style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
-            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomName()">更新</button>' : ''}
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:12px" onclick="updateRoomName()">更新</button>' : ''}
           </div>
         </div>
         <div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像预览</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道头像预览</div>
           <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1px solid var(--border-color)">
             ${currentAvatar ? '<img src="' + imgProxyUrl(esc(currentAvatar)) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<iconify-icon icon=ph:chat-circle-dots-fill></iconify-icon>\'">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px"><iconify-icon icon=ph:chat-circle-dots-fill></iconify-icon></div>'}
           </div>
         </div>
         <div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道头像 URL</div>
           <div style="display:flex;gap:4px">
             <input id="editRoomAvatarCtx" class="input" value="${esc(currentAvatar)}" placeholder="https://..." style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
-            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomAvatar()">更新</button>' : ''}
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:12px" onclick="updateRoomAvatar()">更新</button>' : ''}
           </div>
         </div>
         <div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">频道简介</div>
+          <div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">频道简介</div>
           <div style="display:flex;gap:4px">
             <input id="editRoomTopic" class="input" value="${esc(currentTopic)}" placeholder="频道简介" style="flex:1;font-size:12px"${canManage ? '' : ' disabled'}>
-            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px" onclick="updateRoomTopic()">更新</button>' : ''}
+            ${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:12px" onclick="updateRoomTopic()">更新</button>' : ''}
           </div>
         </div>
       </div>
@@ -8262,7 +8262,7 @@ async function renderChatContextPanel(room) {
           <option value="custom_page"${currentAdmission === 'custom_page' ? ' selected' : ''}>自定义页面</option>
           <option value="composite"${currentAdmission === 'composite' ? ' selected' : ''}>复合验证</option>
         </select>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px" onclick="showAdmissionManagement()"><iconify-icon icon="ph:gear-fill"></iconify-icon> 准入设置</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:12px" onclick="showAdmissionManagement()"><iconify-icon icon="ph:gear-fill"></iconify-icon> 准入设置</button>
       </div>
       <!-- 游客模式 -->
       <div class="ctx-section">
@@ -8276,13 +8276,13 @@ async function renderChatContextPanel(room) {
 
       <!-- 频道公告 -->
       <div class="ctx-section">
-        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center">频道公告${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:10px;padding:2px 8px" onclick="showAnnouncementEditor(null)">+ 发布</button>' : ''}</div>
+        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center">频道公告${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px;padding:2px 8px" onclick="showAnnouncementEditor(null)">+ 发布</button>' : ''}</div>
         <div id="channelAnnouncementList" style="max-height:180px;overflow-y:auto"></div>
       </div>
 
       <!-- 频道工具 -->
       <div class="ctx-section">
-        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 频道工具${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:10px;padding:2px 8px" onclick="showToolEditor()">+ 添加</button>' : ''}</div>
+        <div class="ctx-section-title" style="display:flex;justify-content:space-between;align-items:center"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 频道工具${canManage ? '<button class="btn btn-sm btn-orange" style="font-size:11px;padding:2px 8px" onclick="showToolEditor()">+ 添加</button>' : ''}</div>
         <div id="channelToolList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
 
@@ -8297,12 +8297,12 @@ async function renderChatContextPanel(room) {
       <!-- 通知与操作 -->
       <div class="ctx-section">
         <div class="ctx-section-title">个人设置</div>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="togglePinChannel('${room.id}');var r=chatState.rooms.find(function(x){return x.id==='${room.id}'});if(r)renderChatContextPanel(r)">${getPinnedChannels().indexOf(room.id) >= 0 ? '取消置顶' : '<iconify-icon icon="ph:push-pin-fill"></iconify-icon> 置顶会话'}</button>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="hideChannel('${room.id}')"><iconify-icon icon="ph:eye-slash-fill"></iconify-icon> 隐藏会话</button>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="clearLocalMessages('${room.id}')"><iconify-icon icon="ph:eraser-fill"></iconify-icon> 仅清空本地记录</button>
-        <button class="btn btn-sm btn-gray btn-full" style="font-size:11px;margin-bottom:4px" onclick="clearChatHistory('${room.id}')"><iconify-icon icon="ph:trash-fill"></iconify-icon> 清空所有人记录</button>
-        ${room.type === 'private' ? '<button class="btn btn-sm btn-red btn-full" style="font-size:11px;margin-bottom:4px" onclick="removePrivateChat(\'' + room.id + '\')"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 移除私聊会话</button>' : ''}
-        ${!isOwner ? '<button class="btn btn-sm btn-red btn-full" style="font-size:11px" onclick="leaveChannel(\'' + room.id + '\')"><iconify-icon icon="ph:sign-out-fill"></iconify-icon> 退出频道</button>' : (canManage ? '<button class="btn btn-sm btn-red btn-full" style="font-size:11px" onclick="deleteConversation(\'' + room.id + '\')"><iconify-icon icon="ph:trash-fill"></iconify-icon> 删除频道</button>' : '')}
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="togglePinChannel('${room.id}');var r=chatState.rooms.find(function(x){return x.id==='${room.id}'});if(r)renderChatContextPanel(r)">${getPinnedChannels().indexOf(room.id) >= 0 ? '取消置顶' : '<iconify-icon icon="ph:push-pin-fill"></iconify-icon> 置顶会话'}</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="hideChannel('${room.id}')"><iconify-icon icon="ph:eye-slash-fill"></iconify-icon> 隐藏会话</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="clearLocalMessages('${room.id}')"><iconify-icon icon="ph:eraser-fill"></iconify-icon> 仅清空本地记录</button>
+        <button class="btn btn-sm btn-gray btn-full" style="font-size:12px;margin-bottom:4px" onclick="clearChatHistory('${room.id}')"><iconify-icon icon="ph:trash-fill"></iconify-icon> 清空所有人记录</button>
+        ${room.type === 'private' ? '<button class="btn btn-sm btn-red btn-full" style="font-size:12px;margin-bottom:4px" onclick="removePrivateChat(\'' + room.id + '\')"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> 移除私聊会话</button>' : ''}
+        ${!isOwner ? '<button class="btn btn-sm btn-red btn-full" style="font-size:12px" onclick="leaveChannel(\'' + room.id + '\')"><iconify-icon icon="ph:sign-out-fill"></iconify-icon> 退出频道</button>' : (canManage ? '<button class="btn btn-sm btn-red btn-full" style="font-size:12px" onclick="deleteConversation(\'' + room.id + '\')"><iconify-icon icon="ph:trash-fill"></iconify-icon> 删除频道</button>' : '')}
       </div>
     </div>
   `;
@@ -8648,7 +8648,7 @@ function renderMsgHTML(m, roomId) {
     contentHtml = '<div onclick="openToolPanel(\'' + escAttr(tId) + '\',\'' + escAttr(roomId || '') + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:12px;cursor:pointer;background:var(--accent-bg);transition:all .2s;max-width:280px" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<div style="width:36px;height:36px;border-radius:10px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">' + esc(tIcon) + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text-primary)">' + esc(tTitle) + '</div>' +
-      '<div style="font-size:11px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
+      '<div style="font-size:12px;color:var(--accent)">' + esc(tMeta.label) + ' · 点击打开 →</div></div></div>';
   } else if (text.startsWith('card:')) {
     // 用户名片分享: card:<userId>|<name>|<avatar>|<doubaoId> (各段已 encodeURIComponent)
     var cardParts = text.slice(5).split('|');
@@ -8662,7 +8662,7 @@ function renderMsgHTML(m, roomId) {
       '<div style="width:48px;height:48px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:22px;flex-shrink:0;border:2px solid var(--accent)">' + avatarInner + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;color:var(--text-primary)">' + esc(cName) + '</div>' +
       '<div style="font-size:12px;color:var(--text-muted);margin-top:3px">' + (cDoubao ? '豆包号 @' + esc(cDoubao) : '') + '</div>' +
-      '<div style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600"><iconify-icon icon="ph:credit-card-fill"></iconify-icon> 个人名片 · 点击查看</div></div></div>';
+      '<div style="font-size:12px;color:var(--accent);margin-top:5px;font-weight:600"><iconify-icon icon="ph:credit-card-fill"></iconify-icon> 个人名片 · 点击查看</div></div></div>';
   } else if (text.startsWith('channel:')) {
     // 频道分享: channel:<roomId>|<roomName>|<avatar> (各段已 encodeURIComponent)
     var chParts = text.slice(8).split('|');
@@ -8674,7 +8674,7 @@ function renderMsgHTML(m, roomId) {
       '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-gradient)"></div>' +
       '<div style="width:44px;height:44px;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);font-size:20px;flex-shrink:0">' + chAvatarInner + '</div>' +
       '<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;color:var(--text-primary)">' + esc(chName) + '</div>' +
-      '<div style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon> 频道分享 · 点击加入 →</div></div></div>';
+      '<div style="font-size:12px;color:var(--accent);margin-top:5px;font-weight:600"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon> 频道分享 · 点击加入 →</div></div></div>';
   } else {
     // renderRichText 已在内部处理 @提及高亮和 linkify（仅作用于文本节点，不破坏HTML标签属性）
     contentHtml = renderRichText(text);
@@ -8716,7 +8716,7 @@ function renderMsgHTML(m, roomId) {
     '<div class="chat-msg-sender" style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:2px;padding:0 4px" onclick="showUserPopup(\'' + escAttr(m.sender_id || '') + '\',\'' + escAttr(m.sender) + '\',\'' + escAttr(m.sender_avatar || '') + '\',\'' + escAttr(m.sender_doubao_id || '') + '\')">' + esc(m.sender) + (m.sender_doubao_id ? ' <span style="font-weight:400;opacity:0.6">@' + esc(m.sender_doubao_id) + '</span>' : '') + '</div>' +
     '<div class="chat-msg-bubble">' +
     replyHtml +
-    '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:10px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
+    '<div class="chat-msg-content dp-rich-content">' + contentHtml + (m.edited ? ' <span style="font-size:11px;color:var(--text-faint)">(已编辑)</span>' : '') + '</div>' +
     '</div>' +
     reactionsHtml +
     '<div class="chat-msg-time"><span class="chat-msg-time-text">' + time + '</span><span class="chat-msg-actions">' + actionBtns + moreBtn + '</span></div>' +
@@ -9859,12 +9859,12 @@ function editMessage(eventId) {
   btnRow.style.cssText = 'display:flex;gap:4px;justify-content:flex-end';
   var saveBtn = document.createElement('button');
   saveBtn.className = 'btn btn-sm btn-orange';
-  saveBtn.style.cssText = 'font-size:11px;padding:2px 10px';
+  saveBtn.style.cssText = 'font-size:12px;padding:2px 10px';
   saveBtn.textContent = '保存';
   saveBtn.onclick = function() { saveEdit(eventId); };
   var cancelBtn = document.createElement('button');
   cancelBtn.className = 'btn btn-sm btn-gray';
-  cancelBtn.style.cssText = 'font-size:11px;padding:2px 10px';
+  cancelBtn.style.cssText = 'font-size:12px;padding:2px 10px';
   cancelBtn.textContent = '取消';
   cancelBtn.onclick = function() { cancelEdit(eventId); };
   btnRow.appendChild(saveBtn);
@@ -9937,7 +9937,7 @@ function showReactionPicker(eventId) {
   picker.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg-secondary);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.15);padding:0;z-index:200;max-width:360px;overflow:hidden;border:1px solid var(--border-color)';
   var cats = Object.keys(emojiData);
   var tabsHtml = cats.map(function(c, i) {
-    return '<button class="emoji-cat-tab" data-idx="' + i + '" onclick="switchEmojiTab(' + i + ')" style="background:' + (i===0?'var(--accent-bg)':'transparent') + ';color:' + (i===0?'var(--accent)':'var(--text-faint)') + ';border:none;font-size:11px;padding:4px 10px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap;font-weight:600">' + esc(c) + '</button>';
+    return '<button class="emoji-cat-tab" data-idx="' + i + '" onclick="switchEmojiTab(' + i + ')" style="background:' + (i===0?'var(--accent-bg)':'transparent') + ';color:' + (i===0?'var(--accent)':'var(--text-faint)') + ';border:none;font-size:12px;padding:4px 10px;border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap;font-weight:600">' + esc(c) + '</button>';
   }).join('');
   picker.innerHTML = '<div style="display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--border-color);overflow-x:auto;scrollbar-width:thin">' + tabsHtml + '</div>' +
     '<div id="emojiCatPanel" style="padding:8px;display:flex;flex-wrap:wrap;gap:2px;max-height:200px;overflow-y:auto"></div>';
@@ -10047,11 +10047,11 @@ async function translateMessage(eventId, targetLang) {
       var sel = TRANSLATE_LANGS[i].code === currentLang ? ' selected' : '';
       options += '<option value="' + TRANSLATE_LANGS[i].code + '"' + sel + '>' + TRANSLATE_LANGS[i].name + '</option>';
     }
-    return '<select onchange="translateMessage(\'' + eventId + '\',this.value);this.closest(\'#translateResult_' + eventId + '\').remove()" style="font-size:10px;padding:1px 4px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-muted);cursor:pointer;outline:none">' + options + '</select>';
+    return '<select onchange="translateMessage(\'' + eventId + '\',this.value);this.closest(\'#translateResult_' + eventId + '\').remove()" style="font-size:11px;padding:1px 4px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-muted);cursor:pointer;outline:none">' + options + '</select>';
   }
 
   function showResult(translated, detectedLangName) {
-    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:10px;color:var(--text-faint)"><iconify-icon icon="ph:globe-simple-fill"></iconify-icon> 翻译为' + esc(targetLangName) + (detectedLangName ? '（原文: ' + esc(detectedLangName) + '）' : '') + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
+    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:11px;color:var(--text-faint)"><iconify-icon icon="ph:globe-simple-fill"></iconify-icon> 翻译为' + esc(targetLangName) + (detectedLangName ? '（原文: ' + esc(detectedLangName) + '）' : '') + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--text-primary);font-size:13px;line-height:1.5">' + esc(translated || '翻译结果为空') + '</div>';
   }
 
   function showLoading() {
@@ -10097,7 +10097,7 @@ async function translateMessage(eventId, targetLang) {
       }));
     } catch(e) {}
   } catch(e) {
-    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-size:10px;color:var(--text-faint)"><iconify-icon icon="ph:globe-simple-fill"></iconify-icon> 翻译为' + esc(targetLangName) + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--danger);font-size:12px"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> ' + esc(e.message) + '</div>';
+    resultDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-size:11px;color:var(--text-faint)"><iconify-icon icon="ph:globe-simple-fill"></iconify-icon> 翻译为' + esc(targetLangName) + '</div>' + buildLangSelector(targetLang) + '</div><div style="color:var(--danger);font-size:12px"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> ' + esc(e.message) + '</div>';
     setTimeout(function() { if (resultDiv.parentElement) resultDiv.remove(); }, 5000);
   }
 }
@@ -10221,11 +10221,11 @@ async function showRoomSettings() {
     html += '<option value="questionnaire"' + (currentAdmission === 'questionnaire' ? ' selected' : '') + '>问卷测试</option>';
     html += '<option value="custom_page"' + (currentAdmission === 'custom_page' ? ' selected' : '') + '>自定义页面</option>';
     html += '<option value="composite"' + (currentAdmission === 'composite' ? ' selected' : '') + '>复合验证</option>';
-    html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:11px"><iconify-icon icon="ph:gear-fill"></iconify-icon> 准入设置</button>';
+    html += '</select> <button class="btn btn-sm btn-gray" onclick="showAdmissionManagement()" style="font-size:12px"><iconify-icon icon="ph:gear-fill"></iconify-icon> 准入设置</button>';
     html += '</div>';
   }
-  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:11px">+ 发布</button>' : '') + '</div><div id="settingsChannelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
-  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:11px">+ 添加</button>' : '') + '</div><div id="settingsChannelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
+  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:12px">+ 发布</button>' : '') + '</div><div id="settingsChannelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
+  html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:12px">+ 添加</button>' : '') + '</div><div id="settingsChannelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
   // 频道分组管理
   html += '<div style="margin-top:12px"><button class="btn btn-sm btn-gray" style="width:100%" onclick="showChannelGroupManager()"><iconify-icon icon="ph:folder-fill"></iconify-icon> 频道分组管理</button></div>';
   if (canManage) {
@@ -10370,7 +10370,7 @@ async function loadRoomMemberList(roomId) {
     const isMuted = mutedSet.has(uid);
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color)">';
     html += '<div style="display:flex;align-items:center;gap:8px">';
-    html += '<div style="font-size:13px;font-weight:500">' + esc(u.name) + (u.doubao_id ? ' <span style="font-weight:400;opacity:0.7;font-size:11px">@' + esc(u.doubao_id) + '</span>' : '') + (room?.created_by === uid ? ' <span style="color:var(--accent);font-size:11px">(创建者)</span>' : '') + (isAdmin ? ' <span style="color:#4ECDC4;font-size:11px">(管理员)</span>' : '') + '</div>';
+    html += '<div style="font-size:13px;font-weight:500">' + esc(u.name) + (u.doubao_id ? ' <span style="font-weight:400;opacity:0.7;font-size:12px">@' + esc(u.doubao_id) + '</span>' : '') + (room?.created_by === uid ? ' <span style="color:var(--accent);font-size:12px">(创建者)</span>' : '') + (isAdmin ? ' <span style="color:#4ECDC4;font-size:12px">(管理员)</span>' : '') + '</div>';
     html += '</div>';
     if (uid !== currentUser.id) {
       html += '<div style="display:flex;gap:4px">';
@@ -10380,7 +10380,7 @@ async function loadRoomMemberList(roomId) {
         html += '<button class="btn btn-sm btn-red" onclick="kickMember(\'' + roomId + '\',\'' + uid + '\')">踢出</button>';
       }
       if (isMuted) {
-        html += '<span style="background:var(--danger-bg);color:var(--danger);font-size:11px;padding:2px 6px;border-radius:4px"><iconify-icon icon="ph:speaker-simple-slash-fill"></iconify-icon> 禁言中</span>';
+        html += '<span style="background:var(--danger-bg);color:var(--danger);font-size:12px;padding:2px 6px;border-radius:4px"><iconify-icon icon="ph:speaker-simple-slash-fill"></iconify-icon> 禁言中</span>';
         html += '<button class="btn btn-sm btn-gray" onclick="unmuteMember(\'' + roomId + '\',\'' + uid + '\')">解禁</button>';
       } else {
         var safeMuteName = esc(u.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -10617,7 +10617,7 @@ function showPinnedAnnouncements(announcements) {
       '<div style="font-weight:700;font-size:14px;color:var(--text-primary);flex:1">' + esc(a.title) + '</div>' +
       '</div>' +
       '<div class="dp-rich-content" style="font-size:13px;color:var(--text-secondary);line-height:1.7;overflow-wrap:anywhere;word-break:break-word">' + renderRichContent(a.content) + '</div>' +
-      '<div style="font-size:10px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-faint);margin-top:8px">' + formatDate(a.created_at) + '</div>' +
       '</div>';
   }).join('');
   overlay.innerHTML = '<div class="modal" style="max-width:520px;width:90vw;max-height:80vh">' +
@@ -10646,14 +10646,14 @@ async function loadChannelAnnouncements(roomId, containerId) {
     if (!data.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">暂无公告</div>'; return; }
   }
   el.innerHTML = data.map(function(a) {
-    var visBadge = a.visibility === 'admin' ? '<span class="tag tag-orange" style="margin-left:6px;font-size:9px"><iconify-icon icon="ph:lock-fill"></iconify-icon>管理员</span>' : '';
+    var visBadge = a.visibility === 'admin' ? '<span class="tag tag-orange" style="margin-left:6px;font-size:11px"><iconify-icon icon="ph:lock-fill"></iconify-icon>管理员</span>' : '';
     return '<div class="card" style="margin-bottom:8px;padding:10px 12px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
       '<div style="font-weight:600;font-size:13px">' + (a.pinned ? '<iconify-icon icon="ph:push-pin-fill"></iconify-icon> ' : '') + esc(a.title) + visBadge + '</div>' +
-      (isAdmin ? '<div style="display:flex;gap:4px"><button class="btn btn-sm btn-gray" style="padding:2px 6px;font-size:11px" onclick="showAnnouncementEditor(\'' + a.id + '\')">编辑</button><button class="btn btn-sm btn-red" style="padding:2px 6px;font-size:11px" onclick="deleteChannelAnnouncement(\'' + a.id + '\',\'' + roomId + '\')">删除</button></div>' : '') +
+      (isAdmin ? '<div style="display:flex;gap:4px"><button class="btn btn-sm btn-gray" style="padding:2px 6px;font-size:12px" onclick="showAnnouncementEditor(\'' + a.id + '\')">编辑</button><button class="btn btn-sm btn-red" style="padding:2px 6px;font-size:12px" onclick="deleteChannelAnnouncement(\'' + a.id + '\',\'' + roomId + '\')">删除</button></div>' : '') +
       '</div>' +
       '<div class="dp-rich-content" style="font-size:12px;color:var(--text-secondary);margin-top:4px">' + renderRichContent(a.content) + '</div>' +
-      '<div style="font-size:10px;color:var(--text-faint);margin-top:4px">' + formatDate(a.created_at) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">' + formatDate(a.created_at) + '</div>' +
       '</div>';
   }).join('');
 }
@@ -11272,7 +11272,7 @@ async function openToolPanel(toolId, roomId) {
   var overlay = document.createElement('div');
   overlay.id = 'toolPanelOverlay';
   overlay.className = 'tool-panel-overlay';
-  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span><button class="btn btn-sm btn-gray" style="font-size:11px;flex-shrink:0" onclick="shareToolToChannel(\'' + escAttr(tool.id) + '\',\'' + escAttr(tool.tool_type||'link') + '\',\'' + escAttr(tool.icon||meta.icon) + '\',\'' + escAttr(tool.title) + '\')"><iconify-icon icon="ph:share-network-fill"></iconify-icon> 分享到频道</button></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
+  overlay.innerHTML = '<div class="tool-panel-header"><button class="tool-panel-back" onclick="closeToolPanel()">← 返回聊天</button><span class="tool-panel-title">' + esc(tool.icon || meta.icon) + ' ' + esc(tool.title) + '</span><button class="btn btn-sm btn-gray" style="font-size:12px;flex-shrink:0" onclick="shareToolToChannel(\'' + escAttr(tool.id) + '\',\'' + escAttr(tool.tool_type||'link') + '\',\'' + escAttr(tool.icon||meta.icon) + '\',\'' + escAttr(tool.title) + '\')"><iconify-icon icon="ph:share-network-fill"></iconify-icon> 分享到频道</button></div><div class="tool-panel-body" id="toolPanelContent"><div class="embed-loading">加载中...</div></div>';
   center.appendChild(overlay);
   ['chatMsgs', 'chatViewInput', 'chatReplyBar', 'chatMutedBanner'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -11637,17 +11637,17 @@ function renderQuestionRow(q, i) {
   h += '<option value="fill_standard"' + (q.type === 'fill_standard' ? ' selected' : '') + '>标准填空</option>';
   h += '<option value="fill"' + (q.type === 'fill' ? ' selected' : '') + '>开放填空</option>';
   h += '</select>';
-  h += '<button class="btn btn-sm btn-red" onclick="removeQuestionRow(' + i + ')" style="font-size:11px"><iconify-icon icon="ph:x"></iconify-icon></button>';
+  h += '<button class="btn btn-sm btn-red" onclick="removeQuestionRow(' + i + ')" style="font-size:12px"><iconify-icon icon="ph:x"></iconify-icon></button>';
   h += '</div>';
   if (q.type === 'fill_standard') {
-    h += '<div style="padding-left:20px"><div style="font-size:10px;color:var(--text-faint);margin-bottom:4px"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon> 标准答案（填写正确即自动通过）</div>';
+    h += '<div style="padding-left:20px"><div style="font-size:11px;color:var(--text-faint);margin-bottom:4px"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon> 标准答案（填写正确即自动通过）</div>';
     h += '<input class="input" value="' + esc(q.correct_answer || '') + '" placeholder="正确答案（≤30字）" maxlength="30" style="flex:1" data-field="correct_answer">';
     h += '</div>';
   } else if (q.type === 'fill') {
-    h += '<div style="font-size:11px;color:var(--text-faint);padding-left:20px"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon> 开放填空 — 答案将在审核时展示，由管理员人工判断</div>';
+    h += '<div style="font-size:12px;color:var(--text-faint);padding-left:20px"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon> 开放填空 — 答案将在审核时展示，由管理员人工判断</div>';
   } else {
     h += '<div class="questionOptions" style="padding-left:20px">';
-    h += '<div style="font-size:10px;color:var(--text-faint);margin-bottom:4px">选项（点击 <iconify-icon icon="ph:circle"></iconify-icon>/<iconify-icon icon="ph:check-square-fill"></iconify-icon> 标记正确答案）</div>';
+    h += '<div style="font-size:11px;color:var(--text-faint);margin-bottom:4px">选项（点击 <iconify-icon icon="ph:circle"></iconify-icon>/<iconify-icon icon="ph:check-square-fill"></iconify-icon> 标记正确答案）</div>';
     var correctSet = new Set(q.correct_answer || []);
     (q.options || ['']).forEach(function(opt, j) {
       var isCorrect = correctSet.has(j);
@@ -11655,10 +11655,10 @@ function renderQuestionRow(q, i) {
       h += '<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">';
       h += '<input type="' + inputType + '" name="correct_q' + i + '" ' + (isCorrect ? 'checked' : '') + ' data-correct="' + j + '" style="margin:0;accent-color:var(--accent)" title="标记为正确答案">';
       h += '<input class="input" value="' + esc(opt || '') + '" placeholder="选项文本（≤30字）" maxlength="30" style="flex:1" data-field="option" data-oidx="' + j + '">';
-      h += '<button class="btn btn-sm btn-gray" onclick="removeOption(this)" style="font-size:10px">-</button>';
+      h += '<button class="btn btn-sm btn-gray" onclick="removeOption(this)" style="font-size:11px">-</button>';
       h += '</div>';
     });
-    h += '<button class="btn btn-sm btn-gray" onclick="addOption(this)" style="font-size:10px;margin-left:20px">+ 添加选项</button>';
+    h += '<button class="btn btn-sm btn-gray" onclick="addOption(this)" style="font-size:11px;margin-left:20px">+ 添加选项</button>';
     h += '</div>';
   }
   h += '</div>';
@@ -11784,7 +11784,7 @@ function addOption(btn) {
   var correctInput = inputType === 'multiple' ? 'checkbox' : 'radio';
   optDiv.innerHTML = '<input type="' + correctInput + '" name="correct_q' + qIdx + '" data-correct="' + optionCount + '" style="margin:0;accent-color:var(--accent)" title="标记为正确答案">' +
     '<input class="input" placeholder="选项文本（≤30字）" maxlength="30" style="flex:1" data-field="option" data-oidx="' + optionCount + '">' +
-    '<button class="btn btn-sm btn-gray" onclick="removeOption(this)" style="font-size:10px">-</button>';
+    '<button class="btn btn-sm btn-gray" onclick="removeOption(this)" style="font-size:11px">-</button>';
   btn.parentElement.insertBefore(optDiv, btn);
 }
 
@@ -11937,7 +11937,7 @@ async function showBrowseChannels(query) {
       var avatarHTML = c.avatar_url ? '<img src="' + imgProxyUrl(esc(c.avatar_url)) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon></div>';
       listHtml += '<div class="list-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:default">';
       listHtml += avatarHTML;
-      listHtml += '<div style="flex:1"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:11px;color:var(--text-faint)">' + (c.member_count || 0) + ' 位成员</div></div>';
+      listHtml += '<div style="flex:1"><div style="font-weight:600;font-size:13px">' + esc(c.name) + '</div><div style="font-size:12px;color:var(--text-faint)">' + (c.member_count || 0) + ' 位成员</div></div>';
       if (c.joined) {
         listHtml += '<button class="btn btn-sm btn-green" onclick="switchRoom(\'' + c.id + '\');document.getElementById(\'browseChannelsModal\').remove()">已加入</button>';
       } else {
@@ -12311,18 +12311,18 @@ renderRoomList = function() {
       // 频道分组筛选标签
       if (channelGroupNames.length) {
         channelHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
-          '<button class="btn btn-sm ' + (!channelFilterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
+          '<button class="btn btn-sm ' + (!channelFilterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'\';renderRoomList()" style="font-size:11px">全部</button>' +
           channelGroupNames.map(function(n) {
-            return '<button class="btn btn-sm ' + (channelFilterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+            return '<button class="btn btn-sm ' + (channelFilterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.channelFilterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:11px">' + esc(n) + '</button>';
           }).join('') +
           '</div>';
       }
       if (pinnedChannels.length) {
-        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)"><iconify-icon icon="ph:push-pin-fill"></iconify-icon> 置顶</div>';
+        channelHtml += '<div style="padding:4px 8px;font-size:11px;font-weight:600;color:var(--text-faint)"><iconify-icon icon="ph:push-pin-fill"></iconify-icon> 置顶</div>';
         channelHtml += pinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
       }
       if (unpinnedChannels.length) {
-        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint)">频道</div>';
+        channelHtml += '<div style="padding:4px 8px;font-size:11px;font-weight:600;color:var(--text-faint)">频道</div>';
         channelHtml += unpinnedChannels.map(function(r) { return roomItemHTML(r); }).join('');
       }
       // ── 公开频道（未加入的） ──
@@ -12335,10 +12335,10 @@ renderRoomList = function() {
           pubGroupMap[g].push(r);
         });
         var pubGroupNames = Object.keys(pubGroupMap).sort();
-        channelHtml += '<div style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 公开频道</div>';
+        channelHtml += '<div style="padding:4px 8px;font-size:11px;font-weight:600;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:broadcast-fill"></iconify-icon> 公开频道</div>';
         pubGroupNames.forEach(function(g) {
           if (pubGroupNames.length > 1 || g !== '默认分组') {
-            channelHtml += '<div style="padding:2px 12px;font-size:9px;font-weight:600;color:var(--text-faint)"><iconify-icon icon="ph:folder-fill"></iconify-icon> ' + esc(g) + '</div>';
+            channelHtml += '<div style="padding:2px 12px;font-size:11px;font-weight:600;color:var(--text-faint)"><iconify-icon icon="ph:folder-fill"></iconify-icon> ' + esc(g) + '</div>';
           }
           pubGroupMap[g].forEach(function(r) {
             channelHtml += publicChannelItemHTML(r);
@@ -12366,9 +12366,9 @@ renderRoomList = function() {
       // 好友分组筛选标签
       if (friendGroupNames.length) {
         privateHtml += '<div style="padding:4px 4px;display:flex;gap:4px;flex-wrap:wrap">' +
-          '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:10px">全部</button>' +
+          '<button class="btn btn-sm ' + (!filterGroup ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'\';renderRoomList()" style="font-size:11px">全部</button>' +
           friendGroupNames.map(function(n) {
-            return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:10px">' + esc(n) + '</button>';
+            return '<button class="btn btn-sm ' + (filterGroup === n ? 'btn-orange' : 'btn-gray') + '" onclick="chatState.filterGroup=\'' + escAttr(n) + '\';renderRoomList()" style="font-size:11px">' + esc(n) + '</button>';
           }).join('') +
           '</div>';
       }
@@ -12443,7 +12443,7 @@ function publicChannelItemHTML(r) {
   return '<div class="chat-room-item" onclick="joinPublicChannel(\'' + r.id + '\')">' +
     '<div class="chat-room-avatar">' + avatar + '</div>' +
     '<div class="chat-room-info">' +
-    '<div class="chat-room-name">' + name + ' <span class="chat-role-tag role-dev" style="font-size:9px">公开</span></div>' +
+    '<div class="chat-room-name">' + name + ' <span class="chat-role-tag role-dev" style="font-size:11px">公开</span></div>' +
     '<div class="chat-room-preview">点击加入频道</div>' +
     '</div>' +
     '<div class="chat-room-actions">' +
@@ -12655,18 +12655,18 @@ function settingsAccountHTML() {
     '<div style="font-size:13px;color:var(--text-faint)">' + (currentUser.doubao_id ? '@' + esc(currentUser.doubao_id) : (currentUser.agent_url ? esc(currentUser.agent_url) : '未设置豆包号')) + '</div>' +
     (currentUser.bio ? renderBio(currentUser.bio) : '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">暂无简介</div>') + '</div></div></div>' +
     '<div class="form-group"><label class="form-label">更换头像</label><div style="display:flex;gap:8px"><input class="input" id="newAvatarUrl" placeholder="输入图片链接" value="' + esc(currentUser.avatar || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="updateAvatar()">更新</button></div></div></div>' +
-    '<div class="form-group"><label class="form-label">修改昵称</label><div style="display:flex;gap:8px"><input class="input" id="newName" placeholder="输入新昵称" value="' + esc(currentUser.name || '') + '" maxlength="20" style="flex:1"><button class="btn btn-orange btn-sm" onclick="updateProfile(\'name\')" id="saveNameBtn">保存</button></div><div id="nameCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div></div>' +
-    '<div class="form-group"><label class="form-label">自我介绍</label><textarea class="input" id="newBio" placeholder="编辑你的自我介绍（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">' + esc(currentUser.bio || '') + '</textarea><button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile(\'bio\')" id="saveBioBtn">保存自我介绍</button><div id="bioCooldownHint" style="font-size:11px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div></div>' +
+    '<div class="form-group"><label class="form-label">修改昵称</label><div style="display:flex;gap:8px"><input class="input" id="newName" placeholder="输入新昵称" value="' + esc(currentUser.name || '') + '" maxlength="20" style="flex:1"><button class="btn btn-orange btn-sm" onclick="updateProfile(\'name\')" id="saveNameBtn">保存</button></div><div id="nameCooldownHint" style="font-size:12px;color:var(--text-faint);margin-top:4px">昵称长度1-20位，每30天可修改一次</div></div>' +
+    '<div class="form-group"><label class="form-label">自我介绍</label><textarea class="input" id="newBio" placeholder="编辑你的自我介绍（最多200字）" maxlength="200" rows="3" style="width:100%;resize:vertical">' + esc(currentUser.bio || '') + '</textarea><button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="updateProfile(\'bio\')" id="saveBioBtn">保存自我介绍</button><div id="bioCooldownHint" style="font-size:12px;color:var(--text-faint);margin-top:4px">每30天可修改一次</div></div>' +
     '<div class="form-group"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">拍一拍后缀（≤10字，留空为"👋"）</div><div style="display:flex;gap:8px"><input id="patSuffixInput" class="input" value="' + esc(currentUser.pat_suffix || '') + '" maxlength="10" style="flex:1"><button class="btn btn-sm btn-orange" onclick="updatePatSuffix()">保存</button></div></div>' +
     '<div class="form-group"><label class="form-label">修改密码</label><div style="display:flex;gap:8px"><input class="input" id="newPwd" type="password" placeholder="新密码（6-32位）" maxlength="32" style="flex:1"><button class="btn btn-orange btn-sm" onclick="changePassword()">保存</button></div></div>' +
-    '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 密保问题</div><div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">选择密保问题</label><select class="input" id="securityQuestion" style="width:100%"><option value="">-- 请选择 --</option><option value="你的宠物名字叫什么？">你的宠物名字叫什么？</option><option value="你最喜欢的电影是什么？">你最喜欢的电影是什么？</option><option value="你小学就读的学校叫什么？">你小学就读的学校叫什么？</option><option value="你父亲的名字叫什么？">你父亲的名字叫什么？</option><option value="你母亲的名字叫什么？">你母亲的名字叫什么？</option><option value="你出生的城市叫什么？">你出生的城市叫什么？</option><option value="你最喜欢的食物是什么？">你最喜欢的食物是什么？</option></select></div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">密保答案</label><input class="input" id="securityAnswer" type="text" placeholder="输入密保答案（支持中文）" maxlength="50" style="width:100%"></div><button class="btn btn-orange btn-sm btn-full" onclick="saveSecurityQuestion()" id="saveSecQBtn">设置密保</button><div id="securityQuestionStatus" style="font-size:11px;color:var(--text-faint);margin-top:6px"></div></div>' +
+    '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 密保问题</div><div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">设置密保问题后，忘记账号时可在本设备通过密保找回密码。每30天可修改一次。</div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">选择密保问题</label><select class="input" id="securityQuestion" style="width:100%"><option value="">-- 请选择 --</option><option value="你的宠物名字叫什么？">你的宠物名字叫什么？</option><option value="你最喜欢的电影是什么？">你最喜欢的电影是什么？</option><option value="你小学就读的学校叫什么？">你小学就读的学校叫什么？</option><option value="你父亲的名字叫什么？">你父亲的名字叫什么？</option><option value="你母亲的名字叫什么？">你母亲的名字叫什么？</option><option value="你出生的城市叫什么？">你出生的城市叫什么？</option><option value="你最喜欢的食物是什么？">你最喜欢的食物是什么？</option></select></div><div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:12px">密保答案</label><input class="input" id="securityAnswer" type="text" placeholder="输入密保答案（支持中文）" maxlength="50" style="width:100%"></div><button class="btn btn-orange btn-sm btn-full" onclick="saveSecurityQuestion()" id="saveSecQBtn">设置密保</button><div id="securityQuestionStatus" style="font-size:12px;color:var(--text-faint);margin-top:6px"></div></div>' +
     '<div class="form-group"><label class="form-label">白名单邀请码</label><div style="display:flex;gap:8px"><input class="input" id="whitelistCode" placeholder="设置白名单模式的邀请码" value="' + esc(currentUser.invite_code || '') + '" style="flex:1"><button class="btn btn-blue btn-sm" onclick="setWhitelistCode()">保存</button></div>' +
-    '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint);margin-top:4px">开启白名单模式后，他人需要此邀请码才能搜索到你</div></div>' +
     '<div class="form-group"><label class="form-label">隐私模式</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">' +
     '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'searchable' ? 'btn-green' : 'btn-gray') + '" onclick="setPrivacy(\'searchable\')"><iconify-icon icon="ph:globe-simple-fill"></iconify-icon> 可搜索</button>' +
     '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'whitelist' || currentUser.privacy_setting === 'punished_whitelist' ? 'btn-blue' : 'btn-gray') + '" onclick="setPrivacy(\'whitelist\')"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 白名单</button>' +
     '<button class="btn btn-sm ' + (currentUser.privacy_setting === 'stealth' || currentUser.privacy_setting === 'punished_stealth' ? 'btn-gray' : 'btn-gray') + '" onclick="setPrivacy(\'stealth\')"><iconify-icon icon="ph:ghost-fill"></iconify-icon> 隐身</button></div>' +
-    '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">当前：' + getPrivacyLabel(currentUser.privacy_setting) + '</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint);margin-top:6px">当前：' + getPrivacyLabel(currentUser.privacy_setting) + '</div></div>' +
     '<div class="form-group"><label class="form-label">主题色</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'orange\')" style="background:#FF6B35;color:#fff;border:2px solid transparent" id="themeBtn-orange">活力橙</button>' +
     '<button class="btn btn-sm" onclick="setThemeColor(\'blue\')" style="background:#3B82F6;color:#fff;border:2px solid transparent" id="themeBtn-blue">海洋蓝</button>' +
@@ -12685,14 +12685,14 @@ function settingsAccountHTML() {
     '<input type="text" id="chatBgUrl" placeholder="或输入图片URL" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px">' +
     '<button class="btn btn-sm btn-orange" onclick="setChatBgUrl()">应用</button>' +
     '</div>' +
-    '<div id="chatBgStatus" style="font-size:11px;color:var(--text-secondary);margin-top:4px"></div>' +
+    '<div id="chatBgStatus" style="font-size:12px;color:var(--text-secondary);margin-top:4px"></div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">图床设置</label>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">' +
     '<input type="password" id="picgoKeyInput" placeholder="图床已由服务端配置，无需手动设置" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px" disabled>' +
     '<button class="btn btn-sm btn-gray" onclick="savePicgoKey()">清除旧Key</button>' +
     '</div>' +
-    '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">图床上传由服务端统一管理，API Key 不再存储在浏览器中。</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">图床上传由服务端统一管理，API Key 不再存储在浏览器中。</div>' +
     '</div>' +
     '<div class="form-group"><label class="form-label">功能显示设置</label><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">选择要在主页显示的功能按钮（保存后生效）</div><div id="featureToggleList" style="display:flex;flex-direction:column;gap:8px">加载中...</div></div>' +
     '<div class="form-group" style="margin-top:16px"><label class="form-label">消息通知</label>' +
@@ -12700,20 +12700,20 @@ function settingsAccountHTML() {
     '<input type="checkbox" id="notifToggle" ' + (notifEnabled ? 'checked' : '') + ' onchange="toggleNotif()">接收新消息通知（聊天按钮红点提醒）</label></div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color)">' +
     '<div><div style="font-size:13px;font-weight:600">私聊免打扰</div>' +
-    '<div style="font-size:11px;color:var(--text-faint)">开启后不在好友栏显示私聊消息红点</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint)">开启后不在好友栏显示私聊消息红点</div></div>' +
     '<input type="checkbox" id="mutePrivateToggle" ' + (localStorage.getItem('dp_mute_private') === '1' ? 'checked' : '') + ' onchange="toggleMutePrivate()"></div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color)">' +
     '<div><div style="font-size:13px;font-weight:600">频道免打扰</div>' +
-    '<div style="font-size:11px;color:var(--text-faint)">开启后不在频道栏显示频道消息红点</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint)">开启后不在频道栏显示频道消息红点</div></div>' +
     '<input type="checkbox" id="muteChannelToggle" ' + (localStorage.getItem('dp_mute_channel') === '1' ? 'checked' : '') + ' onchange="toggleMuteChannel()"></div>' +
     '<div class="form-group"><label class="form-label">输入框自动上移（手机适配）</label>' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
     '<input type="checkbox" id="chatKeyboardLiftToggle" ' + (chatKeyboardLift ? 'checked' : '') + ' onchange="toggleChatKeyboardLift()">键盘弹出时自动抬起输入框，避免被遮挡（iOS Safari / Android Chrome 适用）</label>' +
-    '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint);margin-top:4px">部分安卓浏览器可能存在抖动，可在此关闭</div></div>' +
     '<div class="form-group"><label class="form-label">背景着色器</label>' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
     '<input type="checkbox" id="shaderToggle" ' + (localStorage.getItem('dp_shader') !== 'off' ? 'checked' : '') + ' onchange="toggleShader()">显示动态涟漪背景动画（关闭后隐藏动效背景）</label>' +
-    '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div></div>' +
+    '<div style="font-size:12px;color:var(--text-faint);margin-top:4px">关闭可降低 GPU 占用与发热</div></div>' +
     '<div class="card" style="margin-bottom:16px;padding:14px;background:var(--bg-input)"><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px"><iconify-icon icon="ph:lock-key-fill"></iconify-icon> 最近登录</div>' +
     '<div style="font-size:12px;color:var(--text-secondary);line-height:1.8"><div>IP：' + esc(currentUser.last_login_ip || '未知') + '</div><div>时间：' + formatDate(currentUser.last_login_at) + '</div>' +
     '<div>设备：' + esc(currentUser.last_login_ua || '未知') + '</div></div></div>' +
@@ -12749,12 +12749,12 @@ async function loadFriendsWithGroups(el) {
     var html = '<div style="margin-bottom:12px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<div class="section-label" style="margin-bottom:0"><iconify-icon icon="ph:users-three-fill"></iconify-icon> 好友分组</div>' +
-      '<button class="btn btn-sm btn-gray" onclick="showFriendGroupManager()" style="font-size:11px">管理</button></div></div>';
+      '<button class="btn btn-sm btn-gray" onclick="showFriendGroupManager()" style="font-size:12px">管理</button></div></div>';
     if (groupNames.length) {
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
-        '<span class="tag ' + (_filterGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
+        '<span class="tag ' + (_filterGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'\')" style="cursor:pointer;font-size:12px;padding:4px 10px">全部</span>' +
         groupNames.map(function(n) {
-          return '<span class="tag ' + (_filterGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+          return '<span class="tag ' + (_filterGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterFriendGroup(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:12px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
         }).join('') + '</div>';
     }
     var filteredFriends = _filterGroup ? friends.filter(function(f) {
@@ -12769,7 +12769,7 @@ async function loadFriendsWithGroups(el) {
         avatarHTML(f.friend, true, true) +
         '<div class="list-item-info"><div class="list-item-name">' + esc(f.friend.name) + '</div>' +
         '<div class="list-item-email">' + esc(f.friend.doubao_id || '') + '</div></div>' +
-        '<select class="input" style="width:auto;font-size:11px;padding:4px 8px" onchange="setFriendGroup(\'' + f.friend.id + '\',this.value)">' +
+        '<select class="input" style="width:auto;font-size:12px;padding:4px 8px" onchange="setFriendGroup(\'' + f.friend.id + '\',this.value)">' +
         '<option value="">(无分组)</option>' +
         groupNames.map(function(n) { return '<option value="' + esc(n) + '" ' + (g === n ? 'selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
         '</select>' +
@@ -12844,12 +12844,12 @@ async function loadChannelsWithGroups(el) {
     var html = '<div style="margin-bottom:12px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<div class="section-label" style="margin-bottom:0"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> 频道分组</div>' +
-      '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:11px">管理</button></div></div>';
+      '<button class="btn btn-sm btn-gray" onclick="showChannelGroupManager()" style="font-size:12px">管理</button></div></div>';
     if (groupNames.length) {
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
-        '<span class="tag ' + (_filterChannelGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'\')" style="cursor:pointer;font-size:11px;padding:4px 10px">全部</span>' +
+        '<span class="tag ' + (_filterChannelGroup === '' ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'\')" style="cursor:pointer;font-size:12px;padding:4px 10px">全部</span>' +
         groupNames.map(function(n) {
-          return '<span class="tag ' + (_filterChannelGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:11px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
+          return '<span class="tag ' + (_filterChannelGroup === n ? 'tag-blue' : 'tag-gray') + '" onclick="filterChannelGroupInSettings(\'' + escAttr(n) + '\')" style="cursor:pointer;font-size:12px;padding:4px 10px">' + esc(n) + ' (' + (groups[n] || []).length + ')</span>';
         }).join('') + '</div>';
     }
     var filteredChannels = _filterChannelGroup ? channels.filter(function(c) {
@@ -12866,7 +12866,7 @@ async function loadChannelsWithGroups(el) {
         '<div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center">' + channelAvatarHTML(c, 32) + '</div>' +
         '<div class="list-item-info"><div class="list-item-name">' + esc(c.name) + roleTag + '</div>' +
         '<div class="list-item-email">' + (c.member_count || 0) + ' 人' + (c.unread ? ' · ' + c.unread + ' 未读' : '') + '</div></div>' +
-        '<select class="input" style="width:auto;font-size:11px;padding:4px 8px" onchange="setChannelGroupInSettings(\'' + c.id + '\',this.value)">' +
+        '<select class="input" style="width:auto;font-size:12px;padding:4px 8px" onchange="setChannelGroupInSettings(\'' + c.id + '\',this.value)">' +
         '<option value="">(无分组)</option>' +
         groupNames.map(function(n) { return '<option value="' + esc(n) + '" ' + (g === n ? 'selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
         '</select>' +
@@ -13566,12 +13566,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // V9.5：中国红改用「飘扬层」作自己的特色着色器，故流体画布在中国红下让位，
     // 否则它的近白基底会整片盖住 body 的国旗红底（表现为粉灰而非红底）。
     function isRedTheme() { return !!document.body && document.body.classList.contains('theme-red'); }
-    // V9.6 青碧色 / 水墨灰：指针交互从「水纹涟漪」换成「指雾笔」（独立 Canvas 凝雾层），
-    // 故这两个主题不再驱动 rip() 涟漪；背景美术（mode0 柔光色块 / mode3 水墨山水）保持不动。
-    function isFogTheme() {
-      var b = document.body;
-      return !!b && (b.classList.contains('theme-cyan') || b.classList.contains('theme-ink'));
-    }
     function syncMode() {
       try {
         var b = document.body, m = 0;
@@ -13746,7 +13740,7 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
           gl.uniform1f(uT, nowS);
           gl.uniform1f(uD, isDark() ? 1 : 0);
           gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
-          gl.uniform1f(uRo, (ripActive && !isFogTheme()) ? 1 : 0);
+          gl.uniform1f(uRo, ripActive ? 1 : 0);
           gl.uniform4fv(uRip, ripBuf);
           gl.uniform1f(uMode, modeVal);
           gl.uniform2f(uM, pmx, pmy);
@@ -14046,18 +14040,16 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
 </script>
 <script>
 /* ═══════════════════════════════════════════════════════════
-   V9.6 指雾笔 · 青碧色 / 水墨灰 专属
-   反馈：这两个主题的指针交互还是「水纹涟漪」，换成 InternalBeyond
-   同款的「指雾笔」—— 背景上盖一层不均匀的凝雾，指针划过擦出清晰
-   背景，停手后雾再慢慢回凝。背景美术本身（mode0 柔光色块 /
-   mode3 水墨山水）一律不动，只换指针交互这一层。
+   V9.7 宣纸薄雾 · 中国红专属（静态层，不擦除）
+   反馈：青碧色的薄雾效果挺好，但回滚青碧 / 水墨的着色器与背景；
+   薄雾不用擦除，改放进中国红的宣纸设计里。
 
-   实现取舍（本站已反馈卡顿，先算成本再画）：
-   · 擦除走 pointermove 增量 destination-out —— 只画新线段，不重绘全屏
-   · 淡出回凝走 400ms 定时全量重绘 —— 擦痕留 6s，末 2s 渐隐
-   · 不用 rAF：凝雾是静止层，常驻绘制循环纯属浪费
+   · 青碧色 / 水墨灰：本层不再启用，rip() 涟漪已恢复
+   · 中国红：静态薄雾 = 纸面暖白留白 + 四团云气 + 四边起晕 + 洒金飞白
+   · 不擦除：没有 pointermove / destination-out / 笔迹，只在
+     尺寸、明暗、主题、着色器开关变化时重画一次
+   · 不用 rAF：静止层常驻绘制循环纯属浪费，仅 dirty 时重绘
    · 0.75 降采样：雾是软质地看不出来，但省 44% 像素
-   · 无擦痕且尺寸没变时一次全量重绘都不做
    ═══════════════════════════════════════════════════════════ */
 (function () {
   function die() {
@@ -14075,7 +14067,7 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
     // 插在 .noise-overlay 之前：z-index 同为 -1，DOM 靠前 → 噪点仍压在雾上，
-    // 雾压在 #fluid-canvas(-2) 上，正文层级完全不受影响。
+    // 雾压在 body::before 皴染之上，正文层级完全不受影响。
     var noise = document.querySelector('.noise-overlay');
     if (noise && noise.parentNode) noise.parentNode.insertBefore(canvas, noise);
     else document.body.appendChild(canvas);
@@ -14084,70 +14076,54 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     var SCALE = 0.75;
     var W = 1, H = 1, lastCW = 0, lastCH = 0;
     var active = false, dirty = true;
-    var LIFE = 6000, FADE = 2000;
-    var strokes = [], cur = null;
     var sig = '';
 
-    function isFogTheme() {
-      var b = document.body;
-      return !!b && (b.classList.contains('theme-cyan') || b.classList.contains('theme-ink'));
+    function isRedTheme() {
+      return !!document.body && document.body.classList.contains('theme-red');
     }
     function wantActive() {
       var off = false;
       try { off = localStorage.getItem('dp_shader') === 'off'; } catch (e) {}
-      return !off && isFogTheme();
+      return !off && isRedTheme();
     }
     function isDark() {
       var el = document.documentElement;
       return (el && el.classList.contains('dark')) || (document.body && document.body.classList.contains('dark'));
     }
 
-    // 雾色：把背景朝中性冷灰"散射"过去 —— 亮色下压暗、暗色下提亮，
-    // 擦除后对比恢复，指针才会"擦出东西"。掺一点强调色让雾属于这个主题。
-    var fogRGB = '196,212,222', fogA = 0.70, speckA = 0.55;
+    // 雾色：薄雾不是"白纱平盖一层"，而是画心留白、四边先起晕。
+    // 亮色 = 宣纸暖白提亮 + 淡墨纸黄起晕；暗色 = 玄红上的暖烟 + 更深的边晕。
+    var hazeRGB = '255,250,240', hazeA = 0.26;
+    var warmRGB = '150,126,92', warmA = 0.16;
     function syncFogStyle() {
       var dark = isDark();
-      var r = dark ? 146 : 196, g = dark ? 164 : 212, b = dark ? 178 : 222;
-      fogA = dark ? 0.26 : 0.70;
-      speckA = dark ? 0.42 : 0.55;
-      try {
-        var s = String(getComputedStyle(document.body).getPropertyValue('--accent') || '').trim();
-        var n = null;
-        if (s.charAt(0) === '#' && s.length === 7) {
-          var v = parseInt(s.slice(1), 16);
-          if (!isNaN(v)) n = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
-        }
-        if (n) {
-          var k = dark ? 0.20 : 0.14;
-          r = Math.round(n[0] * k + r * (1 - k));
-          g = Math.round(n[1] * k + g * (1 - k));
-          b = Math.round(n[2] * k + b * (1 - k));
-        }
-      } catch (e) {}
-      fogRGB = r + ',' + g + ',' + b;
-      var ns = fogRGB + '|' + fogA + '|' + speckA;
+      hazeRGB = dark ? '176,150,124' : '255,250,240';
+      hazeA = dark ? 0.10 : 0.26;
+      warmRGB = dark ? '10,2,1' : '150,126,92';
+      warmA = dark ? 0.34 : 0.16;
+      var ns = hazeRGB + '|' + hazeA + '|' + warmRGB + '|' + warmA;
       var changed = ns !== sig;
       sig = ns;
       return changed;
     }
 
-    // 冷凝水珠颗粒：128×128 可平铺，让雾有质感（纯平会像 bug）
+    // 洒金：泥金飞白小点 + 极淡纸纤维颗粒，让这层雾属于中国红
     var tile = null;
     function buildTile() {
       var t = document.createElement('canvas');
       t.width = t.height = 128;
       var c = t.getContext('2d');
       if (!c) { tile = null; return; }
-      var dark = isDark();
-      for (var i = 0; i < 300; i++) {
+      for (var i = 0; i < 90; i++) {
         var x = Math.random() * 128, y = Math.random() * 128;
-        var big = Math.random() < 0.07;
-        var rr = 0.6 + Math.random() * (big ? 3.4 : 1.6);
-        var lit = Math.random() < (dark ? 0.8 : 0.55);
-        c.fillStyle = lit
-          ? 'rgba(255,255,255,' + (0.08 + Math.random() * 0.26).toFixed(3) + ')'
-          : 'rgba(110,140,155,' + (0.05 + Math.random() * 0.13).toFixed(3) + ')';
+        var rr = 0.5 + Math.random() * 1.5;
+        c.fillStyle = 'rgba(201,162,39,' + (0.10 + Math.random() * 0.30).toFixed(3) + ')';
         c.beginPath(); c.arc(x, y, rr, 0, 6.2832); c.fill();
+      }
+      for (var j = 0; j < 160; j++) {
+        var fx = Math.random() * 128, fy = Math.random() * 128;
+        c.fillStyle = 'rgba(120,96,60,' + (0.03 + Math.random() * 0.06).toFixed(3) + ')';
+        c.fillRect(fx, fy, 1, 1);
       }
       tile = c.createPattern(t, 'repeat');
     }
@@ -14166,58 +14142,38 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       return (window.innerWidth || 1) !== lastCW || (window.innerHeight || 1) !== lastCH;
     }
 
-    function blotch(nx, ny, nr, a) {
+    function blotch(nx, ny, nr, rgb, a) {
       var x = W * nx, y = H * ny, r = Math.max(W, H) * nr;
       var g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, 'rgba(' + fogRGB + ',' + a + ')');
-      g.addColorStop(1, 'rgba(' + fogRGB + ',0)');
+      g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+      g.addColorStop(1, 'rgba(' + rgb + ',0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
     }
     function paintHaze() {
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(' + fogRGB + ',' + fogA + ')';
+      // ① 纸面留白：极淡暖白整体提一层，画面中心先"亮"起来
+      ctx.fillStyle = 'rgba(' + hazeRGB + ',' + hazeA + ')';
       ctx.fillRect(0, 0, W, H);
-      // 四团不均匀雾斑（凝雾从来不是平的）
-      blotch(0.16, 0.20, 0.52, fogA * 0.24);
-      blotch(0.84, 0.72, 0.56, fogA * 0.20);
-      blotch(0.58, 0.10, 0.42, fogA * 0.18);
-      blotch(0.30, 0.90, 0.46, fogA * 0.16);
+      // ② 四团云气：不均匀晕染，薄雾从来不是平的
+      blotch(0.16, 0.20, 0.52, warmRGB, warmA * 0.85);
+      blotch(0.84, 0.72, 0.56, warmRGB, warmA * 0.70);
+      blotch(0.58, 0.10, 0.42, warmRGB, warmA * 0.60);
+      blotch(0.30, 0.90, 0.46, warmRGB, warmA * 0.55);
+      // ③ 四边起晕：画心亮、纸边沉，像装裱过的宣纸
+      var g = ctx.createRadialGradient(W * 0.5, H * 0.46, Math.min(W, H) * 0.26, W * 0.5, H * 0.5, Math.max(W, H) * 0.74);
+      g.addColorStop(0, 'rgba(' + warmRGB + ',0)');
+      g.addColorStop(1, 'rgba(' + warmRGB + ',' + (warmA * 1.4).toFixed(3) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      // ④ 洒金飞白
       if (tile) {
-        ctx.globalAlpha = speckA;
+        ctx.globalAlpha = isDark() ? 0.7 : 0.9;
         ctx.fillStyle = tile;
         ctx.fillRect(0, 0, W, H);
         ctx.globalAlpha = 1;
       }
-      // 玻璃四周先起雾
-      var g = ctx.createRadialGradient(W * 0.5, H * 0.46, Math.min(W, H) * 0.24, W * 0.5, H * 0.5, Math.max(W, H) * 0.76);
-      g.addColorStop(0, 'rgba(' + fogRGB + ',0)');
-      g.addColorStop(1, 'rgba(' + fogRGB + ',' + (fogA * 0.40) + ')');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-    }
-    // 两遍描边做软边：宽而淡 + 窄而实 → 手指擦玻璃的圆润边缘
-    function strokePath(pts, w, mul) {
-      if (!pts.length) return;
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      if (pts.length === 1) ctx.lineTo(pts[0].x + 0.02, pts[0].y);
-      ctx.globalAlpha = 0.34 * mul;
-      ctx.lineWidth = w * 2.0;
-      ctx.stroke();
-      ctx.globalAlpha = 0.96 * mul;
-      ctx.lineWidth = w;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-    }
-    function brushW() {
-      return Math.max(14, Math.min(46, Math.min(W, H) * 0.035));
     }
     function repaint() {
       if (sizeChanged()) setSize();
@@ -14225,41 +14181,7 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       paintHaze();
-      var now = performance.now(), alive = [];
-      for (var i = 0; i < strokes.length; i++) {
-        var s = strokes[i];
-        var a = (LIFE - (now - s.lastT)) / FADE;
-        if (a <= 0) continue;
-        if (a > 1) a = 1;
-        strokePath(s.pts, s.w, a);
-        alive.push(s);
-      }
-      strokes = alive;
       dirty = false;
-    }
-    function onMove(e) {
-      if (!active) { cur = null; return; }
-      var x = e.clientX, y = e.clientY;
-      if (typeof x !== 'number' || typeof y !== 'number') return;
-      var now = performance.now();
-      var fresh = !cur || (now - cur.lastT) > 700;
-      if (!fresh) {
-        var p = cur.pts, last = p[p.length - 1];
-        // 断点保护：瞬移（切 tab / iframe 抢焦点）不该连一条直线
-        if (Math.abs(x - last.x) > 360 || Math.abs(y - last.y) > 360) fresh = true;
-      }
-      if (fresh) {
-        cur = { lastT: now, w: brushW(), pts: [{ x: x, y: y }] };
-        if (strokes.length > 400) strokes.splice(0, strokes.length - 400);
-        strokes.push(cur);
-        strokePath(cur.pts, cur.w, 1);
-      } else {
-        var q = cur.pts, l = q[q.length - 1];
-        q.push({ x: x, y: y });
-        strokePath([l, { x: x, y: y }], cur.w, 1);
-        cur.lastT = now;
-      }
-      dirty = true;
     }
     function sync() {
       var on = wantActive();
@@ -14269,8 +14191,6 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       }
       active = on;
       canvas.style.display = on ? '' : 'none';
-      cur = null;
-      strokes.length = 0;
       if (on) {
         syncFogStyle();
         buildTile();
@@ -14287,23 +14207,22 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       if (syncFogStyle()) { buildTile(); dirty = true; repaint(); }
     };
 
-    window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('resize', function () { dirty = true; }, { passive: true });
     window.addEventListener('orientationchange', function () { dirty = true; }, { passive: true });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) dirty = true; });
 
+    // 无笔迹，只排 dirty：尺寸/明暗/主题变化后补画一帧即可
     setInterval(function () {
       if (!active || document.hidden) return;
-      if (strokes.length || dirty) repaint();
-    }, 400);
+      if (dirty) repaint();
+    }, 500);
 
     // 主题在 async init() 里才写入，可能晚于本脚本 → MutationObserver 解耦。
     // 同时盯 <html>（暗色）与 <body>（主题 / shaders-off）。
-    // 只在配色真的变了才重建噪点并全量重绘，普通 class 变化直接忽略。
     function onClass() {
       if (!wantActive()) { if (active) sync(); return; }
       if (!active) { sync(); return; }
-      if (syncFogStyle()) { buildTile(); dirty = true; repaint(); }
+      if (syncFogStyle()) { buildTile(); dirty = true; }
     }
     if (window.MutationObserver) {
       try {

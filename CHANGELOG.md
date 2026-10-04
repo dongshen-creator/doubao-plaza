@@ -4,6 +4,56 @@
 
 ---
 
+## v9.7 — 2026-10-04
+
+### 变更：中国红重做成「宣纸国画」2D 质感 · 青碧/水墨薄雾回滚着色器并静态移植进宣纸 · 全站字阶去 9/11px
+
+反馈：中国红的背景、颜色、纹理完全没有宣纸 2D 的感觉，字号字体非常反人类；青碧色的薄雾效果挺好，但回滚成原本的着色器和背景就行，薄雾不用擦除，拿去结合中国红的宣纸设计。
+
+#### 一、青碧色 / 水墨灰：回滚到 v9.5 之前的原版着色器
+- **删掉 `isFogTheme()`** 门控（index.html 0 残留）：`uRo` 恢复为 `gl.uniform1f(uRo, ripActive ? 1 : 0)`——水纹涟漪回来，背景着色器完全复原
+- **删掉指雾笔交互**：不再有 `destination-out` 擦除 / 6s 淡出回凝；`#fog-canvas` 改为纯静态层（见第三节）
+- 两个主题的截图回归核对：柔光色块（cyan）/ 水墨山水（ink）原样，`fog display:none`、`painted:0`
+
+#### 二、中国红亮色：从「绛红洪泛」重做为「宣纸国画」
+上一版整屏被 `--bg-primary:#8C1A12` 淹没，文字用宣纸浅色压在米红上、泥金 `#C9A227` 只有 ~2:1 对比，毫无纸感。本版原则：
+
+- **页面底 = 宣纸本色**：`--bg-primary:#F2E6D0` + `--np-base-grad`（暖纤维横纹 + 米纸三段渐变 + 毛边晕），红退为朱砂印/描边/按钮点缀
+- **文字全线回墨色**：`--text-primary:#2B211A` 系（secondary/muted/faint 按墨色降透明度），可读性 ~13:1
+- **标题/链接用朱砂** `#C3272B`（米纸上 ~5:1），`--border-focus:#C3272B`；泥金退出亮色面，只在暗色玄红底保留
+- **accent 对比修复**：亮色 `.theme-red` 的 `--accent-light` `#C9A227`→`#A6261F`、`--accent-gradient` 尾端 `#C9A227`→`#8E1A15`——按钮/好友页 hero/右聊气泡上的白字从 ~2.4:1 提到 ≥4.5:1
+- **暗色不动**：`body.dark.theme-red` 玄红底（`#450906`）+ V9.5 红釉琉璃 + 泥金点缀原样保留
+
+#### 三、薄雾静态移植进中国红（不擦除）
+- **`paintHaze()` 重写**：暖白留白 + 4 团不均匀云气 + 起晕 + **洒金飞白** tile（220px 噪点金箔平铺）——雾是宣纸上的留白与云气，不是玻璃上的冷凝水
+- **门控 `isRedTheme()`**：只有中国红启用；叠 `dp_shader!=='off'` 与 `prefers-reduced-motion`；**无任何擦除交互**（用户明确"薄雾可以不用擦除"），纯静态一次绘制
+- 双 `MutationObserver` 监听主题/明暗切换重画；`__npFogSync` / `__npFogAccent` 钩子保留
+- 实测：red 亮/暗 `fog display:block` + `painted>0`；cyan/ink/orange `display:none`
+
+#### 四、材质 2.0（三重材质块整体重写）
+- **宣纸面板**：模态/输入/标签栏提亮 + 纤维 + 毛边（阴影降到 `0 2px 6px rgba(60,40,20,.10)`）
+- **卡片玻璃 light/dark 拆分**：亮 = 暖白纸面微光 `rgba(255,255,255,.60)` + 墨棕内描边；暗保留 V9.5 红釉琉璃
+- **纸面文字转墨色** token（含暗色模式下的纸面）
+- **皴染 `::before` 拆分**：亮 `.45` 淡水墨 + 一角朱砂晕；暗 `.5` 浓墨原样
+- `.modal-title` 恒朱砂、亮色 `.tool-panel-title` 朱砂 / 暗色泥金；tab.active 亮朱砂 / 暗泥金；链接亮朱砂 / 暗泥金 / 纸面恒朱砂；滚动条亮纸棕 / 暗暖金
+
+#### 五、字体：中国红全站换 LXGW 文楷衬线
+- `body.theme-red` 加 `font-family:'LXGW WenKai','Fraunces','Songti SC',...`（CDN 已加载，国画楷书质感），实测 computed font-family 生效；cyan/ink/orange 仍是原无衬线栈
+- 表单控件不继承 body 字体：`:where(body.theme-red) :where(input,textarea,select,button){font-family:inherit}`——`:where` 零特异性，不压过 `.dev-textarea` 等等宽规则
+
+#### 六、字阶 sweep：去 9px / 11px 反人类小字
+- **单遍映射替换**（防级联）：`font-size:9px|10px → 11px`、`11px → 12px`
+- style.css 61 行 + index.html 154 行；实测两文件 `font-size:9|10px` 计数归零，页面 DOM 扫描可见元素 `<11px` 数量 = 0
+- **徽标防溢出**：`.badge-dot` / `.tab-badge` `width:16px` → `min-width:16px;padding:0 4px` 药丸形（`99+` 实测宽 28px 不裁切）；`.nav-badge` / `.tabbar-badge` 本就 min-width 不动
+- **选择器同步**：私聊副标题加 `id="privateChatSubtitle"`，`updateNonFriendChatStatus()` 改 `getElementById`——原 `div[style*="font-size:11px"]` 属性选择器会被 sweep 破坏，且与频道头 `#chatViewHeader` 的 12px div 歧义
+- `textarea.style.fontSize='14px'`（JS 赋值）与 SunEditor `fontSize` 列表不受 sweep 影响
+
+#### 门禁与验证
+- `check_inline_scripts.js` → **ALL_PASS**（9 个 inline js block）
+- 本地 playwright 5 场景（red 亮/暗、cyan、ink、orange）：**0 console error / 0 pageerror**，主题 class、背景色、字体栈、雾门控逐项断言通过
+
+---
+
 ## v9.6 — 2026-10-04
 
 ### 变更：中国红飘扬层重写为「跟着指针走的微风」· 青碧色/水墨灰水纹换成「指雾笔」
