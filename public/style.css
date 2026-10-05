@@ -1160,7 +1160,9 @@ body{font-family:'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei',
      ④ 暗色底取「玄色 xuan-se #622A1D + 墨」压暗，不做亮红
    色值参考 Chinese Color Atlas（Chroma Cathay, MIT），全无紫无靛。*/
 .theme-red{--accent:#C3272B;--accent-light:#A6261F;--accent-gradient:linear-gradient(135deg,#C3272B,#8E1A15);--accent-bg:rgba(195,39,43,0.07);--accent-bg-hover:rgba(195,39,43,0.035);--accent-shadow:rgba(122,34,28,0.28);--border-focus:#C3272B}
-.dark.theme-red{--accent:#D2543F;--accent-light:#C9A227;--accent-gradient:linear-gradient(135deg,#D2543F,#C9A227);--accent-bg:rgba(210,84,63,0.10);--accent-bg-hover:rgba(210,84,63,0.05);--accent-shadow:rgba(210,84,63,0.22);--border-focus:#C9A227}
+/* V9.8：暗色中国红 = 宣纸浅底（红泥浆底 #450906 废除）。
+   暗红与亮红共用朱砂系 accent，保证 .friends-hero 等白字渐变可读 */
+.dark.theme-red{--accent:#C3272B;--accent-light:#A6261F;--accent-gradient:linear-gradient(135deg,#C3272B,#8E1A15);--accent-bg:rgba(195,39,43,0.07);--accent-bg-hover:rgba(195,39,43,0.035);--accent-shadow:rgba(122,34,28,0.28);--border-focus:#C3272B}
 .theme-ink{--accent:#464B52;--accent-light:#6E747C;--accent-gradient:linear-gradient(135deg,#464B52,#6E747C);--accent-bg:rgba(70,75,82,0.08);--accent-bg-hover:rgba(70,75,82,0.04);--accent-shadow:rgba(70,75,82,0.35);--border-focus:#464B52;--text-on-accent:#FAFAFB}
 .dark.theme-ink{--accent:#A7ADB8;--accent-light:#C9CED6;--accent-gradient:linear-gradient(135deg,#A7ADB8,#C9CED6);--accent-bg:rgba(167,173,184,0.12);--accent-bg-hover:rgba(167,173,184,0.06);--accent-shadow:rgba(167,173,184,0.25);--border-focus:#A7ADB8;--text-on-accent:#1A1D22}
 
@@ -1182,14 +1184,14 @@ body.dark.theme-cyan{--bg-primary:#151E1D;--bg-secondary:rgba(28,36,33,0.78);--b
      ① 页面底 = 宣纸本色（米纸 + 暖纤维），红退为朱砂印/描边/按钮点缀
      ② 文字全线回墨色（ink #2B211A 系），金只在深红/暗色面上出现
      ③ 标题/链接用朱砂 #C3272B（米纸上 ~5:1），不用泥金
-     ④ 暗色仍守玄红底（下方 body.dark.theme-red 不变）
+     ④ V9.8：暗色亦为宣纸浅底（body.dark.theme-red 同纸面，红泥浆废除）
    配色沿用朱砂 chi #C3272B / 泥金 xiang-se #C9A227 / 玄色 xuan-se #622A1D */
 body.theme-red{
   font-family:'LXGW WenKai','Fraunces','Songti SC','SimSun','Noto Serif CJK SC',Georgia,serif;
   --text-primary:#2B211A;
-  --text-secondary:rgba(43,33,26,0.82);
-  --text-muted:rgba(43,33,26,0.60);
-  --text-faint:rgba(43,33,26,0.44);
+  --text-secondary:rgba(43,33,26,0.84);
+  --text-muted:rgba(43,33,26,0.72);
+  --text-faint:rgba(43,33,26,0.65);
   --border-color:rgba(43,33,26,0.16);
   --border-strong:rgba(43,33,26,0.30);
   --scrollbar-thumb:rgba(43,33,26,0.24);
@@ -1215,32 +1217,57 @@ body.theme-red{
 }
 /* 表单控件不继承 body 字体：红主题下显式继承；:where 零特异性，不压过 .dev-textarea 等等宽规则 */
 :where(body.theme-red) :where(input, textarea, select, button) { font-family: inherit; }
+/* V9.8：暗色中国红与亮色同为宣纸浅底 + 墨字（红泥浆 #450906 废除）。
+   红只做点缀；下方装饰块（红釉琉璃/::before/金线）同步翻纸。 */
 body.dark.theme-red{
-  --text-primary:#F2E4CF;
-  --text-secondary:rgba(242,228,207,0.84);
-  --text-muted:rgba(242,228,207,0.64);
-  --text-faint:rgba(242,228,207,0.42);
-  --border-color:rgba(242,228,207,0.14);
-  --border-strong:rgba(242,228,207,0.26);
-  --scrollbar-thumb:rgba(242,228,207,0.22);
-  --bg-primary:#450906;
-  --bg-tertiary:#E7D6B8;
-  --bg-hover:#D9C39C;
-  --bg-input:#EADCBE;
-  --modal-bg:#EADCBE;
-  --chat-recv-bubble:#EADCBE;
-  --chat-recv-border:#B99C72;
-  --bg-secondary:rgba(255,196,164,0.10);
-  --nav-bg:rgba(58,9,6,0.58);
-  --np-panel-hi:rgba(255,226,200,0.22);
-  --np-blur:blur(15px) saturate(1.7);
+  --text-primary:#2B211A;
+  --text-secondary:rgba(43,33,26,0.84);
+  --text-muted:rgba(43,33,26,0.72);
+  --text-faint:rgba(43,33,26,0.65);
+  --border-color:rgba(43,33,26,0.16);
+  --border-strong:rgba(43,33,26,0.30);
+  --scrollbar-thumb:rgba(43,33,26,0.24);
+  --bg-primary:#F2E6D0;
+  --bg-tertiary:#EADCC0;
+  --bg-hover:#E0CFA9;
+  --bg-input:#F7EFDD;
+  --modal-bg:#F8F2E3;
+  --chat-recv-bubble:#F7EFDD;
+  --chat-recv-border:#C9AE84;
+  --bg-secondary:rgba(255,252,246,0.74);
+  --nav-bg:rgba(247,240,226,0.80);
+  --np-panel-hi:rgba(255,255,255,0.72);
+  --np-blur:blur(16px) saturate(1.15);
+  /* 暗色壳的重投影/暗遮罩在纸面上过脏 → 纸面用亮色同款 */
+  --bg-overlay:rgba(33,28,21,0.38);
+  --text-on-accent:#FFFAF5;
+  --shadow-sm:0 1px 3px rgba(60,45,30,0.05),0 4px 12px rgba(60,45,30,0.04);
+  --shadow-md:0 2px 8px rgba(60,45,30,0.07),0 8px 24px rgba(60,45,30,0.06);
+  --shadow-lg:0 20px 60px rgba(40,30,18,0.18);
+  /* 状态色回亮色系（暗色系浅字压纸底不可读） */
+  --cyan:#4C7A5A;
+  --success:#4C7A5A;
+  --success-bg:#EDF2EA;
+  --success-border:#C6D6C3;
+  --success-text:#35553F;
+  --danger:#B5452E;
+  --danger-bg:#F9EDE7;
+  --danger-border:#EBCBC0;
+  --danger-text:#8C3520;
+  --warning:#8C5A14;
+  --warning-bg:#FAF2DF;
+  --warning-border:#EDD9AE;
+  --info:#3A6EA5;
+  --info-bg:#EDF2F8;
+  --info-border:#CBDCEC;
+  --info-text:#2B5480;
   --np-base-grad:
-    radial-gradient(900px 620px at 84% 108%, rgba(255,150,96,0.13) 0%, rgba(255,150,96,0) 60%),
-    radial-gradient(760px 520px at 8% 88%, rgba(16,4,2,0.46) 0%, rgba(16,4,2,0) 62%),
-    linear-gradient(158deg, #5E0F0A 0%, #450906 52%, #2E0503 100%);
-  --glow-orange:rgba(201,162,39,0.09);
-  --glow-cyan:rgba(255,200,170,0.04);
-  --glow-violet:rgba(0,0,0,0.20);
+    radial-gradient(900px 620px at 84% 108%, rgba(255,214,160,0.34) 0%, rgba(255,214,160,0) 60%),
+    radial-gradient(760px 520px at 8% 88%, rgba(139,110,72,0.13) 0%, rgba(139,110,72,0) 62%),
+    linear-gradient(158deg, #F7EDDB 0%, #F2E6D0 46%, #E9DBC0 100%);
+  --glow-orange:rgba(195,39,43,0.10);
+  --glow-cyan:rgba(139,110,72,0.06);
+  --glow-violet:rgba(60,40,20,0.10);
 }
 body.theme-ink:not(.dark){--bg-primary:#F1F1F2;--bg-secondary:rgba(255,255,255,0.78);--bg-tertiary:#E7E7E9;--bg-hover:#DEDEE1;--bg-input:#ECECEE;--text-primary:#1F2124;--text-secondary:#4B5057;--text-muted:#71767D;--text-faint:#9CA0A6;--border-strong:#DCDCDF;--scrollbar-thumb:#C6C7CB;--nav-bg:rgba(255,255,255,0.72);--modal-bg:rgba(255,255,255,0.92);--chat-recv-bubble:#FAFAFB;--chat-recv-border:#E4E4E7;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#FCFCFD 0%,rgba(252,252,253,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#E9E9EB 0%,rgba(233,233,235,0) 62%);--glow-orange:rgba(70,75,82,0.10);--glow-cyan:rgba(110,116,124,0.07);--glow-violet:rgba(70,75,82,0.09)}
 body.dark.theme-ink{--bg-primary:#15161A;--bg-secondary:rgba(26,27,31,0.72);--bg-tertiary:#212329;--bg-hover:#2A2C33;--bg-input:#1C1E23;--text-primary:#E9EAEC;--text-secondary:#BEC1C7;--text-muted:#93979E;--text-faint:#6C7077;--border-strong:#33353B;--scrollbar-thumb:#4A4C52;--nav-bg:rgba(18,19,22,0.72);--modal-bg:rgba(24,25,29,0.92);--chat-recv-bubble:rgba(35,37,43,0.85);--chat-recv-border:#34363D;--np-base-grad:radial-gradient(1200px 900px at 18% -8%,#1C1E22 0%,rgba(28,30,34,0) 55%),radial-gradient(1500px 1100px at 88% 118%,#121317 0%,rgba(18,19,23,0) 62%);--glow-orange:rgba(167,173,184,0.12);--glow-cyan:rgba(201,206,214,0.08);--glow-violet:rgba(167,173,184,0.10)}
@@ -2682,13 +2709,18 @@ body.dark.shaders-off{
     radial-gradient(1100px 760px at 12% -6%, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0) 60%),
     linear-gradient(168deg, rgba(0,0,0,0) 42%, rgba(0,0,0,0.16) 100%);
 }
+/* V9.8：暗色中国红同纸面 → 静态背景用亮色版（纸底不压黑） */
+body.dark.theme-red.shaders-off{
+  background-image:
+    var(--np-base-grad),
+    radial-gradient(1100px 760px at 12% -6%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(168deg, rgba(0,0,0,0) 42%, rgba(0,0,0,0.055) 100%);
+  background-attachment:fixed, fixed, fixed;
+}
 
 /* ═══════════════════════════════════════════════════════════
    V9.7 中国红材质 2.0：宣纸已是页面底 → 材质层转为「纸上玻璃 / 墨韵」
-   亮色（body.theme-red:not(.dark)）：
-     页面底 = 宣纸米纸 + 纤维，卡片 = 暖白纸面玻璃，红只做朱砂印/描边/按钮
-   暗色（body.dark.theme-red）：
-     保留 V9.5 玄红底上的红釉琉璃 + 泥金点缀
+   V9.8：暗色中国红同为宣纸浅底 → 亮暗共用纸面材质（红泥浆底废除）
    ═══════════════════════════════════════════════════════════ */
 
 /* 宣纸纤维纹理（SVG feTurbulence + 细横纹，data-URI 无外部请求） */
@@ -2717,17 +2749,17 @@ body.theme-red .tabs{
     0 2px 6px rgba(60,40,20,0.10);
 }
 
-/* ③ 卡片玻璃：亮色 = 暖白纸面微光（纸上玻璃） */
-body.theme-red:not(.dark) .card,
-body.theme-red:not(.dark) .navbar,
-body.theme-red:not(.dark) .activity-bar,
-body.theme-red:not(.dark) .app-sidebar,
-body.theme-red:not(.dark) .chat-view-header,
-body.theme-red:not(.dark) .chat-header,
-body.theme-red:not(.dark) .chat-input-area,
-body.theme-red:not(.dark) .chat-view-input,
-body.theme-red:not(.dark) .chat-room-list,
-body.theme-red:not(.dark) .tool-panel-header{
+/* ③ V9.8：暗色中国红同为纸面 → 亮暗共用「纸上玻璃」，红釉琉璃底废除 */
+body.theme-red .card,
+body.theme-red .navbar,
+body.theme-red .activity-bar,
+body.theme-red .app-sidebar,
+body.theme-red .chat-view-header,
+body.theme-red .chat-header,
+body.theme-red .chat-input-area,
+body.theme-red .chat-view-input,
+body.theme-red .chat-room-list,
+body.theme-red .tool-panel-header{
   background-image:
     linear-gradient(150deg, rgba(255,255,255,0.60) 0%, rgba(255,255,255,0) 44%),
     linear-gradient(24deg, rgba(139,110,72,0.06) 0%, rgba(139,110,72,0) 56%);
@@ -2736,28 +2768,7 @@ body.theme-red:not(.dark) .tool-panel-header{
     inset 0 0 0 1px rgba(120,86,44,0.12),
     0 1px 3px rgba(60,40,20,0.08);
 }
-body.theme-red:not(.dark) .navbar{border-bottom-color:rgba(120,86,44,0.16)}
-
-/* ③ 暗色保留红釉琉璃（V9.5） */
-body.dark.theme-red .card,
-body.dark.theme-red .navbar,
-body.dark.theme-red .activity-bar,
-body.dark.theme-red .app-sidebar,
-body.dark.theme-red .chat-view-header,
-body.dark.theme-red .chat-header,
-body.dark.theme-red .chat-input-area,
-body.dark.theme-red .chat-view-input,
-body.dark.theme-red .chat-room-list,
-body.dark.theme-red .tool-panel-header{
-  background-image:
-    linear-gradient(150deg, rgba(255,226,200,0.16) 0%, rgba(255,226,200,0) 38%),
-    linear-gradient(24deg, rgba(120,20,12,0.30) 0%, rgba(120,20,12,0) 52%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,236,214,0.34),
-    inset 0 0 0 1px rgba(255,214,186,0.16),
-    inset 0 -14px 26px rgba(90,14,8,0.16);
-}
-body.dark.theme-red .navbar{border-bottom-color:rgba(255,214,186,0.20)}
+body.theme-red .navbar{border-bottom-color:rgba(120,86,44,0.16)}
 
 /* 宣纸面上的文字必须是墨色（暗色模式下 body 仍是浅字，纸面要单独转墨） */
 body.theme-red .modal,
@@ -2772,14 +2783,14 @@ body.theme-red .tabs,
 body.theme-red .chat-msg-received{
   --text-primary:#2B211A;
   --text-secondary:#4C3D31;
-  --text-muted:#6B5A4A;
-  --text-faint:#93806D;
+  --text-muted:#5C4C3E;
+  --text-faint:#7A6A57;
   --border-color:rgba(43,33,26,0.14);
   --border-strong:rgba(43,33,26,0.24);
 }
 
-/* ④ 国画墨韵：亮色纸面走淡水墨皴染 + 一角朱砂晕；暗色仍用 V9.5 浓墨 */
-body.theme-red:not(.dark)::before{
+/* ④ 国画墨韵：V9.8 起亮暗同为纸面 → 统一淡水墨皴染 + 一角朱砂晕 */
+body.theme-red::before{
   content:'';
   position:fixed;
   inset:0;
@@ -2791,45 +2802,41 @@ body.theme-red:not(.dark)::before{
     radial-gradient(680px 480px at 22% 76%, rgba(80,55,30,0.10) 0%, rgba(80,55,30,0) 68%),
     radial-gradient(520px 400px at 88% 18%, rgba(195,39,43,0.06) 0%, rgba(195,39,43,0) 64%);
 }
-body.dark.theme-red::before{
-  content:'';
-  position:fixed;
-  inset:0;
-  z-index:-2;
-  pointer-events:none;
-  opacity:.5;
-  background-image:
-    repeating-linear-gradient(58deg, rgba(30,6,3,0.055) 0 1px, rgba(30,6,3,0) 1px 13px),
-    radial-gradient(680px 480px at 22% 76%, rgba(28,6,3,0.30) 0%, rgba(28,6,3,0) 68%),
-    radial-gradient(520px 400px at 88% 18%, rgba(255,190,140,0.10) 0%, rgba(255,190,140,0) 64%);
-}
 
-/* 朱砂标题：模态永远坐在宣纸上（亮/暗都是纸色底）→ 朱砂 7:1+，泥金在纸上只有 2:1 */
+/* 朱砂标题：V9.8 起亮暗皆纸面 → 恒朱砂（泥金在纸上只有 2:1） */
 body.theme-red .modal-title{color:#C3272B}
-body.theme-red:not(.dark) .tool-panel-title{color:#C3272B}
-body.dark.theme-red .tool-panel-title{color:var(--accent-light)}
-/* 选中线：亮色走朱砂，暗色走泥金 */
-body.theme-red:not(.dark) .tab.active{
+body.theme-red .tool-panel-title{color:#C3272B}
+/* 选中线：恒朱砂 */
+body.theme-red .tab.active{
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.6),
     inset 0 0 0 1px rgba(195,39,43,0.45);
 }
-body.dark.theme-red .tab.active{
-  box-shadow:
-    inset 0 1px 0 rgba(255,240,220,0.5),
-    inset 0 0 0 1px rgba(201,162,39,0.42);
-}
-/* 链接：亮色纸底 → 朱砂；暗色玄红底 → 泥金；纸面（模态/标签栏/输入/收气泡）恒朱砂 */
-body.theme-red:not(.dark) a{color:var(--accent) !important}
-body.dark.theme-red a{color:var(--accent-light) !important}
+/* 链接：V9.8 起亮暗皆纸底 → 恒朱砂 */
+body.theme-red a{color:var(--accent) !important}
 body.theme-red .modal a,
 body.theme-red .tabs a,
 body.theme-red .input a,
 body.theme-red .chat-input a,
 body.theme-red .chat-msg-received a{color:var(--accent) !important}
 
-/* 滚动条：亮色走纸棕，暗色走暖金 */
-body.theme-red:not(.dark) ::-webkit-scrollbar-thumb{background:rgba(120,86,44,0.32)}
-body.theme-red:not(.dark) ::-webkit-scrollbar-thumb:hover{background:rgba(120,86,44,0.50)}
-body.dark.theme-red ::-webkit-scrollbar-thumb{background:rgba(201,162,39,0.34)}
-body.dark.theme-red ::-webkit-scrollbar-thumb:hover{background:rgba(201,162,39,0.52)}
+/* 滚动条：纸面恒纸棕 */
+body.theme-red ::-webkit-scrollbar-thumb{background:rgba(120,86,44,0.32)}
+body.theme-red ::-webkit-scrollbar-thumb:hover{background:rgba(120,86,44,0.50)}
+
+/* V9.8 暗红翻纸后的两处 .dark 通用规则纠偏（否则纸面被暗色版材质压脏） */
+body.dark.theme-red .noise-overlay{opacity:.05;mix-blend-mode:multiply}
+body.dark.theme-red .input,
+body.dark.theme-red .chat-input,
+body.dark.theme-red .dev-input,
+body.dark.theme-red .dev-textarea,
+body.dark.theme-red .tool-field input,
+body.dark.theme-red .tool-field textarea,
+body.dark.theme-red .tool-field select{box-shadow:inset 0 1px 2px rgba(33,28,21,.05)}
+body.dark.theme-red .input:focus,
+body.dark.theme-red .chat-input:focus,
+body.dark.theme-red .dev-input:focus,
+body.dark.theme-red .dev-textarea:focus,
+body.dark.theme-red .tool-field input:focus,
+body.dark.theme-red .tool-field textarea:focus,
+body.dark.theme-red .tool-field select:focus{box-shadow:inset 0 1px 2px rgba(33,28,21,.05),0 0 0 3px var(--accent-bg)}

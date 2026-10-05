@@ -4,6 +4,43 @@
 
 ---
 
+## v9.8 — 2026-10-05
+
+### 变更：中国红暗色翻成宣纸浅底（红泥浆废除）· 好友页文字可读性修复 · Supabase 依赖服务加固（超时/重试/去重/并行）
+
+反馈：中国红下好友界面文字反人类看不清；背景像「红色泥浆」，改回宣纸色+着色器；依赖 Supabase 的服务（频道、好友）召出慢、失败率高、响应低。
+
+#### 一、暗色中国红 = 宣纸浅底 + 墨字（用户定案）
+- **`body.dark.theme-red` 整块翻纸**：`--bg-primary:#F2E6D0` + 纸面系（bg-tertiary/hover/input/modal）+ 墨字四阶（primary `#2B211A` / secondary .84 / muted .72 / **faint .65**——12px 小字在 `#F7EFDD` 上 ≈4.7:1 过 AA），与亮红同纸面，红只做朱砂点缀
+- **暗红 accent 全系转朱砂**：`#C3272B` / light `#A6261F` / gradient 尾 `#8E1A15`（暗金 `#C9A227` 退出纸面，只留深色装饰面）
+- **装饰块同步翻纸**：卡片玻璃 `::before` 皴染、`.modal-title`/`tab.active`/链接/滚动条的暗色泥金变体全部改朱砂/纸棕；`--glow-*`、`--np-base-grad`、状态色（green/red/orange）换亮系
+- **新增 `body.dark.theme-red.shaders-off` 覆盖**：关着色器时输入框/噪声层纠偏回纸底
+- 亮红 faint 同步 `.62→.65`（徽标 `text-faint/bg-input` ≈4.7:1）
+- grep 确认 `#450906`/暗红泥浆残留归零；好友页文字反人类问题随令牌翻转自然解决（纸底+墨字 ≈13:1）
+
+#### 二、着色器：暗红也走亮色分支（红泥浆根因）
+- **silk 飘扬层**：`var d = 0` 恒亮色分支、`uOp` 恒 0.14——暗色中国红不再压深色蒙版
+- **fog 指雾笔**：`syncFogStyle` 恒 `dark = false`（亮雾 `255,250,240`/`150,126,92`）；洒金飞白 `globalAlpha` 恒 0.9
+- 结果：暗红背景 = 宣纸底 + 云气 + 洒金噪点，「红色泥浆」消失（截图目检确认）
+
+#### 三、`api()` 请求层加固（Supabase 依赖服务慢/失败/低响应的根因修复）
+- **超时**：GET/HEAD 12s、写 25s（对齐既有 `AbortSignal.timeout(25000)`），超时统一抛「请求超时，请稍后重试」
+- **幂等重试**：GET/HEAD 失败重试 1 次，退避 600ms；5xx/网络错误/超时才重试，4xx 不重试
+- **同 URL in-flight 去重**：key=`method+' '+path`——`loadTempChats` 与 `loadMyFriends` 并发拉同一 `/api/friends?...&status=accepted` 只发一次网络（无需逐调用点改）
+- **共享响应防污染**：`exec()` 返回 text，每个调用方各自 `JSON.parse`（此前共享已解析对象，一方改写殃及他方）
+- 调用方自带 `signal` 时不叠加超时
+
+#### 四、`loadRoomList` 往返压缩（频道召出慢）
+- `pubChsPending = fetchPublicChannels()` **函数开头即启动**，与成员/未读/管理批次并行；空 memberships 分支与主分支均复用该 Promise（消除串行第二次往返）
+- **stage2 合并**：频道设置批次（`settingsPending`）与私聊对方成员查询（`otherMembersPending`）先全部启动再 `Promise.all` 一次 await（原为两次串行往返）
+- 私聊批量用户信息（`/api/users/batch`，失败回退逐个）逻辑保持不变
+
+#### 门禁与验证
+- `check_inline_scripts.js` → **ALL_PASS**（9 个 inline js block）
+- 本地 playwright 双模式（`dark theme-red` / `theme-red`）好友页：body 背景 `rgb(242,230,208)`、好友名字 `rgb(43,33,26)`、副标题 `rgba(43,33,26,.65)`、**0 console error / 0 pageerror**，截图目检纸底+墨字+洒金、无红泥
+
+---
+
 ## v9.7 — 2026-10-04
 
 ### 变更：中国红重做成「宣纸国画」2D 质感 · 青碧/水墨薄雾回滚着色器并静态移植进宣纸 · 全站字阶去 9/11px
