@@ -4,6 +4,50 @@
 
 ---
 
+## v10.0 — 2026-10-06
+
+### 变更：全盘前端美学升级——中国红「玄墨/宣纸」双面定稿 · 字体分层 · 位图质感（hero 红绒 + 空状态插画）· 着色器 isDark 语义恢复
+
+定位：不改布局、不改功能，按反主流设计规则升级全站美学。v9.8 把暗色中国红翻成宣纸是矫枉过正——暗色就该是真暗色；本版把暗红回炉成「玄墨深底 + 朱砂点缀」，亮红保留宣纸国画面。
+
+#### 一、中国红 accent 令牌重做（亮/暗分离）
+- `.theme-red`（亮）：`--accent:#C3272B` 朱砂系 + 新增 `--accent-text:#C3272B`——纸面上红只做点缀
+- `.dark.theme-red`（暗）：`--accent:#C3272B` / `--accent-light:#D9453F` / `--accent-gradient:linear-gradient(135deg,#C33129,#8E1A15)` / `--accent-bg:rgba(224,82,74,.13)` / `--border-focus:#E0524A` / `--accent-text:#E0524A`——暗底上 accent 提亮半档，红釉质感
+- 两块令牌加 V10 注释标明分工；四态实测 CSS 变量正确（暗红 bg `rgb(22,17,15)`、accent `#C3272B` 等）
+
+#### 二、暗色中国红 = 玄墨深底（v9.8 宣纸废除）
+- **`body.dark.theme-red` 整块回炉**：`--bg-primary:#16110F`（玄墨，微暖近黑）+ 暗系纸面（`--bg-input:#1F1714` 等）+ 浅暖墨字（primary `#F0E6D8` / muted `#A89B88` / faint `#8C8071`）+ `--np-base-grad` 暗版
+- 暗红 = 真暗色：实测 body 背景 `rgb(22,17,15)`，不再是 v9.8 的宣纸米底；红只出现在 accent / hero / 装饰点缀
+- **纸面规则收窄**：v9.8 翻纸规则从 `body.theme-red` 收窄为 `body.theme-red:not(.dark)`——宣纸只作用亮色；v9.8 的暗红纠偏块（含 `shaders-off` 覆盖）整体删除
+
+#### 三、字体分层修正
+- 删 `body.theme-red` 全局 LXGW 文楷（v9.7 正文全站换楷书的「反人类」观感来源）——正文回到无衬线栈
+- LXGW 文楷收进标题层（选择器扩展覆盖 h1-h3 / `.modal-title` 等）——衬线只出现在该出现的地方
+
+#### 四、位图质感接入（布局零改动）
+- **hero 红绒纹理**：自托管 `public/img/hero-texture.jpg`（178KB 红丝绒，像素均值 79/21/22）叠进 `.friends-hero` 背景层——`background-image:url(...),linear-gradient(...)` + `background-blend-mode:soft-light,normal`，soft-light 让绸面高光融进任意主题 accent 渐变
+- **空状态插画**：自托管 `public/img/empty-mailbox.svg`（手绘邮箱，fills 仅 `#3f3d56`/`#C3272B`/`#f2f2f2`/`#fff`，无 currentColor，主题安全）挂进 `.empty:has(.empty-icon)::before`——150×112 纸卡 + 插画背景，`.empty-icon` 原图标 `display:none` 由插画替代；暗色态卡底固定纸色 `#f3ece1`（暗底上的纸片对比）
+- 走 `public/img/` 自托管，CSP `img-src 'self'` 无需改 `_headers`；style.css 相对路径 `url('img/…')` 解析正常
+
+#### 五、hero 白字对比度修复（非中国红主题 scrim）
+- **根因**：默认橙等亮色主题 hero 渐变（`--accent→--accent-light`）偏亮，白字实测仅 1.75~2.24:1（WCAG 大字 3:1 不达标，v9.8 预存问题被纹理镜面高光加剧）
+- **修复**：`body:not(.theme-red) .friends-hero` 叠纯黑 scrim——亮色 `rgba(0,0,0,.20)` / 暗色 `rgba(0,0,0,.32)`，`background-blend-mode:normal,soft-light,normal`；各通道同比缩放，色相/饱和不变仅降亮度
+- **中国红不动**：红两态本就达标；修复后四态 textContrast = 暗红 3.65 / 亮红 4.63 / 暗橙 3.73 / 亮橙 3.43，全部 ≥3
+
+#### 六、silk/fog 着色器 isDark 语义恢复
+- v9.8 因「暗红=宣纸」把两个着色器钉死亮色分支（silk `var d = 0`、fog `dark = false`）——暗红回炉玄墨后该约束解除
+- **silk**：`var d = isDark() ? 1 : 0;`；**fog**：`var dark = isDark();`——暗色粒子回归暗色系，不再在玄墨底上飘白雾
+
+#### 门禁与验证
+- `check_inline_scripts.js` → **ALL_PASS**（9 个 inline js block，改后复跑仍过）
+- `v10_verify.js` 四态（暗红/亮红/暗橙/亮橙）→ **ALL_PASS**：
+  - hero：`texture:true`、title 纯白、textContrast 3.65/4.63/3.73/3.43（20px 内缩排除圆角外页面底 + title/desc 文字区采样；跳过首登「使用须知」弹窗避免白字污染采样）
+  - 空状态：设置弹窗好友 tab `.empty` 存在、`::before` 含 `empty-mailbox.svg`、`.empty-icon` display:none、文案「暂无好友」、暗态卡底 `rgb(243,236,225)` 纸色
+  - bodyClass / bg / accent 四态全对；**0 console error / 0 pageerror**
+- 四态截图目检：hero 红绒纹理四态皆现、暗红真暗（玄墨）、橙态 scrim 后白字可读、暗/亮设置弹窗纸卡插画正常
+
+---
+
 ## v9.8 — 2026-10-05
 
 ### 变更：中国红暗色翻成宣纸浅底（红泥浆废除）· 好友页文字可读性修复 · Supabase 依赖服务加固（超时/重试/去重/并行）

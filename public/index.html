@@ -14076,12 +14076,12 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
             if (wst < 0.02) wst = 0;
             gl.uniform2f(uRes, canvas.width, canvas.height);
             gl.uniform1f(uT, now / 1000);
-            // V9.8：暗色中国红同为宣纸浅底 → 亮暗恒走亮色分支（d=0，0.14 恒定）
-            var d = 0;
+            // V10 修复：暗色中国红 = 玄墨深底 → 恢复 v9.7 明暗分支（v9.8「亮暗恒走亮色」硬编码废除）
+            var d = isDark() ? 1 : 0;
             gl.uniform1f(uD, d);
             // v9.5：绸面是"红绸上的反光"，不是一层白雾。配合预乘 alpha 输出，
-            // 0.14 左右即可保住底色，只在褶皱高光与风心处提亮。
-            gl.uniform1f(uOp, 0.14);
+            // 0.14 左右即可保住底色，只在褶皱高光与风心处提亮；暗色略提 0.18 保住玄墨上的可见度。
+            gl.uniform1f(uOp, d ? 0.18 : 0.14);
             gl.uniform3f(uAcc, accRGB[0], accRGB[1], accRGB[2]);
             gl.uniform2f(uWpt, wx, wy);
             gl.uniform1f(uWst, wst);
@@ -14158,11 +14158,12 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     }
 
     // 雾色：薄雾不是"白纱平盖一层"，而是画心留白、四边先起晕。
-    // V9.8：暗色中国红同为宣纸浅底 → 恒用亮色雾（宣纸暖白提亮 + 淡墨纸黄起晕）。
+    // V10 修复：暗色 = 玄墨深底 → 恢复 v9.7 明暗分支（v9.8「恒用亮色雾」硬编码废除）：
+    // 暗色画心用淡暖灰微提、四边用近黑压晕 —— 玄墨底上只见深浅，不泛纸白。
     var hazeRGB = '255,250,240', hazeA = 0.26;
     var warmRGB = '150,126,92', warmA = 0.16;
     function syncFogStyle() {
-      var dark = false;
+      var dark = isDark();
       hazeRGB = dark ? '176,150,124' : '255,250,240';
       hazeA = dark ? 0.10 : 0.26;
       warmRGB = dark ? '10,2,1' : '150,126,92';
