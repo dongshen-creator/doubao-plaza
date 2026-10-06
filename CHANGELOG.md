@@ -4,6 +4,37 @@
 
 ---
 
+## v10.1 — 2026-10-06
+
+### 变更：hero 红绒纹理收窄中国红 · 暗红去「黑泥」回宣纸粗糙质感 · 描金入底（洒金与玄墨融合）
+
+反馈：那个纹理图只适合中国红主题的；中国红的暗色模式做成描金玄黑效果还不错，但是背景要参考宣纸那样不要变成黑泥、要有一种粗糙的质感，暗色模式下背景的描金居然没和背景结合在一起、看着很出戏。
+
+#### 一、hero 红绒纹理收窄中国红（其他主题移除）
+- 纹理 + `background-blend-mode:soft-light,normal` 规则从全局 `.friends-hero` 收窄为 `body.theme-red .friends-hero`——红绒只在亮/暗中国红出现
+- 非红两态 `body:not(.theme-red)` / `body.dark:not(.theme-red)` 回归纯渐变 + 黑色 scrim（亮 .20 / 暗 .32）、`blend normal,normal`、不再引用 `url(img/hero-texture.jpg)`
+- 四态实测 texture：暗红 **true** / 亮红 **true** / 暗橙 **false** / 亮橙 **false**
+
+#### 二、暗红「黑泥」根因修复（fog 全屏灰洗 0.10 → 0.03）
+- **归因**（`v10_diag_layers.js` 三态截图：全图层 / 藏 fog / 藏 fog+noise + paintHaze 内隐藏）：整屏浑浊褐灰洗与金色纸屑点**全部来自 fog 画布的 `paintHaze`**；noise-overlay（op .04 overlay）与 silk 丝绢雾只提供微弱质感
+- `syncFogStyle` 暗色全屏暖灰洗 `hazeA` **0.10 → 0.03**——玄墨 `#16110F` 不再被整屏灰洗提成浑浊褐灰（用户说的「黑泥」），底色回归玄墨本色，只留极微画心呼吸；亮色 0.26 不变
+
+#### 三、描金入底（buildTile 暗色感知洒金 + 洒金全局压暗）
+- `buildTile` 按 `isDark()` 建两套 tile（syncFogStyle 变化时重建）：
+  - **暗金点**：原亮金 `rgba(201,162,39,.10~.40)` × `globalAlpha 0.9` 在玄墨上像飘着的荧光纸屑（即「描金没和背景结合」）→ 深琥珀 `rgba(172,134,48, 0.10~0.32)`，且 `paintHaze` ④ 洒金 `globalAlpha` 暗色 **0.9 → 0.45**——金点沉进玄墨成隐约洒金：保留「描金玄黑」的意，去掉浮在背景上的出戏感
+  - **暗纤维颗粒**：原深棕 `rgba(120,96,60,…)` 在近黑底上本来就看不见 → 暖白微光 `rgba(236,224,204, 0.035~0.11)`——玄墨上可见的细微颗粒 = 粗糙质感
+  - 亮色金点 / 纤维维持原值（金箔压在宣纸上本就成立，亮红洒金观感不变）
+
+#### 四、玄墨 ::before 交叉纤维（粗糙织理具象化）
+- `body.dark.theme-red::before`：opacity `.5 → .62`、58° 纤维 alpha `.035 → .055`、**新增 148° 交叉纤维** `rgba(240,230,216,.035) 1px/17px`——双向经纬 + 提线加强，暗底呈现宣纸式粗糙织理
+
+#### 门禁与验证
+- `check_inline_scripts.js` → **ALL_PASS**（9 个 inline js block，改后复跑仍过）
+- `v10_verify.js` 四态（暗红/亮红/暗橙/亮橙）→ **ALL_PASS**：texture `true/true/false/false`、textContrast `3.65/4.63/3.82/3.73`（全 ≥3）、emptyOK ×4、bodyClass/bg/accent 四态全对、**0 console error / 0 pageerror**
+- 目检：四态整页 + 双态 2x 背景特写（`bg_zoom`，deviceScaleFactor=2）——暗红金点成暗琥珀洒金入底不刺眼、无黑泥、交叉纤维与丝绢雾在；亮红宣纸洒金纹理不变；橙态 hero 纯渐变无纹理
+
+---
+
 ## v10.0 — 2026-10-06
 
 ### 变更：全盘前端美学升级——中国红「玄墨/宣纸」双面定稿 · 字体分层 · 位图质感（hero 红绒 + 空状态插画）· 着色器 isDark 语义恢复

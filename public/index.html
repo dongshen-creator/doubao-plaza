@@ -14160,12 +14160,14 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     // 雾色：薄雾不是"白纱平盖一层"，而是画心留白、四边先起晕。
     // V10 修复：暗色 = 玄墨深底 → 恢复 v9.7 明暗分支（v9.8「恒用亮色雾」硬编码废除）：
     // 暗色画心用淡暖灰微提、四边用近黑压晕 —— 玄墨底上只见深浅，不泛纸白。
+    // V10.1：暗色全屏暖灰洗 0.10 → 0.03（用户反馈「黑泥」根因：整屏灰洗把
+    // 玄墨 #16110F 提成浑浊褐灰）——只留极微画心呼吸，底色回归玄墨本色。
     var hazeRGB = '255,250,240', hazeA = 0.26;
     var warmRGB = '150,126,92', warmA = 0.16;
     function syncFogStyle() {
       var dark = isDark();
       hazeRGB = dark ? '176,150,124' : '255,250,240';
-      hazeA = dark ? 0.10 : 0.26;
+      hazeA = dark ? 0.03 : 0.26;
       warmRGB = dark ? '10,2,1' : '150,126,92';
       warmA = dark ? 0.34 : 0.16;
       var ns = hazeRGB + '|' + hazeA + '|' + warmRGB + '|' + warmA;
@@ -14175,8 +14177,14 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
     }
 
     // 洒金：泥金飞白小点 + 极淡纸纤维颗粒，让这层雾属于中国红
+    // V10.1：按明暗建 tile（syncFogStyle 变化时会重建）——
+    //   暗色：亮金点在玄墨上像飘着的荧光纸屑（用户反馈「描金没和背景结合」）→
+    //   改深琥珀暗金 + 低透明度（金点沉进玄墨成隐约洒金，保留描金玄黑的意，
+    //   只去掉浮在背景上的出戏感），纤维颗粒改暖白微光（玄墨上的粗糙质感，
+    //   深棕纤维在近黑底上本来就看不见）；亮色维持原样（金箔压在宣纸上本就成立）
     var tile = null;
     function buildTile() {
+      var dk = isDark();
       var t = document.createElement('canvas');
       t.width = t.height = 128;
       var c = t.getContext('2d');
@@ -14184,12 +14192,16 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       for (var i = 0; i < 90; i++) {
         var x = Math.random() * 128, y = Math.random() * 128;
         var rr = 0.5 + Math.random() * 1.5;
-        c.fillStyle = 'rgba(201,162,39,' + (0.10 + Math.random() * 0.30).toFixed(3) + ')';
+        c.fillStyle = dk
+          ? 'rgba(172,134,48,' + (0.10 + Math.random() * 0.22).toFixed(3) + ')'
+          : 'rgba(201,162,39,' + (0.10 + Math.random() * 0.30).toFixed(3) + ')';
         c.beginPath(); c.arc(x, y, rr, 0, 6.2832); c.fill();
       }
       for (var j = 0; j < 160; j++) {
         var fx = Math.random() * 128, fy = Math.random() * 128;
-        c.fillStyle = 'rgba(120,96,60,' + (0.03 + Math.random() * 0.06).toFixed(3) + ')';
+        c.fillStyle = dk
+          ? 'rgba(236,224,204,' + (0.035 + Math.random() * 0.075).toFixed(3) + ')'
+          : 'rgba(120,96,60,' + (0.03 + Math.random() * 0.06).toFixed(3) + ')';
         c.fillRect(fx, fy, 1, 1);
       }
       tile = c.createPattern(t, 'repeat');
@@ -14234,9 +14246,10 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       g.addColorStop(1, 'rgba(' + warmRGB + ',' + (warmA * 1.4).toFixed(3) + ')');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
-      // ④ 洒金飞白
+      // ④ 洒金飞白（V10.1：暗色全局再压到 0.45——低透明度暗金 + 全局压暗，
+      //    金点沉进玄墨底成「隐约洒金」，不再是浮在背景上的荧光纸屑）
       if (tile) {
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = isDark() ? 0.45 : 0.9;
         ctx.fillStyle = tile;
         ctx.fillRect(0, 0, W, H);
         ctx.globalAlpha = 1;

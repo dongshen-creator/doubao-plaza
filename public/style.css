@@ -717,27 +717,29 @@ body{font-family:'Avenir Next','Helvetica Neue','PingFang SC','Microsoft YaHei',
 .friends-hero-icon{font-size:40px;margin-bottom:8px;position:relative;z-index:1}
 .friends-hero-title{font-size:22px;font-weight:800;margin-bottom:4px;position:relative;z-index:1}
 .friends-hero-desc{font-size:13px;opacity:.9;line-height:1.6;position:relative;z-index:1}
-/* V10.0：hero 叠红绒纹理位图（自托管 img/，布局不变仅加背景层；
-   soft-light 让绸面高光融进 accent 渐变。注：纹理镜面高光会小幅抬亮渐变，
+/* V10.1：hero 叠红绒纹理位图（自托管 img/，布局不变仅加背景层；
+   soft-light 让绸面高光融进 accent 渐变）—— 仅中国红专属（用户反馈：
+   红绒只配朱砂，其他主题叠上去很违和）。注：纹理镜面高光会小幅抬亮渐变，
    亮色主题白字实测对比度略降，由下方 scrim 修复兜底） */
-.friends-hero{
+body.theme-red .friends-hero{
   background-image:url('img/hero-texture.jpg'),linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 100%);
   background-size:cover;background-position:center;
   background-blend-mode:soft-light,normal;
 }
 /* V10.0 修复：非中国红主题（默认橙/蓝/绿等）hero 渐变偏亮，白字实测仅
-   1.75~2.24:1（v9.8 预存不足 + 纹理高光加剧，WCAG 大字 3:1 不达标）。
+   1.75~2.24:1（v9.8 预存不足，WCAG 大字 3:1 不达标）。
    叠纯黑 scrim 等比压暗——各通道同比缩放，色相/饱和不变仅降亮度：
-   亮色 0.20 / 暗色 0.32，压暗后实测 ≥3:1；中国红两态本就 3.65/4.63 达标不动 */
+   亮色 0.20 / 暗色 0.32，压暗后实测 ≥3:1；中国红两态本就 3.65/4.63 达标不动。
+   V10.1：非红不再叠红绒纹理（红绒仅中国红）→ 纯渐变 + scrim */
 body:not(.theme-red) .friends-hero{
-  background-image:linear-gradient(rgba(0,0,0,.20),rgba(0,0,0,.20)),url('img/hero-texture.jpg'),linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 100%);
+  background-image:linear-gradient(rgba(0,0,0,.20),rgba(0,0,0,.20)),linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 100%);
   background-size:cover;background-position:center;
-  background-blend-mode:normal,soft-light,normal;
+  background-blend-mode:normal,normal;
 }
 body.dark:not(.theme-red) .friends-hero{
-  background-image:linear-gradient(rgba(0,0,0,.32),rgba(0,0,0,.32)),url('img/hero-texture.jpg'),linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 100%);
+  background-image:linear-gradient(rgba(0,0,0,.32),rgba(0,0,0,.32)),linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 100%);
   background-size:cover;background-position:center;
-  background-blend-mode:normal,soft-light,normal;
+  background-blend-mode:normal,normal;
 }
 
 /* ── 好友视图：侧边栏搜索区 ── */
@@ -2821,16 +2823,19 @@ body.theme-red:not(.dark)::before{
     radial-gradient(680px 480px at 22% 76%, rgba(80,55,30,0.10) 0%, rgba(80,55,30,0) 68%),
     radial-gradient(520px 400px at 88% 18%, rgba(195,39,43,0.06) 0%, rgba(195,39,43,0) 64%);
 }
-/* ④ 玄墨墨韵（V10.0 暗色专属）：金线降为微光，朱砂晕在暗底上提亮，一角泥金 */
+/* ④ 玄墨墨韵（V10.0 暗色专属）：金线降为微光，朱砂晕在暗底上提亮，一角泥金
+   V10.1：加交叉纤维向 + 提线强（用户反馈暗底「黑泥」缺粗糙质感）——
+   双向细纤维在玄墨上隐约可辨，参照亮色宣纸的纸纹观感；泥金晕保持低透明度贴底 */
 body.dark.theme-red::before{
   content:'';
   position:fixed;
   inset:0;
   z-index:-2;
   pointer-events:none;
-  opacity:.5;
+  opacity:.62;
   background-image:
-    repeating-linear-gradient(58deg, rgba(240,230,216,0.035) 0 1px, rgba(240,230,216,0) 1px 13px),
+    repeating-linear-gradient(58deg, rgba(240,230,216,0.055) 0 1px, rgba(240,230,216,0) 1px 13px),
+    repeating-linear-gradient(148deg, rgba(240,230,216,0.035) 0 1px, rgba(240,230,216,0) 1px 17px),
     radial-gradient(680px 480px at 22% 76%, rgba(195,39,43,0.10) 0%, rgba(195,39,43,0) 68%),
     radial-gradient(520px 400px at 88% 18%, rgba(201,162,39,0.07) 0%, rgba(201,162,39,0) 64%);
 }
