@@ -13832,7 +13832,9 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
 /* V9.4 丝绸飘动质感层（纯布料波纹，无旗形 / 无五星 / 无旗杆）
    保留原有背景（流体画布 L1 + 噪点 L2 + 磨砂玻璃 L3）不动，本层只在噪点之下叠一层缎面光泽。
    指针 / 触摸移动即「风吹拂过」：注入环状波前推开织物并局部提亮；另有极弱环境风让绸面自然呼吸。
-   低频纹理 → 内部按 0.62 倍分辨率渲染，dpr 上限 1，控制移动端开销。 */
+   低频纹理 → 内部按 0.62 倍分辨率渲染，dpr 上限 1，控制移动端开销。
+   V10.2：指针响应由「微风」改为「涟漪」（GLSL ripple()），JS 侧能量管线不变：
+   移速→u_wst 波幅、停手渐息、u_wpt 指针坐标；u_wdir 不再被着色器消费（保留计算无害）。 */
 (function () {
   function die() { try { var c = document.getElementById('silk-canvas'); if (c && c.parentNode) c.parentNode.removeChild(c); } catch (e) {} }
   try {
@@ -13871,13 +13873,17 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ' for(int i=0;i<4;i++){s+=a*nval(q);q=q*2.03+vec2(1.7,9.2);a*=0.5;}',
       ' return s;',
       '}',
-      // 微风场：风心缓动跟随指针，高斯衰减成一团；沿风向行进的波让风"流动"而不是钉在原地
-      'float breeze(vec2 p,float t){',
+      // V10.2 涟漪场（替 V9.6 微风，用户反馈「指针着色器不要用微风了」）：
+      // 以指针为圆心向外荡开的同心波——径向对称、无定向风，浅色宣纸与暗色玄墨上观感一致（应景双明暗）；
+      // 波幅随移速起伏（u_wst），停手后 JS 侧自然消散，和微风共用同一套能量管线
+      'float ripple(vec2 p,float t){',
       ' if(u_wst<=0.001)return 0.0;',
       ' vec2 d=p-u_wpt;',
-      ' float fall=exp(-dot(d,d)*5.0);',
-      ' float wave=0.55+0.45*sin(dot(d,u_wdir)*7.0-t*2.6);',
-      ' return fall*u_wst*wave;',
+      ' float r2=dot(d,d);',
+      ' float fall=exp(-r2*4.5);',
+      ' float r=sqrt(r2);',
+      ' float w=sin(r*21.0-t*4.6);',
+      ' return fall*u_wst*(0.45+0.55*w);',
       '}',
       // 缎面褶皱高度场：横向强拉伸成长条竖褶，两级 fbm 扭曲去机械感
       'float silkH(vec2 p,float t){',
@@ -13894,8 +13900,12 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ' float asp=u_res.x/u_res.y;',
       ' vec2 p=vec2(uv.x*asp,uv.y);',
       ' float t=u_t;',
-      ' float g=breeze(p,t);',
-      ' vec2 sp=p+u_wdir*(g*0.26)+vec2(0.0,g*0.10);',
+      // V10.2：涟漪位移沿「指针→像素」径向推开（微风时代的定向风 u_wdir 已弃用）；
+      // smoothstep 抑制圆心奇点（位移在 r→0 时归零，避免星芒撕裂）
+      ' float g=ripple(p,t);',
+      ' vec2 pd=p-u_wpt;',
+      ' float pr=max(length(pd),1e-4);',
+      ' vec2 sp=p+(pd/pr)*(g*0.16*smoothstep(0.0,0.15,pr));',
       ' float e=0.004;',
       ' float h=silkH(sp,t);',
       ' float hx=silkH(sp+vec2(e,0.0),t);',
@@ -13908,10 +13918,15 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
       ' float diff=0.5+0.5*max(dot(N,L),0.0);',
       ' float spec=pow(ndh,26.0);',
       ' float sheen=pow(ndh,96.0);',
-      ' float lum=diff*0.06+spec*0.34+sheen*0.42+g*0.60;',
+      ' float gr=clamp(g,0.0,1.0);',
+      ' float lum=diff*0.06+spec*0.34+sheen*0.42+g*0.60+gr*0.30;',
       ' vec3 col=mix(vec3(1.0),u_acc,0.20+0.28*u_d);',
       ' col=mix(col*diff,vec3(1.0),sheen*0.55);',
-' float a=clamp(lum,0.0,1.0)*u_op;',
+      // V10.2 涟漪染朱砂：波峰处强烈向 --accent 收敛——亮色宣纸上是朱圈、暗色玄墨上是红晕，
+      // 纯白丝绢色在米纸上不可见（双明暗应景的关键一步）；
+      // 亮色再补一层专属 alpha（u_d=1 时为 0，暗色不受影响）——0.14 全局透明度下红环太淡
+      ' col=mix(col,u_acc,gr*0.85);',
+      ' float a=clamp(lum,0.0,1.0)*u_op+gr*0.12*(1.0-u_d);',
       // 必须输出预乘 alpha：WebGL 上下文 premultipliedAlpha 默认为 true，
       // 若直接给非预乘的 col + 低 alpha，合成端按 dst*(1-a)+col 计算 → 低透明度也会把底色冲白。
 ' gl_FragColor=vec4(col*a,a);',
@@ -13943,9 +13958,9 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
 
     var SCALE = 0.62;                       // 低频纹理，降分辨率省算力
 
-    /* V9.6 微风：一团跟着指针走的风，不再用环状阵风。
-       风心用临界阻尼追踪指针 → 看起来是"风跟着手走"而不是"钉在手心"；
-       风力随移速起伏并在停手后 1.6s 内自然消散；风向 = 指针速度方向平滑值。 */
+    /* V9.6 波幅追踪（V10.2 起供涟漪用）：能量跟移速走，停手后 1.6s 内自然消散；
+       u_wpt 用临界阻尼追踪指针 → 涟漪圆心"跟着手走"而不是钉死在手心。
+       （以下 wdx/wdy 风向平滑保留计算——涟漪径向对称不消费方向，uniform 置 null 时自动忽略） */
     var tx = -1e4, ty = -1e4;      // 指针目标（p 坐标：x 已乘纵横比，y 向上）
     var wx = -1e4, wy = -1e4;      // 实际风心（追踪中）
     var wst = 0;                   // 风力 0..1
@@ -14314,6 +14329,99 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
   } catch (e) {
     die();
   }
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   V10.2 玄武岩背景贴图 · 消费方 = style.css 的 body.dark.theme-red::before
+   反馈：暗色中国红背景颜色（玄墨）是对的，但纹理不对 → 要玄武岩质感。
+   程序化生成 512² 无缝贴图：低频斑驳 + 细颗粒（暖白结晶/暗色砂粒）+
+   火山气孔（暗坑 + 左上受光缘）+ 微裂纹（深缝 + 偏移受光边），
+   toDataURL 后写入 --np-basalt CSS 变量。
+   · 与着色器开关无关（纯 CSS 变量层，dp_shader=off 时质感仍在）
+   · 亮色中国红走宣纸墨韵（body.theme-red:not(.dark)::before），不消费此贴图
+   · 无条件生成（主题运行时切到红也无需刷新）；空闲调度避免首屏阻塞
+   ═══════════════════════════════════════════════════════════ */
+(function () {
+  function build() {
+    try {
+      var N = 512;
+      var c = document.createElement('canvas');
+      c.width = c.height = N;
+      var x = c.getContext('2d');
+      if (!x) return;
+      var R = Math.random, TWO = 6.2832;
+      // ① 低频斑驳：大块暖灰云斑铺底色起伏（圆心留边距，避免裁切硬边）
+      for (var i = 0; i < 46; i++) {
+        var mr = 40 + R() * 90;
+        var mx = mr + R() * (N - mr * 2), my = mr + R() * (N - mr * 2);
+        var g = x.createRadialGradient(mx, my, 0, mx, my, mr);
+        g.addColorStop(0, R() < 0.55 ? 'rgba(0,0,0,0.10)' : 'rgba(240,230,216,0.05)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        x.fillStyle = g;
+        x.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
+      }
+      // ② 细颗粒：双向散点（暖白结晶 + 暗色砂粒）＝玄武岩粗糙手感
+      for (var j = 0; j < 12000; j++) {
+        x.fillStyle = R() < 0.5
+          ? 'rgba(240,230,216,' + (0.03 + R() * 0.05).toFixed(3) + ')'
+          : 'rgba(0,0,0,' + (0.08 + R() * 0.16).toFixed(3) + ')';
+        x.fillRect(R() * N, R() * N, 1 + (R() < 0.18 ? 1 : 0), 1);
+      }
+      // ③ 气孔：火山孔洞（椭圆暗坑 + 左上受光缘）——九宫偏移绘制保证平铺无缝
+      for (var k = 0; k < 64; k++) {
+        var px = R() * N, py = R() * N;
+        var pr = 2.5 + R() * 6.5, ry = pr * (0.62 + R() * 0.3), rot = R() * 3.14;
+        var da = 0.38 + R() * 0.30, ra = 0.07 + R() * 0.06;
+        for (var ox = -1; ox <= 1; ox++) {
+          for (var oy = -1; oy <= 1; oy++) {
+            var vx = px + ox * N, vy = py + oy * N;
+            if (vx < -pr - 2 || vx > N + pr + 2 || vy < -pr - 2 || vy > N + pr + 2) continue;
+            x.fillStyle = 'rgba(0,0,0,' + da.toFixed(3) + ')';
+            x.beginPath();
+            x.ellipse(vx, vy, pr, ry, rot, 0, TWO);
+            x.fill();
+            x.strokeStyle = 'rgba(240,230,216,' + ra.toFixed(3) + ')';
+            x.lineWidth = 1;
+            x.beginPath();
+            x.ellipse(vx, vy, pr, ry, rot, Math.PI * 0.9, Math.PI * 1.75);
+            x.stroke();
+          }
+        }
+      }
+      // ④ 微裂纹：随机游走折线（深缝 + 1px 偏移受光边），同样九宫偏移无缝
+      for (var m = 0; m < 5; m++) {
+        var cx = R() * N, cy = R() * N, ang = R() * TWO;
+        x.beginPath();
+        x.moveTo(cx, cy);
+        var steps = 6 + (R() * 5 | 0);
+        for (var s = 0; s < steps; s++) {
+          ang += (R() - 0.5) * 1.1;
+          cx += Math.cos(ang) * (14 + R() * 16);
+          cy += Math.sin(ang) * (14 + R() * 16);
+          x.lineTo(cx, cy);
+        }
+        for (var ox2 = -1; ox2 <= 1; ox2++) {
+          for (var oy2 = -1; oy2 <= 1; oy2++) {
+            x.save();
+            x.translate(ox2 * N, oy2 * N);
+            x.strokeStyle = 'rgba(0,0,0,0.42)';
+            x.lineWidth = 0.8 + R() * 0.7;
+            x.stroke();
+            x.translate(1, -1);
+            x.strokeStyle = 'rgba(240,230,216,0.05)';
+            x.lineWidth = 1;
+            x.stroke();
+            x.restore();
+          }
+        }
+      }
+      document.documentElement.style.setProperty('--np-basalt', 'url(' + c.toDataURL('image/png') + ')');
+    } catch (e) {}
+  }
+  // 空闲调度：PNG 编码数十毫秒，让出首屏绘制
+  if (window.requestIdleCallback) requestIdleCallback(build, { timeout: 1500 });
+  else setTimeout(build, 200);
 })();
 </script>
 </body>

@@ -4,6 +4,44 @@
 
 ---
 
+## v10.2 — 2026-10-07
+
+### 变更：暗红背景换玄武岩质感 · 指针着色器「微风」废除改朱砂涟漪（双明暗应景）
+
+反馈：中国红暗色模式下，背景的颜色是对的，但是背景的纹理不对，我希望是这个颜色，然后像玄武岩一样的质感。该主题的指针着色器不要用微风了，换个别的，能同时应景浅色和深色模式的。
+
+#### 一、暗红背景：交叉纤维废除 → 玄武岩位图贴图（`--np-basalt`）
+- `body.dark.theme-red::before` 删两层 `repeating-linear-gradient` 交叉纤维（v10.1 的宣纸织理在玄墨上不符「岩面」诉求），改为 `background-image: var(--np-basalt, none)`；保留朱砂/泥金两层 radial 晕（氛围光不属纹理）；opacity `.62 → .8`
+- 新增独立 `<script>` 块（fog 脚本后、`</body>` 前）：`buildBasalt()` 生成 512² 无缝贴图写入 CSS 变量——
+  - ① 46 个大块低频斑驳（留边距，九宫偏移保证平铺无缝）
+  - ② 12000 细颗粒（暖白/暗砂双色随机）
+  - ③ 64 个气孔椭圆（暗坑 + 左上受光缘，玄武岩标志性气孔）
+  - ④ 5 条随机游走微裂纹（深缝 + 偏移受光边）
+  - `requestIdleCallback` / 200ms 兜底调度；无条件生成（主题运行时切红无需刷新）
+- 亮色宣纸规则 `body.theme-red:not(.dark)::before` 原样不动（58° 纤维 + 洒金）
+- 实测：暗红 `beforeBgHasBasalt=true / beforeOpacity=0.8 / fibersGone=true`；亮红 `hasBasalt=false`
+
+#### 二、指针着色器：`breeze()` → `ripple()` 朱砂涟漪（仅中国红主题生效）
+- silk 画布门控 `wantActive()` = `dp_shader≠off && body.theme-red`（亮暗皆跑）——改 silk 即只改「该主题」，橙色两态不受影响
+- **径向涟漪替代定向微风**：`fall=exp(-r2*4.5)`、`w=sin(r*21.0-t*4.6)`、`return fall*u_wst*(0.45+0.55*w)`——径向对称无定向风，天然双明暗中性
+- 位移改径向：`sp=p+(pd/pr)*(g*0.16*smoothstep(0.0,0.15,pr))`（`smoothstep` 抑制圆心奇点）
+- **朱砂染色（亮色可见的关键）**：纯白丝绢色在米纸上不可见——`col=mix(col,u_acc,gr*0.85)` 波峰强烈收敛到 `--accent`；亮色再补专属 alpha `+gr*0.12*(1.0-u_d)`（`u_d=1` 暗色为 0 不受影响）；暗色靠 `lum` 增益 `+gr*0.30` 已足够
+- `u_wdir` 不再被消费（`uniform2f(null, …)` 静默忽略，JS 侧保留计算无害）
+- 结果：亮色宣纸上朱砂色柔光沿指针轨迹晕开、暗色玄墨上红晕同心波纹——同一效果双明暗应景
+
+#### 三、过程故障：GLSL 重复声明致 silk 着色器整块失效（已修）
+- 症状：加强亮色 alpha 的编辑只替换了 `col=` 行、残留旧 `float a=…` 行 → 同作用域重复声明 `float a` → 编译失败 → silk 画布完全无渲染，亮/暗两色涟漪帧均不可见
+- 定位：grep 到相邻两行 `float a=`（新行 + 残留行）；删除残留行后复跑即恢复
+- 教训：编辑 GLSL 字符串数组时 oldString 必须把「被替换行 + 紧随其后的同变量行」一起圈入
+
+#### 门禁与验証
+- `check_inline_scripts.js` → **ALL_PASS**（10 inline js blocks，block11 = 新增玄武岩脚本）
+- `v10_verify.js` 四态 → **ALL_PASS**：texture `true/true/false/false`、textContrast `3.64/4.63/3.82/3.73`（全 ≥3）、0 console error
+- QA 探针（`bg_zoom_v102.js`，deviceScaleFactor=2）：`varSet=true / beforeBgHasBasalt=true / beforeOpacity=0.8 / fibersGone=true`、亮红 `hasBasalt=false`、双态 0 error
+- 目检：暗红整页 = 玄武岩气孔/斑驳/微裂纹 + 金点 + 红绒 hero + 朱砂涟漪同心波纹；亮红 = 宣纸洒金不变 + 朱砂柔光涟漪清晰可见
+
+---
+
 ## v10.1 — 2026-10-06
 
 ### 变更：hero 红绒纹理收窄中国红 · 暗红去「黑泥」回宣纸粗糙质感 · 描金入底（洒金与玄墨融合）

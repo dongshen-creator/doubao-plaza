@@ -2823,19 +2823,22 @@ body.theme-red:not(.dark)::before{
     radial-gradient(680px 480px at 22% 76%, rgba(80,55,30,0.10) 0%, rgba(80,55,30,0) 68%),
     radial-gradient(520px 400px at 88% 18%, rgba(195,39,43,0.06) 0%, rgba(195,39,43,0) 64%);
 }
-/* ④ 玄墨墨韵（V10.0 暗色专属）：金线降为微光，朱砂晕在暗底上提亮，一角泥金
-   V10.1：加交叉纤维向 + 提线强（用户反馈暗底「黑泥」缺粗糙质感）——
-   双向细纤维在玄墨上隐约可辨，参照亮色宣纸的纸纹观感；泥金晕保持低透明度贴底 */
+/* ④ 玄墨玄武岩（V10.0 暗色专属）：金线降为微光，朱砂晕在暗底上提亮，一角泥金
+   V10.1：加交叉纤维向 + 提线强（用户反馈暗底「黑泥」缺粗糙质感）
+   V10.2：纹理换玄武岩质感（用户反馈「颜色对、纹理不对」）——
+   交叉纤维两层废除，改平铺 JS 程序化生成的玄武岩贴图 var(--np-basalt)
+   （细颗粒 + 火山气孔 + 微裂纹，512²，index.html 末尾脚本生成后写入 CSS 变量；
+   贴图未就绪时回退 none，仅剩朱砂/泥金两晕，底色恒为玄墨不受影响）；
+   朱砂晕/泥金晕保留——氛围光不属「纹理」，且泥金即用户认可的描金底味 */
 body.dark.theme-red::before{
   content:'';
   position:fixed;
   inset:0;
   z-index:-2;
   pointer-events:none;
-  opacity:.62;
+  opacity:.8;
   background-image:
-    repeating-linear-gradient(58deg, rgba(240,230,216,0.055) 0 1px, rgba(240,230,216,0) 1px 13px),
-    repeating-linear-gradient(148deg, rgba(240,230,216,0.035) 0 1px, rgba(240,230,216,0) 1px 17px),
+    var(--np-basalt, none),
     radial-gradient(680px 480px at 22% 76%, rgba(195,39,43,0.10) 0%, rgba(195,39,43,0) 68%),
     radial-gradient(520px 400px at 88% 18%, rgba(201,162,39,0.07) 0%, rgba(201,162,39,0) 64%);
 }
