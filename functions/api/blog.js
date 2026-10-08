@@ -4,6 +4,8 @@
 //
 // 小肥羊讲堂 - 博客系统后端
 
+import { urlKey, cacheMatch, cachePut } from './_lib/http-cache.js';
+
 // ===== 常量 =====
 
 // 博客房间浏览器访问 URL
@@ -121,6 +123,15 @@ export async function onRequestGet(context) {
     const pageSize = Math.min(Math.max(parseInt(url.searchParams.get('page_size') || url.searchParams.get('pageSize') || '10', 10) || 10, 1), 50);
     const offset = (page - 1) * pageSize;
 
+    // V10.5 读放大防护：公共 feed（无 status 参数）的响应与角色无关 → 按完整 URL 缓存 30s，
+    // 消掉每次翻页/刷新的 COUNT(*) 全表聚合（COUNT 无索引可走）；
+    // 带 status 的开发者审核视图绝不缓存（同一 URL 按角色返回不同数据，缓存会角色泄露）。
+    const feedCacheKey = url.searchParams.get('status') ? null : urlKey(context.request);
+    if (feedCacheKey) {
+      const hit = await cacheMatch(feedCacheKey);
+      if (hit) return hit;
+    }
+
     // 鉴权：判断是否为开发者（列表接口公开，但开发者可查看更多状态）
     const authUserId = await getAuthUserId(env, context.request);
     const isDev = authUserId ? await isDeveloper(env, authUserId) : false;
@@ -193,7 +204,7 @@ export async function onRequestGet(context) {
       updated_at: formatDate(r.updated_at),
     }));
 
-    return jsonResponse({
+    const listResp = jsonResponse({
       success: true,
       data,
       pagination: {
@@ -203,6 +214,8 @@ export async function onRequestGet(context) {
         total_pages: Math.ceil(total / pageSize),
       },
     });
+    // V10.5：写路径不加 purge，陈旧上界 30s（发布成功有 toast 提示；单篇详情页不缓存保持即时）
+    return feedCacheKey ? cachePut(context, feedCacheKey, listResp, 30) : listResp;
   } catch (e) {
     console.error('[blog.js]', e); return jsonResponse({ success: false, error: '服务器错误：' + '服务器内部错误' }, 500);
   }

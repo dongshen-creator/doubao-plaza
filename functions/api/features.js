@@ -3,10 +3,17 @@
 // POST   /api/features          - 添加功能
 // DELETE /api/features?id=xxx   - 删除功能
 
+import { pathKey, cacheMatch, cachePut, purgeKey } from './_lib/http-cache.js';
+
 // 确保工具包相关列存在（幂等）
+// V10.5：模块级单次化——原先每次 GET/POST/PUT 都跑 2 条 ALTER（重复列报错被吞），
+// 白烧 D1 写配额与 schema 读；列已固化于 schema.sql，每个隔离实例仅首次尝试一次。
+let _toolColsEnsured = false;
 async function ensureToolColumns(env) {
+  if (_toolColsEnsured) return;
   await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_type TEXT").run().catch(() => {});
   await env.DB.prepare("ALTER TABLE features ADD COLUMN tool_config TEXT").run().catch(() => {});
+  _toolColsEnsured = true;
 }
 
 // 从 Authorization 头解析已登录用户 ID
@@ -45,6 +52,11 @@ function isSafeHttpUrl(url) {
 }
 
 export async function onRequestGet(context) {
+  // V10.5 读放大防护：缓存优先（features 列表与请求者无关），命中 0 次 D1 读
+  const cacheKey = pathKey(context.request);
+  const hit = await cacheMatch(cacheKey);
+  if (hit) return hit;
+
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
       status: 500,
@@ -60,9 +72,13 @@ export async function onRequestGet(context) {
        FROM features ORDER BY sort_order ASC, created_at DESC`
     ).all();
 
-    return Response.json({ success: true, data: results.results });
+    return cachePut(context, cacheKey, Response.json({ success: true, data: results.results }), 60);
   } catch (e) {
-    console.error('[features.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
+    console.error('[features.js]', e);
+    // V10.5 部署验证头：错误响应也标 MISS（回源后失败），线上见到该头即证明新版已部署
+    const err = Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
+    err.headers.set('X-DP-Cache', 'MISS');
+    return err;
   }
 }
 
@@ -113,6 +129,7 @@ export async function onRequestPost(context) {
       `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at, tool_type, tool_config FROM features WHERE id = ?`
     ).bind(result.meta.last_row_id).first();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：写后失效，功能面板改动即时可见
     return Response.json({ success: true, data: feature });
   } catch (e) {
     console.error('[features.js]', e); return Response.json({ success: false, error: '添加失败：' + '服务器内部错误' });
@@ -168,6 +185,7 @@ export async function onRequestPut(context) {
       `SELECT id, title, icon_url, link_url, sort_order, created_by, created_at, updated_at, tool_type, tool_config FROM features WHERE id = ?`
     ).bind(id).first();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：写后失效
     return Response.json({ success: true, data: feature });
   } catch (e) {
     console.error('[features.js]', e); return Response.json({ success: false, error: '更新失败：' + '服务器内部错误' });
@@ -202,6 +220,7 @@ export async function onRequestDelete(context) {
 
     await env.DB.prepare(`DELETE FROM features WHERE id = ?`).bind(id).run();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：写后失效
     return Response.json({ success: true });
   } catch (e) {
     console.error('[features.js]', e); return Response.json({ success: false, error: '删除失败：' + '服务器内部错误' });

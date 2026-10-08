@@ -5,6 +5,8 @@
 // PUT    /api/custom-pages?id=xxx   - 更新页面（仅开发者）
 // DELETE /api/custom-pages?id=xxx   - 删除页面（仅开发者）
 
+import { pathKey, urlKey, cacheMatch, cachePut, purgeKey } from './_lib/http-cache.js';
+
 // 检查是否为站务管理员（is_developer 或 is_global_admin，v9.2）
 async function isDeveloper(env, userId) {
   const user = await env.DB.prepare(`SELECT is_developer, is_global_admin FROM users WHERE id = ?`).bind(userId).first();
@@ -26,6 +28,11 @@ async function getAuthUserId(env, request) {
 
 // GET - 获取页面列表或单个页面
 export async function onRequestGet(context) {
+  // V10.5 读放大防护：列表与单页内容均与请求者无关，按完整 URL 缓存 60s（命中 0 次 D1 读）
+  const cacheKey = urlKey(context.request);
+  const hit = await cacheMatch(cacheKey);
+  if (hit) return hit;
+
   if (!context.env.DB) {
     return new Response(JSON.stringify({ success: false, error: '数据库未绑定' }), {
       status: 500,
@@ -48,14 +55,14 @@ export async function onRequestGet(context) {
         return Response.json({ success: false, error: '页面不存在' });
       }
 
-      return Response.json({ success: true, data: page });
+      return cachePut(context, cacheKey, Response.json({ success: true, data: page }), 60);
     } else {
       // 获取列表（不包含 html_content，减少数据传输）
       const results = await env.DB.prepare(
         `SELECT id, title, created_at, updated_at FROM custom_pages ORDER BY created_at DESC`
       ).all();
 
-      return Response.json({ success: true, data: results.results });
+      return cachePut(context, cacheKey, Response.json({ success: true, data: results.results }), 60);
     }
   } catch (e) {
     console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '服务器错误：' + '服务器内部错误' });
@@ -93,6 +100,7 @@ export async function onRequestPost(context) {
       `SELECT id, title, created_at, updated_at FROM custom_pages WHERE id = ?`
     ).bind(result.meta.last_row_id).first();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：新建后失效列表缓存
     return Response.json({ success: true, data: page });
   } catch (e) {
     console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '创建失败：' + '服务器内部错误' });
@@ -137,6 +145,8 @@ export async function onRequestPut(context) {
       `SELECT id, title, created_at, updated_at FROM custom_pages WHERE id = ?`
     ).bind(id).first();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：列表（标题/更新时间）与单页内容同时失效
+    purgeKey(context, urlKey(context.request));
     return Response.json({ success: true, data: page });
   } catch (e) {
     console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '更新失败：' + '服务器内部错误' });
@@ -174,6 +184,8 @@ export async function onRequestDelete(context) {
 
     await env.DB.prepare(`DELETE FROM custom_pages WHERE id = ?`).bind(id).run();
 
+    purgeKey(context, pathKey(context.request)); // V10.5：列表与单页内容同时失效
+    purgeKey(context, urlKey(context.request));
     return Response.json({ success: true });
   } catch (e) {
     console.error('[custom-pages.js]', e); return Response.json({ success: false, error: '删除失败：' + '服务器内部错误' });

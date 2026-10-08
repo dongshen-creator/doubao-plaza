@@ -16,6 +16,7 @@ import {
 } from './_lib/device.js';
 import { resolveClientIp } from './_lib/clientip.js';
 import { verifyTurnstile } from './_lib/turnstile.js';
+import { urlKey, cacheMatch, cachePut } from './_lib/http-cache.js';
 
 // V7.3 读放大防护：搜索接口按 IP 限频（进程内存计数，单个隔离实例内 60 次/分钟）
 const _searchRate = new Map();
@@ -113,6 +114,12 @@ export async function onRequestGet(context) {
       return Response.json({ success: true, data: [] });
     }
 
+    // V10.5 读放大防护③：搜索结果按完整 URL 边缘缓存 30s（current_user 参数含在键内，
+    // 屏蔽关系差异按 URL 隔离；命中 0 次 LIKE 全表扫，且不占②的限频额度）
+    const searchCacheKey = urlKey(context.request);
+    const cachedHit = await cacheMatch(searchCacheKey);
+    if (cachedHit) return cachedHit;
+
     // V7.3 读放大防护②：按 IP 对搜索接口限频（同实例内 60 次/分钟）
     const clientIP = resolveClientIp(context.request) || 'unknown';
     if (_searchRateLimited(clientIP)) {
@@ -178,7 +185,7 @@ export async function onRequestGet(context) {
        FROM users ${whereClause} ORDER BY created_at DESC LIMIT 500`
     ).bind(...params).all();
 
-    return Response.json({ success: true, data: results.results });
+    return cachePut(context, searchCacheKey, Response.json({ success: true, data: results.results }), 30);
   } catch (e) {
     return Response.json({ success: false, error: '服务器错误，请稍后再试' });
   }

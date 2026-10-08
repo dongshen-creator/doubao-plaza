@@ -158,6 +158,8 @@ CREATE INDEX IF NOT EXISTS idx_friendships_status ON friendships(status);
 CREATE INDEX IF NOT EXISTS idx_blocked_user ON blocked_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_blocked_target ON blocked_users(blocked_user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_reported ON reports(reported_id);
+CREATE INDEX IF NOT EXISTS idx_reports_reporter ON reports(reporter_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_features_order ON features(sort_order);
@@ -320,6 +322,7 @@ CREATE TABLE IF NOT EXISTS blog_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_blog_notif_user ON blog_notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_blog_notif_post ON blog_notifications(post_id);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts(created_at);
 
 -- ============================================================
 -- V5.13 新增：注册防滥用（PoW 挑战记录表）

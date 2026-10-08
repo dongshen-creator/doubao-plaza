@@ -4,6 +4,34 @@
 
 ---
 
+## v10.5 — 2026-10-08
+
+### 优化：D1 读消耗四层压降——四端点边缘缓存 + ALTER 单次化 + 举报索引 + schema 对齐
+
+背景：v10.4 索引自愈把「全表扫→索引扫」，但 COUNT 聚合、LIKE 模糊搜索、重复 GET 仍按行计费；为进一步压低 D1 免费版日读配额消耗，本版在索引之上叠加响应缓存层。
+
+#### 一、共享工具 `functions/api/_lib/http-cache.js`（沿用 v7.3 announcements 已上线验证的 Cache API 模式）
+- `pathKey`（响应与 query 无关）/ `urlKey`（响应依赖 query）两种缓存键
+- `cacheMatch` 命中直接返回（0 次 D1 读）；`cachePut` 返回源站响应并异步写入边缘副本；`purgeKey` 写路径主动失效
+- `X-DP-Cache: HIT|MISS` 响应头：线上排障与部署验证用（旧版本无此头，见到即新版已部署）
+- 仅成功响应入缓存；错误/404/429 一律回源直返；缓存不可用自动回源不影响主流程
+
+#### 二、四处端点接入（命中时 0 次 D1 读）
+- `/api/features` GET：路径级缓存 60s（列表与请求者无关）；**`ensureToolColumns` 改模块级单次**——原先每次 GET/POST/PUT 都跑 2 条 ALTER（重复列报错被吞），白烧写配额；POST/PUT/DELETE 成功后 purge（功能面板改动即时可见）
+- `/api/custom-pages` GET：完整 URL 缓存 60s（列表与 `?id=` 单页两分支均与请求者无关）；POST/PUT/DELETE 成功后 purge 列表键+单页键
+- `/api/users` GET 搜索：完整 URL 缓存 30s（`current_user` 参数含在键内，屏蔽差异按 URL 隔离）；插在空条件守卫之后、IP 限频之前——命中不占限频额度；消掉 LIKE `%kw%` 无法走索引的全表扫
+- `/api/blog` GET 公共 feed：**仅无 `status` 参数时**完整 URL 缓存 30s（带 status 的开发者审核视图绝不缓存，防同一 URL 按角色返回不同数据的角色泄露）——消掉每次翻页/刷新的 `COUNT(*)` 全表聚合（COUNT 无索引可走）；写路径不加 purge，陈旧上界 30s（发布成功有 toast 提示；单篇详情页不缓存保持即时）
+
+#### 三、索引与 schema 对齐
+- schema-guard 追加 `idx_reports_reporter ON reports(reporter_id, created_at)`：举报提交链路 3 条 `reporter_id + 时间窗` 查询（限频/查重/自动惩罚判定）原为全表扫
+- **修正** schema-guard 的 blocked_users 索引命名为 `idx_blocked_user`/`idx_blocked_target`（对齐 schema.sql）——原名 `idx_blocked_users_*` 与 schema.sql 已有索引不同名，会在配额恢复后创建同列重复索引
+- schema.sql 补齐 3 条与运行时自愈对齐：`idx_users_created`、`idx_blog_posts_created`、`idx_reports_reporter`（新库安装后与线上一致）
+
+#### 四、验证边界
+- 配额耗尽期间：缓存 MISS 后回源仍 500，缓存无法填充——`x-dp-cache: MISS` 头出现即证明新版已部署；**配额重置（北京 10-09 08:00）后**复验：同 URL 二次请求应为 `x-dp-cache: HIT` 且 features/users/blog/custom-pages 全绿
+- 陈旧上界：features/custom-pages 60s（写后即刻 purge，同边缘节点立即生效）、users/blog 30s（无 purge）
+- 浏览器侧同时带 `Cache-Control: public, max-age=…`，客户端 30/60s 内不发起重复请求（读消耗进一步下降）
+
 ## v10.4 — 2026-10-08
 
 ### 修复：生产 500 事故——D1 免费版日读配额耗尽 · 热路径索引补齐（schema-guard 运行时自愈）
