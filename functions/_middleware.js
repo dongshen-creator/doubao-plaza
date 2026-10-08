@@ -22,6 +22,8 @@
 //   回传边缘真实 IP；仅当边缘 CF-Connecting-IP 属 CF 官方网段时采纳，直连不受影响）。
 
 import { resolveClientIp } from './api/_lib/clientip.js';
+// V10.4 热路径索引自愈（D1 日读配额事故修复）：waitUntil 非阻塞，详见 _lib/schema-guard.js
+import { ensureIndexes } from './api/_lib/schema-guard.js';
 
 const GATE_HEADER_NAME = 'X-DP-Client';
 const GATE_HEADER_VALUE = 'plaza-v1';
@@ -185,6 +187,12 @@ function uaSnippet(request) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+
+  // V10.4 热路径索引自愈：waitUntil 非阻塞（零请求延迟），每隔离体成功即停、失败 5 分钟冷却重试
+  if (env.DB) {
+    context.waitUntil(ensureIndexes(env.DB));
+  }
+
   const url = new URL(request.url);
   const path = url.pathname;
   const api = isApiPath(path);

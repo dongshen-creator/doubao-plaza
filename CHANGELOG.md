@@ -4,6 +4,48 @@
 
 ---
 
+## v10.4 — 2026-10-08
+
+### 修复：生产 500 事故——D1 免费版日读配额耗尽 · 热路径索引补齐（schema-guard 运行时自愈）
+
+反馈：用户报「Failed to load resource: the server responded with a status of 500 ()」，连登录和发消息都做不到。
+
+#### 一、根因（经 v10.3 diag-d1 诊断端点实锤）
+- 症状迷惑性：登录（`.first()` 索引点查）与列表查询（`ORDER BY` 全表扫）表现分裂；announcements 时好时坏（边缘缓存 60s 兜住）；一度误判为 schema 漂移/缺表
+- diag-d1 dump 远端 `sqlite_master`：47 张表/索引全部齐全（devices/features/custom_pages/blog_posts 均在）→ schema 无任何问题
+- 11 条复跑探测的失败项全部回传同一错误：
+  `D1_ERROR: Your account has exceeded D1's free tier daily row read limit. Upgrade to a paid plan or wait until tomorrow (midnight UTC) to continue.`
+- 即 **Cloudflare D1 免费版「每日行读取配额」被打爆**（UTC 午夜重置）：
+  - 索引点查（读 0~1 行）挤得进残余额度 → 登录/按 id 单查一直成功
+  - 全表扫列表查询行数超额度 → 稳定 500 /「服务器错误」
+  - 带边缘缓存的端点（announcements/site-settings max-age=60）命中缓存绕过 D1 → 时好时坏
+  - device/claim 500 = issueDevice 先做两次 COUNT 读撞额度（登录链路被卡的直接原因）
+
+#### 二、配额烧穿的结构性原因：热路径四处全表扫（目标表零索引）
+- `friendships`：好友页 `WHERE (user_id=? OR friend_id=?)` 全表扫（friends.js:50，原零索引）
+- `blocked_users`：黑名单 `WHERE user_id=?` 全表扫（blocked.js:47，原零索引）
+- `blog_posts`：讲堂列表 `ORDER BY bp.created_at DESC` 全表扫（blog.js:185，原零索引）
+- `users`：搜索/可发现列表 `ORDER BY created_at DESC LIMIT 500` 全表扫（users.js GET，原仅有 name_norm 等点查索引）
+- 注：`chat_messages` 全库零读取（聊天走 Supabase/Matrix），不烧 D1，故不建其索引
+
+#### 三、修复：`functions/api/_lib/schema-guard.js` 运行时索引自愈（沿用项目 ensureTables 运行时迁移先例）
+- 新增 6 条 `CREATE INDEX IF NOT EXISTS`：friendships(user_id)/(friend_id)、blocked_users(user_id)/(blocked_user_id)、blog_posts(created_at)、users(created_at)
+- `_middleware.js` 顶部 `context.waitUntil(ensureIndexes(env.DB))` 非阻塞触发，零请求延迟
+- 自愈状态机：每隔离体成功即 `done` 永不重跑；逐条执行单条失败不阻断其余；失败（含配额耗尽致建索引读表失败）冷却 5 分钟自动重试 → 跨 UTC 午夜配额重置后自动补建，无需人工干预
+- 幂等安全：仅 `CREATE INDEX IF NOT EXISTS`，零删除零改写任何数据（遵生产变更不删数据底线）
+
+#### 四、遗留与验证边界
+- 读配额耗尽期间列表查询仍会失败——**UTC 午夜（北京时间 10-09 08:00）后自动恢复**；根治可升级 D1 付费计划（需站主 Cloudflare 控制台操作，本仓库无凭据）
+- 建索引属写操作（独立配额），部署后经 diag-d1 观察 sqlite_master 出现新 idx_ 即验证自愈已执行
+- diag-d1.js（v10.3）保留为 token 门禁只读排障工具（token 见源码常量），可随时删除
+
+## v10.3 — 2026-10-08
+
+### 新增：临时只读诊断端点 `/api/diag-d1`（生产 500 排查）
+- 需 `X-DP-Diag-Token` 头（值见 `functions/api/diag-d1.js` 常量）+ 既有中间件门禁双保险，无 token 一律 404
+- 仅 SELECT 只读：dump `sqlite_master` 全量表/索引结构 + 复跑 11 条故障查询逐条回传真实 `e.message`
+- 本次事故根因即由此端点实锤（见 v10.4）；保留为常驻排障工具，可随时删除
+
 ## v10.2 — 2026-10-07
 
 ### 变更：暗红背景换玄武岩质感 · 指针着色器「微风」废除改朱砂涟漪（双明暗应景）
