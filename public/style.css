@@ -1284,10 +1284,13 @@ body.dark.theme-red{
   --np-blur:blur(18px) saturate(1.3);
   --bg-overlay:rgba(6,3,2,0.62);
   --text-on-accent:#FFF6F1;
-  --np-base-grad:
-    radial-gradient(900px 620px at 84% 108%, rgba(195,39,43,0.16) 0%, rgba(195,39,43,0) 60%),
-    radial-gradient(760px 520px at 8% 88%, rgba(201,162,39,0.06) 0%, rgba(201,162,39,0) 62%),
-    linear-gradient(158deg, #1C1512 0%, #16110F 46%, #100C0A 100%);
+  /* V10.6 纯色玄墨（用户定案：背景只要纯色，氛围交给指针水浪）：
+     ① --np-base-grad 塌缩为 #16110F 单色渐变（三层红/金 wash 废除）；
+     ② background-image 覆写 body@2134 的四层合成（base-grad + 三团 glow 辉光）→
+        仅保留单色层，body 底色即纯玄墨。
+     --glow-* 令牌不动：仍供按钮/悬浮等非背景消费方使用。 */
+  --np-base-grad:linear-gradient(#16110F,#16110F);
+  background-image:var(--np-base-grad);
   --glow-orange:rgba(195,39,43,0.16);
   --glow-cyan:rgba(201,162,39,0.07);
   --glow-violet:rgba(120,60,40,0.14);
@@ -2395,6 +2398,8 @@ body {
   opacity: .04;
   mix-blend-mode: overlay;
 }
+/* V10.6 纯色玄墨：暗色中国红连颗粒也不留——背景严格单色，质感交给指针水浪 */
+body.dark.theme-red .noise-overlay{opacity:0}
 
 /* ── L3 磨砂玻璃：主要容器统一 blur + 暖纸微光高亮边 ── */
 .activity-bar, .app-sidebar, .card, .modal, .dropdown-menu,
@@ -2827,20 +2832,16 @@ body.theme-red:not(.dark)::before{
    V10.1：加交叉纤维向 + 提线强（用户反馈暗底「黑泥」缺粗糙质感）
    V10.2：纹理换玄武岩质感（用户反馈「颜色对、纹理不对」）——
    交叉纤维两层废除，改平铺 JS 程序化生成的玄武岩贴图 var(--np-basalt)
-   （细颗粒 + 火山气孔 + 微裂纹，512²，index.html 末尾脚本生成后写入 CSS 变量；
-   贴图未就绪时回退 none，仅剩朱砂/泥金两晕，底色恒为玄墨不受影响）；
-   朱砂晕/泥金晕保留——氛围光不属「纹理」，且泥金即用户认可的描金底味 */
+   V10.6：暗红背景改「纯色玄墨」（用户定案）——玄武岩贴图 + 朱砂晕 + 泥金晕
+   整层撤除（background-image:none），氛围光全部让位给指针水浪；
+   对应的 --np-basalt 生成脚本已随之删除 */
 body.dark.theme-red::before{
   content:'';
   position:fixed;
   inset:0;
   z-index:-2;
   pointer-events:none;
-  opacity:.8;
-  background-image:
-    var(--np-basalt, none),
-    radial-gradient(680px 480px at 22% 76%, rgba(195,39,43,0.10) 0%, rgba(195,39,43,0) 68%),
-    radial-gradient(520px 400px at 88% 18%, rgba(201,162,39,0.07) 0%, rgba(201,162,39,0) 64%);
+  background-image:none;
 }
 
 /* 朱砂标题：V10.0 走 --accent-text（亮色 #C3272B 米纸 5:1；暗色提亮 #E0524A 玄墨 4.9:1） */
