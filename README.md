@@ -59,19 +59,21 @@ doubao-plaza/
 │   │   └── [[key]].js             # R2 文件代理（通过 /cdn-assets/ 路径访问 R2 对象）
 │   └── pages/
 │       └── [[id]].js              # 自定义页面渲染路由（R2 优先，回退 D1）
-├── schema.sql                     # D1 数据库初始化脚本
-├── supabase-migration.sql         # Supabase 数据库迁移脚本（唯一文件，幂等可重复执行）
-├── d1-cleanup.sql                 # D1 过期记录清理脚本
-├── TOOL_FRAMEWORK_GUIDE.md        # 网站工具框架扩展教程
+├── sql/                           # 数据库脚本（D1 + Supabase）
+│   ├── schema.sql                 # D1 数据库初始化脚本
+│   ├── supabase-migration.sql     # Supabase 数据库迁移脚本（唯一文件，幂等可重复执行）
+│   ├── d1-cleanup.sql             # D1 过期记录清理脚本
+│   ├── migrate-developers.sql     # D1 开发者表增量脚本
+│   └── migrations/                # 版本化增量迁移（v8.x–v9.x，含回滚脚本）
+├── workers/                       # Cloudflare Worker 源码（反代 cf.gallopingroad.top → Pages）
+├── docs/                          # 开发文档与素材
+│   ├── TOOL_FRAMEWORK_GUIDE.md    # 网站工具框架扩展教程
+│   └── screenshots/               # 历史开发截图
+├── AGENTS.md                      # AI 协作规范（目录结构、关键规则与坑）
 ├── README.md                      # 本文件
-└── CHANGELOG.md                   # 更新说明
+└── CHANGELOG.md                   # 版本化更新日志
 
-# 独立工具（与主站分离，可单独部署）
-pages（与网站项目无关）/
-├── tavern/
-│   └── tavern.html                # Tavern 角色扮演聊天工具（单体 HTML 应用）
-└── tavern-standalone/
-    └── index.html                 # Tavern 精简版
+> 独立工具：Tavern 角色扮演聊天工具（单体 HTML 应用）现位于 `public/tavern.html`，与主站共用部署；也可按「部署方式」一节单独静态托管。
 ```
 
 ## 部署教程
@@ -91,7 +93,7 @@ pages（与网站项目无关）/
 1. 在 GitHub 上创建一个新仓库（如 `doubao-plaza`），设为 Public 或 Private 均可
 2. 将项目所有文件上传到该仓库
 
-**验证**：仓库根目录下能看到 `public/`、`functions/`、`schema.sql`、`supabase-migration.sql` 等文件。
+**验证**：仓库根目录下能看到 `public/`、`functions/`、`sql/`、`docs/` 等目录。
 
 ---
 
@@ -107,7 +109,7 @@ pages（与网站项目无关）/
 
 5. 初始化数据库表结构：
    - 进入左侧 **SQL Editor** → **New query**
-   - 打开项目根目录的 `supabase-migration.sql` 文件
+   - 打开项目 `sql/` 目录下的 `supabase-migration.sql` 文件
    - 全选复制，粘贴到 SQL Editor 中
    - 点击 **Run**（或按 Ctrl+Enter）执行
    - 等待执行完成，应显示 `Success`，无报错
@@ -160,12 +162,12 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 3. 点击 **Create database**
 4. 数据库名称填 `doubao-plaza`，点击创建
 5. 创建后，进入数据库详情页 → **Console** 标签
-6. 打开项目根目录的 `schema.sql` 文件，全选复制
+6. 打开项目 `sql/` 目录下的 `schema.sql` 文件，全选复制
 7. 粘贴到 D1 Console 的输入框中，点击 **Execute**
 
    > **注意**：D1 Web Console 一次只能执行一条语句，如果报 `malformed request` 错误，请逐条粘贴执行（每条 `CREATE TABLE` / `CREATE INDEX` 是一条语句，以分号结尾）。
 
-8. 打开 `d1-cleanup.sql`，同样在 D1 Console 中逐条执行
+8. 打开 `sql/d1-cleanup.sql`，同样在 D1 Console 中逐条执行
 
 9. 记录 **Database ID**（在数据库详情页的 Overview 中可以看到），稍后要用
 
@@ -350,7 +352,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - **AI 工具**（基于 Cloudflare Workers AI）：AI对话（多轮上下文，历史存 localStorage）、AI翻译、AI总结、AI画图
 - **免费 API 工具**：天气查询（3天预报）、二维码生成、IP查询、汇率查询、随机笑话、每日名言、头像生成、数学计算（求导/积分/因式分解等）
 - **页面类工具**：小肥羊讲堂（博客平台）— 知乎风格 UI，支持发布/编辑/删除文章、评论、公告
-- 工具框架支持 5 种类型：ai_chat / ai_image / proxy_get / direct_url / page（详见 `TOOL_FRAMEWORK_GUIDE.md`）
+- 工具框架支持 5 种类型：ai_chat / ai_image / proxy_get / direct_url / page（详见 `docs/TOOL_FRAMEWORK_GUIDE.md`）
 - 开发者可从工具注册表中选择工具创建为功能卡片，用户点击后在工具面板中交互式使用
 - AI 对话历史存储在浏览器本地，不占用 D1 数据库空间
 
@@ -473,12 +475,13 @@ Tavern 的链接导入/下载（角色卡 JSON、ZIP 等）优先走 `functions/
 - 所有颜色/背景/边框均通过变量定义（129 处内联颜色已替换为 CSS 变量）
 - `localStorage` 保存用户偏好，首次访问跟随系统设置
 
-### SQL 文件说明
-- `schema.sql` — D1 数据库初始化，在 Cloudflare D1 Console 中执行
-- `supabase-migration.sql` — Supabase 数据库迁移，在 Supabase SQL Editor 中执行，**幂等可重复执行**
-- `d1-cleanup.sql` — D1 过期记录清理，可定期在 D1 Console 中手动执行
+### SQL 文件说明（均在 `sql/` 目录下）
+- `sql/schema.sql` — D1 数据库初始化，在 Cloudflare D1 Console 中执行
+- `sql/supabase-migration.sql` — Supabase 数据库迁移，在 Supabase SQL Editor 中执行，**幂等可重复执行**
+- `sql/d1-cleanup.sql` — D1 过期记录清理，可定期在 D1 Console 中手动执行
+- `sql/migrations/` — 版本化增量迁移（v8.x–v9.x 逐版本脚本与回滚脚本，按需执行）
 
-> 项目曾使用 8 个分散的 SQL 文件，现已合并为上述 3 个文件。旧文件已删除。
+> 项目曾使用 8 个分散的 SQL 文件，后合并为 3 个主文件并统一收纳到 `sql/` 目录；`sql/migrations/` 保留历史版本化增量脚本。
 
 ---
 

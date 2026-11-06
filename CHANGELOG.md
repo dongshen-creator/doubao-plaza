@@ -4,6 +4,40 @@
 
 ---
 
+## v10.7 — 2026-10-27
+
+### 整理：仓库目录结构规范化（零功能改动，`public/` 与 `functions/` 未动一字）
+
+背景：站点部署只依赖 `public/`（静态产物）与 `functions/`（Pages Functions），仓库其余文件均为脚本/文档，借机把根目录散落的 SQL 脚本、教程与截图归档，令结构整洁优雅。
+
+#### 移动清单（git mv，历史可追溯）
+- `schema.sql` / `supabase-migration.sql` / `migrate-developers.sql` / `d1-cleanup.sql` → `sql/`
+- `migrations/`（v8.x–v9.x 六个版本化脚本含回滚）→ `sql/migrations/`
+- `TOOL_FRAMEWORK_GUIDE.md` → `docs/`
+- 四张无引用历史截图（cloud-import-modal / host-no-token / tavern-top / theme-light.png）→ `docs/screenshots/`
+- `developer-sql-reference/`（.gitignore 本地文档）→ `docs/developer-sql-reference/`
+
+#### 安全性确认（移动前逐项核实）
+- `functions/` 与 `public/index.html` 中对 SQL 文件名的引用均为注释/控制台提示（如「请重跑 schema.sql」），无运行时文件读取，移动零影响
+- 四张截图全仓库零引用（README / AGENTS / CHANGELOG / 前端均未嵌入）
+- `public/_headers`、`public/_routes.json`、`workers/`（反代 Worker）未动，部署路由与 CSP 不受影响
+- `public/demo.html`（未跟踪的着色器 Demo）保持原位未动
+
+#### 修改文件
+| 文件 | 变更 |
+|---|---|
+| `sql/` | 新建目录：四个主 SQL 脚本自根目录移入；`sql/migrations/` 收纳原 `migrations/` 六脚本 |
+| `docs/` | 新建目录：TOOL_FRAMEWORK_GUIDE.md、screenshots/ 四张截图、developer-sql-reference/（本地，不入库） |
+| `README.md` | 项目结构树重写（sql/、workers/、docs/ 入树，stale 的 pages/ 独立工具段改为实情注记）；部署教程三处路径改 `sql/…`；SQL 文件说明补 migrations/；工具教程链接改 `docs/` |
+| `AGENTS.md` | 目录结构同步（sql/、sql/migrations/、workers/、docs/）；文档与 SQL 路径更新；修正两处过时描述：「最新 v5.13」→「最新 v10.7」、「本项目不是 git 仓库」→ 实情（remote：dongshen-creator/doubao-plaza） |
+| `CHANGELOG.md` | 本节 |
+
+#### 验证记录
+- `git status`：全部为 R（重命名）+ 文档 M，`public/`、`functions/`、`workers/` 零 diff
+- 全仓库 grep 确认无代码引用旧的根目录 SQL/截图路径（仅注释与文档，均已同步或本就泛指文件名）
+
+---
+
 ## v10.6 — 2026-10-10
 
 ### 重写：中国红指针着色器「水浪翻涌 + 薄膜干涉」（暗色玄墨纯底）+ V10.6.1 收敛
