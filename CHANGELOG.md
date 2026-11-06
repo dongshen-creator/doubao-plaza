@@ -4,6 +4,56 @@
 
 ---
 
+## v10.8 — 2026-11-06
+
+### 接入 freserafim（chocoChat）图床/文件床：逆向网页端上传链路，替换已失效的 picgo.net 与 img.nickyam.com
+
+用户反馈：用作图床/文件床的几个 API 全部失效；「功能」页外链 freserafim 是很好的图床但没有 API，要求自行想办法接入，另接一个免费文件床。
+
+#### 一、失效排查（2026-11-06 实测）
+| 服务 | 状态 | 证据 |
+|---|---|---|
+| picgo.net（Chevereto API） | ❌ 失效 | `www.picgo.net/api/1/upload` 返回 301 迁移 |
+| img.nickyam.com | ❌ 失效 | 连接失败（HTTP 000） |
+| img.scdn.io | ✅ 可用 | 上传成功（返回域已变为 img.cdn1.vip，前端取完整 url 字段不受影响） |
+| tmpfile.link | ✅ 可用 | `/api/upload` 正常返回直链（用户侧"用不了"或为区域/间歇问题，降为兜底） |
+| 0x0.st | ❌ 排除 | 503「uploads disabled（AI botnet spam）」无恢复时间表 |
+| gofile.io | ❌ 排除 | 可上传但直链需 guest token cookie，无法在聊天 `<img>` 热链 |
+| catbox.moe | ❌ 排除 | 本地（国内网络）连接重置，无法预先验证 |
+
+#### 二、freserafim（chocoChat）逆向接入
+- 定位：「功能」页外链 `chat.freserafim.com` = chocoChat（Rails 应用），用户以聊天附件作图床使用，无官方 API
+- 抓取其网页端源码逆向三步上传链路，新端点 `POST /api/upload/freserafim` 服务端复刻（浏览器不直连第三方）：
+  ① `GET /zh-CN/` → 取 CSRF 令牌（meta）+ 会话 Cookie
+  ② `POST /zh-CN/rooms` JSON `{room:{name,expires_at}}` 建存储房（+30 天，名字 `doubao-plaza-bed`）
+  ③ `POST /zh-CN/rooms/{id}/images` multipart 字段 `image` → `{url}` 直链
+- 防护：Bearer 鉴权（对齐 picgo/tmpfile）、≤20MB（实测余量内）、屏蔽 SVG/HTML/可执行（对齐 tmpfile.js）、无扩展名按 MIME 补后缀（直链后缀决定前端渲染判定）、isolate 级缓存存储房（7 天复用，403/404/422 房间失效自动重建重试一次）、上游 60s 超时
+- 直链形态 `chat.freserafim.com/files/{uuid}.{ext}`：免登录公开热链、Content-Type 正确、字节一致
+
+#### 三、前端链路重排（index.html）
+- 图片/视频链：**freserafim（新主通道）→ img.scdn.io 直连 → tmpfile.link 兜底**；移除 nickyam/picgo 两段死通道（Function 端点文件保留不删，picgo 前端不再调用）
+- 文件链：**freserafim（新主通道）→ tmpfile.link 兜底**
+- 博客编辑器图床提示与聊天背景错误文案同步（Nickyam → chocoChat）；`MEDIA_IMG_HOSTS` 保留 nickyam（旧消息存量链接渲染兼容）
+- CSP 零改动：`img-src`/`media-src`/`connect-src` 均为 `https:` 通配，新域天然放行
+
+#### 修改文件
+| 文件 | 变更 |
+|---|---|
+| `functions/api/upload/freserafim.js` | 新增：chocoChat 服务端直传端点（会话/存储房 isolate 缓存 + 房间失效自愈重建） |
+| `public/index.html` | 图片链与文件链接入 freserafim 主通道；移除 nickyam/picgo 死通道步骤；两处图床提示、一处 toast、一处背景图错误文案更新 |
+| `README.md` | 文件存储架构表、项目结构树、部署说明、功能清单、技术说明、FAQ 共 8 处上传链描述更新 |
+| `CHANGELOG.md` | 本节 |
+
+#### 验证记录（Node 24 端到端仿真，2026-11-06）
+- 三步链路仿真（GET 会话 → 建房 → 上传 → 公网回读）：**ALL_PASS**（直链 200 / image/png / 74/74 字节一致）
+- 大小探界：2MB 与 20MB 二进制均 200 OK（20MB/5.6s）；文件名决定直链后缀（.png/.bin 实测）
+- 过期实验：120 秒寿命房间到期后，文件直链仍 200（长期持久性未验证，链路保留 tmpfile 兜底）
+- `node --check functions/api/upload/freserafim.js`：PASS
+- index.html 内联脚本语法门禁（9 块，剔除 ld+json 与外链）：**ALL_PASS**
+- 部署后待人工复验：聊天发图/发文件实际走 freserafim 直链、兜底切换、博客编辑器提示文案
+
+---
+
 ## v10.7 — 2026-10-27
 
 ### 整理：仓库目录结构规范化（零功能改动，`public/` 与 `functions/` 未动一字）

@@ -4389,7 +4389,7 @@ function blogShowEditor(container, postId) {
         '<div style="flex:1;min-width:200px">' +
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">封面图片URL（可选）</label>' +
           '<input id="blogCoverInput" type="text" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px">' +
-          '<div style="font-size:12px;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:lightbulb-fill"></iconify-icon> 建议先上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
+          '<div style="font-size:12px;color:var(--text-faint);margin-top:4px"><iconify-icon icon="ph:lightbulb-fill"></iconify-icon> 建议先上传到图床（如 <a href="https://chat.freserafim.com/zh-CN/" target="_blank" style="color:var(--accent)">chocoChat</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a> 或 <a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），拿到链接后粘贴到这里</div>' +
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -4400,7 +4400,7 @@ function blogShowEditor(container, postId) {
         '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">正文 ' +
         '<span style="font-size:12px;font-weight:400;color:var(--text-faint)">（支持 LaTeX：用 $...$ 行内公式，$$...$$ 独立公式）</span>' +
         '</label>' +
-        '<div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px"><iconify-icon icon="ph:camera-fill"></iconify-icon> <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://img.nickyam.com" target="_blank" style="color:var(--accent)">Nickyam</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
+        '<div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;padding:6px 10px;background:var(--bg-hover);border-radius:6px"><iconify-icon icon="ph:camera-fill"></iconify-icon> <b>图片上传提示</b>：请先将图片上传到图床（如 <a href="https://chat.freserafim.com/zh-CN/" target="_blank" style="color:var(--accent)">chocoChat</a>、<a href="https://imgse.com" target="_blank" style="color:var(--accent)">路过图床</a>、<a href="https://smms.app" target="_blank" style="color:var(--accent)">SMMS</a>），获取直链后用编辑器工具栏的"图片"按钮插入链接。请勿直接上传本地图片，以免占用网站存储资源。</div>' +
         '<textarea id="blogContentTextarea" style="width:100%;height:400px;display:none"></textarea>' +
       '</div>' +
       '<div style="margin-bottom:16px">' +
@@ -4551,7 +4551,7 @@ function initBlogSunEditor(textarea) {
     onChange: function() { blogScheduleDraftSave(); },
     onImageUpload: function(files, info, core) {
       // 阻止本地文件上传，提示用户使用图床
-      toast('请勿直接上传图片。请先上传到图床（如 Nickyam、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
+      toast('请勿直接上传图片。请先上传到图床（如 chocoChat、路过图床、SMMS），获取链接后用"图片"按钮插入URL', 'error');
       if (window.__blogSunEditor && window.__blogSunEditor.core) {
         try { window.__blogSunEditor.core.initImageSelect(); } catch(e) {}
       }
@@ -9328,10 +9328,26 @@ async function safeJsonParse(response) {
 // 文件上传（非图片 → tmpfile.link 文件存储）
 // ═══════════════════════════════════════════════════════
 
-// 图片上传：img.scdn.io 直连（project2.0 验证可用）→ picgo.net Function → tmpfile.link
+// 图片/视频上传：freserafim 图床（V10.8 主通道，Function 服务端转发）→ img.scdn.io 直连 → tmpfile.link 兜底
+// V10.8：img.nickyam.com（连接失败）与 picgo.net（API 迁移 301）已从链路移除；两个 Function 端点保留但不再调用
 async function uploadImageToPicgo(file) {
   var url = null, errors = [];
   var isVideo = file.type.startsWith('video/');
+
+  // 0. freserafim（功能页外链图床 chocoChat，无官方 API，V10.8 逆向网页端链路接通；图片/视频/音频均可，≤20MB）
+  try {
+    var frForm = new FormData();
+    frForm.append('file', file);
+    var frRes = await fetch('/api/upload/freserafim', {
+      method: 'POST',
+      body: frForm,
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+      signal: AbortSignal.timeout(45000)
+    }).then(safeJsonParse);
+    if (frRes && frRes.success && frRes.url) { url = frRes.url; }
+    else if (frRes && frRes.error) errors.push('freserafim: ' + frRes.error);
+    else errors.push('freserafim: 响应异常');
+  } catch(e) { errors.push('freserafim: ' + e.message); console.warn('freserafim upload failed:', e); }
 
   // 1. img.scdn.io（前端直连，无需 API Key，支持 CORS）
   //    project2.0 一直使用此图床，稳定可用
@@ -9346,35 +9362,7 @@ async function uploadImageToPicgo(file) {
     } catch(e) { errors.push('img.scdn.io: ' + e.message); console.warn('img.scdn.io upload failed:', e); }
   }
 
-  // 1.5. img.nickyam.com（基于 Telegraph 的免费图床，前端直连，无需 API Key）
-  if (!url && file.type.startsWith('image/')) {
-    try {
-      var nyForm = new FormData();
-      nyForm.append('file', file);
-      var nyRes = await fetch('https://img.nickyam.com/upload', { method: 'POST', body: nyForm }).then(safeJsonParse);
-      if (nyRes && Array.isArray(nyRes) && nyRes[0] && nyRes[0].src) {
-        url = 'https://img.nickyam.com' + nyRes[0].src;
-      } else if (nyRes && nyRes.error) {
-        errors.push('img.nickyam.com: ' + (typeof nyRes.error === 'string' ? nyRes.error : '上传失败'));
-      } else {
-        errors.push('img.nickyam.com: 响应异常');
-      }
-    } catch(e) { errors.push('img.nickyam.com: ' + e.message); console.warn('img.nickyam.com upload failed:', e); }
-  }
-
-  // 2. picgo.net 备选（通过 Cloudflare Function 服务端转发）
-  if (!url && file.type.startsWith('image/')) {
-    try {
-      var pForm = new FormData();
-      pForm.append('file', file);
-      var pRes = await fetch('/api/upload/picgo', { method: 'POST', body: pForm, headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') } }).then(safeJsonParse);
-      if (pRes && pRes.success && pRes.url) { url = pRes.url; }
-      else if (pRes && pRes.error) errors.push('picgo.net: ' + pRes.error);
-      else errors.push('picgo.net: 响应异常');
-    } catch(e) { errors.push('picgo.net: ' + e.message); console.warn('picgo.net upload failed:', e); }
-  }
-
-  // 3. tmpfile.link 最终兜底（通过 Cloudflare Function 服务端转发）
+  // 2. tmpfile.link 最终兜底（通过 Cloudflare Function 服务端转发）
   if (!url) {
     try {
       var tfForm = new FormData();
@@ -9399,11 +9387,26 @@ async function uploadImageToPicgo(file) {
   return { url: url, isVideo: isVideo };
 }
 
-// 文件上传：tmpfile.link 专用端点
+// 文件上传：freserafim（V10.8 主通道，免费、直链可公开热链）→ tmpfile.link 兜底（均 Function 服务端转发）
 async function uploadFileToTmpfile(file) {
   var url = null, errors = [];
 
-  // 1. tmpfile.link（通过专用 Cloudflare Function 服务端转发）
+  // 1. freserafim（功能页外链图床 chocoChat，V10.8 逆向接入；任意文件 ≤20MB）
+  try {
+    var frForm = new FormData();
+    frForm.append('file', file);
+    var frRes = await fetch('/api/upload/freserafim', {
+      method: 'POST',
+      body: frForm,
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('dp_token') || '') },
+      signal: AbortSignal.timeout(45000)
+    }).then(safeJsonParse);
+    if (frRes && frRes.success && frRes.url) { url = frRes.url; }
+    else if (frRes && frRes.error) errors.push('freserafim: ' + frRes.error);
+    else errors.push('freserafim: 响应异常');
+  } catch(e) { errors.push('freserafim: ' + e.message); console.warn('freserafim upload failed:', e); }
+
+  // 2. tmpfile.link（通过专用 Cloudflare Function 服务端转发）
   try {
     var tfForm = new FormData();
     tfForm.append('file', file);
@@ -13184,7 +13187,7 @@ function uploadChatBgFallback(file, status) {
     })
     .catch(function(err) {
       console.warn('tmpfile.link 上传失败:', err);
-      if (status) status.textContent = '上传失败：picgo.net 和 tmpfile.link 均不可用，可尝试手动输入URL';
+      if (status) status.textContent = '上传失败：img.scdn.io 和 tmpfile.link 均不可用，可尝试手动输入URL';
       toast('自动上传失败，请手动输入图片URL', 'error');
     });
 }

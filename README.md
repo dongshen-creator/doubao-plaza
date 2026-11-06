@@ -11,7 +11,7 @@
 | 数据库（账户/社交） | Cloudflare D1 (SQLite) | 用户、好友、举报、公告、频道元数据 |
 | 数据库（聊天消息） | Supabase (PostgreSQL) | 消息存储、表情反应、实时推送 |
 | 实时通信 | Supabase Realtime | WebSocket 消息推送 + 前端轮询兜底 |
-| 文件存储 | picgo.net + tmpfile.link + Cloudflare R2 | 聊天图片/文件上传（picgo.net 优先 + tmpfile.link 第二 + R2 兜底）+ 开发者文件托管（Supabase Storage） |
+| 文件存储 | freserafim(chocoChat) + img.scdn.io + tmpfile.link + Cloudflare R2 | 聊天图片/文件上传（freserafim 优先 + img.scdn.io 直连 + tmpfile.link 兜底）+ 开发者文件托管（Supabase Storage） |
 | 部署 | Cloudflare Pages | 边缘网络部署，全球加速 |
 
 ## 项目结构
@@ -52,7 +52,8 @@ doubao-plaza/
 │   │   ├── moss/voice-generations.js # MOSS 声线设计生成端点（文本+风格描述）
 │   │   ├── pages/upload.js        # 文件上传 API（R2 兼容，前端已改用 Supabase Storage）
 │   │   ├── upload/image.js        # 聊天文件/图片上传 API（R2 存储，兜底）
-│   │   ├── upload/picgo.js        # picgo.net 图床上传 API（图片专用，服务端转发）
+│   │   ├── upload/freserafim.js   # freserafim(chocoChat) 图床/文件床上传 API（V10.8 主通道，服务端转发）
+│   │   ├── upload/picgo.js        # picgo.net 图床上传 API（已失效弃用，前端不再调用，文件保留）
 │   │   ├── upload/tmpfile.js      # tmpfile.link 文件上传 API（文件专用，服务端转发）
 │   │   └── presence.js            # 在线状态心跳 API
 │   ├── cdn-assets/
@@ -122,7 +123,7 @@ doubao-plaza/
    - 名称填 `pages`，勾选 **Public bucket**（公开访问）
    - 点击 **Create bucket**
 
-   > 只需要创建 `pages` 一个桶。聊天图片上传优先使用 picgo.net 图床，tmpfile.link 作为第二选择，R2 作为兜底，不需要额外存储桶。
+   > 只需要创建 `pages` 一个桶。聊天图片上传优先使用 freserafim 图床（chocoChat，V10.8 接入），img.scdn.io / tmpfile.link 作为备选，不需要额外存储桶。
 
 **验证**：
 - SQL Editor 中执行 `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`，应看到 `chat_rooms`、`chat_messages`、`public_channels` 等约 15 张表
@@ -210,7 +211,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
    - **R2 bucket**: 选择刚创建的 `doubao-plaza-assets`
 5. 点击 **Save**
 
-> R2 绑定后，聊天上传的文件存储在 `chat-assets/{userId}/{timestamp}-{filename}` 路径下，通过 `/cdn-assets/` 路径访问。图片上传优先使用 picgo.net 图床（Chevereto API），tmpfile.link 作为第二选择（支持视频和文件），R2 作为兜底方案。
+> R2 绑定后，聊天上传的文件存储在 `chat-assets/{userId}/{timestamp}-{filename}` 路径下，通过 `/cdn-assets/` 路径访问。图片上传优先使用 freserafim 图床（V10.8 逆向接入 chocoChat），img.scdn.io 直连为第二选择，tmpfile.link 兜底。
 
 ---
 
@@ -325,7 +326,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - 私聊 + 频道群聊
 - 实时消息推送（Supabase Realtime + 轮询兜底）
 - HTML 消息渲染（白名单净化器，支持 `<a>`、`<img>`、`<b>`、`<table>` 等 30+ 标签）
-- 图片/文件上传（picgo.net 图床优先 + tmpfile.link 第二 + Cloudflare R2 兜底，tmpfile.link 文件支持 iframe 预览嵌入）
+- 图片/文件上传（freserafim 图床优先 + img.scdn.io 第二 + tmpfile.link 兜底，tmpfile.link 文件支持 iframe 预览嵌入）
 - 在线人数检测（Supabase user_presence 心跳，5 分钟超时）
 - 消息撤回/表情反应
 - @提及 / 回复引用
@@ -461,9 +462,9 @@ Tavern 的链接导入/下载（角色卡 JSON、ZIP 等）优先走 `functions/
 ### 数据库分工
 - **D1 (SQLite)**：账户体系、好友关系、黑名单、举报、公告、频道元数据
 - **Supabase (PostgreSQL)**：聊天消息、表情反应、未读计数、实时推送、在线状态（user_presence）、频道公告、公开频道
-- **picgo.net**：聊天图片上传首选图床（Chevereto API，需 API Key）
+- **freserafim（chocoChat）**：聊天图片/文件上传首选图床（V10.8 逆向网页端上传链路接入，免费，直链可公开热链，≤20MB）
 - **tmpfile.link**：聊天图片/视频/文件上传第二选择（匿名上传，支持 iframe 预览嵌入）
-- **Cloudflare R2**：聊天图片/文件上传兜底存储（picgo.net 和 tmpfile.link 均失败时回退使用，通过 `/cdn-assets/` 路径访问）
+- **Cloudflare R2**：聊天图片/文件上传兜底存储端点（`/api/upload/image`，通过 `/cdn-assets/` 路径访问）
 - **Supabase Storage**：开发者文件托管（`pages` 桶）
 
 ### 消息清理
@@ -497,7 +498,7 @@ A: 检查 Supabase 的 `chat_messages` 表是否已创建（执行了 `supabase-
 A: 说明 `user_presence` 表尚未创建。请在 Supabase SQL Editor 中执行 `supabase-migration.sql`（包含 `user_presence` 表创建语句），执行后刷新页面即可。
 
 **Q: 聊天上传图片/文件后无法显示（404）？**
-A: 图片上传优先使用 picgo.net 图床（Chevereto API），tmpfile.link 作为第二选择，失败时回退到 Cloudflare R2。若 R2 上传成功但 URL 返回 404，检查 Cloudflare Pages 设置中是否已绑定 R2 存储桶（变量名 `PAGES_BUCKET`），并确认 `_routes.json` 中 `include` 数组包含 `/cdn-assets/*`。
+A: 图片上传优先使用 freserafim 图床（chocoChat），img.scdn.io 作为第二选择，tmpfile.link 兜底。若使用 R2 兜底端点上传成功但 URL 返回 404，检查 Cloudflare Pages 设置中是否已绑定 R2 存储桶（变量名 `PAGES_BUCKET`），并确认 `_routes.json` 中 `include` 数组包含 `/cdn-assets/*`。
 
 **Q: 聊天中发送 HTML 标签消息显示为纯文本？**
 A: 消息中包含 `<` 字符时会触发 HTML 渲染流程（经 `sanitizeHtml()` 白名单净化）。确保消息格式正确（如 `<a href="https://example.com">链接</a>`），且未包含被过滤的危险标签（`script`、`iframe` 等）。
