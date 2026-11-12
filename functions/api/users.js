@@ -10,6 +10,7 @@ import { verifyChallenge, consumeChallenge, isTorExitIP } from './_lib/pow.js';
 import { normalizeName } from './_lib/name.js';
 import {
   resolveAuthDevice,
+  observeDeviceSignals,
   deviceSetCookie,
   logRiskEvent,
   cfMeta,
@@ -313,7 +314,7 @@ export async function onRequestPost(context) {
 
     // V8.0 第一方设备标记校验（服务端签发 __Host- Cookie，客户端无法编造有效标记）
     // 放在所有业务校验之后、PoW 消耗之前：失败时不再浪费已解出的挑战
-    const dev = await resolveAuthDevice(env, context.request, clientIP);
+    const dev = await resolveAuthDevice(env, context.request, clientIP, body);
     if (dev.rateLimited) {
       return Response.json({ success: false, error: '设备签发过于频繁，请稍后再试' }, { status: 429 });
     }
@@ -330,7 +331,7 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '该设备/浏览器已注册过账号，每个设备只能注册一个账号' });
     }
     // 之后的失败路径也要把新标记发回浏览器，避免重试时重复签发耗尽 IP 限流额度
-    const devCookie = (dev.fresh && dev.raw) ? deviceSetCookie(dev.raw) : null;
+    const devCookie = dev.header || null;
     const errWithCookie = (error, status = 200) => {
       const h = { 'Content-Type': 'application/json' };
       if (devCookie) h['Set-Cookie'] = devCookie;
@@ -378,19 +379,23 @@ export async function onRequestPost(context) {
 
     // 创建会话（30天有效期）
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
     await env.DB.prepare(
-      `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
-    ).bind(user.id, token, expiresAt).run();
+      `INSERT INTO sessions (user_id, token, expires_at, device_id, created_ip, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(user.id, token, expiresAt, dev.device && dev.device.id, clientIP).run();
 
     // 签发 Supabase JWT（用于 RLS 鉴权）
     const supabaseToken = await signSupabaseJWT(user.id, env);
 
+    // V11.0：注册成功后记录多维设备信号，供清 Cookie 后的受控恢复与后台关联分析。
+    await observeDeviceSignals(env, dev.device && dev.device.id, body, context.request, clientIP);
     // V8.0：注册风险事件落库 + 新设备标记下发（已有标记的浏览器无需重发）
     await logRiskEvent(env, {
       event_type: 'register', user_id: user.id, device_id: dev.device && dev.device.id,
       ip: clientIP, ...cmeta, ua: regUA, action: 'allowed',
-      risk_score: dev.fresh ? 10 : 0, detail: { fresh_device: !!dev.fresh },
+      risk_score: dev.recovered ? 25 : (dev.fresh ? 10 : 0),
+      detail: { fresh_device: !!dev.fresh && !dev.recovered, recovered_device: !!dev.recovered, match_score: dev.matchScore || 0 },
     });
     const respHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
     if (dev.fresh && dev.raw) respHeaders['Set-Cookie'] = deviceSetCookie(dev.raw);

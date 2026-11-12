@@ -5,9 +5,8 @@
 // - 领取行为写入 risk_events（fresh / 重领 都是风控信号，不阻塞正常用户）
 
 import {
-  getDeviceByCookie,
-  issueDevice,
-  deviceSetCookie,
+  resolveAuthDevice,
+  observeDeviceSignals,
   logRiskEvent,
   getClientIp,
   cfMeta,
@@ -24,47 +23,42 @@ export async function onRequestPost(context) {
   const ua = request.headers.get('User-Agent') || '';
 
   try {
-    const { raw, device } = await getDeviceByCookie(env, request);
-
-    if (device) {
-      if (device.status === 'banned') {
-        return Response.json({ success: false, error: '设备已被限制' }, { status: 403 });
-      }
-      env.DB.prepare(`UPDATE devices SET last_seen_at = datetime('now') WHERE id = ?`)
-        .bind(device.id).run().catch(() => {});
-      return Response.json({ success: true, fresh: false });
+    const hints = await request.json().catch(() => ({}));
+    const dev = await resolveAuthDevice(env, request, ip, hints);
+    if (dev.banned) {
+      await logRiskEvent(env, {
+        event_type: 'device_claim', device_id: dev.device && dev.device.id,
+        ip, ...meta, ua, action: 'blocked', risk_score: 70,
+        detail: { reason: 'banned_device', recovered: !!dev.recovered },
+      });
+      return Response.json({ success: false, error: '设备已被限制' }, { status: 403 });
+    }
+    if (dev.rateLimited || !dev.device) {
+      await logRiskEvent(env, {
+        event_type: 'device_claim', ip, ...meta, ua,
+        action: 'blocked', risk_score: 30, detail: { reason: 'claim_rate_limited' },
+      });
+      return Response.json({ success: false, error: '设备签发过于频繁，请稍后再试' }, { status: 429 });
     }
 
-    const issued = await issueDevice(env, { ip });
-    if (!issued.ok) {
-      if (issued.error === 'rate_limited') {
-        await logRiskEvent(env, {
-          event_type: 'device_claim',
-          ip, ...meta, ua, action: 'blocked', risk_score: 30,
-          detail: { reason: 'claim_rate_limited' },
-        });
-        return Response.json({ success: false, error: '设备签发过于频繁，请稍后再试' }, { status: 429 });
-      }
-      return Response.json({ success: false, error: '设备签发失败，请重试' }, { status: 500 });
-    }
-
+    await observeDeviceSignals(env, dev.device.id, hints, request, ip);
     await logRiskEvent(env, {
-      event_type: 'device_claim',
-      device_id: issued.id,
-      ip, ...meta, ua, action: 'allowed', risk_score: 5,
-      detail: { fresh: true },
+      event_type: 'device_claim', device_id: dev.device.id,
+      ip, ...meta, ua, action: 'allowed', risk_score: dev.recovered ? 25 : (dev.fresh ? 5 : 0),
+      canvas_hash: hints.canvas_hash ? String(hints.canvas_hash).slice(0, 64) : null,
+      detail: {
+        fresh: !!dev.fresh && !dev.recovered,
+        recovered: !!dev.recovered,
+        match_score: dev.matchScore || 0,
+        matched_signals: dev.matchedSignals || [],
+      },
     });
 
+    const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+    if (dev.header) headers['Set-Cookie'] = dev.header;
     return new Response(
-      JSON.stringify({ success: true, fresh: true }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-          'Set-Cookie': deviceSetCookie(issued.raw),
-        },
-      }
+      JSON.stringify({ success: true, fresh: !!dev.fresh && !dev.recovered, recovered: !!dev.recovered }),
+      { status: 200, headers }
     );
   } catch (e) {
     console.error('[DEVICE] claim error:', e.message);

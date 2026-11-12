@@ -15,3 +15,10 @@ DELETE FROM chat_admins WHERE room_id NOT IN (SELECT id FROM chat_rooms);
 DELETE FROM chat_muted WHERE room_id NOT IN (SELECT id FROM chat_rooms);
 DELETE FROM chat_banned WHERE room_id NOT IN (SELECT id FROM chat_rooms);
 DELETE FROM chat_channel_settings WHERE room_id NOT IN (SELECT id FROM chat_rooms);
+
+-- V11.0：风控/认证信号保留 90 天；只清理已明确过期的数据，不动活跃账号与设备。
+DELETE FROM risk_events WHERE created_at < datetime('now', '-90 days');
+DELETE FROM security_events WHERE created_at < datetime('now', '-90 days');
+DELETE FROM login_attempts WHERE created_at < datetime('now', '-90 days');
+DELETE FROM device_signals WHERE last_seen_at < datetime('now', '-90 days');
+DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now');

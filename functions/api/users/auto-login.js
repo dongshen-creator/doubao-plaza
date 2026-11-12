@@ -1,14 +1,28 @@
 // Cloudflare Pages Function - Auto Login
 // POST /api/users/auto-login
+// V11.0：会话轮换前必须确认设备。Cookie 被清除时通过多维历史信号恢复原设备；
+// 强信号不足或设备被封禁时拒绝续期并要求密码重新登录，避免仅清 Cookie / 换代理绕过处置。
 
-import { signSupabaseJWT, generateToken, getAuthUserId } from '../_lib/jwt.js';
+import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
 import { resolveClientIp } from '../_lib/clientip.js';
+import {
+  ensureDeviceSignalSchema,
+  resolveAuthDevice,
+  observeDeviceSignals,
+  logRiskEvent,
+  cfMeta,
+} from '../_lib/device.js';
 
 // 统一 no-store JSON 响应：含 token 的响应禁止任何缓存
 function jsonNoStore(data, init = {}) {
   return new Response(JSON.stringify(data), {
     status: init.status || 200,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(init.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      ...(init.headers || {}),
+    },
   });
 }
 
@@ -28,67 +42,133 @@ async function checkAndUpdatePunishment(env, userId) {
   return user;
 }
 
+function deviceHeaders(devRes) {
+  return devRes && devRes.header ? { 'Set-Cookie': devRes.header } : {};
+}
+
 export async function onRequestPost(context) {
-  // 首先检查环境变量
   if (!context.env.DB) {
-    return new Response(JSON.stringify({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonNoStore({ success: false, error: '数据库未绑定，请在Cloudflare Pages设置中绑定D1数据库' }, { status: 500 });
   }
 
   try {
-    const { env } = context;
-    const body = await context.request.json().catch(() => ({}));
-    const { token } = body;
+    const { env, request } = context;
+    const body = await request.json().catch(() => ({}));
+    const token = String(body.token || '');
+    if (!token) return jsonNoStore({ success: false, error: '无会话token' });
 
-    if (!token) {
-      return jsonNoStore({ success: false, error: '无会话token' });
+    // 运行时幂等补列，避免未执行迁移脚本时旧库查询失败。
+    try { await ensureDeviceSignalSchema(env); } catch (error) {
+      console.warn('[auto-login] schema migration failed:', error.message);
     }
 
     const session = await env.DB.prepare(
-      `SELECT s.user_id, s.token, s.expires_at, u.* FROM sessions s JOIN users u ON s.user_id = u.id 
-       WHERE s.token = ? AND s.expires_at > datetime('now')`
+      `SELECT s.user_id AS session_user_id, s.token, s.expires_at, s.device_id AS session_device_id, u.*
+       FROM sessions s JOIN users u ON s.user_id = u.id
+       WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')`
     ).bind(token).first();
 
-    if (!session) {
-      return jsonNoStore({ success: false, error: '会话已过期' });
-    }
+    if (!session) return jsonNoStore({ success: false, error: '会话已过期' });
+    const userId = session.session_user_id;
 
-    // V8.0 惩罚性隐身：隔离 / 停用账号的旧会话一律按「过期」处理（口径与 middleware 诱饵一致），
-    // 并撤销该账号全部会话；不暴露隔离状态
+    // V8.0 惩罚性隐身：隔离 / 停用账号的旧会话一律按「过期」处理并撤销全部会话。
     if (session.quarantined_at || session.deactivated_at) {
-      await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(session.user_id).run();
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+        env.DB.prepare('DELETE FROM stepup_tokens WHERE user_id = ?').bind(userId),
+      ]);
       return jsonNoStore({ success: false, error: '会话已过期' });
     }
 
-    // Token 轮换：删除旧 token，签发新 token（防止 token 被窃后长期有效）
+    const ip = resolveClientIp(request) || 'unknown';
+    const meta = cfMeta(request);
+    const ua = request.headers.get('User-Agent') || '';
+    const devRes = await resolveAuthDevice(env, request, ip, body);
+
+    if (devRes.banned) {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+        env.DB.prepare('DELETE FROM stepup_tokens WHERE user_id = ?').bind(userId),
+      ]);
+      await logRiskEvent(env, {
+        event_type: 'auto_login', user_id: userId, device_id: devRes.device && devRes.device.id,
+        ip, ...meta, ua, action: 'blocked', risk_score: 90,
+        detail: { reason: 'banned_device', recovered: !!devRes.recovered },
+      });
+      return jsonNoStore(
+        { success: false, need_reauth: true, error: '设备环境需要重新确认，请重新登录' },
+        { status: 403, headers: deviceHeaders(devRes) }
+      );
+    }
+
+    // 无设备凭据或设备已绑定其他账号，均不得用长期会话自动给自己补新设备。
+    if (!devRes.device || (devRes.bindingUserId && devRes.bindingUserId !== userId)) {
+      await logRiskEvent(env, {
+        event_type: 'auto_login', user_id: userId, device_id: devRes.device && devRes.device.id,
+        ip, ...meta, ua, action: 'blocked', risk_score: 70,
+        detail: { reason: devRes.device ? 'device_bound_to_other' : 'device_unverified', recovered: !!devRes.recovered },
+      });
+      return jsonNoStore(
+        { success: false, need_reauth: true, error: '设备环境需要重新确认，请重新登录' },
+        { status: 403, headers: deviceHeaders(devRes) }
+      );
+    }
+
+    let trusted = !!devRes.bindingUserId || session.session_device_id === devRes.device.id;
+    if (!trusted) {
+      const history = await env.DB.prepare(
+        `SELECT 1 AS found FROM risk_events
+         WHERE user_id = ? AND device_id = ? AND action = 'allowed'
+           AND event_type IN ('register', 'login_ok', 'auto_login', 'device_rebind')
+         LIMIT 1`
+      ).bind(userId, devRes.device.id).first();
+      trusted = !!history && (!!devRes.recovered || devRes.matchScore >= 100);
+    }
+    if (!trusted) {
+      await logRiskEvent(env, {
+        event_type: 'auto_login', user_id: userId, device_id: devRes.device.id,
+        ip, ...meta, ua, action: 'blocked', risk_score: 55,
+        detail: { reason: 'device_not_trusted_for_session', match_score: devRes.matchScore || 0 },
+      });
+      return jsonNoStore(
+        { success: false, need_reauth: true, error: '设备环境需要重新确认，请重新登录' },
+        { status: 403, headers: deviceHeaders(devRes) }
+      );
+    }
+
+    // Token 轮换：旧会话删除与新会话签发在同一批次内提交，防止并发请求产生多个有效会话。
     const newToken = generateToken();
-    const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
-    await env.DB.prepare(
-      `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
-    ).bind(session.user_id, newToken, newExpiresAt).run();
+    const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString().replace('T', ' ').slice(0, 19);
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token),
+      env.DB.prepare(
+        `INSERT INTO sessions (user_id, token, expires_at, device_id, created_ip, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(userId, newToken, newExpiresAt, devRes.device.id, ip),
+      env.DB.prepare(
+        `UPDATE users SET last_login_at = datetime('now'), last_active_at = datetime('now'),
+         last_login_ip = ?, last_login_ua = ? WHERE id = ?`
+      ).bind(ip, ua, userId),
+    ]);
 
     // 签发 Supabase JWT（用于 RLS 鉴权）
-    const supabaseToken = await signSupabaseJWT(session.user_id, env);
+    const supabaseToken = await signSupabaseJWT(userId, env);
+    const user = await checkAndUpdatePunishment(env, userId);
+    if (!user) return jsonNoStore({ success: false, error: '用户不存在' });
 
-    // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
-    const clientIP = resolveClientIp(context.request) || 'unknown';
-    const userAgent = context.request.headers.get('User-Agent') || '';
+    await observeDeviceSignals(env, devRes.device.id, body, request, ip);
+    await logRiskEvent(env, {
+      event_type: 'auto_login', user_id: userId, device_id: devRes.device.id,
+      ip, ...meta, ua, action: 'allowed',
+      risk_score: devRes.recovered ? 20 : 0,
+      detail: {
+        recovered_device: !!devRes.recovered,
+        match_score: devRes.matchScore || 0,
+        matched_signals: devRes.matchedSignals || [],
+      },
+    });
 
-    await env.DB.prepare(
-      `UPDATE users SET last_login_at = datetime('now'), last_login_ip = ?, last_login_ua = ? WHERE id = ?`
-    ).bind(clientIP, userAgent, session.user_id).run();
-
-    const user = await checkAndUpdatePunishment(env, session.user_id);
-
-    if (!user) {
-      return jsonNoStore({ success: false, error: '用户不存在' });
-    }
-
-    // 安全地移除 password 字段
     const safeUser = {
       id: user.id,
       name: user.name,
@@ -103,12 +183,16 @@ export async function onRequestPost(context) {
       created_at: user.created_at,
       updated_at: user.updated_at,
       last_login_at: user.last_login_at,
-      last_login_ip: clientIP,
-      last_login_ua: userAgent,
-      pat_suffix: user.pat_suffix
+      last_active_at: user.last_active_at,
+      last_login_ip: ip,
+      last_login_ua: ua,
+      pat_suffix: user.pat_suffix,
     };
 
-    return jsonNoStore({ success: true, data: safeUser, token: newToken, supabase_token: supabaseToken });
+    return jsonNoStore(
+      { success: true, data: safeUser, token: newToken, supabase_token: supabaseToken },
+      { headers: deviceHeaders(devRes) }
+    );
   } catch (e) {
     console.error('[auto-login] 服务器错误:', e);
     return jsonNoStore({ success: false, error: '服务器错误，请稍后再试' });

@@ -1,6 +1,6 @@
 # 逗包用户广场 (Doubao Plaza)
 
-一个面向豆包智能体用户的社交平台，集成了用户展示/搜索、实时聊天（私聊+频道群聊）、好友/黑名单系统、举报与自动惩罚、开发者后台等功能。
+一个面向豆包智能体用户的社交平台，集成了用户展示/搜索、实时聊天（私聊+频道群聊）、好友/黑名单系统、举报与自动惩罚、开发者后台、组合条件批量账号管理、设备风险识别与审计等功能。
 
 ## 技术架构
 
@@ -25,6 +25,9 @@ doubao-plaza/
 ├── functions/                     # Cloudflare Pages Functions
 │   ├── api/
 │   │   ├── chat/index.js          # 聊天频道管理 API
+│   │   ├── developer/account-manager.js # 组合条件查询与批量账号处置
+│   │   ├── developer/devices.js  # 设备检索、封禁、解封与解绑
+│   │   ├── developer/risk.js     # 风险/安全/登录事件检索
 │   │   ├── proxy.js               # CORS 代理（转发 AI API 请求，支持 Coze Cookie 认证）
 │   │   ├── users.js               # 用户注册/搜索
 │   │   ├── users/login.js         # 登录
@@ -63,8 +66,9 @@ doubao-plaza/
 ├── sql/                           # 数据库脚本（D1 + Supabase）
 │   ├── schema.sql                 # D1 数据库初始化脚本
 │   ├── supabase-migration.sql     # Supabase 数据库迁移脚本（唯一文件，幂等可重复执行）
-│   ├── d1-cleanup.sql             # D1 过期记录清理脚本
+│   ├── d1-cleanup.sql             # D1 过期记录清理脚本（含 V11 风控信号 90 天保留）
 │   ├── migrate-developers.sql     # D1 开发者表增量脚本
+│   ├── migrations/v11.0-admin-risk.sql # V11 管理员与设备信号增量迁移
 │   └── migrations/                # 版本化增量迁移（v8.x–v9.x，含回滚脚本）
 ├── workers/                       # Cloudflare Worker 源码（反代 cf.gallopingroad.top → Pages）
 ├── docs/                          # 开发文档与素材
@@ -170,7 +174,9 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 8. 打开 `sql/d1-cleanup.sql`，同样在 D1 Console 中逐条执行
 
-9. 记录 **Database ID**（在数据库详情页的 Overview 中可以看到），稍后要用
+9. **已有生产数据库升级到 V11.0**：逐条执行 `sql/migrations/v11.0-admin-risk.sql`。新库无需重复执行（定义已包含在 `schema.sql`）。`ALTER TABLE` 提示列已存在可忽略；服务端也有运行时幂等补列作为兜底。
+
+10. 记录 **Database ID**（在数据库详情页的 Overview 中可以看到），稍后要用
 
 **验证**：在 D1 Console 中执行 `SELECT name FROM sqlite_master WHERE type='table';`，应看到 `users`、`friendships`、`sessions` 等约 15 张表。
 
@@ -285,6 +291,11 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 | 小肥羊讲堂 | 功能界面→小肥羊讲堂 | 显示博客列表，可发布/阅读/评论 |
 | 博客公告 | 开发者在讲堂中点击「管理公告」 | 可发布/删除公告，公告在列表页横幅展示 |
 | IP注册限制 | 同IP注册超过10个 | 返回「该网络的注册账号数量已达上限」 |
+| 安全后台 | 登录管理员后访问 `/developer.html` | 身份状态、组合账号工作台、设备与身份确认、风控事件中心、旧功能全部可见 |
+| 批量账号预演 | 筛选账号并勾选多个目标 → 选择动作 → 预演 | 显示逐账号可操作/跳过原因，不产生实际变更 |
+| 批量账号执行 | 输入正确确认数后执行 | 返回逐账号成功/跳过/失败，写入审计；开发者与当前操作者受保护 |
+| 设备封禁 | 设备卡片封禁已绑定账号的设备 | 设备状态变更，关联会话/近期认证被撤销 |
+| 设备恢复 | 清除站点 Cookie 后用同一浏览器登录 | 多维历史信号匹配原设备并轮换凭据；强信号不足时要求密码重新认证 |
 
 ---
 
@@ -307,7 +318,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 ### 用户系统
 - 注册（豆包号 + 智能体链接验证 + 头像 + 简介）
-- 登录（密码 + 设备指纹 + 7天自动登录）
+- 登录（密码、30 天自动登录、可选 TOTP 动态码，以及多维设备身份确认）
 - 密码找回（密保问题验证，支持7个预设问题，PBKDF2-SHA256 哈希存储答案）
 - 用户资料编辑（头像、密码、昵称、自我介绍、拍一拍后缀、密保问题）
 - 资料修改冷却（昵称/自我介绍/密保问题各30天一次）
@@ -342,12 +353,18 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - 入群申请审核（频道顶部横幅 + 实时推送通知）
 - 消息自动清理（7天保留策略，pg_cron 定时执行）
 
-### 开发者后台
+### 开发者后台 / 安全后台
 - 公告管理（CRUD + 富媒体插入）
 - 功能图标管理（外部链接 / 本地页面 / 网站工具三种创建方式）
 - 自定义页面（HTML 托管 + Supabase Storage 文件上传）
 - 文件管理（Supabase Storage `pages` 桶）
 - 公开频道管理（选取频道设为公开 + 独立分组管理 + 所有用户默认可见）
+- 组合账号查询：关键词、角色、状态、活跃度、IP、设备、举报数、注册日期、排序与分页
+- 批量账号处置：预演 + 确认数 + 二次认证；隔离/解隔离、强制下线、撤销近期认证、释放设备绑定
+- 设备工作台：生效绑定、信号数、风险等级、封禁/解封/解绑；封禁同步撤销关联凭据
+- 风控事件中心：`risk_events` / `security_events` / `login_attempts` 三类来源、时间范围与多维筛选、汇总统计
+- 当前页 CSV 导出、筛选保存、逐账号执行结果与后台审计
+- 保留原有身份状态、TOTP、审计日志、隔离管理、账号清理与 step-up 机制
 
 ### 网站工具包系统
 - **AI 工具**（基于 Cloudflare Workers AI）：AI对话（多轮上下文，历史存 localStorage）、AI翻译、AI总结、AI画图
@@ -366,10 +383,14 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 - **房间链接**：发布后可获取博客聊天室链接（`/api/blog/publish` 记录发布状态并返回房间 URL，无需额外配置）
 - **权限模型**：开发者=全权管理，博客作者=管理自己的文章和评论，普通用户=阅读和评论
 
-### 注册安全
+### 注册与设备身份确认
 - 同 IP 每小时最多注册 5 次（频率限制）
 - 同 IP 最多注册 10 个账号（总数限制，防止批量注册）
-- 设备指纹检测（可选，不阻塞注册）
+- Tor 出口节点拦截、PoW 挑战、Turnstile 人机验证
+- 第一方 HttpOnly 设备凭据 + 一机一号绑定
+- V11 多维信号：FingerprintJS、Canvas、WebGL/音频/屏幕环境、三槽持久标识（localStorage/IndexedDB/CacheStorage）、网络 ASN 取证，仅存 SHA-256 摘要
+- 清 Cookie 或换匿名代理不等于可信新设备：高置信匹配会恢复原设备并轮换凭据；封禁设备仍拒绝；强信号不足时要求重新密码认证
+- 设备指纹属于风险证据而非绝对身份证明；虚拟机、全新浏览器、禁用存储与篡改客户端值等场景仍可能导致无法识别，需结合 TOTP / 人机验证 / 人工复核
 
 ### 主题
 - 亮色/暗色模式无缝切换
@@ -480,7 +501,7 @@ Tavern 的链接导入/下载（角色卡 JSON、ZIP 等）优先走 `functions/
 - `sql/schema.sql` — D1 数据库初始化，在 Cloudflare D1 Console 中执行
 - `sql/supabase-migration.sql` — Supabase 数据库迁移，在 Supabase SQL Editor 中执行，**幂等可重复执行**
 - `sql/d1-cleanup.sql` — D1 过期记录清理，可定期在 D1 Console 中手动执行
-- `sql/migrations/` — 版本化增量迁移（v8.x–v9.x 逐版本脚本与回滚脚本，按需执行）
+- `sql/migrations/` — 版本化增量迁移（v8.x–v11.x 逐版本脚本；已有生产库升级 V11 执行 `v11.0-admin-risk.sql`）
 
 > 项目曾使用 8 个分散的 SQL 文件，后合并为 3 个主文件并统一收纳到 `sql/` 目录；`sql/migrations/` 保留历史版本化增量脚本。
 
@@ -522,7 +543,7 @@ A: 需要在 D1 数据库中将你的 `is_developer` 设为 1（见第七步）�
 A: 检查 Supabase Storage 中是否已创建名为 `pages` 的**公开**存储桶。Storage 权限策略已包含在 `supabase-migration.sql` 中。
 
 **Q: 暗色模式样式不生效？**
-A: 强制刷新浏览器缓存（Ctrl+Shift+R）。`style.css` 版本号已更新为 `?v=3`。
+A: 强制刷新浏览器缓存（Ctrl+Shift+R）。V11.0 已将 `style.css` 缓存版本号更新为 `?v=53`。
 
 **Q: Supabase SQL 执行报错 `relation already exists`？**
 A: 这是正常的——`supabase-migration.sql` 使用了 `CREATE TABLE IF NOT EXISTS`，重复执行不会报错。如果看到这个提示说明表已经存在了。

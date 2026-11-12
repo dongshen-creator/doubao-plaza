@@ -232,7 +232,9 @@
       };
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
+  <!-- V11.0 入口微优化：键盘焦点态描边（不占布局；主视觉仍由 style.css 统一处理） -->
+  <style>.btn:focus-visible { outline: 2px solid var(--accent, #ff7a45); outline-offset: 2px; transition: outline-offset .15s ease; }</style>
   <!-- V11 修复：Cloudflare Turnstile 人机验证脚本（站点密钥为空时无需加载，避免脚本被外网环境拦截产生报错；启用时取消注释并填入 TURNSTILE_SITE_KEY） -->
   <!-- <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> -->
   <script>
@@ -394,6 +396,8 @@
       <form onsubmit="event.preventDefault();doLogin()">
       <div class="form-group"><label class="form-label">昵称 / 豆包号 / 智能体链接</label><input class="input" id="loginId" placeholder="输入昵称、豆包号或智能体链接"></div>
       <div class="form-group"><label class="form-label">密码</label><input class="input" id="loginPwd" type="password" placeholder="输入密码" maxlength="32" autocomplete="current-password"></div>
+      <!-- V11.0：普通登录 TOTP 动态码（默认隐藏，服务端返回 need_totp 时展示） -->
+      <div class="form-group" id="loginTotpWrap" style="display:none"><label class="form-label">动态验证码</label><input class="input" id="loginTotp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位动态码"></div>
       <!-- V8.0：登录风险复验（撞库喷洒/持续攻击信号时展示，完成后重新点击登录） -->
       <div class="form-group" id="loginTurnstileContainer" style="display:none"><div class="form-label">人机验证</div><div id="loginTurnstileWidget"></div><input type="hidden" id="loginTurnstileToken"></div>
       <button type="submit" class="btn btn-orange btn-full">登录</button>
@@ -1394,10 +1398,12 @@ async function init() {
 
   // Try auto login
   if (sessionToken) {
+    // V11.0：合并设备证据（容错，等待不超过约 1.5 秒）
+    const autoEvidence1 = await getDeviceEvidence().catch(function() { return {}; });
     try {
       const res = await api('/api/users/auto-login', {
         method: 'POST',
-        body: JSON.stringify({ token: sessionToken }),
+        body: JSON.stringify(Object.assign({}, autoEvidence1, { token: sessionToken })),
       });
       if (res.success) {
         currentUser = res.data;
@@ -1406,14 +1412,19 @@ async function init() {
         saveDeviceLogin(currentUser);
         if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
       } else {
+        // V11.0：设备环境变化 → 清理会话并明确提示；其余沿用原有静默清理
+        if (!handleAutoLoginDeviceFailure(res, null)) {
+          localStorage.removeItem('dp_token');
+          sessionToken = null;
+          if (window.__clearSupabaseSession) window.__clearSupabaseSession();
+        }
+      }
+    } catch (e) {
+      if (!handleAutoLoginDeviceFailure(null, e)) {
         localStorage.removeItem('dp_token');
         sessionToken = null;
         if (window.__clearSupabaseSession) window.__clearSupabaseSession();
       }
-    } catch (e) {
-      localStorage.removeItem('dp_token');
-      sessionToken = null;
-      if (window.__clearSupabaseSession) window.__clearSupabaseSession();
     }
   }
 
@@ -1781,7 +1792,8 @@ async function ensureDeviceMark() {
     await fetch('/api/device/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: '{}',
+      // V11.0：携带设备证据供服务端恢复设备身份（采集失败时 evidence 为部分结果，仍照常提交）
+      body: JSON.stringify(await getDeviceEvidence()),
       credentials: 'same-origin',
     });
   } catch (e) { /* 忽略 */ }
@@ -1808,6 +1820,254 @@ async function getCanvasHash() {
     _canvasHashCache = '';
   }
   return _canvasHashCache;
+}
+
+// ===== V11.0 设备证据：多维信号恢复 + 本地持久种子 =====
+// 服务端在设备标记/注册/登录/自动登录时据此恢复设备身份；任何采集失败都静默降级，不阻碍主流程。
+// 不收集具体位置、通讯录、文件内容，不读取 Cookie，不申请新权限，不访问外部域名。
+var _deviceEvidenceCache = null;     // 后台采集完成后的结果，后续调用直接复用
+var _deviceEvidenceJob = null;       // 后台采集 Promise（只启动一次，跑完即缓存）
+var _deviceEvidencePartial = null;   // 采集过程中的部分结果（超时降级时返回）
+
+// device_context 固定七个键，值均为字符串
+function _emptyDeviceContext() {
+  return { screen: '', timezone: '', languages: '', platform: '', hardware: '', webgl: '', audio: '' };
+}
+
+// 合法种子：32~128 位小写 hex
+function _validSeed(s) {
+  return typeof s === 'string' && /^[0-9a-f]{32,128}$/.test(s);
+}
+
+// 槽 1：localStorage
+function _seedFromLS() {
+  try {
+    var v = localStorage.getItem('dp_device_seed');
+    return _validSeed(v) ? v : '';
+  } catch (e) { return ''; }
+}
+function _seedToLS(seed) {
+  try { localStorage.setItem('dp_device_seed', seed); } catch (e) {}
+}
+
+// 槽 2：IndexedDB 数据库 dp_device_vault / 对象仓 seed。
+// 事务异步完成，统一返回 Promise，等 oncomplete 后才 resolve。
+function _seedIDB(value, isWrite) {
+  return new Promise(function(resolve) {
+    var done = false;
+    function finish(v) { if (!done) { done = true; resolve(v); } }
+    try {
+      if (!window.indexedDB) { finish(''); return; }
+      var open = indexedDB.open('dp_device_vault', 1);
+      open.onupgradeneeded = function() {
+        try {
+          var db = open.result;
+          if (!db.objectStoreNames.contains('seed')) db.createObjectStore('seed');
+        } catch (e) {}
+      };
+      open.onerror = function() { finish(''); };
+      open.onblocked = function() { finish(''); };
+      open.onsuccess = function() {
+        var db = open.result;
+        try {
+          var tx = db.transaction('seed', isWrite ? 'readwrite' : 'readonly');
+          var req = isWrite ? tx.objectStore('seed').put(value, 'value') : tx.objectStore('seed').get('value');
+          tx.oncomplete = function() {
+            var v = isWrite ? '' : (_validSeed(req.result) ? req.result : '');
+            try { db.close(); } catch (e) {}
+            finish(v);
+          };
+          tx.onerror = function() { try { db.close(); } catch (e) {} finish(''); };
+          tx.onabort = function() { try { db.close(); } catch (e) {} finish(''); };
+        } catch (e) { try { db.close(); } catch (e2) {} finish(''); }
+      };
+    } catch (e) { finish(''); }
+  });
+}
+
+// 槽 3：CacheStorage，cache dp_device_vault 内同源 Request('/__dp_device_seed')
+function _seedFromCache() {
+  try {
+    if (!window.caches) return Promise.resolve('');
+    return caches.open('dp_device_vault').then(function(cache) {
+      return cache.match(new Request('/__dp_device_seed'));
+    }).then(function(res) {
+      return res ? res.text() : '';
+    }).then(function(t) {
+      return _validSeed(t) ? t : '';
+    }).catch(function() { return ''; });
+  } catch (e) { return Promise.resolve(''); }
+}
+function _seedToCache(seed) {
+  try {
+    if (!window.caches) return Promise.resolve();
+    return caches.open('dp_device_vault').then(function(cache) {
+      return cache.put(new Request('/__dp_device_seed'), new Response(seed));
+    }).catch(function() {});
+  } catch (e) { return Promise.resolve(); }
+}
+
+// 写入前先读：优先 localStorage，缺失则依次从 IndexedDB、CacheStorage 恢复并回填其他槽；
+// 三处都无则用 crypto.getRandomValues(16 字节) 新建小写 hex 并写入全部槽。
+async function _readDeviceSeed() {
+  var seed = _seedFromLS();
+  if (seed) return seed;
+  seed = await _seedIDB('', false);
+  if (!seed) seed = await _seedFromCache();
+  if (!seed) {
+    try {
+      var bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      seed = Array.from(bytes, function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch (e) { return ''; }
+  }
+  _seedToLS(seed);
+  // 回填全部槽：等待异步事务完成（均返回 Promise），失败静默降级
+  await Promise.all([
+    _seedIDB(seed, true).catch(function() {}),
+    _seedToCache(seed).catch(function() {}),
+  ]);
+  return seed;
+}
+
+// audio：OfflineAudioContext 生成音频样本的短哈希，取不到则空字符串
+async function _audioContextHash() {
+  try {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return '';
+    var offline = new OAC(1, 5000, 44100);
+    var osc = offline.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = 10000;
+    var comp = offline.createDynamicsCompressor();
+    try {
+      comp.threshold.value = -50;
+      comp.knee.value = 40;
+      comp.ratio.value = 12;
+      comp.attack.value = 0;
+      comp.release.value = 0.25;
+    } catch (e) {}
+    osc.connect(comp);
+    comp.connect(offline.destination);
+    osc.start(0);
+    var renderPromise = new Promise(function(resolve) {
+      offline.oncomplete = function(ev) { resolve(ev.renderedBuffer); };
+      var p = offline.startRendering();
+      if (p && typeof p.then === 'function') p.then(resolve, function() { resolve(null); });
+    });
+    var rendered = await Promise.race([
+      renderPromise,
+      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 800); }),
+    ]);
+    if (!rendered) return '';
+    var data = rendered.getChannelData(0);
+    var sum = 0;
+    for (var i = 4500; i < 5000 && i < data.length; i++) sum += Math.abs(data[i]);
+    var digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(sum)));
+    return Array.from(new Uint8Array(digest), function(b) { return b.toString(16).padStart(2, '0'); }).join('').slice(0, 32);
+  } catch (e) { return ''; }
+}
+
+// device_context：屏幕/时区/语言/平台/硬件/WebGL/音频，七键均为字符串
+async function _buildDeviceContext() {
+  var ctx = _emptyDeviceContext();
+  try {
+    var s = window.screen || {};
+    var dims = [Number(s.width) || 0, Number(s.height) || 0].sort(function(a, b) { return a - b; });
+    ctx.screen = dims.join('x') + '|' + (s.colorDepth == null ? '' : s.colorDepth) + '|' + (window.devicePixelRatio == null ? '' : window.devicePixelRatio);
+  } catch (e) { ctx.screen = ''; }
+  try {
+    var tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e2) {}
+    ctx.timezone = tz + '|' + String(new Date().getTimezoneOffset());
+  } catch (e) { ctx.timezone = ''; }
+  try { ctx.languages = (navigator.languages || [navigator.language || '']).join(','); } catch (e) { ctx.languages = ''; }
+  try { ctx.platform = String(navigator.platform || ''); } catch (e) { ctx.platform = ''; }
+  try {
+    ctx.hardware = [navigator.hardwareConcurrency || '', navigator.deviceMemory || '', navigator.maxTouchPoints == null ? '' : navigator.maxTouchPoints].join('|');
+  } catch (e) { ctx.hardware = ''; }
+  try {
+    var cv = document.createElement('canvas');
+    var gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+    var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) {
+      var vendor = String(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || '');
+      var renderer = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '');
+      ctx.webgl = (vendor || renderer) ? vendor + '|' + renderer : '';
+    }
+  } catch (e) { ctx.webgl = ''; }
+  ctx.audio = await _audioContextHash();
+  return ctx;
+}
+
+// 单项采集：容错 + 有界等待，保证后台任务最终 settle
+function _boundedEvidence(fn, ms, fallback) {
+  var timer;
+  var timeout = new Promise(function(resolve) {
+    timer = setTimeout(function() { resolve(fallback); }, ms);
+  });
+  return Promise.race([
+    Promise.resolve().then(fn).catch(function() { return fallback; }),
+    timeout,
+  ]).then(function(v) {
+    clearTimeout(timer);
+    return (v === undefined || v === null) ? fallback : v;
+  });
+}
+
+function _startDeviceEvidenceJob() {
+  var partial = {
+    device_fingerprint: null,
+    canvas_hash: '',
+    device_context: _emptyDeviceContext(),
+    device_seed: '',
+  };
+  _deviceEvidencePartial = partial;
+  function part(fn, key, fallback) {
+    return _boundedEvidence(fn, 2500, fallback).then(function(v) { partial[key] = v; });
+  }
+  var jobs = [
+    part(function() { return getDeviceFingerprint(); }, 'device_fingerprint', null),
+    part(function() { return getCanvasHash(); }, 'canvas_hash', ''),
+    part(function() { return _buildDeviceContext(); }, 'device_context', _emptyDeviceContext()),
+    part(function() { return _readDeviceSeed(); }, 'device_seed', ''),
+  ];
+  return Promise.all(jobs).then(function() {
+    _deviceEvidenceCache = {
+      device_fingerprint: partial.device_fingerprint,
+      canvas_hash: partial.canvas_hash,
+      device_context: partial.device_context,
+      device_seed: partial.device_seed,
+    };
+    return _deviceEvidenceCache;
+  });
+}
+
+// 缓存结果；整体最多等约 1500ms，超时返回已收集到的部分（空对象/无 seed 也可），后台继续跑完并缓存。
+async function getDeviceEvidence() {
+  if (_deviceEvidenceCache) return _deviceEvidenceCache;
+  if (!_deviceEvidenceJob) _deviceEvidenceJob = _startDeviceEvidenceJob();
+  var timer;
+  var timeout = new Promise(function(resolve) {
+    timer = setTimeout(function() { resolve(_deviceEvidencePartial); }, 1500);
+  });
+  var out = await Promise.race([_deviceEvidenceJob, timeout]);
+  clearTimeout(timer);
+  return out || _deviceEvidencePartial;
+}
+
+// V11.0：自动登录失败若因设备环境变化，清理本地会话并明确提示重新登录，不再静默当作普通过期。
+function handleAutoLoginDeviceFailure(res, err) {
+  var raw = (res && res.error) || (err && err.message) || '';
+  var msg = String(raw);
+  var hit = !!(res && res.need_reauth) || /设备/.test(msg) || /reauth/i.test(msg);
+  if (!hit) return false;
+  try { localStorage.removeItem('dp_token'); } catch (e) {}
+  sessionToken = null;
+  currentUser = null;
+  if (window.__clearSupabaseSession) window.__clearSupabaseSession();
+  toast('设备环境需要重新确认，请重新登录', 'error');
+  return true;
 }
 
 // 登录风险复验组件（复用注册的 TURNSTILE_SITE_KEY）
@@ -1840,16 +2100,20 @@ function renderLoginTurnstile() {
     await ensureDeviceMark();
     const canvasHash = await getCanvasHash();
     const loginTsToken = (document.getElementById('loginTurnstileToken') || {}).value || '';
+    // V11.0：合并设备证据 + 普通登录 TOTP 动态码（采集容错，等待不超过约 1.5 秒）
+    const evidence = await getDeviceEvidence().catch(function() { return {}; });
+    const totpCode = (document.getElementById('loginTotp') || {}).value || '';
 
     try {
       const res = await api('/api/users/login', {
         method: 'POST',
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({}, evidence, {
           identifier, password,
           canvas_hash: canvasHash,
           canvas_status: canvasHash ? 'ok' : 'blocked',
           turnstile_token: loginTsToken,
-        }),
+          totp_code: totpCode,
+        })),
       });
 
       if (res.success) {
@@ -1861,6 +2125,9 @@ function renderLoginTurnstile() {
         // 复验组件隐藏并清空（下次风险信号时重新渲染）
         var ltBox = document.getElementById('loginTurnstileContainer');
         if (ltBox) { ltBox.style.display = 'none'; var ltIn = document.getElementById('loginTurnstileToken'); if (ltIn) ltIn.value = ''; }
+        // V11.0：登录成功隐藏并清空动态码字段
+        var totpWrap = document.getElementById('loginTotpWrap');
+        if (totpWrap) { totpWrap.style.display = 'none'; var totpIn = document.getElementById('loginTotp'); if (totpIn) totpIn.value = ''; }
         closeModal('login');
         updateNavbar();
         if (chatStandaloneMode && chatStandaloneRoom) {
@@ -1869,6 +2136,13 @@ function renderLoginTurnstile() {
           renderContent();
         }
         toast(`欢迎回来，${currentUser.name}！`);
+      } else if (res.need_totp) {
+        // V11.0：普通登录需 TOTP 二次验证 → 展示动态码字段、聚焦、显示错误（不当作普通崩溃）
+        var totpWrap2 = document.getElementById('loginTotpWrap');
+        if (totpWrap2) totpWrap2.style.display = '';
+        var totpInput = document.getElementById('loginTotp');
+        if (totpInput) totpInput.focus();
+        errEl.innerHTML = '<div class="form-error">' + esc(res.error) + '</div>';
       } else if (res.need_turnstile) {
         // V8.0：撞库风险信号 → 展示人机验证，用户完成后重新点击登录
         var shown = renderLoginTurnstile();
@@ -1957,10 +2231,20 @@ async function doRegister() {
     if (!turnstileToken) { errEl.innerHTML = '<div class="form-error">请完成人机验证</div>'; return; }
   }
 
+  // V11.0：合并设备证据（采集失败静默降级，保持原有字段）
+  const regEvidence = await getDeviceEvidence().catch(function() { return {}; });
+
   try {
     const res = await api('/api/users', {
       method: 'POST',
-      body: JSON.stringify({ name, password, doubao_id, agent_url, avatar, bio, device_fingerprint: fingerprint, turnstile_token: turnstileToken, pow_token: pow ? pow.token : '', pow_nonce: pow ? pow.nonce : '', website: honeypot }),
+      body: JSON.stringify(Object.assign({}, regEvidence, {
+        name, password, doubao_id, agent_url, avatar, bio,
+        device_fingerprint: fingerprint,
+        turnstile_token: turnstileToken,
+        pow_token: pow ? pow.token : '',
+        pow_nonce: pow ? pow.nonce : '',
+        website: honeypot,
+      })),
     });
 
     if (res.success) {
@@ -6351,10 +6635,12 @@ async function showModal(name) {
   if (name === 'login') {
     const existingToken = localStorage.getItem('dp_token');
     if (existingToken) {
+      // V11.0：合并设备证据（容错，等待不超过约 1.5 秒）
+      const autoEvidence2 = await getDeviceEvidence().catch(function() { return {}; });
       try {
         const auto = await api('/api/users/auto-login', {
           method: 'POST',
-          body: JSON.stringify({ token: existingToken }),
+          body: JSON.stringify(Object.assign({}, autoEvidence2, { token: existingToken })),
         });
         if (auto.success) {
           currentUser = auto.data;
@@ -6367,7 +6653,11 @@ async function showModal(name) {
           toast(`检测到主页已登录，已恢复会话：${currentUser.name}`);
           return;
         }
-      } catch (e) {}
+        // V11.0：设备环境变化 → 清理会话并明确提示，不再静默当作普通过期
+        handleAutoLoginDeviceFailure(auto, null);
+      } catch (e) {
+        handleAutoLoginDeviceFailure(null, e);
+      }
     }
     // 主页上无有效会话 → 显示正常登录表单
   }

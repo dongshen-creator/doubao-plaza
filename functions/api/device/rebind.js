@@ -10,6 +10,7 @@
 import { getAuthUserId } from '../_lib/jwt.js';
 import {
   resolveAuthDevice,
+  observeDeviceSignals,
   bindDeviceForUser,
   deviceSetCookie,
   logRiskEvent,
@@ -50,8 +51,9 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '设备更换过于频繁，请 24 小时后再试' }, { status: 429 });
     }
 
-    // 解析/签发当前设备标记
-    const dev = await resolveAuthDevice(env, request, ip);
+    // 解析/恢复当前设备标记；清 Cookie 后通过多维信号匹配原设备。
+    const hints = await request.json().catch(() => ({}));
+    const dev = await resolveAuthDevice(env, request, ip, hints);
     if (dev.rateLimited) {
       return Response.json({ success: false, error: '设备签发过于频繁，请稍后再试' }, { status: 429 });
     }
@@ -89,14 +91,15 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '设备关联失败，请重试' }, { status: 500 });
     }
 
+    await observeDeviceSignals(env, dev.device.id, hints, request, ip);
     await logRiskEvent(env, {
       event_type: 'device_rebind', device_id: dev.device.id,
-      user_id: userId, ip, ...meta, ua, action: 'allowed', risk_score: dev.fresh ? 15 : 5,
-      detail: { fresh: !!dev.fresh, rebound: !!bind.rebound },
+      user_id: userId, ip, ...meta, ua, action: 'allowed', risk_score: dev.recovered ? 25 : (dev.fresh ? 15 : 5),
+      detail: { fresh: !!dev.fresh, recovered: !!dev.recovered, rebound: !!bind.rebound },
     });
 
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-    if (dev.fresh && dev.raw) headers['Set-Cookie'] = deviceSetCookie(dev.raw);
+    if (dev.header) headers['Set-Cookie'] = dev.header;
 
     return new Response(
       JSON.stringify({ success: true, bound: true, fresh_device: !!dev.fresh }),

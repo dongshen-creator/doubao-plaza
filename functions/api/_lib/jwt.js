@@ -60,7 +60,7 @@ export async function getAuthUserId(env, request) {
   const token = auth.slice(7).trim();
   if (!token) return null;
   const session = await env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE token = ? AND expires_at > datetime('now')`
+    `SELECT user_id FROM sessions WHERE token = ? AND datetime(expires_at) > datetime('now')`
   ).bind(token).first();
   return session ? session.user_id : null;
 }

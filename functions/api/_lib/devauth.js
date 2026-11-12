@@ -57,7 +57,7 @@ export async function requireDeveloper(env, request, opts = {}) {
     const rec = sToken
       ? await env.DB.prepare(
           `SELECT token FROM stepup_tokens
-           WHERE token = ? AND user_id = ? AND expires_at > datetime('now')`
+           WHERE token = ? AND user_id = ? AND purpose = 'devops' AND datetime(expires_at) > datetime('now')`
         ).bind(sToken, userId).first()
       : null;
     if (!rec) {

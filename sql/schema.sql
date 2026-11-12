@@ -462,3 +462,31 @@ CREATE TABLE IF NOT EXISTS security_events (
 );
 CREATE INDEX IF NOT EXISTS idx_security_events_kind_time ON security_events(kind, created_at);
 CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at);
+
+-- ============================================================
+-- V11.0 迁移：多维设备信号 · 会话设备绑定 · 设备封禁元数据
+-- 运行本脚本后，服务端也有运行时幂等补列作为兜底；已有数据库重跑即可。
+-- ============================================================
+CREATE TABLE IF NOT EXISTS device_signals (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  device_id TEXT NOT NULL,
+  signal_type TEXT NOT NULL,             -- fingerprint | canvas | persistent | context | network
+  signal_hash TEXT NOT NULL,             -- 仅保存 SHA-256 摘要，不保存原始指纹
+  first_seen_at TEXT DEFAULT (datetime('now')),
+  last_seen_at TEXT DEFAULT (datetime('now')),
+  seen_count INTEGER DEFAULT 1,
+  last_ip TEXT,
+  last_asn INTEGER,
+  UNIQUE(device_id, signal_type, signal_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_device_signals_lookup
+  ON device_signals(signal_type, signal_hash, last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_device_signals_device ON device_signals(device_id, last_seen_at);
+
+ALTER TABLE devices ADD COLUMN ban_reason TEXT;
+ALTER TABLE devices ADD COLUMN banned_at TEXT;
+ALTER TABLE devices ADD COLUMN banned_by TEXT;
+ALTER TABLE sessions ADD COLUMN device_id TEXT;
+ALTER TABLE sessions ADD COLUMN created_ip TEXT;
+ALTER TABLE sessions ADD COLUMN last_seen_at TEXT;
+CREATE INDEX IF NOT EXISTS idx_sessions_device ON sessions(device_id, expires_at);

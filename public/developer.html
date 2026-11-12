@@ -44,7 +44,7 @@ try { if (!localStorage.getItem('dp_token')) location.replace('/404.html'); } ca
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23F2622A'/><path d='M28 34c0-4.4 3.6-8 8-8h36c4.4 0 8 3.6 8 8v24c0 4.4-3.6 8-8 8H50l-14 12v-12h0c-4.4 0-8-3.6-8-8V34z' fill='%23FFF9F2'/><circle cx='42' cy='47' r='4' fill='%23F2622A'/><circle cx='58' cy='47' r='4' fill='%23F2622A'/></svg>">
 <title>开发者后台 · 逗包用户广场</title>
-<link rel="stylesheet" href="/style.css?v=52">
+<link rel="stylesheet" href="/style.css?v=53">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-regular.css" integrity="sha384-usAwS4GuP3EymPRjfL7yc7ZFZZl45NeR7Lbl/krLMVINoRHVKYgQG/6WTGXNyNOH" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-bold.css" integrity="sha384-wvyC9BCHtJEZ8WmLkhXV9p66P71K/TY9GjKAotcuTWdws6Bxynnh1tNPyc5+N9yA" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.2.5/400.css" integrity="sha384-mRqDW3yEf05PJJCFvnOwtF5u6mMhCvx3okwrnfnUhH7moKkDWMqwZP5wfEuKxN7c" crossorigin="anonymous">
@@ -141,6 +141,110 @@ try { if (!localStorage.getItem('dp_token')) location.replace('/404.html'); } ca
   #toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(12px); background: var(--text-primary); color: var(--bg-primary); padding: 10px 18px; border-radius: var(--radius-full); font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 1500; max-width: 86vw; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.err { background: var(--danger); color: #fff; }
+
+  /* ═══════════════════ V11.0 质感升级（仅追加增强，不改写上方任何旧规则） ═══════════════════ */
+  .wrap {
+    /* 组件级变量：全部由现有主题变量派生，亮/暗主题自动适配 */
+    --v11-hairline: linear-gradient(90deg, transparent 0%, var(--accent) 48%, var(--accent) 52%, transparent 100%);
+    --v11-ring: 0 0 0 3px var(--accent-bg);
+    --v11-soft-shadow: 0 10px 30px var(--accent-shadow);
+  }
+
+  /* 卡片：顶部细高光 + 微阴影 + 圆角 + 柔和过渡 */
+  .card {
+    position: relative;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm), var(--v11-soft-shadow);
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  }
+  .card:hover { box-shadow: var(--shadow-lg), var(--v11-soft-shadow); }
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 16px; right: 16px;
+    height: 2px;
+    border-radius: 0 0 3px 3px;
+    background: var(--v11-hairline);
+    opacity: .55;
+    pointer-events: none;
+  }
+  .icon-chip { box-shadow: 0 2px 8px var(--accent-shadow); }
+
+  /* 按钮 / 输入：hover 抬升 + focus-visible 焦点环（键盘可达） */
+  .btn:not(:disabled):hover { transform: translateY(-1px); }
+  .btn:not(:disabled):active { transform: translateY(0); }
+  .btn:focus-visible, .input:focus-visible, select.input:focus-visible,
+  .v11-scroll input[type="checkbox"]:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--v11-ring);
+  }
+  .btn.primary { background: var(--accent-gradient); }
+
+  /* 统计数字网格 */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin: 4px 0 14px; }
+  .stat-cell { position: relative; overflow: hidden; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-input); box-shadow: inset 0 1px 0 var(--border); }
+  .stat-cell::after { content: ""; position: absolute; top: 0; left: 0; width: 34px; height: 2px; border-radius: 0 0 2px 0; background: var(--accent); opacity: .75; }
+  .stat-cell .n { font-size: 22px; font-weight: 800; line-height: 1.15; color: var(--text-primary); font-variant-numeric: tabular-nums; word-break: break-all; }
+  .stat-cell .l { font-size: 11px; color: var(--text-faint); margin-top: 5px; letter-spacing: .2px; }
+  .stat-cell.ok .n { color: var(--success-text); }
+  .stat-cell.warn .n { color: var(--warning); }
+  .stat-cell.err .n { color: var(--danger-text); }
+  .stat-cell.accent .n {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+
+  /* 徽章语义扩展（沿用 .badge.ok / .warn / .err） */
+  .badge.accent { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+
+  /* 表格：斑马纹 + 悬停；粘性表头仅作用于带独立滚动容器的新表格，避免影响旧表格 */
+  .tbl tbody tr { transition: background var(--transition-fast); }
+  .tbl tbody tr:nth-child(even) { background: var(--bg-tertiary); }
+  .tbl tbody tr:hover { background: var(--accent-bg); }
+  .v11-scroll { max-height: 430px; overflow: auto; }
+  .v11-scroll thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--border); }
+  .tbl input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+  .tbl details summary { list-style: none; }
+  .tbl details summary::-webkit-details-marker { display: none; }
+
+  /* 筛选表单 / 操作栏 / 分页 / 说明 / 结果区 */
+  .v11-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 10px 12px; align-items: end; }
+  .v11-filters .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .v11-filters .f > label { font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: .2px; }
+  .v11-filters .input { padding: 7px 10px; font-size: 12.5px; }
+  .v11-filters select.input { width: 100%; }
+  .v11-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  .v11-actions .input { width: auto; }
+  .v11-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+  .v11-pager .spacer { flex: 1; }
+  .v11-pager .btn { padding: 5px 12px; font-size: 12px; }
+  .v11-lazy { text-align: center; padding: 26px 12px; color: var(--text-faint); font-size: 12.5px; }
+  .v11-note { font-size: 11.5px; line-height: 1.75; color: var(--text-faint); background: var(--bg-input); border: 1px dashed var(--border); border-radius: var(--radius); padding: 10px 12px; margin-top: 12px; }
+  .v11-note strong { color: var(--text-muted); }
+  .v11-out { font-size: 12.5px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin-top: 12px; background: var(--bg-input); max-height: 230px; overflow: auto; }
+  .v11-out .row { padding: 5px 0; border-bottom: 1px dashed var(--border); }
+  .v11-out .row:last-child { border-bottom: none; }
+  .tbl td.detail .mono { font-size: 10.5px; }
+
+  /* 响应式：窄屏收紧间距与栅格 */
+  @media (max-width: 720px) {
+    .wrap { padding: 14px 12px 48px; }
+    .card { padding: 16px 14px; }
+    .card::before { left: 10px; right: 10px; }
+    .topbar { flex-wrap: wrap; gap: 8px; }
+    .stat-grid { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+    .v11-filters { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); }
+    .btn { padding: 7px 12px; }
+    .card-head { flex-wrap: wrap; }
+  }
+
+  /* 尊重系统「减少动态效果」偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    .btn:not(:disabled):hover, .btn:not(:disabled):active { transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -189,6 +293,184 @@ try { if (!localStorage.getItem('dp_token')) location.replace('/404.html'); } ca
         <div class="status-item"><div class="k">双因素认证 (TOTP)</div><div class="v" id="stTotp">—</div></div>
         <div class="status-item"><div class="k">近期验证 (step-up)</div><div class="v" id="stStepup">—</div></div>
       </div>
+    </section>
+
+    <!-- ═══════════ V11.0 · 组合账号工作台 ═══════════ -->
+    <section class="card" id="amCard">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:users-three-fill"></iconify-icon></div>
+        <div>
+          <h2>组合账号工作台</h2>
+          <div class="desc">多维筛选 · 批量预演与执行 · 高危操作需二次验证</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn" id="amLoadBtn"><iconify-icon icon="ph:download-simple"></iconify-icon> 载入</button>
+        </div>
+      </div>
+
+      <div class="v11-filters">
+        <div class="f"><label for="amQ">关键词 q</label><input class="input" id="amQ" placeholder="名称 / 豆包号 / ID"></div>
+        <div class="f"><label for="amStatus">状态 status</label>
+          <select class="input" id="amStatus">
+            <option value="all">全部 (all)</option><option value="normal">正常 (normal)</option>
+            <option value="quarantined">隔离 (quarantined)</option><option value="deactivated">停用 (deactivated)</option>
+            <option value="punished">处罚 (punished)</option>
+          </select></div>
+        <div class="f"><label for="amRole">角色 role</label>
+          <select class="input" id="amRole">
+            <option value="all">全部 (all)</option><option value="user">普通用户 (user)</option>
+            <option value="global_admin">全局管理员 (global_admin)</option><option value="developer">开发者 (developer)</option>
+          </select></div>
+        <div class="f"><label for="amActivity">活跃 activity</label>
+          <select class="input" id="amActivity">
+            <option value="all">全部 (all)</option><option value="7d">近 7 天 (7d)</option>
+            <option value="30d">近 30 天 (30d)</option><option value="90d">近 90 天 (90d)</option>
+            <option value="never">从未活跃 (never)</option>
+          </select></div>
+        <div class="f"><label for="amIp">IP</label><input class="input" id="amIp" placeholder="注册 / 登录 IP"></div>
+        <div class="f"><label for="amDevice">device_id</label><input class="input" id="amDevice" placeholder="设备 ID"></div>
+        <div class="f"><label for="amMinReports">min_reports</label><input class="input" id="amMinReports" type="number" min="0" placeholder="最少被举报数"></div>
+        <div class="f"><label for="amFrom">created_from</label><input class="input" id="amFrom" type="date"></div>
+        <div class="f"><label for="amTo">created_to</label><input class="input" id="amTo" type="date"></div>
+        <div class="f"><label for="amSort">sort</label>
+          <select class="input" id="amSort">
+            <option value="created_at">创建时间</option><option value="last_active_at">最后活跃</option>
+            <option value="risk_score">风险分</option><option value="reports">举报数</option><option value="name">名称</option>
+          </select></div>
+        <div class="f"><label for="amOrder">order</label>
+          <select class="input" id="amOrder"><option value="desc">降序 (desc)</option><option value="asc">升序 (asc)</option></select></div>
+        <div class="f"><label for="amPageSize">page_size</label>
+          <select class="input" id="amPageSize"><option value="20">20</option><option value="50" selected>50</option><option value="100">100</option></select></div>
+      </div>
+      <div class="v11-actions">
+        <button class="btn primary" id="amQueryBtn"><iconify-icon icon="ph:magnifying-glass"></iconify-icon> 查询</button>
+        <button class="btn" id="amResetBtn"><iconify-icon icon="ph:arrow-counter-clockwise"></iconify-icon> 重置</button>
+        <button class="btn" id="amSaveBtn"><iconify-icon icon="ph:floppy-disk"></iconify-icon> 保存当前筛选</button>
+        <button class="btn" id="amCsvBtn"><iconify-icon icon="ph:export"></iconify-icon> 导出当前页 CSV</button>
+      </div>
+
+      <div id="amStats" class="stat-grid" style="margin-top:16px"></div>
+
+      <div class="tbl-wrap v11-scroll" id="amTableWrap">
+        <table class="tbl">
+          <thead><tr>
+            <th style="width:34px"><input type="checkbox" id="amCheckAll" aria-label="全选本页"></th>
+            <th>账号</th><th>状态</th><th>活跃</th><th>网络</th><th>关联</th><th>指纹前8位</th><th>创建时间</th>
+          </tr></thead>
+          <tbody id="amBody"><tr><td colspan="8" class="v11-lazy">点击「载入」或「查询」加载数据</td></tr></tbody>
+        </table>
+      </div>
+      <div class="v11-pager">
+        <button class="btn" id="amPrevBtn" disabled>上一页</button>
+        <button class="btn" id="amNextBtn" disabled>下一页</button>
+        <span id="amPageInfo">第 0 / 0 页 · 共 0 条</span>
+        <span class="spacer"></span>
+        <span id="amSelInfo">已选 0 个</span>
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">批量操作（先预演，再确认执行）</div>
+        <div class="v11-actions" style="margin-top:0">
+          <select class="input" id="amAction" style="min-width:180px">
+            <option value="quarantine">隔离 quarantine</option>
+            <option value="unquarantine">解除隔离 unquarantine</option>
+            <option value="force_logout">强制下线 force_logout</option>
+            <option value="revoke_stepup">撤销 step-up revoke_stepup</option>
+            <option value="release_devices">释放设备 release_devices</option>
+          </select>
+          <input class="input" id="amReason" placeholder="操作原因（留档审计）" style="flex:1;min-width:180px;max-width:340px">
+          <button class="btn" id="amPreviewBtn"><iconify-icon icon="ph:eye"></iconify-icon> 预演</button>
+          <button class="btn danger" id="amExecBtn"><iconify-icon icon="ph:lightning-fill"></iconify-icon> 确认执行</button>
+        </div>
+        <div id="amPreviewOut" class="v11-out" style="display:none"></div>
+        <div id="amExecOut" class="v11-out" style="display:none"></div>
+      </div>
+      <div class="err-line" id="amErr"></div>
+    </section>
+
+    <!-- ═══════════ V11.0 · 设备与身份确认 ═══════════ -->
+    <section class="card" id="dvCard">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:devices-fill"></iconify-icon></div>
+        <div>
+          <h2>设备与身份确认</h2>
+          <div class="desc">设备画像 · 风险信号 · 封禁 / 解封 / 解除绑定</div>
+        </div>
+        <div style="margin-left:auto"><button class="btn" id="dvLoadBtn"><iconify-icon icon="ph:download-simple"></iconify-icon> 载入</button></div>
+      </div>
+      <div class="v11-filters">
+        <div class="f"><label for="dvQ">q</label><input class="input" id="dvQ" placeholder="设备 ID / 账号 / IP"></div>
+        <div class="f"><label for="dvStatus">status</label>
+          <select class="input" id="dvStatus">
+            <option value="">全部</option><option value="active">active</option>
+            <option value="banned">banned</option><option value="released">released</option>
+          </select></div>
+        <div class="f"><label for="dvMinRisk">min_risk</label><input class="input" id="dvMinRisk" type="number" min="0" step="1" placeholder="最小风险分"></div>
+        <div class="f"><label for="dvPageSize">page_size</label>
+          <select class="input" id="dvPageSize"><option value="20">20</option><option value="50" selected>50</option><option value="100">100</option></select></div>
+      </div>
+      <div class="v11-actions">
+        <button class="btn primary" id="dvQueryBtn"><iconify-icon icon="ph:magnifying-glass"></iconify-icon> 查询</button>
+        <input class="input" id="dvReason" placeholder="操作原因（封禁必填，留档审计）" style="flex:1;min-width:200px;max-width:360px">
+      </div>
+      <div id="dvStats" class="stat-grid" style="margin-top:16px"></div>
+      <div id="dvDegraded" class="v11-note" style="display:none"></div>
+      <div class="tbl-wrap v11-scroll">
+        <table class="tbl">
+          <thead><tr>
+            <th>设备ID短码</th><th>状态</th><th>风险</th><th>绑定账号</th><th>信号数</th>
+            <th>最近风险分</th><th>创建IP</th><th>最后活跃</th><th>ban_reason</th><th>操作</th>
+          </tr></thead>
+          <tbody id="dvBody"><tr><td colspan="10" class="v11-lazy">点击「载入」或「查询」加载数据</td></tr></tbody>
+        </table>
+      </div>
+      <div class="v11-pager">
+        <button class="btn" id="dvPrevBtn" disabled>上一页</button>
+        <button class="btn" id="dvNextBtn" disabled>下一页</button>
+        <span id="dvPageInfo">第 0 / 0 页 · 共 0 条</span>
+      </div>
+      <div class="v11-note">
+        说明：设备判定基于<strong>多维信号</strong>综合恢复，单一标识变化不必然生成新设备；封禁设备将<strong>撤销其关联会话</strong>并要求重新确认身份；该机制用于提升滥用成本，<strong>不承诺绝对不可绕过</strong>，请结合风控事件与人工复核使用。
+      </div>
+      <div class="err-line" id="dvErr"></div>
+    </section>
+
+    <!-- ═══════════ V11.0 · 风控事件中心 ═══════════ -->
+    <section class="card" id="rkCard">
+      <div class="card-head">
+        <div class="icon-chip"><iconify-icon icon="ph:pulse-fill"></iconify-icon></div>
+        <div>
+          <h2>风控事件中心</h2>
+          <div class="desc">risk / security / login 多源事件聚合检索</div>
+        </div>
+        <div style="margin-left:auto"><button class="btn" id="rkLoadBtn"><iconify-icon icon="ph:download-simple"></iconify-icon> 载入</button></div>
+      </div>
+      <div class="v11-filters">
+        <div class="f"><label for="rkSource">source</label>
+          <select class="input" id="rkSource"><option value="risk">risk</option><option value="security">security</option><option value="login">login</option></select></div>
+        <div class="f"><label for="rkDays">days</label>
+          <select class="input" id="rkDays"><option value="1">1 天</option><option value="7" selected>7 天</option><option value="30">30 天</option><option value="90">90 天</option></select></div>
+        <div class="f"><label for="rkLimit">limit</label>
+          <select class="input" id="rkLimit"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option><option value="500">500</option></select></div>
+        <div class="f"><label for="rkEventType">event_type</label><input class="input" id="rkEventType" placeholder="事件类型，留空为全部"></div>
+        <div class="f"><label for="rkKind">kind</label><input class="input" id="rkKind" placeholder="kind"></div>
+        <div class="f"><label for="rkUserId">user_id</label><input class="input" id="rkUserId" placeholder="用户 ID"></div>
+        <div class="f"><label for="rkDeviceId">device_id</label><input class="input" id="rkDeviceId" placeholder="设备 ID"></div>
+        <div class="f"><label for="rkIp">ip</label><input class="input" id="rkIp" placeholder="IP"></div>
+        <div class="f"><label for="rkAction">action</label><input class="input" id="rkAction" placeholder="动作"></div>
+        <div class="f"><label for="rkSuccess">success</label>
+          <select class="input" id="rkSuccess"><option value="">全部</option><option value="true">仅成功</option><option value="false">仅失败</option></select></div>
+      </div>
+      <div class="v11-actions"><button class="btn primary" id="rkQueryBtn"><iconify-icon icon="ph:magnifying-glass"></iconify-icon> 查询</button></div>
+      <div id="rkSummary" class="stat-grid" style="margin-top:16px"></div>
+      <div id="rkChips" class="v11-actions" style="margin-top:-2px"></div>
+      <div class="tbl-wrap v11-scroll">
+        <table class="tbl">
+          <thead id="rkHead"><tr><th>事件</th></tr></thead>
+          <tbody id="rkBody"><tr><td class="v11-lazy">点击「载入」或「查询」加载数据</td></tr></tbody>
+        </table>
+      </div>
+      <div class="err-line" id="rkErr"></div>
     </section>
 
     <!-- 双因素认证 -->
@@ -444,7 +726,12 @@ function devApi(path, opts, _retried) {
         });
       }
       if (!res.ok || !data || data.success === false) {
-        throw new Error((data && data.error) || ('请求失败 (HTTP ' + res.status + ')'));
+        var apiErr = new Error((data && data.error) || ('请求失败 (HTTP ' + res.status + ')'));
+        /* V11.0：把响应体与状态码挂到错误对象上，供新增卡片读取 400 的 expected 等服务器字段；
+           不改变原有 message 行为，旧代码依旧只依赖 e.message */
+        if (data) apiErr.data = data;
+        apiErr.status = res.status;
+        throw apiErr;
       }
       return data;
     });
@@ -455,12 +742,18 @@ function devApi(path, opts, _retried) {
   });
 }
 
-/* ═══════════ Step-up 模态 ═══════════ */
-var stepupSettlers = null;
+/* ═══════════ Step-up 模态（V11.0：并发安全队列） ═══════════
+   旧实现用单个 settler 对象，多个请求同时收到 403 时后一个会覆盖前一个，
+   被覆盖的请求永远等不到 resolve/reject（永久挂起）。改为：所有等待者入队，
+   弹窗已打开则只入队不重复打开；一次验证成功即 resolve 全部并统一重试。 */
+var stepupQueue = [];      // [{ resolve, reject }]
+var stepupOpen = false;    // 弹窗是否已打开
 
 function openStepup() {
-  return new Promise(function (resolve, reject) {
-    stepupSettlers = { resolve: resolve, reject: reject };
+  var p = new Promise(function (resolve, reject) {
+    stepupQueue.push({ resolve: resolve, reject: reject });
+    if (stepupOpen) return;   // 已有弹窗在等待验证：仅入队，等待统一结算
+    stepupOpen = true;
     $('suErr').textContent = '';
     $('suPwd').value = '';
     $('suTotp').value = '';
@@ -468,19 +761,25 @@ function openStepup() {
     $('stepupModal').style.display = 'flex';
     setTimeout(function () { $('suPwd').focus(); }, 30);
   });
+  /* 预先给该 promise 挂一个空 catch：即使个别调用方未处理 rejection，也不会产生
+     unhandledrejection；同时 p 本身仍会把 rejection 正常传递给真正的调用链。 */
+  p.catch(function () {});
+  return p;
 }
+
 function closeStepup(cancelled) {
   $('stepupModal').style.display = 'none';
-  if (stepupSettlers) {
-    var s = stepupSettlers;
-    stepupSettlers = null;
-    if (cancelled) {
-      var err = new Error('已取消身份验证');
-      err.stepupCancelled = true;
-      s.reject(err);
-    } else {
-      s.resolve();
-    }
+  stepupOpen = false;
+  var waiters = stepupQueue.splice(0, stepupQueue.length);
+  if (!waiters.length) return;
+  if (cancelled) {
+    var err = new Error('已取消身份验证');
+    err.stepupCancelled = true;
+    waiters.forEach(function (s) { s.reject(err); });
+    toast('已取消身份验证（等待中的请求已中止）', true);
+  } else {
+    /* 验证成功：resolve 全部等待者，队列清空，各自带新 token 重试 */
+    waiters.forEach(function (s) { s.resolve(); });
   }
 }
 function submitStepup() {
@@ -510,9 +809,11 @@ function submitStepup() {
         return;
       }
       $('suErr').textContent = (data && data.error) || '验证失败';
+      toast('身份验证失败：' + $('suErr').textContent, true);
     });
   }).catch(function () {
     $('suErr').textContent = '网络错误，请稍后重试';
+    toast('身份验证失败：网络错误', true);
   });
 }
 $('suOk').addEventListener('click', submitStepup);
@@ -923,6 +1224,577 @@ function cuRestore(runId) {
 
 $('cuDryBtn').addEventListener('click', cuDryRun);
 $('cuExecBtn').addEventListener('click', cuExecute);
+
+/* ═══════════════════ V11.0 · 通用 helper（复用既有 esc / toast / devApi） ═══════════════════ */
+function escAttr(s) { return esc(s); }   /* 属性值统一转义；esc 已覆盖 & < > " ' */
+function v11val(v) { return (v == null || v === '') ? '-' : String(v); }
+function v11short(s, n) {
+  s = String(s == null ? '' : s);
+  n = n || 12;
+  return s.length > n ? s.slice(0, n) + '…' : (s || '-');
+}
+function v11pick(o, keys) {
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (o && o[k] != null && o[k] !== '') return o[k];
+  }
+  return '';
+}
+function v11qs(obj) {
+  var parts = [];
+  Object.keys(obj).forEach(function (k) {
+    var v = obj[k];
+    if (v == null || v === '') return;
+    parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+  });
+  return parts.join('&');
+}
+function v11errLine(id, e) {
+  var msg = (e && e.message) || '请求失败';
+  if (e && e.status === 400) msg = '[HTTP 400] ' + msg;
+  if (e && e.data && e.data.expected != null) msg += '（服务器期望确认数：' + e.data.expected + '）';
+  $(id).textContent = msg;
+}
+function v11stats(id, items) {
+  $(id).innerHTML = items.map(function (it) {
+    return '<div class="stat-cell ' + (it.tone || '') + '">' +
+      '<div class="n">' + esc(it.value) + '</div>' +
+      '<div class="l">' + esc(it.label) + '</div></div>';
+  }).join('');
+}
+
+/* ═══════════════════ V11.0 · 组合账号工作台 ═══════════════════ */
+var AM_FILTER_IDS = ['amQ','amStatus','amRole','amActivity','amIp','amDevice','amMinReports','amFrom','amTo','amSort','amOrder','amPageSize'];
+var AM_DEFAULTS = { amStatus:'all', amRole:'all', amActivity:'all', amSort:'created_at', amOrder:'desc', amPageSize:'50' };
+var amUsers = [];
+var amSelected = Object.create(null);
+var amPage = 1, amPages = 0, amTotal = 0;
+
+function amFilter() {
+  return {
+    q: $('amQ').value.trim(),
+    status: $('amStatus').value,
+    role: $('amRole').value,
+    activity: $('amActivity').value,
+    ip: $('amIp').value.trim(),
+    device_id: $('amDevice').value.trim(),
+    min_reports: $('amMinReports').value.trim(),
+    created_from: $('amFrom').value,
+    created_to: $('amTo').value,
+    sort: $('amSort').value,
+    order: $('amOrder').value,
+    page_size: $('amPageSize').value
+  };
+}
+function amRestoreSaved() {
+  try {
+    var raw = localStorage.getItem('dp_am_filter');
+    if (!raw) return;
+    var saved = JSON.parse(raw);
+    AM_FILTER_IDS.forEach(function (id) { if (saved[id] != null && $(id)) $(id).value = saved[id]; });
+  } catch (e) {}
+}
+function amSaveFilter() {
+  var o = {};
+  AM_FILTER_IDS.forEach(function (id) { o[id] = $(id).value; });
+  try { localStorage.setItem('dp_am_filter', JSON.stringify(o)); toast('当前筛选已保存到本地'); }
+  catch (e) { toast('保存失败：本地存储不可用', true); }
+}
+function amResetFilter() {
+  AM_FILTER_IDS.forEach(function (id) {
+    if ($(id)) $(id).value = (AM_DEFAULTS[id] != null) ? AM_DEFAULTS[id] : '';
+  });
+  amPage = 1;
+  toast('筛选条件已重置');
+}
+function amUserId(u) { return String(v11pick(u, ['id','user_id','uid']) || ''); }
+function amFp(u) {
+  var fp = String(v11pick(u, ['fingerprint','device_fingerprint','fp','fingerprint_hash','device_hash']) || '');
+  return fp ? fp.slice(0, 8) : '-';   /* 仅前 8 位，绝不输出原始 hash */
+}
+function amState(u) {
+  var s = String(v11pick(u, ['status','account_status','state']) || '').toLowerCase();
+  if (s === 'quarantined' || u.quarantined_at || u.quarantined) return { label:'隔离', tone:'err' };
+  if (s === 'deactivated' || u.deactivated_at || u.deactivated) return { label:'停用', tone:'warn' };
+  if (s === 'punished' || s === 'banned' || u.punished_at || u.punished) return { label:'处罚', tone:'err' };
+  if (s === 'normal' || s === 'active') return { label:'正常', tone:'ok' };
+  return { label: s || '正常', tone: 'ok' };
+}
+function amRole(u) {
+  var r = String(v11pick(u, ['role','user_role']) || 'user');
+  var label = ({ user:'用户', global_admin:'全局管理员', developer:'开发者' })[r] || r;
+  var tone = (r === 'developer') ? 'accent' : (r === 'global_admin' ? 'warn' : '');
+  return { label: label, tone: tone };
+}
+function amRender() {
+  var body = $('amBody');
+  if (!amUsers.length) {
+    body.innerHTML = '<tr><td colspan="8" class="v11-lazy">暂无匹配账号</td></tr>';
+    $('amCheckAll').checked = false;
+    return;
+  }
+  body.innerHTML = amUsers.map(function (u) {
+    var id = amUserId(u);
+    var st = amState(u), role = amRole(u);
+    var name = v11val(v11pick(u, ['name','nickname','display_name']));
+    var dou = v11val(v11pick(u, ['doubao_id','doubao','handle']));
+    var rel = [
+      '设备 ' + v11val(v11pick(u, ['active_device_count','device_count'])),
+      '会话 ' + v11val(v11pick(u, ['active_session_count','session_count'])),
+      '风控 ' + v11val(v11pick(u, ['risk_event_count','risk_events'])),
+      '峰值 ' + v11val(v11pick(u, ['max_risk_score','risk_score','peak_risk']))
+    ].join(' · ');
+    return '<tr>' +
+      '<td><input type="checkbox" class="am-row" data-amid="' + escAttr(id) + '"' + (amSelected[id] ? ' checked' : '') + ' aria-label="选择账号"></td>' +
+      '<td><div style="font-weight:700;color:var(--text-primary)">' + esc(name) + '</div>' +
+        '<div class="mono" style="font-size:10.5px;color:var(--text-faint)">@' + esc(dou) + ' · ' + esc(v11short(id, 12)) + '</div>' +
+        '<span class="badge ' + role.tone + '" style="margin-top:4px">' + esc(role.label) + '</span></td>' +
+      '<td><span class="badge ' + st.tone + '">' + esc(st.label) + '</span></td>' +
+      '<td class="mono" style="font-size:10.5px">活跃 ' + esc(v11val(v11pick(u, ['last_active_at','last_seen_at']))) + '<br>登录 ' + esc(v11val(u.last_login_at)) + '</td>' +
+      '<td class="mono" style="font-size:10.5px">注册 ' + esc(v11val(v11pick(u, ['registered_ip','register_ip']))) + '<br>登录 ' + esc(v11val(u.last_login_ip)) + '</td>' +
+      '<td style="font-size:10.5px;color:var(--text-faint)">' + esc(rel) + '</td>' +
+      '<td class="mono">' + esc(amFp(u)) + '</td>' +
+      '<td class="mono" style="font-size:10.5px">' + esc(v11val(v11pick(u, ['created_at','registered_at']))) + '</td>' +
+    '</tr>';
+  }).join('');
+  Array.prototype.forEach.call(body.querySelectorAll('input.am-row'), function (cb) {
+    cb.addEventListener('change', function () {
+      var id = cb.getAttribute('data-amid');
+      if (cb.checked) amSelected[id] = true; else delete amSelected[id];
+      amUpdateSel();
+    });
+  });
+  amSyncCheckAll();
+}
+function amSelIds() { return Object.keys(amSelected); }
+function amSyncCheckAll() {
+  var boxes = $('amBody').querySelectorAll('input.am-row');
+  if (!boxes.length) { $('amCheckAll').checked = false; return; }
+  var all = true;
+  Array.prototype.forEach.call(boxes, function (b) { if (!b.checked) all = false; });
+  $('amCheckAll').checked = all;
+}
+function amUpdateSel() {
+  $('amSelInfo').textContent = '已选 ' + amSelIds().length + ' 个';
+  amSyncCheckAll();
+}
+function amRenderPager() {
+  $('amPageInfo').textContent = '第 ' + (amTotal ? amPage : 0) + ' / ' + amPages + ' 页 · 共 ' + amTotal + ' 条';
+  $('amPrevBtn').disabled = !(amPage > 1);
+  $('amNextBtn').disabled = !(amPages && amPage < amPages);
+}
+function amLoad(resetPage) {
+  if (resetPage) amPage = 1;
+  var f = amFilter();
+  f.page = amPage;
+  $('amErr').textContent = '';
+  $('amBody').innerHTML = '<tr><td colspan="8" class="v11-lazy">加载中…</td></tr>';
+  devApi('/api/developer/account-manager?' + v11qs(f)).then(function (r) {
+    var d = r.data || {};
+    amUsers = d.users || [];
+    var pg = d.pagination || {};
+    amPage = Number(pg.page) || amPage;
+    amTotal = Number(pg.total) || amUsers.length;
+    amPages = Number(pg.pages) || (amUsers.length ? 1 : 0);
+    var s = d.stats || {};
+    v11stats('amStats', [
+      { label:'总账号 total_users', value: v11val(s.total_users), tone:'accent' },
+      { label:'正常 normal_users', value: v11val(s.normal_users), tone:'ok' },
+      { label:'隔离 quarantined_users', value: v11val(s.quarantined_users), tone:'err' },
+      { label:'停用 deactivated_users', value: v11val(s.deactivated_users), tone:'warn' },
+      { label:'封禁设备 banned_devices', value: v11val(s.banned_devices), tone:'err' }
+    ]);
+    amRender();
+    amRenderPager();
+    amUpdateSel();
+  }).catch(function (e) {
+    $('amBody').innerHTML = '<tr><td colspan="8" class="v11-lazy">加载失败</td></tr>';
+    v11errLine('amErr', e);
+  });
+}
+function amCsvCell(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+function amCsv() {
+  if (!amUsers.length) { toast('当前页无可导出数据', true); return; }
+  var head = ['账号名称','豆包号','用户ID短码','角色','状态','最后活跃','最后登录','注册IP','登录IP','活跃设备','活跃会话','风控事件','最高风险分','指纹前8位','创建时间'];
+  var lines = [head.map(amCsvCell).join(',')];
+  amUsers.forEach(function (u) {
+    lines.push([
+      v11pick(u, ['name','nickname','display_name']),
+      v11pick(u, ['doubao_id','doubao','handle']),
+      v11short(amUserId(u), 12),
+      amRole(u).label, amState(u).label,
+      v11pick(u, ['last_active_at','last_seen_at']), u.last_login_at,
+      v11pick(u, ['registered_ip','register_ip']), u.last_login_ip,
+      v11pick(u, ['active_device_count','device_count']),
+      v11pick(u, ['active_session_count','session_count']),
+      v11pick(u, ['risk_event_count','risk_events']),
+      v11pick(u, ['max_risk_score','risk_score','peak_risk']),
+      amFp(u),                         /* 仅前 8 位，不含原始设备 hash */
+      v11pick(u, ['created_at','registered_at'])
+    ].map(amCsvCell).join(','));
+  });
+  var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'accounts_p' + amPage + '_' + Date.now() + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  toast('已导出当前页 ' + amUsers.length + ' 条');
+}
+function amCheckSelection() {
+  var ids = amSelIds();
+  if (!ids.length) { toast('请先勾选至少一个账号', true); return null; }
+  if (ids.length > 50) { toast('单次最多 50 个账号，当前已选 ' + ids.length + ' 个', true); return null; }
+  return ids;
+}
+function amPreview() {
+  var ids = amCheckSelection();
+  if (!ids) return;
+  var op = $('amAction').value, reason = $('amReason').value.trim();
+  $('amErr').textContent = '';
+  var out = $('amPreviewOut');
+  out.style.display = '';
+  out.innerHTML = '<div class="row">预演中…</div>';
+  /* 服务端 preview 目前可能只按 action=preview 判定，前端仍按要求发送 operation 字段 */
+  devApi('/api/developer/account-manager', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'preview', operation: op, user_ids: ids, reason: reason })
+  }).then(function (r) {
+    var d = r.data || {}, targets = d.targets || [];
+    var html = '<div class="row" style="color:var(--text-primary);font-weight:700">预演结果 · 可处理 ' + esc(v11val(d.actionable)) + ' · 跳过 ' + esc(v11val(d.skipped)) + '</div>';
+    if (!targets.length) {
+      html += '<div class="row">服务端未返回目标明细（targets 为空）。</div>';
+    } else {
+      /* targets 全部 will_process 属服务端行为，正常展示、不报错 */
+      html += targets.map(function (t) {
+        var wp = !!t.will_process;
+        return '<div class="row"><span class="badge ' + (wp ? 'ok' : 'warn') + '">' + (wp ? '将处理' : '跳过') + '</span> ' +
+          esc(v11val(v11pick(t, ['name','user_name']))) +
+          ' <span class="mono" style="font-size:10.5px;color:var(--text-faint)">' + esc(v11short(v11pick(t, ['user_id','id']), 16)) + '</span>' +
+          (t.skip_reason ? ' <span style="color:var(--warning)">· ' + esc(t.skip_reason) + '</span>' : '') +
+          '</div>';
+      }).join('');
+    }
+    out.innerHTML = html;
+  }).catch(function (e) {
+    out.innerHTML = '<div class="row" style="color:var(--danger-text)">预演失败（服务器返回）：' + esc(e.message) + '</div>';
+    v11errLine('amErr', e);
+  });
+}
+function amExec() {
+  var ids = amCheckSelection();
+  if (!ids) return;
+  var op = $('amAction').value, reason = $('amReason').value.trim(), n = ids.length;
+  var input = prompt('确认执行【' + op + '】？\n将影响 ' + n + ' 个账号，请输入选中数量 ' + n + ' 以确认：', '');
+  if (input === null) return;
+  if (parseInt(input, 10) !== n) { toast('确认数量不匹配，已取消', true); return; }
+  $('amErr').textContent = '';
+  var out = $('amExecOut');
+  out.style.display = '';
+  out.innerHTML = '<div class="row">执行中…</div>';
+  devApi('/api/developer/account-manager', {
+    method: 'POST',
+    body: JSON.stringify({ action: op, user_ids: ids, reason: reason, confirm: n })
+  }).then(function (r) {
+    var d = r.data || {};
+    var html = '<div class="row" style="color:var(--text-primary);font-weight:700">执行完成 · ' + esc(v11val(d.action || op)) +
+      ' · 已处理 ' + esc(v11val(d.processed)) + ' · 跳过 ' + esc(v11val(d.skipped)) + ' · 失败 ' + esc(v11val(d.failed)) + '</div>';
+    var results = d.results || [];
+    html += results.map(function (it) {
+      var ok = it.ok !== false && !it.error && String(v11pick(it, ['status','result']) || '').toLowerCase() !== 'failed';
+      return '<div class="row"><span class="badge ' + (ok ? 'ok' : 'err') + '">' + (ok ? '成功' : '失败') + '</span> ' +
+        esc(v11val(v11pick(it, ['user_id','id','name']))) +
+        (it.error || it.reason || it.skip_reason ? ' <span style="color:var(--text-faint)">· ' + esc(it.error || it.reason || it.skip_reason) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    out.innerHTML = html;
+    toast('执行完成：已处理 ' + v11val(d.processed) + ' / 跳过 ' + v11val(d.skipped) + ' / 失败 ' + v11val(d.failed));
+    amSelected = Object.create(null);
+    amLoad(false);   /* 刷新列表 */
+  }).catch(function (e) {
+    out.innerHTML = '<div class="row" style="color:var(--danger-text)">执行失败（服务器返回）：' + esc(e.message) + '</div>';
+    v11errLine('amErr', e);   /* 处理 400 的 expected */
+  });
+}
+$('amQueryBtn').addEventListener('click', function () { amLoad(true); });
+$('amLoadBtn').addEventListener('click', function () { amLoad(true); toast('正在载入组合账号数据'); });
+$('amResetBtn').addEventListener('click', amResetFilter);
+$('amSaveBtn').addEventListener('click', amSaveFilter);
+$('amCsvBtn').addEventListener('click', amCsv);
+$('amPrevBtn').addEventListener('click', function () { if (amPage > 1) { amPage--; amLoad(false); } });
+$('amNextBtn').addEventListener('click', function () { if (amPage < amPages) { amPage++; amLoad(false); } });
+$('amCheckAll').addEventListener('change', function () {
+  var on = $('amCheckAll').checked;
+  Array.prototype.forEach.call($('amBody').querySelectorAll('input.am-row'), function (cb) {
+    cb.checked = on;
+    var id = cb.getAttribute('data-amid');
+    if (on) amSelected[id] = true; else delete amSelected[id];
+  });
+  amUpdateSel();
+});
+$('amPreviewBtn').addEventListener('click', amPreview);
+$('amExecBtn').addEventListener('click', amExec);
+
+/* ═══════════════════ V11.0 · 设备与身份确认 ═══════════════════ */
+var dvDevices = [];
+var dvPage = 1, dvPages = 0, dvTotal = 0;
+function dvId(d) { return String(v11pick(d, ['id','device_id','device_hash']) || ''); }
+function dvStatusTone(s) {
+  s = String(s || '').toLowerCase();
+  if (s === 'banned' || s === 'blocked') return 'err';
+  if (s === 'active') return 'ok';
+  if (s === 'released') return 'warn';
+  return '';
+}
+function dvRiskTone(r) {
+  r = String(r || '').toLowerCase();
+  if (r === 'high' || r === 'critical') return 'err';
+  if (r === 'medium' || r === 'mid') return 'warn';
+  if (r === 'low') return 'ok';
+  return '';
+}
+function dvRender() {
+  var body = $('dvBody');
+  if (!dvDevices.length) { body.innerHTML = '<tr><td colspan="10" class="v11-lazy">暂无匹配设备</td></tr>'; return; }
+  body.innerHTML = dvDevices.map(function (d) {
+    var id = dvId(d);
+    var st = v11val(d.status);
+    var risk = String(v11pick(d, ['risk_level','risk']) || '-');
+    var bind = v11pick(d, ['active_binding','binding','account','user_name']);
+    if (bind && typeof bind === 'object') bind = v11pick(bind, ['name','user_name','id','user_id']);
+    var bc = v11pick(d, ['binding_count','bindings']);
+    var binding = (bind ? esc(v11short(String(bind), 18)) : '-') +
+      (bc !== '' && bc != null ? ' <span style="color:var(--text-faint)">×' + esc(v11val(bc)) + '</span>' : '');
+    return '<tr>' +
+      '<td class="mono" title="' + escAttr(id) + '">' + esc(v11short(id, 12)) + '</td>' +
+      '<td><span class="badge ' + dvStatusTone(st) + '">' + esc(st) + '</span></td>' +
+      '<td><span class="badge ' + dvRiskTone(risk) + '">' + esc(risk) + '</span></td>' +
+      '<td>' + binding + '</td>' +
+      '<td>' + esc(v11val(v11pick(d, ['signal_count','signals']))) + '</td>' +
+      '<td>' + esc(v11val(v11pick(d, ['recent_risk_score','risk_score','score']))) + '</td>' +
+      '<td class="mono">' + esc(v11val(v11pick(d, ['created_ip','register_ip']))) + '</td>' +
+      '<td class="mono" style="font-size:10.5px">' + esc(v11val(v11pick(d, ['last_seen_at','last_active_at','updated_at']))) + '</td>' +
+      '<td class="detail" title="' + escAttr(d.ban_reason || '') + '">' + esc(v11short(d.ban_reason, 26)) + '</td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="btn" data-devact="ban" data-devid="' + escAttr(id) + '" style="padding:3px 9px;font-size:11px">封禁</button> ' +
+        '<button class="btn" data-devact="unban" data-devid="' + escAttr(id) + '" style="padding:3px 9px;font-size:11px">解封</button> ' +
+        '<button class="btn" data-devact="release" data-devid="' + escAttr(id) + '" style="padding:3px 9px;font-size:11px">解除绑定</button>' +
+      '</td></tr>';
+  }).join('');
+  Array.prototype.forEach.call(body.querySelectorAll('button[data-devact]'), function (btn) {
+    btn.addEventListener('click', function () { dvAction(btn.getAttribute('data-devact'), btn.getAttribute('data-devid')); });
+  });
+}
+function dvRenderPager() {
+  $('dvPageInfo').textContent = '第 ' + (dvTotal ? dvPage : 0) + ' / ' + dvPages + ' 页 · 共 ' + dvTotal + ' 条';
+  $('dvPrevBtn').disabled = !(dvPage > 1);
+  $('dvNextBtn').disabled = !(dvPages && dvPage < dvPages);
+}
+function dvLoad(resetPage) {
+  if (resetPage) dvPage = 1;
+  var f = {
+    q: $('dvQ').value.trim(),
+    status: $('dvStatus').value,
+    min_risk: $('dvMinRisk').value.trim(),
+    page_size: $('dvPageSize').value,
+    page: dvPage
+  };
+  $('dvErr').textContent = '';
+  $('dvBody').innerHTML = '<tr><td colspan="10" class="v11-lazy">加载中…</td></tr>';
+  devApi('/api/developer/devices?' + v11qs(f)).then(function (r) {
+    var d = r.data || {};
+    dvDevices = d.devices || [];
+    var pg = d.pagination || {};
+    dvPage = Number(pg.page) || dvPage;
+    dvTotal = Number(pg.total) || dvDevices.length;
+    dvPages = Number(pg.pages) || (dvDevices.length ? 1 : 0);
+    var s = d.stats || {};
+    v11stats('dvStats', [
+      { label:'活跃设备 active', value: v11val(s.active), tone:'ok' },
+      { label:'已封禁 banned', value: v11val(s.banned), tone:'err' },
+      { label:'高风险 high_risk', value: v11val(s.high_risk), tone:'warn' }
+    ]);
+    var dg = $('dvDegraded');
+    if (d.degraded) { dg.style.display = ''; dg.textContent = '注意：服务端当前处于降级模式（degraded），部分信号可能缺失，结果仅供参考。'; }
+    else dg.style.display = 'none';
+    dvRender();
+    dvRenderPager();
+  }).catch(function (e) {
+    $('dvBody').innerHTML = '<tr><td colspan="10" class="v11-lazy">加载失败</td></tr>';
+    v11errLine('dvErr', e);
+  });
+}
+function dvAction(action, id) {
+  if (!id) return;
+  $('dvErr').textContent = '';
+  var reason = $('dvReason').value.trim();
+  if (action === 'ban') {
+    if (!reason) reason = (prompt('请输入封禁原因（留档审计）：', '') || '').trim();
+    if (!reason) { toast('封禁必须填写原因', true); return; }
+    if (!confirm('二次确认：封禁设备 ' + v11short(id, 12) + '？\n将撤销其关联会话并要求重新确认身份。')) return;
+  } else if (action === 'unban') {
+    if (!confirm('确认解封设备 ' + v11short(id, 12) + '？')) return;
+  } else {
+    if (!confirm('确认解除设备 ' + v11short(id, 12) + ' 的全部账号绑定？')) return;
+  }
+  devApi('/api/developer/devices', {
+    method: 'POST',
+    body: JSON.stringify({ action: action, device_id: id, reason: reason || undefined })
+  }).then(function (r) {
+    var d = r.data || {};
+    var extra = (d.released_count != null ? ' · 释放绑定 ' + d.released_count : '') +
+                (d.revoked_user_count != null ? ' · 撤销会话账号 ' + d.revoked_user_count : '');
+    toast('设备操作成功（' + (d.action || action) + '）' + extra);
+    dvLoad(false);
+  }).catch(function (e) { v11errLine('dvErr', e); });
+}
+$('dvQueryBtn').addEventListener('click', function () { dvLoad(true); });
+$('dvLoadBtn').addEventListener('click', function () { dvLoad(true); toast('正在载入设备数据'); });
+$('dvPrevBtn').addEventListener('click', function () { if (dvPage > 1) { dvPage--; dvLoad(false); } });
+$('dvNextBtn').addEventListener('click', function () { if (dvPage < dvPages) { dvPage++; dvLoad(false); } });
+
+/* ═══════════════════ V11.0 · 风控事件中心 ═══════════════════ */
+var RK_COLS = {
+  risk:     ['时间','事件类型','用户','设备','IP','风险分','动作','详情'],
+  security: ['时间','动作','用户','IP','结果','详情'],
+  login:    ['时间','用户','IP','结果','设备','UA','详情']
+};
+function rkVal(e, keys) { return v11pick(e, keys); }
+function rkTime(e) { return v11val(rkVal(e, ['created_at','ts','time','timestamp','occurred_at'])); }
+function rkType(e) { return String(rkVal(e, ['event_type','type','kind','name']) || '-'); }
+function rkActionOf(e) { return String(rkVal(e, ['action','event','op']) || '-'); }
+function rkUser(e) { return v11short(v11val(rkVal(e, ['user_id','user','uid','user_name'])), 14); }
+function rkDevice(e) { return v11short(v11val(rkVal(e, ['device_id','device','device_hash'])), 12); }
+function rkIpOf(e) { return v11short(v11val(rkVal(e, ['ip','ip_addr','remote_ip'])), 20); }
+function rkScore(e) { return v11val(rkVal(e, ['risk_score','score','severity'])); }
+function rkUa(e) { return v11short(v11val(rkVal(e, ['ua','user_agent','useragent'])), 18); }
+function rkSuccessOf(e) {
+  var s = rkVal(e, ['success','ok','result','status']);
+  if (s === '' || s == null) return { label:'-', tone:'' };
+  var v = String(s).toLowerCase();
+  if (s === true || s === 1 || v === 'true' || v === 'success' || v === 'ok' || v === 'allowed') return { label:'成功', tone:'ok' };
+  if (s === false || s === 0 || v === 'false' || v === 'blocked' || v === 'denied' || v === 'fail' || v === 'failed' || v === 'rejected') return { label:'失败/拦截', tone:'err' };
+  return { label: String(s), tone:'' };
+}
+function rkDetail(e) {
+  var d = rkVal(e, ['detail','meta','data','extra','message','reason']);
+  if (d && typeof d === 'object') { try { d = JSON.stringify(d); } catch (x) { d = String(d); } }
+  return String(d == null || d === '' ? '-' : d);
+}
+function rkTone(text) {
+  var s = String(text || '').toLowerCase();
+  if (/block|deny|fail|reject|ban|拦截|拒绝|失败/.test(s)) return 'err';
+  if (/warn|risk|suspic|可疑|风险|挑战|challenge/.test(s)) return 'warn';
+  if (/allow|pass|success|ok|通过|成功/.test(s)) return 'ok';
+  return 'accent';
+}
+function rkDetailCell(e) {
+  var full = rkDetail(e), short = v11short(full, 60);
+  return '<td class="detail" title="' + escAttr(full) + '">' +
+    (full.length > 60
+      ? '<details style="max-width:320px"><summary style="cursor:pointer;color:var(--accent)">' + esc(short) + '</summary><div style="white-space:pre-wrap;word-break:break-all;color:var(--text-faint);font-size:11px;margin-top:4px">' + esc(full) + '</div></details>'
+      : esc(short)) + '</td>';
+}
+function rkRow(e, src) {
+  var badgeType = '<span class="badge ' + rkTone(rkType(e) + ' ' + rkActionOf(e)) + '">' + esc(v11short(rkType(e), 24)) + '</span>';
+  var badgeAct = '<span class="badge ' + rkTone(rkActionOf(e)) + '">' + esc(v11short(rkActionOf(e), 20)) + '</span>';
+  var su = rkSuccessOf(e);
+  var okBadge = '<span class="badge ' + su.tone + '">' + esc(su.label) + '</span>';
+  var common = '<td class="mono" style="font-size:10.5px">' + esc(rkTime(e)) + '</td>';
+  if (src === 'security') {
+    return '<tr>' + common + '<td>' + badgeAct + '</td>' +
+      '<td class="mono">' + esc(rkUser(e)) + '</td>' +
+      '<td class="mono">' + esc(rkIpOf(e)) + '</td>' +
+      '<td>' + okBadge + '</td>' + rkDetailCell(e) + '</tr>';
+  }
+  if (src === 'login') {
+    return '<tr>' + common +
+      '<td class="mono">' + esc(rkUser(e)) + '</td>' +
+      '<td class="mono">' + esc(rkIpOf(e)) + '</td>' +
+      '<td>' + okBadge + '</td>' +
+      '<td class="mono">' + esc(rkDevice(e)) + '</td>' +
+      '<td class="mono" title="' + escAttr(String(rkVal(e, ['ua','user_agent']) || '')) + '">' + esc(rkUa(e)) + '</td>' +
+      rkDetailCell(e) + '</tr>';
+  }
+  return '<tr>' + common + '<td>' + badgeType + '</td>' +
+    '<td class="mono">' + esc(rkUser(e)) + '</td>' +
+    '<td class="mono">' + esc(rkDevice(e)) + '</td>' +
+    '<td class="mono">' + esc(rkIpOf(e)) + '</td>' +
+    '<td>' + esc(rkScore(e)) + '</td>' +
+    '<td>' + badgeAct + '</td>' + rkDetailCell(e) + '</tr>';
+}
+function rkSummary(d) {
+  var s = (d && d.summary) || {}, items = [];
+  var LABELS = {
+    filtered_count:'筛选事件数', '24h_events':'近24小时事件', high_risk_events:'高风险事件',
+    blocked_events:'拦截事件', total:'总事件', total_events:'总事件', event_types:'事件类型数',
+    unique_users:'涉及用户', unique_devices:'涉及设备', avg_risk_score:'平均风险分'
+  };
+  var TONES = { high_risk_events:'err', blocked_events:'err', '24h_events':'warn' };
+  Object.keys(s).forEach(function (k) {
+    var v = s[k];
+    if (v == null) return;
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v)) { items.push({ label: LABELS[k] || k, value: v.length, tone: TONES[k] || 'accent' }); return; }
+      items.push({ label: LABELS[k] || k, value: Object.keys(v).length, tone: TONES[k] || '' });
+      return;
+    }
+    items.push({ label: LABELS[k] || k, value: v, tone: TONES[k] || (items.length === 0 ? 'accent' : '') });
+  });
+  if (!items.length) items.push({ label:'事件数', value: ((d && d.events) || []).length, tone:'accent' });
+  v11stats('rkSummary', items);
+  /* event_types 明细徽章（按来源容错：数组或对象均可） */
+  var et = s.event_types, chips = $('rkChips');
+  if (et && typeof et === 'object') {
+    var pairs = Array.isArray(et) ? et.map(function (x) { return [x, 1]; })
+      : Object.keys(et).map(function (k) { return [k, et[k]]; });
+    chips.innerHTML = pairs.slice(0, 24).map(function (p) {
+      return '<span class="badge ' + rkTone(p[0]) + '">' + esc(v11short(p[0], 20)) +
+        (!Array.isArray(et) && p[1] != 1 ? ' · ' + esc(v11val(p[1])) : '') + '</span>';
+    }).join('');
+  } else chips.innerHTML = '';
+}
+function rkLoad() {
+  var src = $('rkSource').value;
+  var cols = RK_COLS[src] || RK_COLS.risk;
+  var f = {
+    source: src,
+    days: $('rkDays').value,
+    limit: $('rkLimit').value,
+    event_type: $('rkEventType').value.trim(),
+    kind: $('rkKind').value.trim(),
+    user_id: $('rkUserId').value.trim(),
+    device_id: $('rkDeviceId').value.trim(),
+    ip: $('rkIp').value.trim(),
+    action: $('rkAction').value.trim(),
+    success: $('rkSuccess').value
+  };
+  $('rkErr').textContent = '';
+  $('rkHead').innerHTML = '<tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
+  $('rkBody').innerHTML = '<tr><td colspan="' + cols.length + '" class="v11-lazy">加载中…</td></tr>';
+  devApi('/api/developer/risk?' + v11qs(f)).then(function (r) {
+    var d = r.data || {}, events = d.events || [];
+    $('rkBody').innerHTML = events.length
+      ? events.map(function (e) { return rkRow(e, src); }).join('')
+      : '<tr><td colspan="' + cols.length + '" class="v11-lazy">暂无事件</td></tr>';
+    rkSummary(d);
+  }).catch(function (e) {
+    $('rkBody').innerHTML = '<tr><td colspan="' + cols.length + '" class="v11-lazy">加载失败</td></tr>';
+    v11errLine('rkErr', e);
+  });
+}
+$('rkQueryBtn').addEventListener('click', rkLoad);
+$('rkLoadBtn').addEventListener('click', function () { rkLoad(); toast('正在载入风控事件'); });
+
+/* V11.0 初始化：仅恢复本地筛选 / 渲染占位，不发起任何高敏接口请求。
+   三块数据一律等用户点击「载入 / 查询」才通过 devApi 懒加载（可能触发 step-up）。 */
+amRestoreSaved();
+amRenderPager();
+amUpdateSel();
+dvRenderPager();
 
 /* ═══════════ 启动 ═══════════ */
 loadGate();

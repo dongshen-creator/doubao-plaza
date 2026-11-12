@@ -11,12 +11,12 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v10.7）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v11.0）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
 - `sql/schema.sql` — D1 初始化脚本
-- `sql/migrations/` — 版本化增量迁移（v8.x–v9.x，含回滚脚本）
+- `sql/migrations/` — 版本化增量迁移（v8.x–v11.x，含回滚脚本；V11 已有生产库需执行 `v11.0-admin-risk.sql`）
 
 ## 目录结构
 ```
@@ -29,7 +29,7 @@ functions/api/chat/          # 聊天频道管理
 functions/cdn-assets/[[key]].js   # R2 文件代理
 functions/pages/[[id]].js    # 自定义页面渲染（R2 优先，回退 D1）
 sql/                         # 数据库脚本（schema.sql / supabase-migration.sql / migrate-developers.sql / d1-cleanup.sql）
-sql/migrations/              # 版本化增量迁移（v8.x–v9.x）
+sql/migrations/              # 版本化增量迁移（v8.x–v11.x）
 workers/                     # Cloudflare Worker 源码（反代 cf.gallopingroad.top → Pages）
 docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素材（screenshots/）
 ```
@@ -42,6 +42,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 5. **工具框架单一事实来源**：新增网站工具只改 `functions/api/tools/registry.js`（按 docs/TOOL_FRAMEWORK_GUIDE.md 的 api_type 模式），不要另起后端分散定义。
 6. **数据库变更**：D1 改 `sql/schema.sql`；Supabase 只改 `sql/supabase-migration.sql` 且保持幂等（可重复执行）；非法协议校验（头像 URL 等）已有 `validateAvatarUrl` 类防护，新增用户输入 URL 必须做协议白名单校验。
 7. **无 npm/构建工具链**：没有 package.json / wrangler.toml，无本地 build/test/lint 命令。验证靠部署后手动/浏览器实测（可参考 CHANGELOG 各版本的「验证记录」）。项目为 git 仓库（remote：github.com/dongshen-creator/doubao-plaza）。
+8. **管理员与设备风控**：`/api/developer/*` 新端点统一走 `requireDeveloper(..., {stepup:true})` + `writeAdminAudit()`；批量处置必须预演、确认数、逐目标重查、角色层级保护、逐项结果；设备证据只存散列，客户端值不得作为唯一身份依据。新增 D1 表/列同时写 `sql/schema.sql` 与 `sql/migrations/` 的增量脚本。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

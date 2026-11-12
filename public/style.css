@@ -2870,3 +2870,82 @@ body.theme-red:not(.dark) ::-webkit-scrollbar-thumb:hover{background:rgba(120,86
 
 /* V10.0：删除 v9.8「暗红翻纸」的 .dark 纠偏块（noise-overlay/输入框内阴影）——
    暗红回归真·暗色后，.dark 通用暗色材质直接适用，无需纠偏 */
+
+/* ═══════════════════════════════════════════════════════════
+   V11.0 前端质感统一：只增补材质、焦点与交互反馈，不改变任何尺寸/布局
+   亮/暗色与「中国红」主题均通过现有变量派生；theme-red 保持其原有着色
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --v11-sheen:rgba(255,255,255,0.62);
+  --v11-edge:rgba(33,28,21,0.075);
+  --v11-focus:rgba(242,98,42,0.24);
+  --v11-lift:rgba(60,45,30,0.085);
+  --v11-soft:rgba(255,252,247,0.55);
+}
+.dark{
+  --v11-sheen:rgba(255,255,255,0.055);
+  --v11-edge:rgba(240,232,218,0.085);
+  --v11-focus:rgba(255,138,76,0.30);
+  --v11-lift:rgba(0,0,0,0.26);
+  --v11-soft:rgba(42,36,29,0.40);
+}
+
+/* 卡片高光：仅默认材质主题，不影响 V10.x 中国红宣纸/玄墨材质 */
+body:not(.theme-red) .card{
+  box-shadow:inset 0 1px 0 var(--v11-sheen),var(--shadow-sm);
+  transition:box-shadow .24s var(--np-ease, ease),border-color .24s ease,transform .24s var(--np-ease, ease);
+}
+body:not(.theme-red) .card:hover{
+  box-shadow:inset 0 1px 0 var(--v11-sheen),0 2px 8px var(--v11-lift),0 12px 28px var(--v11-lift);
+}
+body:not(.theme-red) .modal{
+  box-shadow:inset 0 1px 0 var(--v11-sheen),var(--shadow-lg);
+}
+body:not(.theme-red) .navbar{
+  backdrop-filter:blur(20px) saturate(1.35);
+  -webkit-backdrop-filter:blur(20px) saturate(1.35);
+}
+
+/* 统一清晰而不抢眼的键盘焦点；鼠标点击不显示 */
+:where(a,button,input,textarea,select,[tabindex]):focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 4px var(--v11-focus);
+}
+:where(.btn,.nav-btn,.icon-only,.modal-close):focus-visible{
+  outline-offset:3px;
+}
+:where(.input,.dev-input,.dev-textarea,select,textarea):focus{
+  border-color:var(--accent);
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+::selection{background:var(--accent);color:var(--text-on-accent)}
+
+/* 按钮在无障碍前提下增加轻微反馈，禁用态不动 */
+.btn:not(:disabled),.nav-btn:not(:disabled),.nav-btn-primary:not(:disabled){
+  transition:transform .18s var(--np-ease, ease),box-shadow .18s ease,filter .18s ease,background .18s ease;
+}
+.btn:not(:disabled):hover,.nav-btn-primary:not(:disabled):hover{filter:saturate(1.08)}
+.btn:not(:disabled):active,.nav-btn:not(:disabled):active{transform:translateY(1px)}
+.btn:disabled,.nav-btn:disabled{opacity:.56;cursor:not-allowed;filter:grayscale(.2)}
+
+/* 表格与滚动区域：更清晰的层次，不改变容器尺寸 */
+.tbl tbody tr,.v11-table tbody tr{transition:background-color .15s ease}
+.tbl tbody tr:hover,.v11-table tbody tr:hover{background:var(--accent-bg-hover)}
+body:not(.theme-red) ::-webkit-scrollbar{width:10px;height:10px}
+body:not(.theme-red) ::-webkit-scrollbar-track{background:transparent}
+body:not(.theme-red) ::-webkit-scrollbar-thumb{
+  background:var(--scrollbar-thumb);border:3px solid transparent;background-clip:padding-box;border-radius:99px;
+}
+body:not(.theme-red) ::-webkit-scrollbar-thumb:hover{filter:brightness(.9)}
+
+/* 密排信息轻微优化可读性 */
+.mono,.code,code,pre{font-variant-ligatures:none;letter-spacing:.005em}
+.badge,.tag{font-weight:650;letter-spacing:.01em}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;animation-iteration-count:1!important;
+    scroll-behavior:auto!important;transition-duration:.01ms!important;
+  }
+}

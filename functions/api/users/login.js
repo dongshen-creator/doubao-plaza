@@ -13,14 +13,14 @@ import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
 import { normalizeName } from '../_lib/name.js';
 import { verifyTurnstile } from '../_lib/turnstile.js';
 import {
-  getDeviceByCookie,
-  issueDevice,
-  deviceSetCookie,
+  resolveAuthDevice,
+  observeDeviceSignals,
   bindDeviceForUser,
   logRiskEvent,
   getClientIp,
   cfMeta,
 } from '../_lib/device.js';
+import { totpVerify } from '../_lib/totp.js';
 
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -162,7 +162,8 @@ export async function onRequestPost(context) {
   try {
     const { env, request } = context;
     const body = await request.json().catch(() => ({}));
-    const { identifier, password, turnstile_token, canvas_hash, canvas_status } = body;
+    const { identifier, password, turnstile_token, canvas_hash, canvas_status, totp_code } = body;
+    const identStr = String(identifier || '').trim();
 
     if (!identifier || !password) {
       return Response.json({ success: false, error: '请输入账号和密码' });
@@ -175,7 +176,7 @@ export async function onRequestPost(context) {
 
     // V5.13：暴力破解防护——失败过多直接锁定（先于密码校验，避免给爆破者做算力）
     const tableReady = await ensureLoginAttemptsTable(env);
-    if (tableReady && await isLoginLocked(env, String(identifier), clientIP)) {
+    if (tableReady && await isLoginLocked(env, identStr, clientIP)) {
       await logRiskEvent(env, {
         event_type: 'login_fail', ip: clientIP, ...cmeta, ua,
         action: 'blocked', risk_score: 40,
@@ -185,7 +186,7 @@ export async function onRequestPost(context) {
     }
 
     // V8.0：撞库风险信号 → 要求 Turnstile 复验（未配置密钥时 verifyTurnstile 自动放行）
-    const risk = tableReady ? await loginRiskNeedsChallenge(env, String(identifier), clientIP) : { need: false };
+    const risk = tableReady ? await loginRiskNeedsChallenge(env, identStr, clientIP) : { need: false };
     if (risk.need) {
       const ts = await verifyTurnstile(turnstile_token, env, clientIP);
       if (!ts.success) {
@@ -203,7 +204,6 @@ export async function onRequestPost(context) {
     }
 
     // V8.0：昵称登录——优先级 豆包号 → 智能体链接 → 规范化昵称（与注册同一 normalizeName）
-    const identStr = String(identifier).trim();
     let user = await env.DB.prepare(`SELECT * FROM users WHERE doubao_id = ?`).bind(identStr).first();
     if (!user) user = await env.DB.prepare(`SELECT * FROM users WHERE agent_url = ?`).bind(identStr).first();
     if (!user) {
@@ -211,43 +211,35 @@ export async function onRequestPost(context) {
       if (norm) user = await env.DB.prepare(`SELECT * FROM users WHERE name_norm = ?`).bind(norm).first();
     }
 
-    // V8.0：设备标记解析（先于尝试记录，便于落 device_hash）
-    // - 已有标记：有效则续期，封禁则拒
-    // - 无标记：服务端补签（签发限流时降级为「不绑定」而非拒绝登录，避免共享出口 IP 用户无法登录）
+    // V11.0：Cookie 缺失时先按多维历史信号恢复原设备并轮换凭据；
+    // 只有强信号不足时才视为新设备，封禁状态不会因清 Cookie / 换代理而自动消失。
     let device = null;
     let freshDevRaw = null;
-    const devRes = await getDeviceByCookie(env, request);
+    const devRes = await resolveAuthDevice(env, request, clientIP, body);
+    if (devRes.banned) {
+      await logRiskEvent(env, {
+        event_type: 'login_fail', device_id: devRes.device && devRes.device.id,
+        ip: clientIP, ...cmeta, ua, action: 'blocked', risk_score: 80,
+        detail: { reason: 'banned_device', recovered: !!devRes.recovered, identifier: identStr.slice(0, 100) },
+      });
+      return Response.json({ success: false, error: '登录失败，请更换网络环境后重试' }, { status: 403 });
+    }
     if (devRes.device) {
-      if (devRes.device.status === 'banned') {
-        await logRiskEvent(env, {
-          event_type: 'login_fail', device_id: devRes.device.id,
-          ip: clientIP, ...cmeta, ua, action: 'blocked', risk_score: 60,
-          detail: { reason: 'banned_device', identifier: identStr.slice(0, 100) },
-        });
-        return Response.json({ success: false, error: '登录失败，请更换网络环境后重试' }, { status: 403 });
-      }
       device = devRes.device;
-      env.DB.prepare(`UPDATE devices SET last_seen_at = datetime('now') WHERE id = ?`)
-        .bind(device.id).run().catch(() => {});
+      freshDevRaw = devRes.fresh ? devRes.raw : null;
     } else {
-      const iss = await issueDevice(env, { ip: clientIP });
-      if (iss.ok) {
-        freshDevRaw = iss.raw;
-        device = await env.DB.prepare(`SELECT * FROM devices WHERE id = ?`).bind(iss.id).first();
-      } else {
-        // 签发限流：不阻塞登录，记录风险信号
-        await logRiskEvent(env, {
-          event_type: 'login_fail', ip: clientIP, ...cmeta, ua,
-          action: 'allowed', risk_score: 20,
-          detail: { reason: 'device_issue_limited', identifier: identStr.slice(0, 100) },
-        });
-      }
+      // 签发限流：密码登录仍可使用，但自动登录必须重新进行设备确认。
+      await logRiskEvent(env, {
+        event_type: 'login_fail', ip: clientIP, ...cmeta, ua,
+        action: 'allowed', risk_score: 20,
+        detail: { reason: 'device_issue_limited', identifier: identStr.slice(0, 100) },
+      });
     }
 
     // 记录尝试（失败场景先落库）；成功场景在下方标记 success=1
     const attemptId = generateToken().slice(0, 24);
     if (tableReady) {
-      env.DB.prepare(
+      await env.DB.prepare(
         `INSERT INTO login_attempts (id, identifier, ip_address, success, asn, country, canvas_hash, device_hash)
          VALUES (?, ?, ?, 0, ?, ?, ?, ?)`
       ).bind(
@@ -293,10 +285,20 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: '账号或密码错误' });
     }
 
+    // V11.0：已启用 TOTP 的账号，普通密码登录同样要求动态码，不再只保护后台操作。
+    if (user.totp_enabled && !(await totpVerify(user.totp_secret, totp_code))) {
+      await logRiskEvent(env, {
+        event_type: 'login_fail', user_id: user.id, device_id: device && device.id,
+        ip: clientIP, ...cmeta, ua, action: 'challenge', risk_score: 35,
+        detail: { reason: 'totp_required_or_invalid' },
+      });
+      return Response.json({ success: false, need_totp: true, error: '请输入身份验证器中的 6 位动态码' });
+    }
+
     if (tableReady) {
-      env.DB.prepare(`UPDATE login_attempts SET success = 1 WHERE id = ?`).bind(attemptId).run().catch(() => {});
+      await env.DB.prepare(`UPDATE login_attempts SET success = 1 WHERE id = ?`).bind(attemptId).run().catch(() => {});
       // 成功登录清零该账号的失败记录：受害者不因撞库尝试被持续锁定
-      env.DB.prepare(`DELETE FROM login_attempts WHERE identifier = ? AND success = 0`)
+      await env.DB.prepare(`DELETE FROM login_attempts WHERE identifier = ? AND success = 0`)
         .bind(identStr.slice(0, 200)).run().catch(() => {});
     }
 
@@ -309,11 +311,13 @@ export async function onRequestPost(context) {
     await checkAndUpdatePunishment(env, user.id);
 
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const sessionDeviceId = device && (!devRes.bindingUserId || devRes.bindingUserId === user.id) ? device.id : null;
 
     await env.DB.prepare(
-      `INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)`
-    ).bind(user.id, token, expiresAt).run();
+      `INSERT INTO sessions (user_id, token, expires_at, device_id, created_ip, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(user.id, token, expiresAt, sessionDeviceId, clientIP).run();
 
     // 签发 Supabase JWT（用于 RLS 鉴权）
     const supabaseToken = await signSupabaseJWT(user.id, env);
@@ -338,13 +342,20 @@ export async function onRequestPost(context) {
       }
     }
 
+    await observeDeviceSignals(env, device && device.id, body, request, clientIP);
     await logRiskEvent(env, {
       event_type: 'login_ok', user_id: user.id, device_id: device && device.id,
       ip: clientIP, ...cmeta, ua,
       canvas_hash: canvas_hash ? String(canvas_hash).slice(0, 64) : null,
       canvas_status: canvas_status || null,
-      action: 'allowed', risk_score: freshDevRaw ? 10 : 0,
-      detail: { fresh_device: !!freshDevRaw },
+      action: 'allowed', risk_score: devRes.recovered ? 25 : (freshDevRaw ? 10 : 0),
+      detail: {
+        fresh_device: !!freshDevRaw && !devRes.recovered,
+        recovered_device: !!devRes.recovered,
+        match_score: devRes.matchScore || 0,
+        matched_signals: devRes.matchedSignals || [],
+        bound_to_other: !!(devRes.bindingUserId && devRes.bindingUserId !== user.id),
+      },
     });
 
     // 安全地移除 password 字段
@@ -368,7 +379,7 @@ export async function onRequestPost(context) {
     };
 
     const respHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-    if (freshDevRaw) respHeaders['Set-Cookie'] = deviceSetCookie(freshDevRaw);
+    if (devRes.header) respHeaders['Set-Cookie'] = devRes.header;
 
     return new Response(
       JSON.stringify({ success: true, data: safeUser, token, supabase_token: supabaseToken }),

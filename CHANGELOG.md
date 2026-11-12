@@ -4,6 +4,66 @@
 
 ---
 
+## v11.0 — 2026-11-12
+
+### 前端质感升级 · 管理员组合工作台 · 多维设备身份确认
+
+保留原有整体界面布局、纵向后台结构与后端目录结构，只在现有材质/组件上做美学增强，并补齐高敏后台功能与设备风控闭环。
+
+#### 一、前端美学（不改布局）
+- `style.css` 追加 V11 质感层：卡片顶部高光、柔和浮起阴影、统一键盘焦点环、按钮禁用/按压反馈、滚动条细节、表格 hover、`prefers-reduced-motion`；仅默认材质主题生效，V10.x 中国红宣纸/玄墨材质保持不变。
+- `developer.html` 追加统计网格、语义徽章、粘性表头、斑马纹、新卡片高光与 720px 响应式细节；所有旧卡片、DOM id、事件绑定和旧功能保留。
+- 两个入口的样式缓存版本号统一升到 `style.css?v=53`。
+- `index.html` 的登录表单新增默认隐藏的 TOTP 动态码字段，仅在服务端返回 `need_totp` 时显示，不占原有布局。
+
+#### 二、管理员后台新增功能
+- 组合账号查询：关键词、角色、正常/隔离/停用/处罚状态、活跃窗口、IP、设备 ID、举报数、注册日期、排序、分页；本页补充设备数、会话数、风险事件数/最高风险分。
+- 批量处置：1–50 个目标，预演 + 确认数 + step-up；支持隔离/解隔离、强制下线、撤销近期认证、释放设备绑定；逐 ID 重查状态与权限，返回逐项 `processed/skipped/failed`，写入 `bulk_*` 审计。
+- 角色层级保护：不能操作自己或开发者；全局管理员不能操作其他全局管理员；开发者可操作普通全局管理员。
+- 设备工作台：设备状态、生效绑定、信号数、风险等级和封禁原因检索；支持封禁、解封、解绑；封禁同步撤销关联会话与近期认证，且禁止封禁当前操作者自身绑定设备。
+- 风控事件中心：`risk_events` / `security_events` / `login_attempts` 三类来源，时间范围与事件类型/用户/设备/IP/动作筛选，返回汇总统计；Canvas/设备散列在响应中截断。
+- 附加体验：当前页 CSV 导出、筛选条件本地保存、懒加载高敏模块、审计筛选；修复原来单个 `stepupSettlers` 在并发请求时互相覆盖、导致 Promise 永久挂起的问题，改为队列解析。
+
+#### 三、设备身份确认与认证加固
+- 新增 `device_signals`：保存 FingerprintJS、Canvas、WebGL/音频/屏幕环境、三槽本地持久标识、网络/ASN 信号的 SHA-256 摘要；原值不入库，客户端值不单独作为身份凭据。
+- Cookie 被清除时，服务端要求至少一个高熵信号 + 一个独立辅助信号且综合分 ≥65 才恢复原设备；恢复会轮换凭据并写风险事件；并列候选或强信号不足时不恢复，自动登录要求重新密码认证。
+- 设备封禁在 Cookie 路径和信号恢复路径均生效；封禁设备不再轮换凭据或下发新 Cookie；自动登录补齐设备绑定检查、会话撤销和 `last_active_at` 更新。
+- 会话新增 `device_id/created_ip/last_seen_at`，令牌轮换在同一批次原子提交；会话有效期统一为 SQLite 时间格式，鉴权统一用 `datetime(expires_at)` 比较。
+- 普通登录补齐 TOTP 校验（原先仅后台 step-up 校验）、identifier 去空格后的锁定口径、登录尝试写入/成功标记 await；注册、登录、claim、rebind、auto-login 全链路携带多维设备证据。
+- 诚实边界：这是概率型风险识别，不承诺绝对无法绕过。全新设备、禁用存储、篡改客户端值或全新的匿名浏览器可能使历史信号不足，此时走重新认证/人机验证/人工复核。
+
+#### 四、数据库与清理
+- `sql/schema.sql` 与新增 `sql/migrations/v11.0-admin-risk.sql`：设备信号表、封禁元数据、会话设备绑定、组合查询/风控检索索引。
+- `sql/d1-cleanup.sql` 增加 90 天风控信号/会话过期清理；生产库升级需逐条执行 V11 增量脚本，服务端另有运行时幂等补列兜底。
+
+#### 修改文件
+| 文件 | 变更 |
+|---|---|
+| `public/style.css` | 新增 V11 全局视觉质感层；主题变量与无障碍交互 |
+| `public/index.html` | 设备证据采集、三槽持久标识、注册/登录/自动登录接入、登录 TOTP、样式版本 |
+| `public/developer.html` | 三张新工作台、视觉精修、step-up 并发队列、懒加载 |
+| `functions/api/_lib/device.js` | 设备信号散列、匹配评分、凭据轮换、运行时幂等补列 |
+| `functions/api/users.js` | 注册接入多维信号与会话设备绑定 |
+| `functions/api/users/login.js` | 设备恢复、TOTP、会话绑定、风控与限流修正 |
+| `functions/api/users/auto-login.js` | 设备确认、会话原子轮换、封禁拦截、活跃时间修复 |
+| `functions/api/device/claim.js` / `rebind.js` | 清 Cookie 后受控恢复与证据采集 |
+| `functions/api/_lib/jwt.js` / `devauth.js` | 会话时间格式统一、step-up purpose 校验 |
+| `functions/api/developer/account-manager.js` | 新增组合查询、预演与批量处置 |
+| `functions/api/developer/devices.js` | 新增设备检索、封禁/解封/解绑 |
+| `functions/api/developer/risk.js` | 新增三类风控事件检索与汇总 |
+| `sql/schema.sql` / `sql/d1-cleanup.sql` / `sql/migrations/v11.0-admin-risk.sql` | 设备信号与会话迁移、保留策略、性能优化索引 |
+| `README.md` / `AGENTS.md` / `CHANGELOG.md` | 部署/迁移说明、项目规则与本节版本记录 |
+
+#### 验证记录（2026-11-12）
+- 所有 11 个改动/新增 JS：`node --check` 全部 PASS。
+- `public/index.html` 9 段、`public/developer.html` 3 段内联脚本：Node `vm.Script` 语法检查全部 PASS；后台旧函数/旧 DOM id/卡片顺序/`$()` 引用全量静态核对 PASS。
+- 模拟 D1 动态冒烟测试 24/24 PASS（20 动态 + 4 静态）：信号权重/散列、65 分恢复、55 分拒绝、封禁不轮换 Cookie、preview 状态判断、confirm 校验、批量逐项结果、设备封禁撤会话、风控散列截断、自动登录三种路径。
+- 复测修复：索引失败可重试、封禁恢复不续签、超长输入不生成可预测信号、banned 路径字段一致；回归用例无退化。
+- 部署后必须人工完成：在 Cloudflare D1 Console 执行 `sql/migrations/v11.0-admin-risk.sql`，然后实测管理员 step-up、组合查询/预演/执行、设备封禁、清 Cookie 后重新登录、TOTP 登录与风险事件可见性。
+- WorkBuddy 发布的是 `public/` 静态前端预览；Cloudflare Pages Functions、D1 与 Supabase 不在 WorkBuddy 沙箱内运行，完整线上功能以 GitHub 推送触发的 Cloudflare Pages 部署为准。
+
+---
+
 ## v10.8 — 2026-11-06
 
 ### 接入 freserafim（chocoChat）图床/文件床：逆向网页端上传链路，替换已失效的 picgo.net 与 img.nickyam.com
