@@ -4,6 +4,19 @@
 
 ---
 
+## v12.0.2 — 2026-11-13
+
+### 生产配置落地：回写令牌 + D1 迁移（无需人工操作控制台）
+
+- 通过 wrangler OAuth 重新登录 Cloudflare，定位到 Pages 项目 `doubao-plaza` 与生产 D1 `doubao-plaza-db`（权限含 `pages:write` / `d1:write`）。
+- 生成 48 位高强度随机令牌，用 `wrangler pages secret put` 写入**生产环境** `SYNC_BRIDGE_TOKEN`（加密存储；未写入仓库、未提交 git、未写入前端代码）。
+- 只读诊断确认生产库真实结构：`device_signals` 与 `sessions.device_id/created_ip/last_seen_at`、`devices.ban_reason/banned_at/banned_by` 均已由运行时自愈补齐；缺的是 `cloud_sync_inbox` 与全部 `*_updated` 索引。
+- 执行 `sql/migrations/v12.0-cloud-sync.sql`（全幂等）；V11 迁移剔除 6 条非幂等 `ALTER TABLE` 后执行其余建表/建索引语句，避免 `duplicate column name`。验证 `sqlite_master` 命中 10 个对象：`cloud_sync_inbox`、`idx_cloud_sync_inbox_time`、5 个 `*_updated`、`device_signals`、`idx_sessions_device`、`idx_risk_events_created`。
+- **Pages secret 变更必须重新部署才会被 Functions 读取**，本次提交同时用于触发 Cloudflare Pages 自动部署。
+- 前端「云服务」面板的回写令牌需在发布域手工输入一次，仅存内存、用完清空；令牌不落在代码、localStorage 或日志中。
+
+---
+
 ## v12.0.1 — 2026-11-13
 
 ### 修复：WorkBuddy 发布域调用共享服务网关被 403
