@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v11.0）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v11.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -43,6 +43,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 6. **数据库变更**：D1 改 `sql/schema.sql`；Supabase 只改 `sql/supabase-migration.sql` 且保持幂等（可重复执行）；非法协议校验（头像 URL 等）已有 `validateAvatarUrl` 类防护，新增用户输入 URL 必须做协议白名单校验。
 7. **无 npm/构建工具链**：没有 package.json / wrangler.toml，无本地 build/test/lint 命令。验证靠部署后手动/浏览器实测（可参考 CHANGELOG 各版本的「验证记录」）。项目为 git 仓库（remote：github.com/dongshen-creator/doubao-plaza）。
 8. **管理员与设备风控**：`/api/developer/*` 新端点统一走 `requireDeveloper(..., {stepup:true})` + `writeAdminAudit()`；批量处置必须预演、确认数、逐目标重查、角色层级保护、逐项结果；设备证据只存散列，客户端值不得作为唯一身份依据。新增 D1 表/列同时写 `sql/schema.sql` 与 `sql/migrations/` 的增量脚本。
+9. **纯前端特性（V11.1）**：凡标注「仅前端、不占用后端资源」的需求，只允许用 `localStorage` / DOM / CSS 实现，禁止新增 Functions 文件、`fetch` / `api()` 调用、数据库查询或服务端日志；首访类状态一律写本地标记并提供隐私模式内存兜底；覆盖层用 `pointer-events:none` 避免遮挡既有交互，目标元素用 `getBoundingClientRect()` 动态定位以适配导航重渲染与移动端隐藏；改动 `style.css` 后必须同步提升 `index.html` / `developer.html` 的 `?v=` 缓存版本号。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

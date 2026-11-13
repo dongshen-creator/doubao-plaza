@@ -4,6 +4,42 @@
 
 ---
 
+## v11.1 — 2026-11-13
+
+### 首次访问注册引导线（纯前端，零后端资源）
+
+面向第一次访问、本机没有任何登录痕迹的访客，叠加一条指向「注册」的可视引导线，引导其立即创建账号。**不新增接口、不发起 fetch、不查数据库、不写服务端日志、不占用任何后端资源。**
+
+#### 一、新增
+- `public/style.css` 追加 `V11.1 · 首次访问注册引导线` 样式层：SVG 曲线引导线（流动虚线 + 箭头 + 端点脉冲）、目标高亮环、浮动引导卡片；全部颜色走 `--accent` / `--text-*` / `--border-*` 变量，自动适配亮色、暗色、中国红与玄墨材质主题；`prefers-reduced-motion` 由全局规则统一降级；移动端有独立紧凑间距。
+- `public/index.html` 新增自包含的 `__registerGuide` 模块与 `maybeShowRegisterGuide()`：
+  - 首访判定只读浏览器本地：`dp_register_guide_v1` 标记、`dp_token`、`dp_device_logins` 本机登录痕迹，并排除维护模式与独立聊天模式；`localStorage` 不可用（隐私模式）时用内存变量兜底。
+  - 目标自适应：桌面端指向导航栏「注册」，移动端（导航按钮被 CSS 隐藏）指向内容区「立即注册」，打开登录弹窗时指向弹窗内的「立即注册」链接。
+  - 引导线随窗口 resize / 任意容器 scroll 通过 `requestAnimationFrame` 重算，目标滚出视口时收起曲线、保留卡片，不画屏幕外的路径。
+  - 首次公告弹窗存在时用最多 40 次 × 500ms 的**有限重试**等待其关闭，不设长驻定时器；不阻塞既有弹窗交互（覆盖层 `pointer-events:none`，仅卡片可点）。
+  - 收尾条件：点击「立即注册」/「稍后再说」/关闭按钮，或直接点击被高亮的注册入口，或登录 / 注册成功 —— 任一都会写入本地标记并隐藏，`showModal` / `closeModal` / `doLogin` / `doRegister` 已挂接。
+- 两个入口样式缓存版本号统一升到 `style.css?v=54`（V11.0 为 `?v=53`）。
+
+#### 二、关于 `unknown_identifier` 的结论
+`{"reason":"unknown_identifier","identifier":"凌"}` 是 `risk_events.detail` 里的一条**风控审计记录**，不是返回给用户的登录报错；用户实际看到的是 `{"success":false,"error":"账号或密码错误"}`。它表示登录标识 `"凌"` 依次未命中 `users.doubao_id`、`users.agent_url`、`users.name_norm`（`normalizeName` 只做 Unicode 归一化 / 去空白 / 转小写，是**精确匹配**，不做模糊搜索）。常见原因：输入了昵称片段而非完整昵称、账号本就不存在、旧账号 `name_norm` 未回填，或把昵称误填成豆包号。本次未改动登录逻辑。
+
+#### 三、修改文件
+| 文件 | 变更 |
+|---|---|
+| `public/style.css` | 追加 V11.1 引导线样式层与 4 组 keyframes |
+| `public/index.html` | 新增引导线模块与首访入口；`closeModal` / `showModal` / `init` / `doLogin` / `doRegister` 各挂一处钩子；`style.css?v=54` |
+| `public/developer.html` | 仅同步 `style.css?v=54` |
+| `README.md` | 用户系统补充说明、FAQ 缓存版本号 |
+| `AGENTS.md` | 最新版本号 v11.1；新增第 9 条「纯前端特性」约定 |
+| `CHANGELOG.md` | 本节 |
+
+#### 四、验证记录
+- 全部内联 `<script>` 用 `vm.Script` 做语法检查通过；V11.1 新增代码段单独解析通过。
+- 静态核对：引导层无 `fetch(` / `api(` / `XMLHttpRequest` / `/api/` 调用；不引用 `env.DB`、不新增 Functions 文件；目标选择器与现有 DOM id、导航渲染模板、登录弹窗链接一致。
+- 未改动任何后端文件、`sql/` 与 `functions/`，因此**无需执行 D1 迁移**。
+
+---
+
 ## v11.0 — 2026-11-12
 
 ### 前端质感升级 · 管理员组合工作台 · 多维设备身份确认

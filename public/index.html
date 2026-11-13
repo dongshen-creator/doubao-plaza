@@ -232,7 +232,7 @@
       };
     })();
   </script>
-  <link rel="stylesheet" href="style.css?v=53">
+  <link rel="stylesheet" href="style.css?v=54">
   <!-- V11.0 入口微优化：键盘焦点态描边（不占布局；主视觉仍由 style.css 统一处理） -->
   <style>.btn:focus-visible { outline: 2px solid var(--accent, #ff7a45); outline-offset: 2px; transition: outline-offset .15s ease; }</style>
   <!-- V11 修复：Cloudflare Turnstile 人机验证脚本（站点密钥为空时无需加载，避免脚本被外网环境拦截产生报错；启用时取消注释并填入 TURNSTILE_SITE_KEY） -->
@@ -695,6 +695,8 @@ function closeProgressToast(el) {
 function closeModal(name) {
   document.getElementById(name + 'Modal').style.display = 'none';
   if (name === 'announcement') { localStorage.setItem('dp_announcement_seen', '1'); markAnnouncementsRead(); }
+  // V11.1：登录弹窗关闭后，引导线退回指向页面里的「注册」入口（已看过则自动跳过）
+  if (name === 'login' && typeof __registerGuide !== 'undefined') __registerGuide.show('page');
 }
 
 // ===== Avatar HTML =====
@@ -1462,6 +1464,8 @@ async function init() {
   loadUsageNotice();
   if (!localStorage.getItem('dp_announcement_seen')) showFirstLoginAnnouncements();
   renderContent();
+  // V11.1：首次访问注册引导线（纯前端；等布局与首次公告弹窗稳定后再判定）
+  setTimeout(maybeShowRegisterGuide, 420);
   // v7.3: D1 轮询后台暂停 —— 隐藏标签页不发请求，回前台立即补一轮（带最小间隔防抖）
   var _annLastRun = 0, _blogLastRun = 0;
   function pollUnreadAnnouncements() {
@@ -2122,6 +2126,8 @@ function renderLoginTurnstile() {
         localStorage.setItem('dp_token', sessionToken);
         saveDeviceLogin(currentUser);
         if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
+        // V11.1：登录成功即结束首访引导（纯前端标记）
+        if (typeof __registerGuide !== 'undefined') __registerGuide.finish();
         // 复验组件隐藏并清空（下次风险信号时重新渲染）
         var ltBox = document.getElementById('loginTurnstileContainer');
         if (ltBox) { ltBox.style.display = 'none'; var ltIn = document.getElementById('loginTurnstileToken'); if (ltIn) ltIn.value = ''; }
@@ -2253,6 +2259,8 @@ async function doRegister() {
       localStorage.setItem('dp_token', sessionToken);
       saveDeviceLogin(currentUser);
       if (res.supabase_token) window.__setSupabaseSession(res.supabase_token);
+      // V11.1：注册成功即结束首访引导（纯前端标记）
+      if (typeof __registerGuide !== 'undefined') __registerGuide.finish();
       closeModal('register');
       updateNavbar();
       if (chatStandaloneMode && chatStandaloneRoom) {
@@ -6663,6 +6671,11 @@ async function showModal(name) {
   }
 
   document.getElementById(name + 'Modal').style.display = 'flex';
+  // V11.1：纯前端引导线跟随弹窗切换目标 / 收尾（不发起任何请求）
+  if (typeof __registerGuide !== 'undefined') {
+    if (name === 'login') __registerGuide.show('modal');
+    if (name === 'register') __registerGuide.finish();
+  }
   if (name === 'settings') loadSettings();
   if (name === 'recover') showRecoveryAccounts();
   // V11 修复：注册弹窗打开时渲染 Turnstile
@@ -13480,6 +13493,211 @@ function uploadChatBgFallback(file, status) {
       if (status) status.textContent = '上传失败：img.scdn.io 和 tmpfile.link 均不可用，可尝试手动输入URL';
       toast('自动上传失败，请手动输入图片URL', 'error');
     });
+}
+
+// ═══════════════════════════════════════════════════════════
+// V11.1 · 首次访问注册引导线（纯前端 / 零后端资源）
+//   - 判断依据只来自浏览器本地：localStorage 引导标记、会话 token、本机登录痕迹
+//   - 不新增接口、不 fetch、不查数据库、不写服务端日志、不占用任何后端资源
+//   - 覆盖层是 body 的兄弟子节点，不改动既有 DOM 结构与布局
+//   - 桌面端指向导航栏「注册」，移动端指向内容区「立即注册」，登录弹窗内指向弹窗里的「立即注册」
+// ═══════════════════════════════════════════════════════════
+var REGISTER_GUIDE_KEY = 'dp_register_guide_v1';
+var __rgMemorySeen = false;   // 隐私模式 / localStorage 不可用时的内存兜底
+var __rgRetryLeft = 40;       // 等公告弹窗关闭的有限重试，不设长驻定时器
+var __rgResizeFrame = 0;
+
+function rgSeen() {
+  try { return localStorage.getItem(REGISTER_GUIDE_KEY) === '1' || __rgMemorySeen; }
+  catch (e) { return __rgMemorySeen; }
+}
+function rgMarkSeen() {
+  __rgMemorySeen = true;
+  try { localStorage.setItem(REGISTER_GUIDE_KEY, '1'); } catch (e) {}
+}
+function rgHasAccountTrace() {
+  try {
+    if (localStorage.getItem('dp_token')) return true;
+    var list = JSON.parse(localStorage.getItem('dp_device_logins') || '[]');
+    if (Array.isArray(list) && list.length) return true;
+  } catch (e) {}
+  return false;
+}
+function rgIsFirstVisit() {
+  if (rgSeen()) return false;
+  if (typeof currentUser !== 'undefined' && currentUser) return false;
+  if (rgHasAccountTrace()) return false;
+  if (typeof chatStandaloneMode !== 'undefined' && chatStandaloneMode) return false;
+  if (typeof siteSettings !== 'undefined' && siteSettings && siteSettings.maintenance_mode === 'on') return false;
+  return true;
+}
+function rgHasBlockingModal() {
+  var nodes = document.querySelectorAll('.modal-overlay');
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    if (getComputedStyle(n).display !== 'none' && n.getBoundingClientRect().width > 0) return true;
+  }
+  return false;
+}
+function rgFindTarget(stage) {
+  var list = stage === 'modal'
+    ? ['#loginModal #loginForm a[onclick*="showModal(\'register\')"]']
+    : [
+        '#navRight button[onclick*="showModal(\'register\')"]',
+        '#mainContent .login-required a[onclick*="showModal(\'register\')"]'
+      ];
+  for (var i = 0; i < list.length; i++) {
+    var el = null;
+    try { el = document.querySelector(list[i]); } catch (e) { continue; }
+    if (!el) continue;
+    var r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    if (r.width > 4 && r.height > 4 && cs.display !== 'none' && cs.visibility !== 'hidden' &&
+        r.bottom > 8 && r.top < window.innerHeight - 8) return el;
+  }
+  return null;
+}
+
+var __registerGuide = (function () {
+  var root = null, svg, glow, path, dot, ring, card;
+  var stage = 'page';
+  var bound = false;
+
+  function build() {
+    root = document.createElement('div');
+    root.id = 'dpRegisterGuide';
+    root.className = 'rg-root';
+    root.setAttribute('role', 'region');
+    root.setAttribute('aria-label', '首次访问注册引导');
+    root.innerHTML =
+      '<svg class="rg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><marker id="rgArrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="rg-arrow" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>' +
+        '<path class="rg-path-glow" d=""/>' +
+        '<path class="rg-path" d="" marker-end="url(#rgArrowHead)"/>' +
+        '<circle class="rg-dot" cx="-99" cy="-99" r="5"/>' +
+      '</svg>' +
+      '<div class="rg-ring"></div>' +
+      '<div class="rg-card">' +
+        '<button class="rg-close" type="button" aria-label="关闭引导">&times;</button>' +
+        '<div class="rg-kicker"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 第一次来到这里？</div>' +
+        '<div class="rg-title">先创建一个账号吧</div>' +
+        '<p class="rg-desc">注册后即可搜索用户、添加好友、管理个人资料。顺着这条引导线，点一下「注册」就能开始。</p>' +
+        '<div class="rg-actions">' +
+          '<button class="btn btn-orange rg-go" type="button">立即注册</button>' +
+          '<button class="btn btn-gray rg-later" type="button">稍后再说</button>' +
+        '</div>' +
+        '<div class="rg-foot"><iconify-icon icon="ph:shield-check-fill"></iconify-icon><span>只在你自己的浏览器里记录，不会向服务器发送任何数据</span></div>' +
+      '</div>';
+    document.body.appendChild(root);
+    svg = root.querySelector('.rg-svg');
+    glow = root.querySelector('.rg-path-glow');
+    path = root.querySelector('.rg-path');
+    dot = root.querySelector('.rg-dot');
+    ring = root.querySelector('.rg-ring');
+    card = root.querySelector('.rg-card');
+    root.querySelector('.rg-go').addEventListener('click', rgGoRegister);
+    root.querySelector('.rg-later').addEventListener('click', function () { __registerGuide.dismiss(); });
+    root.querySelector('.rg-close').addEventListener('click', function () { __registerGuide.dismiss(); });
+    if (!bound) {
+      bound = true;
+      window.addEventListener('resize', scheduleReposition, { passive: true });
+      window.addEventListener('scroll', scheduleReposition, true);
+    }
+  }
+
+  function scheduleReposition() {
+    if (!root || !root.classList.contains('rg-on')) return;
+    if (__rgResizeFrame) return;
+    __rgResizeFrame = requestAnimationFrame(function () {
+      __rgResizeFrame = 0;
+      reposition();
+    });
+  }
+
+  function reposition() {
+    if (!root || !root.classList.contains('rg-on')) return;
+    var W = window.innerWidth, H = window.innerHeight;
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+    var cardW = Math.min(300, W - 32);
+    card.style.width = cardW + 'px';
+    var cardH = card.offsetHeight || 190;
+
+    var target = rgFindTarget(stage);
+    var tr = target ? target.getBoundingClientRect() : null;
+    var visible = tr && tr.width > 4 && tr.height > 4 && tr.bottom > 8 && tr.top < H - 8;
+
+    // 目标滚出视口时保留卡片、收起引导线，避免画出屏幕外的曲线
+    if (!visible) {
+      svg.style.opacity = '0'; ring.style.opacity = '0'; dot.style.opacity = '0';
+      card.style.left = Math.max(16, W - cardW - 20) + 'px';
+      card.style.top = Math.max(16, Math.min(H - cardH - 16, H * 0.16)) + 'px';
+      return;
+    }
+    svg.style.opacity = ''; ring.style.opacity = ''; dot.style.opacity = '';
+
+    var pad = 7;
+    ring.style.left = (tr.left - pad) + 'px';
+    ring.style.top = (tr.top - pad) + 'px';
+    ring.style.width = (tr.width + pad * 2) + 'px';
+    ring.style.height = (tr.height + pad * 2) + 'px';
+    var targetRadius = parseFloat(getComputedStyle(target).borderRadius);
+    ring.style.borderRadius = (isNaN(targetRadius) || targetRadius < 6 ? 10 : targetRadius) + 'px';
+
+    var tx = tr.left + tr.width / 2;
+    var below = tr.top < H * 0.46;                 // 目标偏上 → 卡片放目标下方
+    var cardTop = below ? tr.bottom + 30 : tr.top - cardH - 30;
+    if (cardTop < 16) cardTop = tr.bottom + 30;
+    cardTop = Math.max(16, Math.min(cardTop, H - cardH - 16));
+    var cardLeft = Math.max(16, Math.min(W - cardW - 16, tx - cardW / 2));
+    card.style.left = cardLeft + 'px';
+    card.style.top = cardTop + 'px';
+
+    var sx = Math.max(cardLeft + 24, Math.min(cardLeft + cardW - 24, tx));
+    var sy = below ? cardTop : cardTop + cardH;
+    var ex = tx;
+    var ey = below ? tr.bottom + pad + 2 : tr.top - pad - 2;
+    ey = Math.max(12, Math.min(H - 12, ey));   // 目标贴近视口边缘时把箭头收进屏幕内
+    var mid = (sy + ey) / 2;
+    var d = 'M ' + sx + ' ' + sy + ' C ' + sx + ' ' + mid + ', ' + ex + ' ' + mid + ', ' + ex + ' ' + ey;
+    glow.setAttribute('d', d);
+    path.setAttribute('d', d);
+    dot.setAttribute('cx', ex);
+    dot.setAttribute('cy', ey);
+  }
+
+  function show(nextStage) {
+    if (!rgIsFirstVisit()) return;
+    stage = nextStage === 'modal' ? 'modal' : 'page';
+    if (!root) build();
+    root.classList.toggle('rg-in-modal', stage === 'modal');
+    root.classList.add('rg-on');
+    reposition();
+    requestAnimationFrame(reposition);
+  }
+  function hide() { if (root) root.classList.remove('rg-on'); }
+  function dismiss() { rgMarkSeen(); hide(); }
+  function finish() { rgMarkSeen(); hide(); }
+
+  return { show: show, hide: hide, dismiss: dismiss, finish: finish, reposition: reposition };
+})();
+
+function rgGoRegister() {
+  __registerGuide.finish();
+  try { closeModal('login'); } catch (e) {}
+  try { showModal('register'); } catch (e) {}
+}
+
+// 首访引导入口：等布局稳定 + 首次公告弹窗关闭后再出现（有限重试，无长驻定时器）
+function maybeShowRegisterGuide() {
+  if (!rgIsFirstVisit()) return;
+  if (rgHasBlockingModal()) {
+    if (__rgRetryLeft-- > 0) setTimeout(maybeShowRegisterGuide, 500);
+    return;
+  }
+  __rgRetryLeft = 40;
+  __registerGuide.show('page');
 }
 
 // ===== Start =====

@@ -318,6 +318,7 @@ var SUPABASE_ANON_KEY = 'eyblabla...';
 
 ### 用户系统
 - 注册（豆包号 + 智能体链接验证 + 头像 + 简介）
+- 首次访问注册引导线（**纯前端**：只用浏览器本地标记判断是否首访，用一条 SVG 引导线指向「注册」入口；不新增接口、不查库、不占用后端资源；点击注册 / 稍后再说 / 登录成功后不再出现）
 - 登录（密码、30 天自动登录、可选 TOTP 动态码，以及多维设备身份确认）
 - 密码找回（密保问题验证，支持7个预设问题，PBKDF2-SHA256 哈希存储答案）
 - 用户资料编辑（头像、密码、昵称、自我介绍、拍一拍后缀、密保问题）
@@ -543,7 +544,7 @@ A: 需要在 D1 数据库中将你的 `is_developer` 设为 1（见第七步）�
 A: 检查 Supabase Storage 中是否已创建名为 `pages` 的**公开**存储桶。Storage 权限策略已包含在 `supabase-migration.sql` 中。
 
 **Q: 暗色模式样式不生效？**
-A: 强制刷新浏览器缓存（Ctrl+Shift+R）。V11.0 已将 `style.css` 缓存版本号更新为 `?v=53`。
+A: 强制刷新浏览器缓存（Ctrl+Shift+R）。V11.1 已将 `style.css` 缓存版本号更新为 `?v=54`（V11.0 为 `?v=53`）。
 
 **Q: Supabase SQL 执行报错 `relation already exists`？**
 A: 这是正常的——`supabase-migration.sql` 使用了 `CREATE TABLE IF NOT EXISTS`，重复执行不会报错。如果看到这个提示说明表已经存在了。
