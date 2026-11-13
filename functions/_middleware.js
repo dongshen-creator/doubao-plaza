@@ -28,6 +28,26 @@ import { ensureIndexes } from './api/_lib/schema-guard.js';
 const GATE_HEADER_NAME = 'X-DP-Client';
 const GATE_HEADER_VALUE = 'plaza-v1';
 
+// V12.0：共享服务网关允许的白名单跨域来源（WorkBuddy 应用发布域 + 官方反代入口）。
+// 仅对 /api/sync/* 生效，且仍必须携带 X-DP-Client；其余 API 的同源门禁不变。
+// 说明：export 是脱敏只读投影，import 另有 SYNC_BRIDGE_TOKEN 失败关闭保护，
+// 因此放宽「来源」不会放开写入权限；后缀匹配让重新发布换发布子域时不必再改代码。
+const SHARED_SYNC_ORIGINS = new Set([
+  'https://doubao-plaza-v11.app.workbuddy.host',
+  'https://cf.gallopingroad.top',
+]);
+function isSyncPath(path) {
+  return path === '/api/sync' || path.startsWith('/api/sync/');
+}
+function isSharedSyncOrigin(origin) {
+  if (!origin) return false;
+  if (SHARED_SYNC_ORIGINS.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    return u.protocol === 'https:' && u.hostname.endsWith('.app.workbuddy.host');
+  } catch (e) { return false; }
+}
+
 // 蜜罐路径（已对照 functions/api 全清单确认无真实端点撞名；含子路径）
 const HONEYPOT_PREFIXES = [
   '/api/admin',
@@ -269,10 +289,14 @@ export async function onRequest(context) {
   }
 
   // ---- 4) 门禁：同源证明（白名单 Bearer 绕过）----
-  if (api && !apiAllowed && !isGateExempt(path)) {
+  // V12.0：/api/sync/* 的 CORS 预检不携带门禁头，交由端点自身的 OPTIONS 处理器应答；
+  // 实际请求仍必须带 X-DP-Client，且来源要么同源、要么在共享服务白名单内。
+  const syncPreflight = isSyncPath(path) && request.method === 'OPTIONS';
+  if (api && !apiAllowed && !isGateExempt(path) && !syncPreflight) {
     const clientTag = request.headers.get(GATE_HEADER_NAME);
     const origin = request.headers.get('Origin');
-    const originOk = !origin || origin === url.origin;
+    const originOk = !origin || origin === url.origin ||
+      (isSyncPath(path) && isSharedSyncOrigin(origin));
     if (clientTag !== GATE_HEADER_VALUE || !originOk) {
       logSecurityEvent(
         context,
@@ -285,7 +309,11 @@ export async function onRequest(context) {
           ? 'missing-' + GATE_HEADER_NAME
           : 'origin-mismatch:' + origin
       );
-      return jsonError(403, { success: false, error: '请求未通过来源校验' });
+      return jsonError(
+        403,
+        { success: false, error: '请求未通过来源校验' },
+        isSyncPath(path) ? { 'Access-Control-Allow-Origin': '*' } : undefined
+      );
     }
   }
 

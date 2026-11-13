@@ -20,7 +20,7 @@
 自建应用（WorkBuddy 发布域）与 `doubao-plaza.pages.dev` **共用同一套后端服务**，不各自维护一份业务数据：
 
 - **唯一事实来源**：`doubao-plaza.pages.dev` 的 Pages Functions + D1 + Supabase。前端 `sharedBase()` 在本站走同源 `/api`，在 WorkBuddy 域走绝对地址 `https://doubao-plaza.pages.dev/api`，最终落到同一实例。
-- **统一服务网关**：`GET /api/sync/export`（D1/Supabase 公开投影增量导出）与 `POST /api/sync/import`（回写 D1 `cloud_sync_inbox` 收件箱），两端点均带 CORS，两个域名可同等调用。
+- **统一服务网关**：`GET /api/sync/export`（D1/Supabase 公开投影增量导出）与 `POST /api/sync/import`（回写 D1 `cloud_sync_inbox` 收件箱），两端点均带 CORS，两个域名可同等调用。跨域请求需带 `X-DP-Client: plaza-v1`；全局中间件仅对 `/api/sync/*` 放行白名单来源（WorkBuddy 发布子域、官方反代域）与 CORS 预检，其余 `/api/*` 的同源门禁不变。
 - **云服务的角色**：不是复制一套业务库，只承担全局共享镜像 `dp_sync_records`（唯一键 `source+table_name+record_key`，任何操作者刷新同一行）、水位、审计与跨端偏好 `dp_cloud_prefs`。两个域名登录同一云服务账号即读到同一份数据。
 - **边界**：云数据面校验精确来源，云端读写需在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 打开面板；业务数据不受此限制。浏览器会话按域名隔离，两个域名需各自登录一次。同步为基于时间列的增量快照，删除不传播，冲突以来源侧为准。
 - **启用回写**：在 Cloudflare Pages 环境变量配置 `SYNC_BRIDGE_TOKEN`，并在面板中输入同一令牌；未配置时回写端点 503 失败关闭。

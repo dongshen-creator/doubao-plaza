@@ -4,6 +4,40 @@
 
 ---
 
+## v12.0.1 — 2026-11-13
+
+### 修复：WorkBuddy 发布域调用共享服务网关被 403
+
+#### 一、现象（上线后实测基线）
+`doubao-plaza.pages.dev` 的 `/api/sync/export` 直连可用，但从 WorkBuddy 发布域发起的**跨域**请求一律被拒：
+
+| 探测 | 修复前 |
+|---|---|
+| 直连 GET + `X-DP-Client` | 200（但 CORS 允许头缺 `X-DP-Client`） |
+| 跨域 GET + 白名单 Origin + `X-DP-Client` | 403 `请求未通过来源校验` |
+| 跨域 OPTIONS 预检 | 403 `请求未通过来源校验` |
+| 跨域 POST `/api/sync/import` | 403 `请求未通过来源校验` |
+
+#### 二、根因
+`functions/_middleware.js` 是全局 `/api/*` 门禁：强制 `X-DP-Client: plaza-v1` 且 `Origin` 必须等于请求 origin。V12.0 的两个新端点虽然自带 CORS/OPTIONS，但请求**先**被中间件拦截，端点的 `onRequestOptions()` 根本没机会执行；而 CORS 预检按规范不携带自定义头，必然撞门禁。
+
+#### 三、修复（4 个文件，业务门禁不放宽）
+- `functions/_middleware.js`：新增 `isSyncPath()` / `isSharedSyncOrigin()`；仅对 `/api/sync/*` 放行 **CORS 预检**与白名单来源（WorkBuddy 发布子域 `*.app.workbuddy.host`、官方反代域 `cf.gallopingroad.top`）；实际请求**仍必须**携带 `X-DP-Client`；同步路径的 403 响应补 `Access-Control-Allow-Origin`，便于前端读到具体错误。其余 `/api/*` 规则完全不变。
+- `functions/api/sync/export.js` / `import.js`：`Access-Control-Allow-Headers` 补 `X-DP-Client`。
+- `public/cloud-service.js`：`pullShared()` / `pushShared()` 的共享服务请求补 `X-DP-Client: plaza-v1`；拉取失败时读取网关返回的中文错误而非只显示 HTTP 码。
+- 设计说明：`export` 是脱敏只读投影，`import` 另有 `SYNC_BRIDGE_TOKEN` 失败关闭，放宽「来源」不等于放宽写入权限。
+
+#### 四、验证
+- 四个改动文件语法检查 4/4 PASS。
+- 新增临时回归脚本 23/23 PASS：预检放行、白名单/同源/无 Origin 放行、缺门禁头与恶意 Origin 仍 403、其余 API 门禁未放宽、两个端点 OPTIONS 允许头、令牌 503/401、LWW 幂等、非法记录跳过、>200 条拒绝、导出脱敏投影与 CORS。
+- 线上复验结果记入当日工作日志。
+
+#### 五、仍需人工完成
+- Cloudflare Pages 环境变量配置 `SYNC_BRIDGE_TOKEN`（未配置时回写保持 503 失败关闭，正向同步不受影响）。
+- 生产 D1 执行 `sql/migrations/v12.0-cloud-sync.sql` 与 `sql/migrations/v11.0-admin-risk.sql`。
+
+---
+
 ## v12.0 — 2026-11-13
 
 ### 开启云服务 · 两个域名共享同一套服务

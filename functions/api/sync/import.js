@@ -13,7 +13,7 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Token',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Token, X-DP-Client',
   'Access-Control-Max-Age': '86400',
   'Cache-Control': 'no-store, max-age=0',
 };

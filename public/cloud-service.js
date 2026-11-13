@@ -297,12 +297,20 @@
     try {
       var url = serviceUrl('/api/sync/export?limit=100') + (since ? '&since=' + encodeURIComponent(since) : '');
       var res;
+      // V12.0：共享服务仍走 /api/* 全局门禁，跨域请求必须带同源证明头；
+      // 该头已列入 /api/sync/* 的 CORS allow-headers，预检由端点 OPTIONS 处理器应答。
       try {
-        res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'X-DP-Client': 'plaza-v1' }
+        });
       } catch (e) {
         fail('拉取共享服务', { message: '网络不可达：' + SHARED_ORIGIN + ' 暂时无法连接' }); return;
       }
-      if (!res.ok) { fail('拉取共享服务', { message: '共享服务返回 HTTP ' + res.status }); return; }
+      if (!res.ok) {
+        var errBody = await res.json().catch(function () { return {}; });
+        fail('拉取共享服务', { message: errBody.error || ('共享服务返回 HTTP ' + res.status) });
+        return;
+      }
       var payload = await res.json();
       if (!payload.success) { fail('拉取共享服务', { message: payload.error || '导出端返回失败' }); return; }
       var records = Array.isArray(payload.records) ? payload.records : [];
@@ -404,7 +412,11 @@
       try {
         res = await fetch(serviceUrl('/api/sync/import'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Sync-Token': bridgeToken },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Sync-Token': bridgeToken,
+            'X-DP-Client': 'plaza-v1'
+          },
           body: JSON.stringify({ records: records })
         });
       } catch (e) { fail('回写', { message: '网络不可达：' + SHARED_ORIGIN }); return; }
