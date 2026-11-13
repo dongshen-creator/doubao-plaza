@@ -490,3 +490,17 @@ ALTER TABLE sessions ADD COLUMN device_id TEXT;
 ALTER TABLE sessions ADD COLUMN created_ip TEXT;
 ALTER TABLE sessions ADD COLUMN last_seen_at TEXT;
 CREATE INDEX IF NOT EXISTS idx_sessions_device ON sessions(device_id, expires_at);
+
+-- ============================================================
+-- V12.0 · 统一服务网关回写收件箱（两个前端域名共享同一套 D1）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS cloud_sync_inbox (
+  source TEXT NOT NULL,
+  table_name TEXT NOT NULL,
+  record_key TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  updated_at TEXT,
+  synced_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (source, table_name, record_key)
+);
+CREATE INDEX IF NOT EXISTS idx_cloud_sync_inbox_time ON cloud_sync_inbox(updated_at);

@@ -4,6 +4,54 @@
 
 ---
 
+## v12.0 — 2026-11-13
+
+### 开启云服务 · 两个域名共享同一套服务
+
+用户明确目标：「自建应用与 doubao-plaza.pages.dev 共享同一套服务」。因此**不把云库做成第三套各自复制的业务库**，而是：D1 + Supabase 保持唯一事实来源，两个前端域名共用同一组 API；云服务只承担共享增量水位、同步审计与跨端偏好。
+
+#### 一、云服务环境
+- 复用已发布应用 `wbapp_5ErsgrS7fNKfn4IKKmMoat` 激活云服务，`billingStatus=normal`、`provisionStatus=assigned`，四模块共享同一环境（本次使用 Database + Auth）。
+- `publicConfig` 的 `endpoint` / `oauthRelayBaseUrl` / `publishableKey` 全部来自激活结果；前端按 plain-HTML 规范用 `@dev` CDN 脚本初始化**唯一**一个 `createWorkBuddyCloud` 实例，无任何手写 `/.cloud/**` 请求。
+
+#### 二、云数据库（PostgreSQL，经 MCP 管理面建表）
+| 表 | 作用 | RLS |
+|---|---|---|
+| `dp_cloud_prefs` | 现有本机偏好上云（主题/配色/分组等白名单键） | owner-only，全部操作 |
+| `dp_sync_records` | D1/Supabase 公开投影的**全局唯一**共享镜像 | 已登录用户共享读、协同刷新；全局唯一键 `(source,table_name,record_key)` |
+| `dp_sync_watermarks` | 增量水位 | 共享读 + 本人写，客户端取最大值形成全局单调水位 |
+| `dp_sync_runs` | 每次同步的审计（方向/条数/状态/降级原因） | 共享读 + 本人写 |
+- 验证：建表 + 16 条 owner 策略 + 3 条共享读策略 + 1 条协同刷新策略 + 全局唯一索引；两个不同 `owner_id` 用 `ON CONFLICT (source,table_name,record_key)` 写入同一行，实测 `id` 不变、payload 更新，证明两个域名/操作者共享同一份镜像。
+
+#### 三、统一服务网关（Cloudflare Pages Functions）
+- `GET /api/sync/export`：D1 白名单投影（users 仅 `privacy_setting='searchable'`、announcements、features、blog_posts 已发布、site_settings）+ Supabase 公开频道元数据（`public_channels` / `chat_channel_announcements` / `chat_channel_tools`）。**排除**密码、密保、令牌、IP、设备指纹、私信内容。支持 `since` 增量水位、`limit≤200`、来源/表筛选；单来源失败只标记 `degraded`，不拖垮整体；时间参数绑定，表级白名单硬编码。
+- `POST /api/sync/import`：`X-Sync-Token` 与 `SYNC_BRIDGE_TOKEN` 常量时间比较；未配置一律 503 **失败关闭**。写 D1 `cloud_sync_inbox` 收件箱（不直接覆盖业务表），LWW + `ON CONFLICT` 幂等，逐条 `processed/skipped/failed`，字段格式强校验。
+- 两端点均带 CORS + OPTIONS，两个域名可同源/跨域调用同一套服务。
+
+#### 四、前端接入（`public/cloud-service.js` + `index.html`）
+- 新增导航栏「云服务」入口与面板：邮箱验证码登录（发码/验码分离、复用 challenge、不重复发码）、退出、会话门禁。
+- ① 本机偏好 ↔ 云：白名单键上传/恢复，主题即时生效；② 一键增量同步：网关 → 云库共享镜像 + 水位 + 审计；③ 回写：云 → D1 收件箱，令牌仅存内存、用完清空。
+- 统一 `sharedBase()`：本站用同源 `/api`，WorkBuddy 域用 `https://doubao-plaza.pages.dev/api`，**最终落到同一个 D1/Supabase**。
+- 失败路径全覆盖：SDK 未加载、非发布域精确来源拒绝、未登录门禁、`42501`/`42P01`/`23505`、来源降级、网络不可达、回写 503/401、令牌清空，均给出中文提示，不静默失败。
+
+#### 五、修改文件
+`public/cloud-service.js`（新）、`public/index.html`（CDN/入口/面板/showModal 钩子）、`functions/api/sync/export.js`（新）、`functions/api/sync/import.js`（新）、`sql/schema.sql`、`sql/migrations/v12.0-cloud-sync.sql`（新）、`.env.example`、`README.md`、`AGENTS.md`、`CHANGELOG.md`。
+
+#### 六、验证记录
+- ESM 语法 `node --check` 2/2 PASS；`public/cloud-service.js` 与 `index.html` 9 段内联脚本 `vm.Script` PASS；SDK CDN HTTP 200 且含 `WorkBuddyCloud` 全局。
+- 前端模拟 DOM 冒烟 25/25 PASS（初始化参数、SDK 缺失、未登录门禁、OTP 序列、同步链路、降级/网络/权限、跨域拒绝、回写 503）。
+- 网关模拟 D1/Supabase 冒烟 18/18 PASS（投影脱敏、隐身排除、参数绑定、水位、降级、令牌失败关闭、LWW 幂等、非法字段跳过）。
+- 云库管理面实测：建表、RLS、写入读回、upsert 冲突、全局唯一共享行、探针数据已清理。
+
+#### 七、平台边界（必须如实告知，不算未完成的实现缺陷）
+- 云服务数据面强制**精确来源校验**：云端读写只在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 生效。从 `doubao-plaza.pages.dev` 打开面板会看到明确提示，云操作被门禁拦截；但业务数据始终来自同一套 D1/Supabase，两个域名共享。
+- 浏览器会话按域名隔离：两个域名需各自登录一次（本站 `dp_token`、云端邮箱验证码），但登录的是同一套后端、同一份云数据。
+- 同步是**基于 created_at/updated_at 的增量快照**，删除不传播；冲突以来源侧为准（source-wins）。
+- `SYNC_BRIDGE_TOKEN` 需你在 Cloudflare Pages 环境变量中配置；未配置前反向回写保持 503 失败关闭，正向同步不受影响。
+- 生产 D1 需执行 `sql/migrations/v12.0-cloud-sync.sql`（`/api/sync/import` 有运行时幂等建表兜底）。
+
+---
+
 ## v11.1 — 2026-11-13
 
 ### 首次访问注册引导线（纯前端，零后端资源）

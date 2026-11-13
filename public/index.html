@@ -152,6 +152,9 @@
   <!-- FingerprintJS 开源版（V5.14 本地自托管，规避外部 CDN 被 local address space 拦截） -->
   <script src="/vendor/fingerprintjs/fp.min.js" defer></script>
   <script src="supabase-sdk.js?v=2"></script>
+  <!-- V12.0 云服务 SDK：本项目无构建步骤，按 plain-HTML 规范用 CDN 形式，defer 保证先于业务脚本执行 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js" defer></script>
+  <script src="cloud-service.js?v=1" defer></script>
   <script>
     (function () {
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
@@ -318,6 +321,7 @@
       <span class="logo-text">逗包用户广场</span>
     </div>
     <div class="nav-right" id="navRight">
+      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       <button class="nav-btn-primary" onclick="showModal('login')"><iconify-icon icon="ph:key-fill"></iconify-icon> 登录</button>
       <button class="nav-btn" onclick="showModal('register')"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 注册</button>
     </div>
@@ -464,6 +468,63 @@
     <button type="submit" class="btn btn-orange btn-full">注册</button>
     </form>
     <p style="text-align:center;font-size:13px;color:var(--text-faint);margin-top:14px">已有账号？<a href="#" onclick="closeModal('register');showModal('login');return false" style="color:var(--accent);font-weight:600">去登录</a></p>
+  </div>
+</div>
+
+<!-- V12.0 云服务与共享同步 -->
+<div class="modal-overlay" id="cloudsyncModal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div style="width:32px;height:32px;border-radius:10px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon></div>
+      <div><div class="modal-title">云服务与共享同步</div><div style="font-size:12px;color:var(--text-faint)">两个域名 · 同一套服务</div></div>
+      <button class="modal-close" onclick="closeModal('cloudsync')"><iconify-icon icon="ph:x"></iconify-icon></button>
+    </div>
+    <div id="dpCloudStatus"></div>
+
+    <div id="dpCloudAuth">
+      <div class="form-group"><label class="form-label">云服务邮箱</label><input class="input" id="dpCloudEmail" type="email" autocomplete="email" placeholder="用于接收登录验证码"></div>
+      <div class="form-group"><label class="form-label">验证码</label><input class="input" id="dpCloudCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="输入邮件中的验证码"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-gray" style="flex:1" data-dp-busy id="dpCloudSendCode" type="button">获取验证码</button>
+        <button class="btn btn-orange" style="flex:1" data-dp-busy id="dpCloudVerify" type="button">登录 / 注册</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-faint);margin-top:10px;line-height:1.6">本站业务数据始终由 doubao-plaza.pages.dev 的 D1 + Supabase 统一提供；此处登录只用于云端偏好、共享水位与同步审计。浏览器会话按域名隔离，两个域名需各自登录一次，但读到的是同一份数据。</p>
+    </div>
+
+    <div id="dpCloudBody" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--text-secondary)">
+        <iconify-icon icon="ph:user-circle-fill" style="color:var(--accent)"></iconify-icon>
+        <span id="dpCloudWho">已登录</span>
+        <button class="btn btn-gray" style="margin-left:auto;padding:5px 10px;font-size:12px" data-dp-busy id="dpCloudSignOut" type="button">退出</button>
+      </div>
+
+      <div class="card" style="padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px">① 现有功能上云 · 本机偏好</div>
+        <div style="font-size:12px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">把主题、配色、频道分组等本机设置保存到云，在另一个域名登录同一云服务账号后恢复，两边保持一致。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-orange" style="flex:1;min-width:130px" data-dp-busy id="dpCloudUploadPrefs" type="button">上传本机偏好</button>
+          <button class="btn btn-gray" style="flex:1;min-width:130px" data-dp-busy id="dpCloudRestorePrefs" type="button">从云端恢复</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px">② 三库共享同步 · D1 / Supabase → 云</div>
+        <div style="font-size:12px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">从统一服务网关按增量水位拉取公开投影（排除密码、密保、IP、设备指纹、私信），幂等写入云库共享镜像。两个域名读同一份镜像与审计记录。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-orange" style="flex:1;min-width:130px" data-dp-busy id="dpCloudPull" type="button">立即增量同步</button>
+          <button class="btn btn-gray" style="flex:1;min-width:130px" data-dp-busy id="dpCloudInspect" type="button">查看共享镜像</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px">③ 回写 · 云 → D1 收件箱</div>
+        <div style="font-size:12px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">把云端记录送回共享服务的 cloud_sync_inbox，由管理员复核后再决定是否落到业务表，避免反向覆盖真实数据。</div>
+        <div class="form-group" style="margin-bottom:8px"><input class="input" id="dpCloudBridgeToken" type="password" autocomplete="off" placeholder="回写令牌（仅内存保存，不写入本地）"></div>
+        <button class="btn btn-gray btn-full" data-dp-busy id="dpCloudPush" type="button">回写到共享服务</button>
+      </div>
+    </div>
+
+    <div id="dpCloudLog" style="max-height:130px;overflow:auto;font-size:12px;color:var(--text-faint);border-top:1px solid var(--border-color);padding-top:8px"></div>
   </div>
 </div>
 
@@ -1705,6 +1766,7 @@ function updateNavbar() {
   if (currentUser) {
     el.innerHTML = `
       <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:pointer;padding:6px 10px" onclick="showOnlineUsers()" title="点击查看在线用户"></span>
+      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       ${isSiteAdmin() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 开发者</button>' : ''}
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
@@ -1718,6 +1780,7 @@ function updateNavbar() {
     el.innerHTML = `
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
+      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       <button class="nav-btn" onclick="showModal('login')"><iconify-icon icon="ph:key-fill"></iconify-icon> 登录</button>
       <button class="nav-btn-primary" onclick="showModal('register')"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 注册</button>
     `;
@@ -6676,6 +6739,8 @@ async function showModal(name) {
     if (name === 'login') __registerGuide.show('modal');
     if (name === 'register') __registerGuide.finish();
   }
+  // V12.0：打开云服务面板时刷新会话与状态
+  if (name === 'cloudsync' && window.DPCloud) window.DPCloud.render();
   if (name === 'settings') loadSettings();
   if (name === 'recover') showRecoveryAccounts();
   // V11 修复：注册弹窗打开时渲染 Turnstile
