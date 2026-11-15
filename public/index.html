@@ -321,7 +321,6 @@
       <span class="logo-text">逗包用户广场</span>
     </div>
     <div class="nav-right" id="navRight">
-      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       <button class="nav-btn-primary" onclick="showModal('login')"><iconify-icon icon="ph:key-fill"></iconify-icon> 登录</button>
       <button class="nav-btn" onclick="showModal('register')"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 注册</button>
     </div>
@@ -1766,7 +1765,6 @@ function updateNavbar() {
   if (currentUser) {
     el.innerHTML = `
       <span id="onlineCountBadge" class="nav-btn" style="font-size:12px;color:var(--text-faint);cursor:pointer;padding:6px 10px" onclick="showOnlineUsers()" title="点击查看在线用户"></span>
-      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       ${isSiteAdmin() ? '<button class="nav-btn nav-desktop-only" style="background:var(--accent-bg);color:var(--accent)" onclick="showModal(\'developer\')"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 开发者</button>' : ''}
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
@@ -1780,7 +1778,6 @@ function updateNavbar() {
     el.innerHTML = `
       <button class="nav-btn" id="themeToggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">${themeIcon}</button>
       <button class="nav-btn nav-mobile-only" style="position:relative" onclick="openChat()" aria-label="聊天"><iconify-icon icon="ph:chat-circle-dots-fill"></iconify-icon> <span id="chatUnreadBadge" class="hidden nav-badge">0</span></button>
-      <button class="nav-btn" onclick="showModal('cloudsync')" title="云服务与共享同步" aria-label="云服务与共享同步"><iconify-icon icon="ph:cloud-arrow-up-fill"></iconify-icon> 云服务</button>
       <button class="nav-btn" onclick="showModal('login')"><iconify-icon icon="ph:key-fill"></iconify-icon> 登录</button>
       <button class="nav-btn-primary" onclick="showModal('register')"><iconify-icon icon="ph:sparkle-fill"></iconify-icon> 注册</button>
     `;
