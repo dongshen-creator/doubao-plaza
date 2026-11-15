@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v12.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v12.2）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -20,7 +20,10 @@
 
 ## 目录结构
 ```
-public/                      # 前端静态文件（index.html 主应用 / tavern.html 独立工具 / style.css / supabase-sdk.js）
+public/                      # 前端静态文件 + WorkBuddy 同源后台
+  server.js                  # V12.2 Node 单端口 HTTP 服务（静态同源 + /api 等业务路径反代）
+  dp-backend.js              # V12.2 部署形态探针占位（真后台动态覆盖为 true）
+public/vendor/               # KaTeX / SunEditor / FingerprintJS 本地依赖（5.5MB，必须随发布包带上）
 functions/api/               # 业务 API（每文件头部有注释列出端点与方法）
 functions/api/_lib/          # 共享代码（jwt 等）
 functions/api/tools/         # 工具注册表 registry.js（唯一真实来源）+ ai.js / proxy.js / fetch.js
@@ -41,8 +44,10 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 4. **前端是单体大文件**（index.html ~630KB、tavern.html ~1.1MB）：修改时搜索相关函数/区块就地编辑，保持现有风格（中文注释、内联 CSS/JS）。`style.css` 用 CSS 变量支撑亮/暗色模式，新颜色尽量走 `--acc`/`--acc2` 等变量。
 5. **工具框架单一事实来源**：新增网站工具只改 `functions/api/tools/registry.js`（按 docs/TOOL_FRAMEWORK_GUIDE.md 的 api_type 模式），不要另起后端分散定义。
 6. **数据库变更**：D1 改 `sql/schema.sql`；Supabase 只改 `sql/supabase-migration.sql` 且保持幂等（可重复执行）；非法协议校验（头像 URL 等）已有 `validateAvatarUrl` 类防护，新增用户输入 URL 必须做协议白名单校验。
-7. **无 npm/构建工具链**：没有 package.json / wrangler.toml，无本地 build/test/lint 命令。验证靠部署后手动/浏览器实测（可参考 CHANGELOG 各版本的「验证记录」）。项目为 git 仓库（remote：github.com/dongshen-creator/doubao-plaza）。
+7. **无 npm/构建工具链**：Cloudflare Pages 侧没有 package.json / wrangler.toml，无本地 build/test/lint 命令；Build command 留空、输出目录 `public`。**V12.2 起 `public/` 内不应存在 `package.json`**（会干扰 Pages 构建）；WorkBuddy 发布改用显式 `language=node` + `startCmd="node server.js"` + `installCmd=""` 指定启动入口。项目为 git 仓库（remote：github.com/dongshen-creator/doubao-plaza）。
 8. **管理员与设备风控**：`/api/developer/*` 新端点统一走 `requireDeveloper(..., {stepup:true})` + `writeAdminAudit()`；批量处置必须预演、确认数、逐目标重查、角色层级保护、逐项结果；设备证据只存散列，客户端值不得作为唯一身份依据。新增 D1 表/列同时写 `sql/schema.sql` 与 `sql/migrations/` 的增量脚本。
+9. **WorkBuddy 发布形态（V12.2 强制）**：发布域**必须跑真后台** `public/server.js`，不要用「前端 fetch patch 跨域改写到主站」当最终方案——跨域会让 `__Host-dp_device` 设备 Cookie 被第三方策略拦截、静态资源 404、CORS 预检失败，登录始终不稳。判定依据：`GET /__dp/health` 应返回 `mode: workbuddy-backend`；`GET /dp-backend.js` 应返回 `window.__DP_BACKEND__ = true`。三张页面（index / developer / tavern）都靠这个探针在首帧决定 `/api` 走向，改动时必须保持「真后台同源 / 静态托管跨域降级」两种分支都能用。
+10. **`/.cloud/**` 是平台网关保留路径**：WorkBuddy 云数据面由边缘（`Server: tcbgw`）按路径接管，自建后台绝不能把它反代到业务主站；服务里需保留环回守卫。云服务精确 Origin 校验依赖发布时复用同一 appId / 保留域，不要换发布目录或 domainPrefix。
 9. **纯前端特性（V11.1）**：凡标注「仅前端、不占用后端资源」的需求，只允许用 `localStorage` / DOM / CSS 实现，禁止新增 Functions 文件、`fetch` / `api()` 调用、数据库查询或服务端日志；首访类状态一律写本地标记并提供隐私模式内存兜底；覆盖层用 `pointer-events:none` 避免遮挡既有交互，目标元素用 `getBoundingClientRect()` 动态定位以适配导航重渲染与移动端隐藏；改动 `style.css` 后必须同步提升 `index.html` / `developer.html` 的 `?v=` 缓存版本号。
 10. **云服务与共享架构（V12.1）**：目标是「自建应用与 doubao-plaza.pages.dev 共享同一套服务」，**禁止把云库做成另一套业务数据库**。D1 + Supabase 是唯一事实来源。云 SDK 只在本项目用 `@dev` CDN 形式初始化一个 `createWorkBuddyCloud` 实例，`endpoint` / `oauthRelayBaseUrl` / `publishableKey` 只能来自 `workbuddy_cloud_service` 的 `publicConfig`；不得硬编码其他域的 endpoint。云表必须 RLS + 两道门（GRANT + POLICY）；导出端点只做白名单公开投影，绝不导出密码/令牌/密保/IP/设备指纹/私信。回写令牌 `SYNC_BRIDGE_TOKEN` 未配置时 503 失败关闭，令牌仅存内存。新增 D1 表同时写 `sql/schema.sql` 与 `sql/migrations/`。
     - **WorkBuddy 发布域是纯静态托管，没有 Functions**：`public/index.html` 必须把该域的 `/api/*` 改写为主站绝对地址并注入 `X-DP-Client: plaza-v1`，`/vendor/*` 经 `__dpAsset` 改写到主站，manifest 在该域移除。主站与 `cf.gallopingroad.top` 保持同源相对路径。登录态是 `localStorage.dp_token` + Bearer 头，不依赖 Cookie。

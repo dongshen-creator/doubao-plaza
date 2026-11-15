@@ -41,14 +41,22 @@
   <link rel="preload" href="/vendor/suneditor/dist/suneditor.min.js" as="script">
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
+  <!-- V12.2 部署形态探针：静态托管下发 false，WorkBuddy 真后台下发 true。
+       必须早于下方 fetch patch，让 /api 与 vendor 的走向在首帧就确定。 -->
+  <script src="/dp-backend.js?v=12.2"></script>
   <script>
-  /* AUDIT FIX v9.0 [6.7] 门禁证明 + V12.1 共享后端：静态预览域把 /api 统一指向主站，两个域名读同一套数据 */
+  /* AUDIT FIX v9.0 [6.7] 门禁证明 + V12.2 同源后台：
+     · WorkBuddy 真后台（__DP_BACKEND__=true）：网页/接口/静态资源全部同源，
+       由 WorkBuddy 侧 server.js 反代到共享主站，无跨域、无第三方 Cookie 拦截
+     · WorkBuddy 纯静态托管（历史形态）：保留 V12.1 的 /api 与 vendor 跨域改写
+     · 主站与官方反代域：始终同源相对路径 */
   (function () {
     if (window.__dpFetchPatched) return;
     var SHARED = 'https://doubao-plaza.pages.dev';
     var LOCAL_HOSTS = ['doubao-plaza.pages.dev', 'cf.gallopingroad.top'];
-    var remote = LOCAL_HOSTS.indexOf(location.hostname) === -1;
-    window.__DP_SHARED = { remote: remote, origin: SHARED };
+    var backend = !!window.__DP_BACKEND__;
+    var remote = !backend && LOCAL_HOSTS.indexOf(location.hostname) === -1;
+    window.__DP_SHARED = { remote: remote, backend: backend, origin: SHARED };
     window.__dpAsset = function (p) { return (remote && p.charAt(0) === '/') ? SHARED + p : p; };
 
     // 静态预览域未随包带上 vendor/，公式 / 编辑器 / 指纹库从主站取；manifest 跨域无意义，直接移除

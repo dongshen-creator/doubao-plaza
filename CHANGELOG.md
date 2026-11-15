@@ -4,6 +4,60 @@
 
 ---
 
+## v12.2 — 2026-11-16
+
+### 借用 WorkBuddy 后台服务器：发布域改为真后台，网页/接口/静态资源全部同源
+
+用户诉求：「但是我想借用 workbuddy 的后台服务器诶」——明确否定 V12.1 的「静态发布域 + 前端跨域改写」方案。用户要的是 WorkBuddy 侧自己跑后台服务，而不是把浏览器请求甩给主站。
+
+**一、根因与架构纠正**
+
+- V12.1 的方案里，WorkBuddy 发布域是纯静态托管，前端把 `/api/*` 跨域改写到 `doubao-plaza.pages.dev`。虽然接口能返回 200，但：上游下发的 `__Host-dp_device` 是第三方 Cookie，被浏览器 Tracking Prevention / SameSite 策略拦截不落盘；`/vendor/*` 与 `manifest.json` 在发布域 404/403；CORS 预检与跨站存储访问持续报错。设备身份确认链路始终不闭环，这正是「WorkBuddy 版一直登录不上去」的根因。
+- WorkBuddy 发布沙箱实际支持 **Node / Python / Go 单端口 HTTP 服务**（监听 `$PORT`、绑定 `0.0.0.0`），V12.1 把它当成了只能放静态文件的托管。本版把发布形态切到真后台。
+
+**二、新增 `public/server.js`（零第三方依赖）**
+
+- 同源提供 `public/` 下全部静态资源：HTML、CSS/JS、`vendor/`（KaTeX / SunEditor / FingerprintJS，5.5MB）、`manifest.json`、图片、字体，manifest 不再需要移除。
+- `/api/*`、`/pages/*`、`/chat/*`、`/cdn-assets/*` 同源反代到共享主站（与 `public/_routes.json` 的 Functions 路由范围一致）。上游仍是唯一事实来源（Pages Functions + D1 + Supabase），没有第三套业务库。
+- 反代时服务端**强制覆盖** `X-DP-Client: plaza-v1` 与 `Origin: <上游 origin>`：门禁按「同源」放行，且门禁头无法被客户端伪造或遗漏；同时透传真实客户端 IP 到 `X-DP-Real-IP` / `X-Forwarded-For`。
+- 上游 `Set-Cookie` 去掉 `Domain` 后回种为本域 host-only Cookie，`__Host-dp_device` 在本域正常落盘并随同源请求自动携带，**设备身份确认链路真正闭环**。
+- 流式 `pipe` 转发，保留 SSE / 大文件上传；支持 `Range` 分段、HEAD、clean URL（`/developer` → `/developer.html`）；过滤 hop-by-hop 头、改写 `Location`、剔除跨域 CORS 头；网络层故障才切换备用入口 `cf.gallopingroad.top`，业务 4xx/5xx 原样透传。
+- 静态文件缺失时按扩展名做一次**同源兜底反代**，即使发布沙箱漏带 `vendor/` 也不影响公式 / 编辑器 / 指纹库。
+- 安全：路径穿越防护、`server.js` / `package.json` / dotfile 等禁止静态下发、`/.cloud/**` 平台网关路径带环回守卫不反代到主站。
+- `GET /__dp/health` 返回 `mode: workbuddy-backend`，用于一眼确认跑的是真后台；`GET /dp-backend.js` 动态返回 `window.__DP_BACKEND__ = true`。
+
+**三、前端三形态兼容**
+
+- 新增 `public/dp-backend.js` 静态占位（`__DP_BACKEND__ = false`），真后台服务把该路径动态覆盖为 `true`。三张页面都在 fetch patch **之前**同步引入（带 `?v=12.2` 破缓存）。
+- `public/index.html`：`remote = !__DP_BACKEND__ && hostname 不在主站白名单`。真后台模式下 `/api` 保持同源相对路径、vendor 保持本地、manifest 保留；静态托管回退时仍是 V12.1 的跨域改写。
+- `public/developer.html` / `public/tavern.html`：补齐同一形态判定与降级改写（此前只有门禁头注入，静态托管时管理员后台接口会落空）。
+- `public/cloud-service.js`：`sharedBase()` 优先 `__DP_BACKEND__`，真后台下 `/api/sync/export` 也走同源反代；`originOk()` 精确发布域校验不变，`dp_replica` 无人值守同步继续生效。
+- `functions/_middleware.js` 未改动：跨域白名单降级通道保留，门禁 / 蜜罐 / 限流 / 封禁逻辑零放宽。
+
+**四、发布与验证**
+
+- `public/package.json` **不新增**：Cloudflare Pages 的 Build output directory 就是 `public`，放 package.json 会干扰线上构建。WorkBuddy 改用显式 `language=node` / `startCmd="node server.js"` / `installCmd=""` 指定启动入口，并复用同一 appId 与保留域以维持云服务精确 Origin。
+- 本地实测（`PORT=3188`）：health 200 / 探针 true / 首页 824707B / style.css / manifest / vendor KaTeX 全 200；`/server.js`、`/../README.md`、`/%2e%2e/README.md` 全 404。
+- 本地反代实测：直连主站 `/api/site-settings` 为 403（缺门禁头），经同源后台为 **200** 并带 `X-DP-Gateway: workbuddy-same-origin`；`POST /api/device/claim` 200 且返回 `Set-Cookie: __Host-dp_device=...; Path=/; Secure; HttpOnly; SameSite=Lax`（Domain 已去）；`POST /api/users/login` 返回业务 JSON `{"success":false,"error":"账号或密码错误"}`（不再是 501/404）；`/api/users/auto-login`、`/api/announcements`、`/api/features`、`/api/sync/export?limit=1` 全 200。
+- 前端三形态模拟测试 `dp-v122-front-smoke.mjs`：**43 PASS / 0 FAIL**（静态托管跨域、真后台同源、主站/反代域同源、探针时序、cloud-service 适配）。
+- 三张页面内联 JS 语法检查：9 段全部通过；`server.js` / `dp-backend.js` / `cloud-service.js` `node --check` 通过。
+
+**修改文件表**
+
+| 文件 | 改动 |
+|------|------|
+| `public/server.js` | 新增：WorkBuddy 同源后台（静态服务 + 业务反代 + Cookie 回种 + 健康检查 + 探针覆盖） |
+| `public/dp-backend.js` | 新增：部署形态探针静态占位 |
+| `public/index.html` | 引入探针；`__DP_BACKEND__` 优先的同源判定；注释更新 |
+| `public/developer.html` | 引入探针；形态判定 + 静态降级改写 |
+| `public/tavern.html` | 引入探针；形态判定 + 静态降级改写 |
+| `public/cloud-service.js` | `sharedBase()` 支持真后台同源 |
+| `README.md` | 架构表 / V12.2 共享服务章节 / 项目结构 |
+| `AGENTS.md` | 最新版本号、目录结构、第 7/9/10 条发布形态强规则 |
+| `CHANGELOG.md` | 本条 |
+
+---
+
 ## v12.1 — 2026-11-15
 
 ### 修复 WorkBuddy 版登录 + 数据库改为无人值守自动更新 + 重新发布

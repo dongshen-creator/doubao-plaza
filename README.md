@@ -12,28 +12,40 @@
 | 数据库（聊天消息） | Supabase (PostgreSQL) | 消息存储、表情反应、实时推送 |
 | 实时通信 | Supabase Realtime | WebSocket 消息推送 + 前端轮询兜底 |
 | 文件存储 | freserafim(chocoChat) + img.scdn.io + tmpfile.link + Cloudflare R2 | 聊天图片/文件上传（freserafim 优先 + img.scdn.io 直连 + tmpfile.link 兜底）+ 开发者文件托管（Supabase Storage） |
-| 部署 | Cloudflare Pages | 边缘网络部署，全球加速 |
+| 部署 | Cloudflare Pages + WorkBuddy 发布（Node HTTP 服务） | 边缘网络部署 + 国内直连同源接入层 |
 | 云服务（V12.1） | WorkBuddy Cloud Service（PostgreSQL） | 公开数据实时副本 `dp_replica`（自动更新）+ 共享水位/审计/跨端偏好；不是第三套业务库 |
 
-### 两个域名共享同一套服务（V12.1）
+### 两个域名共享同一套服务（V12.2）
 
 自建应用（WorkBuddy 发布域）与 `doubao-plaza.pages.dev` **共用同一套后端服务**，不各自维护一份业务数据：
 
-- **唯一事实来源**：`doubao-plaza.pages.dev` 的 Pages Functions + D1 + Supabase。WorkBuddy 发布域是**纯静态托管、不部署 Functions**，因此 `public/index.html` 把该域的所有 `/api/*` 请求改写为主站绝对地址（并注入 `X-DP-Client: plaza-v1`），`/vendor/*` 静态资源也从主站加载，manifest 在该域移除。主站与官方反代域 `cf.gallopingroad.top` 保持同源相对路径不变。
-- **登录态**：`localStorage.dp_token` + `Authorization: Bearer`，不依赖 Cookie，所以跨域指向同一后端即可正常登录/自动登录；设备 Cookie `__Host-dp_device` 跨域不落盘时走 V11.0 多维信号恢复兜底。
-- **全业务 API 跨域**：`functions/_middleware.js` 对自有前端域名（发布域、`*.app.workbuddy.host`、官方反代域）放行全部 `/api/*`，中间件统一应答 CORS 预检并给实际响应补 `Access-Control-Allow-Origin` / `Vary: Origin`。`X-DP-Client` 门禁头、蜜罐、限流、封禁检查**均不放宽**。
+- **唯一事实来源**：`doubao-plaza.pages.dev` 的 Pages Functions + D1 + Supabase。
+- **WorkBuddy 侧有真后台（V12.2）**：发布形态由「纯静态托管」改为 **Node 单端口 HTTP 服务**（`public/server.js`，零第三方依赖，监听 `$PORT`、绑定 `0.0.0.0`）。网页、CSS/JS、`vendor/`、`manifest.json`、图片全部由它**同源提供**；`/api/*`、`/pages/*`、`/chat/*`、`/cdn-assets/*` 同源反代到共享主站。浏览器只与发布域通信，不再有跨域预检、第三方 Cookie 被 Tracking Prevention 拦截、静态资源 404 等问题。
+  - 服务端强制注入 `X-DP-Client: plaza-v1` 与上游同源 `Origin`，因此上游门禁按「同源」放行，且门禁头无法被客户端伪造或遗漏。
+  - 上游下发的 `Set-Cookie: __Host-dp_device=...` 去掉 `Domain` 后回种为本域 host-only Cookie，同源请求自动携带，**设备身份确认链路真正闭环**——这是 V12.1 跨域方案始终登录不稳的根因。
+  - `/.cloud/**` 属于 WorkBuddy 云数据面平台网关，服务不把它反代到业务主站，并带环回守卫。
+  - 静态文件缺失时按扩展名做一次同源兜底反代，即使发布沙箱漏带 `vendor/` 也不影响公式/编辑器/指纹库。
+  - `GET /__dp/health` 返回 `mode: workbuddy-backend`，可一眼确认当前跑的是真后台而非静态托管。
+- **形态探针**：`public/dp-backend.js` 是静态占位（`__DP_BACKEND__ = false`），真后台服务把该路径动态覆盖为 `true`。`index.html` / `developer.html` / `tavern.html` 据此在首帧确定 `/api` 与 `vendor` 走向。三种形态都可用：主站与反代域同源、WorkBuddy 真后台同源、WorkBuddy 纯静态托管（万一回退）退回 V12.1 跨域改写。
+- **登录态**：`localStorage.dp_token` + `Authorization: Bearer`；设备凭据另由同源 `__Host-dp_device` Cookie 承载。
+- **全业务 API 跨域**：`functions/_middleware.js` 对自有前端域名（发布域、`*.app.workbuddy.host`、官方反代域）放行全部 `/api/*`，中间件统一应答 CORS 预检并给实际响应补 `Access-Control-Allow-Origin` / `Vary: Origin`。这是静态托管形态的降级通道；真后台模式下接口已同源，不再经过 CORS。`X-DP-Client` 门禁头、蜜罐、限流、封禁检查**均不放宽**。
 - **统一服务网关**：`GET /api/sync/export`（D1/Supabase 公开投影增量导出）与 `POST /api/sync/import`（回写 D1 `cloud_sync_inbox` 收件箱）。
-- **自动更新的实时副本（V12.1）**：云数据库新增 `dp_replica`，仅存公开脱敏投影。页面打开 2.5 秒后自动首次同步，之后每 5 分钟增量一次，切回前台补跑、页面隐藏暂停；水位存浏览器 `localStorage`。**无需登录、无需点按钮、无人值守**。该表对 `anon` 开放读写，但用 RLS `WITH CHECK` 限定来源（`d1|supabase`）、8 张白名单表与 `record_key ≤ 128`，且不开放 DELETE。SDK 加载失败时降级为同源 REST（仅带 publishableKey）。
+- **自动更新的实时副本（V12.1）**：云数据库 `dp_replica`，仅存公开脱敏投影。页面打开 2.5 秒后自动首次同步，之后每 5 分钟增量一次，切回前台补跑、页面隐藏暂停；水位存浏览器 `localStorage`。**无需登录、无需点按钮、无人值守**。该表对 `anon` 开放读写，但用 RLS `WITH CHECK` 限定来源（`d1|supabase`）、8 张白名单表与 `record_key ≤ 128`，且不开放 DELETE。SDK 加载失败时降级为同源 REST（仅带 publishableKey）。真后台模式下 `/api/sync/export` 也走同源反代。
 - **云服务的角色**：不是复制一套业务库。V12.0 的 `dp_sync_records` / 水位 / 审计 / `dp_cloud_prefs` 仍为 owner-scoped，保留给登录用户；`dp_replica` 是独立的公开副本，供国内直连读取。
-- **边界**：云数据面校验精确来源，自动副本同步只在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 执行；业务数据不受此限制。同步为基于时间列的增量快照，删除不传播，冲突以来源侧为准（`source-wins`）。
+- **边界**：云数据面校验精确来源，自动副本同步只在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 执行；业务数据不受此限制。同步为基于时间列的增量快照，删除不传播，冲突以来源侧为准（`source-wins`）。真后台反代时上游按反代出口 IP 统计，设备网络信号以服务端透传的 `X-DP-Real-IP` 为准（仅在边缘判定为可信反代时采纳）。
 - **启用回写**：在 Cloudflare Pages 环境变量配置 `SYNC_BRIDGE_TOKEN`；未配置时回写端点 503 失败关闭。
 
 ## 项目结构
 
 ```
 doubao-plaza/
-├── public/                        # 前端静态文件
+├── public/                        # 前端静态文件 + WorkBuddy 同源后台
+│   ├── server.js                  # V12.2 Node 单端口 HTTP 服务（静态同源 + 业务接口反代）
+│   ├── dp-backend.js              # V12.2 部署形态探针占位（真后台动态覆盖为 true）
 │   ├── index.html                 # 主应用（HTML + 内嵌 JavaScript）
+│   ├── developer.html             # 管理员安全后台
+│   ├── tavern.html                # 酒馆页面
+│   ├── cloud-service.js           # V12.x 统一服务客户端 / dp_replica 无人值守同步
 │   ├── style.css                  # 全局样式表（CSS 变量 + 亮/暗色模式）
 │   └── supabase-sdk.js            # Supabase JS SDK v2.108.0
 ├── functions/                     # Cloudflare Pages Functions

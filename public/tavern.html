@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!-- V12.2 部署形态探针：真后台同源，静态托管时降级为跨域改写 -->
+<script src="/dp-backend.js?v=12.2"></script>
 <script>
-/* AUDIT FIX v9.0 [6.7]: 门禁证明注入 —— 同源 /api fetch 自动携带 X-DP-Client 头（与 functions/_middleware.js gate 配套，须同版本上线） */
+/* AUDIT FIX v9.0 [6.7]: 门禁证明注入 + V12.2 同源后台（与 functions/_middleware.js gate 配套） */
 (function () {
   if (window.__dpFetchPatched) return;
+  var SHARED = 'https://doubao-plaza.pages.dev';
+  var LOCAL_HOSTS = ['doubao-plaza.pages.dev', 'cf.gallopingroad.top'];
+  var remote = !window.__DP_BACKEND__ && LOCAL_HOSTS.indexOf(location.hostname) === -1;
   var orig = window.fetch;
   if (typeof orig !== 'function') return;
   function isApi(u) {
@@ -29,6 +34,14 @@
         var h = new Headers(src);
         if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
         init = Object.assign({}, init, { headers: h });
+        if (remote) {
+          var r2 = new URL(u, location.href);
+          var abs = SHARED + r2.pathname + r2.search;
+          if (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL)) input = abs;
+          else if (typeof Request !== 'undefined' && input instanceof Request) {
+            try { input = new Request(abs, input); } catch (e) {}
+          } else if (input && input.url) input = abs;
+        }
       }
     } catch (e) {}
     return orig.call(this, input, init);

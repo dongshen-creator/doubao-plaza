@@ -37,7 +37,10 @@
   function $(id) { return document.getElementById(id); }
   function el(id) { return $(id); }
 
+  // V12.2：WorkBuddy 真后台模式下所有业务接口都走同源，由发布域的
+  // server.js 反代到共享主站；静态托管形态才退回跨域绝对地址。
   function sharedBase() {
+    if (window.__DP_BACKEND__) return '';
     return location.origin === SHARED_ORIGIN ? '' : SHARED_ORIGIN;
   }
   function serviceUrl(path) { return sharedBase() + path; }
