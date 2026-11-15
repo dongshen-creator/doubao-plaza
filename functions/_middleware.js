@@ -28,24 +28,35 @@ import { ensureIndexes } from './api/_lib/schema-guard.js';
 const GATE_HEADER_NAME = 'X-DP-Client';
 const GATE_HEADER_VALUE = 'plaza-v1';
 
-// V12.0：共享服务网关允许的白名单跨域来源（WorkBuddy 应用发布域 + 官方反代入口）。
-// 仅对 /api/sync/* 生效，且仍必须携带 X-DP-Client；其余 API 的同源门禁不变。
-// 说明：export 是脱敏只读投影，import 另有 SYNC_BRIDGE_TOKEN 失败关闭保护，
-// 因此放宽「来源」不会放开写入权限；后缀匹配让重新发布换发布子域时不必再改代码。
-const SHARED_SYNC_ORIGINS = new Set([
+// V12.1：自有前端域名白名单（WorkBuddy 静态发布域 + 官方反代入口）。
+// 静态发布域没有 Functions，它的全部 /api/* 请求会跨域打到本服务，因此门禁对白名单来源放行：
+//   · 仍必须携带 X-DP-Client: plaza-v1（门禁头不放宽）
+//   · 由本中间件统一应答 OPTIONS 预检，并给实际响应补 CORS 头
+//   · 其它来源的同源门禁完全不变
+// 后缀匹配让重新发布换发布子域时不必再改代码。
+const SHARED_APP_ORIGINS = new Set([
   'https://doubao-plaza-v11.app.workbuddy.host',
   'https://cf.gallopingroad.top',
 ]);
 function isSyncPath(path) {
   return path === '/api/sync' || path.startsWith('/api/sync/');
 }
-function isSharedSyncOrigin(origin) {
+function isSharedAppOrigin(origin) {
   if (!origin) return false;
-  if (SHARED_SYNC_ORIGINS.has(origin)) return true;
+  if (SHARED_APP_ORIGINS.has(origin)) return true;
   try {
     const u = new URL(origin);
     return u.protocol === 'https:' && u.hostname.endsWith('.app.workbuddy.host');
   } catch (e) { return false; }
+}
+function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-DP-Client, X-Sync-Token, X-DP-Diag-Token, X-DP-Real-IP',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
 }
 
 // 蜜罐路径（已对照 functions/api 全清单确认无真实端点撞名；含子路径）
@@ -141,8 +152,13 @@ function applyApiSecurityHeaders(headers) {
   return headers;
 }
 
-function wrapApiResponse(res) {
+function wrapApiResponse(res, allowOrigin) {
   const headers = applyApiSecurityHeaders(new Headers(res.headers));
+  // V12.1：白名单来源的跨域响应补 CORS，让静态发布域读得到业务 API
+  if (allowOrigin) {
+    headers.set('Access-Control-Allow-Origin', allowOrigin);
+    headers.set('Vary', 'Origin');
+  }
   // 透传 body（保住 SSE/流式）；204/304 的 body 为 null，构造安全
   return new Response(res.body, {
     status: res.status,
@@ -289,14 +305,19 @@ export async function onRequest(context) {
   }
 
   // ---- 4) 门禁：同源证明（白名单 Bearer 绕过）----
-  // V12.0：/api/sync/* 的 CORS 预检不携带门禁头，交由端点自身的 OPTIONS 处理器应答；
-  // 实际请求仍必须带 X-DP-Client，且来源要么同源、要么在共享服务白名单内。
-  const syncPreflight = isSyncPath(path) && request.method === 'OPTIONS';
-  if (api && !apiAllowed && !isGateExempt(path) && !syncPreflight) {
+  // V12.1：自有静态发布域的全部 /api/* 请求跨域打到这里；由中间件统一应答预检，
+  // 并给白名单来源的实际响应补 CORS 头。实际请求仍必须带 X-DP-Client。
+  const origin = request.headers.get('Origin');
+  const sharedOrigin = api && isSharedAppOrigin(origin) ? origin : null;
+  if (api && sharedOrigin && request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: applyApiSecurityHeaders(new Headers(corsHeaders(sharedOrigin))),
+    });
+  }
+  if (api && !apiAllowed && !isGateExempt(path)) {
     const clientTag = request.headers.get(GATE_HEADER_NAME);
-    const origin = request.headers.get('Origin');
-    const originOk = !origin || origin === url.origin ||
-      (isSyncPath(path) && isSharedSyncOrigin(origin));
+    const originOk = !origin || origin === url.origin || !!sharedOrigin;
     if (clientTag !== GATE_HEADER_VALUE || !originOk) {
       logSecurityEvent(
         context,
@@ -312,12 +333,13 @@ export async function onRequest(context) {
       return jsonError(
         403,
         { success: false, error: '请求未通过来源校验' },
-        isSyncPath(path) ? { 'Access-Control-Allow-Origin': '*' } : undefined
+        sharedOrigin ? corsHeaders(sharedOrigin)
+          : isSyncPath(path) ? { 'Access-Control-Allow-Origin': '*' } : undefined
       );
     }
   }
 
   // ---- 5) 放行：/api/* 响应统一补齐安全头 ----
   const res = await context.next();
-  return api ? wrapApiResponse(res) : res;
+  return api ? wrapApiResponse(res, sharedOrigin) : res;
 }

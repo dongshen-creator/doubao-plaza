@@ -13,17 +13,20 @@
 | 实时通信 | Supabase Realtime | WebSocket 消息推送 + 前端轮询兜底 |
 | 文件存储 | freserafim(chocoChat) + img.scdn.io + tmpfile.link + Cloudflare R2 | 聊天图片/文件上传（freserafim 优先 + img.scdn.io 直连 + tmpfile.link 兜底）+ 开发者文件托管（Supabase Storage） |
 | 部署 | Cloudflare Pages | 边缘网络部署，全球加速 |
-| 云服务（V12） | WorkBuddy Cloud Service（PostgreSQL + 邮箱验证码） | 共享增量水位、同步审计、跨端偏好；不是第三套业务库 |
+| 云服务（V12.1） | WorkBuddy Cloud Service（PostgreSQL） | 公开数据实时副本 `dp_replica`（自动更新）+ 共享水位/审计/跨端偏好；不是第三套业务库 |
 
-### 两个域名共享同一套服务（V12.0）
+### 两个域名共享同一套服务（V12.1）
 
 自建应用（WorkBuddy 发布域）与 `doubao-plaza.pages.dev` **共用同一套后端服务**，不各自维护一份业务数据：
 
-- **唯一事实来源**：`doubao-plaza.pages.dev` 的 Pages Functions + D1 + Supabase。前端 `sharedBase()` 在本站走同源 `/api`，在 WorkBuddy 域走绝对地址 `https://doubao-plaza.pages.dev/api`，最终落到同一实例。
-- **统一服务网关**：`GET /api/sync/export`（D1/Supabase 公开投影增量导出）与 `POST /api/sync/import`（回写 D1 `cloud_sync_inbox` 收件箱），两端点均带 CORS，两个域名可同等调用。跨域请求需带 `X-DP-Client: plaza-v1`；全局中间件仅对 `/api/sync/*` 放行白名单来源（WorkBuddy 发布子域、官方反代域）与 CORS 预检，其余 `/api/*` 的同源门禁不变。
-- **云服务的角色**：不是复制一套业务库，只承担全局共享镜像 `dp_sync_records`（唯一键 `source+table_name+record_key`，任何操作者刷新同一行）、水位、审计与跨端偏好 `dp_cloud_prefs`。两个域名登录同一云服务账号即读到同一份数据。
-- **边界**：云数据面校验精确来源，云端读写需在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 打开面板；业务数据不受此限制。浏览器会话按域名隔离，两个域名需各自登录一次。同步为基于时间列的增量快照，删除不传播，冲突以来源侧为准。
-- **启用回写**：在 Cloudflare Pages 环境变量配置 `SYNC_BRIDGE_TOKEN`，并在面板中输入同一令牌；未配置时回写端点 503 失败关闭。
+- **唯一事实来源**：`doubao-plaza.pages.dev` 的 Pages Functions + D1 + Supabase。WorkBuddy 发布域是**纯静态托管、不部署 Functions**，因此 `public/index.html` 把该域的所有 `/api/*` 请求改写为主站绝对地址（并注入 `X-DP-Client: plaza-v1`），`/vendor/*` 静态资源也从主站加载，manifest 在该域移除。主站与官方反代域 `cf.gallopingroad.top` 保持同源相对路径不变。
+- **登录态**：`localStorage.dp_token` + `Authorization: Bearer`，不依赖 Cookie，所以跨域指向同一后端即可正常登录/自动登录；设备 Cookie `__Host-dp_device` 跨域不落盘时走 V11.0 多维信号恢复兜底。
+- **全业务 API 跨域**：`functions/_middleware.js` 对自有前端域名（发布域、`*.app.workbuddy.host`、官方反代域）放行全部 `/api/*`，中间件统一应答 CORS 预检并给实际响应补 `Access-Control-Allow-Origin` / `Vary: Origin`。`X-DP-Client` 门禁头、蜜罐、限流、封禁检查**均不放宽**。
+- **统一服务网关**：`GET /api/sync/export`（D1/Supabase 公开投影增量导出）与 `POST /api/sync/import`（回写 D1 `cloud_sync_inbox` 收件箱）。
+- **自动更新的实时副本（V12.1）**：云数据库新增 `dp_replica`，仅存公开脱敏投影。页面打开 2.5 秒后自动首次同步，之后每 5 分钟增量一次，切回前台补跑、页面隐藏暂停；水位存浏览器 `localStorage`。**无需登录、无需点按钮、无人值守**。该表对 `anon` 开放读写，但用 RLS `WITH CHECK` 限定来源（`d1|supabase`）、8 张白名单表与 `record_key ≤ 128`，且不开放 DELETE。SDK 加载失败时降级为同源 REST（仅带 publishableKey）。
+- **云服务的角色**：不是复制一套业务库。V12.0 的 `dp_sync_records` / 水位 / 审计 / `dp_cloud_prefs` 仍为 owner-scoped，保留给登录用户；`dp_replica` 是独立的公开副本，供国内直连读取。
+- **边界**：云数据面校验精确来源，自动副本同步只在发布域 `https://doubao-plaza-v11.app.workbuddy.host` 执行；业务数据不受此限制。同步为基于时间列的增量快照，删除不传播，冲突以来源侧为准（`source-wins`）。
+- **启用回写**：在 Cloudflare Pages 环境变量配置 `SYNC_BRIDGE_TOKEN`；未配置时回写端点 503 失败关闭。
 
 ## 项目结构
 

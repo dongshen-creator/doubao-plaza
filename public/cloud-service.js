@@ -495,15 +495,144 @@
     });
   }
 
+  // ── V12.1 无人值守副本同步：无需登录、无需按钮，页面打开后自己更新数据库 ──
+  // 唯一事实来源仍是主站 D1 + Supabase；这里把「脱敏白名单投影」的增量写入
+  // WorkBuddy 云库的公开副本表 dp_replica（anon 可写、表/键白名单、无敏感字段）。
+  // 水位存浏览器本地，不依赖云会话，也不读写 owner-only 的同步元数据表，
+  // 因此「没有登录、没有管理员、没有人点按钮」时数据库照样自动更新。
+  var REPLICA_TABLE = 'dp_replica';
+  var REPLICA_TABLES = {
+    users: 1, announcements: 1, features: 1, blog_posts: 1, site_settings: 1,
+    public_channels: 1, chat_channel_announcements: 1, chat_channel_tools: 1
+  };
+  var AUTO_SYNC_DELAY_MS = 2500;
+  var AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+  var AUTO_SYNC_MAX_BATCHES = 4;
+  var WM_KEY = 'dp_replica_watermark_v1';
+  var STAT_KEY = 'dp_replica_last_ok_v1';
+  var autoSyncTimer = null;
+  var autoSyncBusy = false;
+
+  function autoWatermark() {
+    try { return String(localStorage.getItem(WM_KEY) || ''); } catch (e) { return ''; }
+  }
+  function autoSetWatermark(v) {
+    try { if (v) localStorage.setItem(WM_KEY, String(v)); } catch (e) {}
+  }
+  function autoStat(rows, batches) {
+    try {
+      localStorage.setItem(STAT_KEY, JSON.stringify({
+        at: new Date().toISOString(), rows: rows, batches: batches
+      }));
+    } catch (e) {}
+  }
+
+  // 优先走 SDK；国内 CDN 不可达时降级为同源 REST 直写公开副本表，
+  // 两者都只携带 publishableKey（anon），不接触任何用户会话或敏感数据。
+  async function replicaUpsert(rows) {
+    var c = initClient();
+    if (c && c.database && typeof c.database.from === 'function') {
+      try {
+        var up = await c.database.from(REPLICA_TABLE)
+          .upsert(rows, { onConflict: 'source,table_name,record_key' });
+        return !(up && up.error);
+      } catch (e) { return false; }
+    }
+    try {
+      var r = await fetch('/.cloud/database/rest/v1/' + REPLICA_TABLE +
+        '?on_conflict=source,table_name,record_key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'x-wb-webapp-access-key': publicConfig.publishableKey,
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(rows)
+      });
+      return !!r.ok;
+    } catch (e) { return false; }
+  }
+
+  async function autoSyncTick() {
+    if (autoSyncBusy || document.hidden || !originOk()) return;
+    autoSyncBusy = true;
+    var total = 0, batches = 0, failed = false;
+    try {
+      for (var b = 0; b < AUTO_SYNC_MAX_BATCHES; b++) {
+        var since = autoWatermark();
+        var url = serviceUrl('/api/sync/export?limit=100') +
+          (since ? '&since=' + encodeURIComponent(since) : '');
+        var res;
+        try {
+          res = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'X-DP-Client': 'plaza-v1' }
+          });
+        } catch (e) { break; }
+        if (!res.ok) break;
+        var payload = await res.json().catch(function () { return null; });
+        if (!payload || !payload.success) break;
+
+        var records = (Array.isArray(payload.records) ? payload.records : []).filter(function (r) {
+          return r && (r.source === 'd1' || r.source === 'supabase') &&
+            Object.prototype.hasOwnProperty.call(REPLICA_TABLES, String(r.table_name)) &&
+            String(r.record_key).length > 0 && String(r.record_key).length <= 128;
+        });
+        for (var i = 0; i < records.length; i += 25) {
+          var chunk = records.slice(i, i + 25).map(function (r) {
+            return {
+              source: String(r.source),
+              table_name: String(r.table_name),
+              record_key: String(r.record_key),
+              payload: (r.payload && typeof r.payload === 'object') ? r.payload : {}
+            };
+          });
+          if (!(await replicaUpsert(chunk))) { failed = true; break; }
+        }
+        if (failed) break;
+        total += records.length;
+        batches += 1;
+        var wm = payload.watermark || since;
+        if (String(wm) > String(since)) autoSetWatermark(wm);
+        else break;
+        if (!payload.truncated || records.length === 0) break;
+      }
+      if (batches && !failed) {
+        autoStat(total, batches);
+        log('数据库已自动更新：' + total + ' 条记录', 'ok');
+      }
+    } catch (e) {
+      // 后台同步永不打扰用户：网络 / 权限异常静默留待下一轮重试
+    } finally {
+      autoSyncBusy = false;
+    }
+  }
+
+  function startAutoSync() {
+    if (autoSyncTimer || !originOk()) return;
+    setTimeout(function () { autoSyncTick(); }, AUTO_SYNC_DELAY_MS);
+    autoSyncTimer = setInterval(autoSyncTick, AUTO_SYNC_INTERVAL_MS);
+    // 从后台切回前台立刻补一次，缩短副本滞后窗口
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) autoSyncTick();
+    });
+  }
+
   window.DPCloud = {
     render: render,
+    syncNow: autoSyncTick,
     publicConfig: publicConfig,
     sharedOrigin: SHARED_ORIGIN
   };
 
+  function boot() {
+    bind();
+    render();
+    startAutoSync();
+  }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { bind(); render(); });
+    document.addEventListener('DOMContentLoaded', boot);
   } else {
-    bind(); render();
+    boot();
   }
 })();

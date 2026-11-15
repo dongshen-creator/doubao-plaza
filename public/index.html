@@ -42,12 +42,35 @@
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
   <script>
-  /* AUDIT FIX v9.0 [6.7]: 门禁证明注入 —— 同源 /api fetch 自动携带 X-DP-Client 头（与 functions/_middleware.js gate 配套，须同版本上线） */
+  /* AUDIT FIX v9.0 [6.7] 门禁证明 + V12.1 共享后端：静态预览域把 /api 统一指向主站，两个域名读同一套数据 */
   (function () {
     if (window.__dpFetchPatched) return;
+    var SHARED = 'https://doubao-plaza.pages.dev';
+    var LOCAL_HOSTS = ['doubao-plaza.pages.dev', 'cf.gallopingroad.top'];
+    var remote = LOCAL_HOSTS.indexOf(location.hostname) === -1;
+    window.__DP_SHARED = { remote: remote, origin: SHARED };
+    window.__dpAsset = function (p) { return (remote && p.charAt(0) === '/') ? SHARED + p : p; };
+
+    // 静态预览域未随包带上 vendor/，公式 / 编辑器 / 指纹库从主站取；manifest 跨域无意义，直接移除
+    function rewriteAssets() {
+      if (!remote) return;
+      var nodes = document.querySelectorAll('link[href^="/vendor/"], script[src^="/vendor/"]');
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.getAttribute('data-dp-rewritten')) continue;
+        var a = n.tagName === 'LINK' ? 'href' : 'src';
+        n.setAttribute(a, SHARED + n.getAttribute(a));
+        n.setAttribute('data-dp-rewritten', '1');
+      }
+      var mf = document.querySelector('link[rel="manifest"]');
+      if (mf && mf.parentNode) mf.parentNode.removeChild(mf);
+    }
+    rewriteAssets();
+    document.addEventListener('DOMContentLoaded', rewriteAssets);
+
     var orig = window.fetch;
     if (typeof orig !== 'function') return;
-    function isApi(u) {
+    function isLocalApi(u) {
       if (!u || u.indexOf('api') === -1) return false;
       try {
         var r = new URL(u, location.href);
@@ -62,7 +85,7 @@
           : (typeof URL !== 'undefined' && input instanceof URL) ? input.href
           : (typeof Request !== 'undefined' && input instanceof Request) ? input.url
           : (input && input.url) || '';
-        if (isApi(u)) {
+        if (isLocalApi(u)) {
           var src = (init && init.headers)
             ? init.headers
             : (typeof Request !== 'undefined' && input instanceof Request) ? input.headers
@@ -70,6 +93,14 @@
           var h = new Headers(src);
           if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
           init = Object.assign({}, init, { headers: h });
+          if (remote) {
+            var r2 = new URL(u, location.href);
+            var abs = SHARED + r2.pathname + r2.search;
+            if (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL)) input = abs;
+            else if (typeof Request !== 'undefined' && input instanceof Request) {
+              try { input = new Request(abs, input); } catch (e) {}
+            } else if (input && input.url) input = abs;
+          }
         }
       } catch (e) {}
       return orig.call(this, input, init);
@@ -87,9 +118,10 @@
         console.error('[LaTeX] KaTeX 本地 CSS 加载失败');
       });
     }
+    var A = window.__dpAsset || function (p) { return p; };
     var katexLibs = [
-      '/vendor/katex/dist/katex.min.js',
-      '/vendor/katex/dist/contrib/auto-render.min.js'
+      A('/vendor/katex/dist/katex.min.js'),
+      A('/vendor/katex/dist/contrib/auto-render.min.js')
     ];
     window.__katexReady = false;
     window.__katexFailed = false;
@@ -4808,14 +4840,15 @@ function ensureSunEditorLoaded(cb) {
   _sunEditorCallbacks.push(cb);
   if (_sunEditorCallbacks.length > 1) return; // 已在加载中
   // 先注入 CSS
-  if (!document.querySelector('link[href="/vendor/suneditor/dist/css/suneditor.min.css"]')) {
+  var A = window.__dpAsset || function (p) { return p; };
+  if (!document.querySelector('link[href*="suneditor/dist/css/suneditor.min.css"]')) {
     var cssLink = document.createElement('link');
     cssLink.rel = 'stylesheet';
-    cssLink.href = '/vendor/suneditor/dist/css/suneditor.min.css';
+    cssLink.href = A('/vendor/suneditor/dist/css/suneditor.min.css');
     document.head.appendChild(cssLink);
   }
   var s = document.createElement('script');
-  s.src = '/vendor/suneditor/dist/suneditor.min.js';
+  s.src = A('/vendor/suneditor/dist/suneditor.min.js');
   s.onload = function() {
     _sunEditorLoaded = true;
     while (_sunEditorCallbacks.length) {

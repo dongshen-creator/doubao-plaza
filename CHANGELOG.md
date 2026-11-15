@@ -4,6 +4,48 @@
 
 ---
 
+## v12.1 — 2026-11-15
+
+### 修复 WorkBuddy 版登录 + 数据库改为无人值守自动更新 + 重新发布
+
+用户诉求：「你自己改成自动更新数据库，然后再发布 workbuddy，另外 workbuddy 版逗包用户广场一直登陆不上去，也需要先修复」。
+
+**一、WorkBuddy 发布域登录不上去（根因：静态托管无 Functions）**
+
+- 现象：发布域 `/api/site-settings`、`/api/announcements` 404，`/api/device/claim`、`/api/users/login` 501，`/vendor/*` 与 `/manifest.json` 403/404。
+- 根因：WorkBuddy 发布域是**纯静态托管，不部署 `functions/**`**；页面里的 `/api/*` 相对路径全部落空。登录态实际是 `localStorage.dp_token` + `Authorization: Bearer`，不依赖 Cookie，因此把请求指向同一后端即可修复。
+- `public/index.html`：新增共享后端判定（主站 `doubao-plaza.pages.dev` / 反代 `cf.gallopingroad.top` 视为本地，其余视为静态发布域）。静态发布域下所有 `/api/*` 请求改写为主站绝对地址，并一律注入 `X-DP-Client: plaza-v1`；`/vendor/*` 静态资源经 `__dpAsset` 改写到主站，KaTeX / SunEditor 懒加载同步适配；移除跨域无意义的 `manifest` link（消除 403）。
+- `functions/_middleware.js`：把 V12.0.1 仅针对 `/api/sync/*` 的白名单升级为**自有前端域名的全业务 API 白名单**（精确发布域 + `*.app.workbuddy.host` + 官方反代域）。中间件统一应答预检 `OPTIONS`（204 + CORS），并给实际响应补 `Access-Control-Allow-Origin` / `Vary: Origin`。**门禁头 `X-DP-Client` 不放宽**，蜜罐、限流、账号封禁检查全部保持原样。
+- `public/_headers`：CSP 放行 `https://doubao-plaza.pages.dev` 的 script / style / font，保证静态发布域从主站加载 vendor 不被拦。
+- 设备 Cookie `__Host-dp_device` 跨域不落盘，走 V11.0 已有的「多维信号恢复设备」兜底，不阻断密码登录。
+
+**二、数据库改成自动更新（根因：云库 RLS 要求登录，SDK 无匿名登录）**
+
+- 诊断：`@tencent-ai/workbuddy-cloud-sdk` 的 `anonymousTokenProvider` 只返回空 token，**没有匿名登录方法**；V12.0 的四张表均为 `owner_id = auth.uid()` 的 owner-only RLS。因此原先「自动同步」会因 `refreshSession()` 为空而静默跳过，等于没有自动化。
+- 云数据库新增公开副本表 `dp_replica`（仅 `source / table_name / record_key / payload / source_updated_at / synced_at`，无敏感字段）：开启 RLS，`GRANT SELECT, INSERT, UPDATE TO authenticated, anon`，三条策略对 `anon` 开放，并用 `WITH CHECK` 把写入限制在 `d1|supabase` 来源、8 张白名单表、`record_key ≤ 128`；**不开放 DELETE**。实测匿名 `SELECT` 200、`UPSERT` 201。
+- `public/cloud-service.js` 重写后台自动同步：页面打开 2.5 秒后自动跑首次，之后每 5 分钟增量一次，切回前台立即补跑，页面隐藏时暂停。从主站 `/api/sync/export` 拉增量 → `dp_replica` 按 `(source, table_name, record_key)` upsert → 水位存 `localStorage`。**不需要登录、不需要点按钮、不读写任何 owner-only 表**。
+- 水印/失败处理：本地记录成功批次与条数；网关异常、CDN 不可达一律静默留待下轮重试，不弹窗打扰用户。优先走 SDK，SDK 未加载时降级为同源 REST（仅带 publishableKey，anon 角色）。
+- 安全边界：只有 WorkBuddy 发布域（`originOk()`）才执行云库写入；导出端仍是脱敏投影，`source-wins`，不传播删除。
+
+**三、修改文件表**
+
+| 文件 | 改动 |
+| --- | --- |
+| `public/index.html` | 共享后端判定 + `/api/*` 改写 + 门禁头 + `/vendor/*` 资源改写 + 移除 manifest |
+| `public/cloud-service.js` | 无人值守自动同步（本地水位 + `dp_replica` upsert + CDN 降级） |
+| `public/_headers` | CSP 放行主站静态资源域 |
+| `functions/_middleware.js` | 自有发布域全业务 API CORS + 预检统一应答 |
+| 云数据库 | 新建 `dp_replica` 及 3 条 anon 白名单策略（不改动原有 4 张表） |
+| `CHANGELOG.md` / `AGENTS.md` / `README.md` | 同步 v12.1 说明 |
+
+**四、验证记录**
+
+- 语法：`_middleware.js` / `cloud-service.js` / `sync/export.js` `node --check` 通过；`index.html` 9 段内联 JS `vm.Script` 全通过。
+- 网关回归 27/27 PASS；前端模拟 DOM 33/33 PASS（含未登录自动同步、白名单过滤、水位、隐藏暂停、静默失败）；登录请求改写模拟 26/26 PASS（含主站/反代域不改写、幂等、重复注入防护）。
+- 云库匿名读写实测：SELECT 200、UPSERT 201。
+
+---
+
 ## v12.0.3 — 2026-11-15
 
 ### 移除前端「云服务」入口（按用户要求）
