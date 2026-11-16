@@ -65,6 +65,28 @@ const AGENT_OPTS = {
 const HTTPS_AGENT = new https.Agent(AGENT_OPTS);
 const HTTP_AGENT = new http.Agent(AGENT_OPTS);
 
+/* ── V12.3 网关共享令牌 ───────────────────────────────────────
+   上游只在「边缘 IP ∈ Cloudflare 官方网段」时才采信 X-DP-Real-IP。
+   经本沙箱反代时边缘看到的是沙箱出口 IP，该头会被忽略 ⇒ 所有用户在上游
+   是同一个 IP ⇒ device.js 的 CLAIM_HOURLY_LIMIT(5)/CLAIM_DAILY_LIMIT(15)
+   变成全站共享配额，第 6 个新设备就被 429。
+   令牌与 Pages 环境变量 DP_PROXY_TOKEN 配对，本文件只从以下来源取，
+   不硬编码、不进仓库：
+     1) 环境变量 DP_PROXY_TOKEN
+     2) 同目录 _dp/proxy-token.txt（部署时随包上传，已被 .gitignore 忽略，
+        且 _dp 在 DENY_NAMES 里，绝不对外下发）
+   两处都没有 → 不发该头，上游行为与改造前完全一致（安全降级）。 */
+function readProxyToken() {
+  const fromEnv = (process.env.DP_PROXY_TOKEN || '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const p = path.join(ROOT, '_dp', 'proxy-token.txt');
+    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8').trim();
+  } catch (e) { /* 读不到就当没配置 */ }
+  return '';
+}
+const PROXY_TOKEN = readProxyToken();
+
 // 与 public/_routes.json 的 Functions 路由范围保持一致
 const PROXY_PREFIXES = ['/api/', '/pages/', '/chat/', '/cdn-assets/'];
 const PROXY_EXACT = ['/api', '/pages', '/chat', '/cdn-assets'];
@@ -81,6 +103,8 @@ const HOP_RESPONSE = new Set([
 const DENY_NAMES = new Set([
   'server.js', 'server.mjs', 'server.cjs', 'package.json',
   'package-lock.json', 'wrangler.toml', '.env', '.npmrc',
+  // V12.3：网关共享令牌目录，随包上传但绝不对外下发
+  '_dp',
 ]);
 
 // 静态资源扩展名：沙箱若未随包带上某个目录（历史上 vendor/ 就发生过），
@@ -176,6 +200,7 @@ function outboundHeaders(req, origin, extra) {
   }
   // 客户端无法伪造边缘 IP 头；统一由本服务按真实来源回写
   delete out['cf-connecting-ip'];
+  delete out['x-dp-proxy-token'];
   out.host = new URL(origin).host;
   // 让上游 _middleware.js 的门禁按「同源」判定（origin === request url origin）
   out.origin = origin;
@@ -186,6 +211,8 @@ function outboundHeaders(req, origin, extra) {
     out['x-dp-real-ip'] = ip;
     out['x-forwarded-for'] = ip;
   }
+  // 共享令牌：证明这条真实 IP 是本网关转发的，而不是直连 pages.dev 伪造的
+  if (PROXY_TOKEN) out['x-dp-proxy-token'] = PROXY_TOKEN;
   if (extra) Object.assign(out, extra);
   return out;
 }
@@ -375,6 +402,8 @@ async function handle(req, res) {
       version: '12.3',
       upstream: PRIMARY,
       fallback: FALLBACK,
+      // 只暴露「有没有配」不暴露值：false 表示真实客户端 IP 无法被上游采信
+      proxyToken: !!PROXY_TOKEN,
       time: new Date().toISOString(),
     };
     // ?diag=1 时回显平台网关转发进来的来源标识头，用于核对真实客户端 IP 是否可用

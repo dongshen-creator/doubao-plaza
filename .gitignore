@@ -6,3 +6,6 @@ scripts/pending_fixes.jsonl
 .wrangler/
 .workbuddy/
 developer-sql-reference/
+
+# V12.3 网关共享令牌目录（仅随 WorkBuddy 部署包上传，绝不进仓库/Pages）
+public/_dp/

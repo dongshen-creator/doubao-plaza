@@ -111,15 +111,45 @@ export function isCloudflareEgress(ip) {
   return ip.indexOf(':') >= 0 ? inCfV6(ip) : inCfV4(ip);
 }
 
-// Functions 侧统一取真实客户端 IP：
-//   经反代（边缘 IP ∈ CF 官方网段）→ 信任 Worker 覆盖写入的 X-DP-Real-IP；
-//   直连 pages.dev → CF-Connecting-IP（任何 X-DP-Real-IP 均被忽略，伪造无效）。
-//   均缺失返回 ''，调用方按原口径兜底（'' 或 'unknown'）。
-export function resolveClientIp(request) {
+// 常量时间字符串比较（避免按字节提前返回泄露前缀）
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (!a || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// V12.3：同一请求内多处调用 resolveClientIp，只有 _middleware.js 那一次拿得到 env。
+// 用 WeakMap 把结论挂到 Request 对象上，后续调用（不带 env）直接复用，
+// 不必改动 device.js / audit.js 等一大批调用方签名。Request 回收时条目自动释放。
+const RESOLVED = new WeakMap();
+
+function computeClientIp(request, env) {
   const edge = request.headers.get('CF-Connecting-IP') || '';
   const forwarded = request.headers.get('X-DP-Real-IP') || '';
-  if (forwarded && validIp(forwarded) && isCloudflareEgress(edge)) {
-    return forwarded;
-  }
+  if (!forwarded || !validIp(forwarded)) return edge;
+  // ① 经 Cloudflare 反代：边缘 IP 属官方网段，采信反代写入的真实 IP
+  if (isCloudflareEgress(edge)) return forwarded;
+  // ② V12.3 WorkBuddy 发布沙箱反代：边缘看到的是沙箱出口 IP（不在 CF 网段），
+  //    若请求同时携带与 Pages 环境变量一致的共享令牌，则采信真实 IP。
+  //    没有令牌就一律不采信——否则任何人直连 pages.dev 伪造该头即可绕过按 IP 限流。
+  const expected = env && typeof env.DP_PROXY_TOKEN === 'string' ? env.DP_PROXY_TOKEN : '';
+  if (expected && safeEqual(request.headers.get('X-DP-Proxy-Token') || '', expected)) return forwarded;
   return edge;
+}
+
+// Functions 侧统一取真实客户端 IP：
+//   经反代（边缘 IP ∈ CF 官方网段）→ 信任 Worker 覆盖写入的 X-DP-Real-IP；
+//   经 WorkBuddy 沙箱反代（带共享令牌）→ 同样信任 X-DP-Real-IP；
+//   直连 pages.dev → CF-Connecting-IP（任何 X-DP-Real-IP 均被忽略，伪造无效）。
+//   均缺失返回 ''，调用方按原口径兜底（'' 或 'unknown'）。
+export function resolveClientIp(request, env) {
+  try {
+    const hit = RESOLVED.get(request);
+    if (hit !== undefined) return hit;
+  } catch (e) { /* 非对象 request，忽略缓存 */ }
+  const ip = computeClientIp(request, env);
+  try { RESOLVED.set(request, ip); } catch (e) { /* 不可缓存则每次重算 */ }
+  return ip;
 }

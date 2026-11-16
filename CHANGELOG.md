@@ -42,21 +42,29 @@
 
 - `GET /__dp/health?diag=1` 回显平台网关转发进来的来源标识头（`cf-connecting-ip` / `x-real-ip` / `x-forwarded-for` / `true-client-ip` / `x-client-ip`）与解析出的 `clientIp`，用于线上核对真实客户端 IP 是否可用（只回显调用者自己的请求头）。
 
-**六、发现但未在本版处理的隐患（需单独决策）**
+**六、同时修掉 V12.2 引入的「全站共享一个 IP」回归**
 
-- 上游 `functions/api/_lib/clientip.js` 只在**边缘 IP 属于 Cloudflare 官方网段**时才采信 `X-DP-Real-IP`，否则退回边缘 IP。经 WorkBuddy 沙箱反代时，边缘看到的是**沙箱出口 IP**，不在 CF 网段 ⇒ 该头被忽略 ⇒ 所有 WorkBuddy 域用户在上游看起来是**同一个 IP**。
-- 影响：`functions/api/_lib/device.js` 的 `CLAIM_HOURLY_LIMIT = 5` / `CLAIM_DAILY_LIMIT = 15` 是按 `created_ip` 计数的，共享 IP 会让**第 6 个新设备在一小时内就被 429**（「设备签发过于频繁」），风险评分与按 IP 处置也会失真。V12.1 是浏览器直连主站，没有这个问题，属 V12.2 架构切换引入的回归。
-- 正确修法需要「沙箱 → 主站」共享一个密钥（`DP_PROXY_TOKEN`：Cloudflare Pages 侧用 `wrangler pages secret put` 写入，沙箱侧从部署目录里一个 git 忽略的文件读取），**不能**用「带某个头就采信」的写法，否则任何人直连 `pages.dev` 伪造该头即可绕过 IP 限流。
+- 现象（不修的话登录修好了也会立刻崩）：上游 `functions/api/_lib/clientip.js` 只在**边缘 IP 属于 Cloudflare 官方网段**时才采信 `X-DP-Real-IP`，否则退回边缘 IP。经 WorkBuddy 沙箱反代时，边缘看到的是**沙箱出口 IP**，不在 CF 网段 ⇒ 该头被忽略 ⇒ 所有 WorkBuddy 域用户在上游看起来是**同一个 IP**。
+- 后果：`functions/api/_lib/device.js` 的 `CLAIM_HOURLY_LIMIT = 5` / `CLAIM_DAILY_LIMIT = 15` 是按 `created_ip` 计数的，共享 IP 会让**第 6 个新设备在一小时内就被 429**（「设备签发过于频繁」），风险评分、Tor 判定、按 IP 处置也全部失真。V12.1 是浏览器直连主站，没有这个问题，属 V12.2 架构切换引入的回归。
+- 修复方式：加一条**共享令牌**信任通道，不用「带某个头就采信」的写法（那样任何人直连 `pages.dev` 伪造该头即可绕过按 IP 限流）。
+  - Cloudflare Pages 侧：`DP_PROXY_TOKEN` 用 `wrangler pages secret put` 写入生产环境（加密存储，实测已出现在 secret list 中）。
+  - 沙箱侧：`public/server.js` 从 `process.env.DP_PROXY_TOKEN` 或 `public/_dp/proxy-token.txt` 读取；该目录已加进 `.gitignore`（不进仓库、不会部署到 Pages），并加进 `DENY_NAMES`（本服务绝不下发，实测 `/_dp/proxy-token.txt`、`/_dp/`、`/_dp%2F...` 全部 404）。反代时强制覆盖 `X-DP-Proxy-Token`，客户端注入的同名头一律丢弃。
+  - 校验侧：`resolveClientIp(request, env)` 在「边缘 ∈ CF 官方网段」之外，增加「`X-DP-Proxy-Token` 与 `DP_PROXY_TOKEN` 常量时间相等」这一条；**两处都没有令牌时不发、不认**，行为与改造前完全一致（安全降级）。
+  - 性能/一致性：同一请求内多处调用 `resolveClientIp`，只有 `_middleware.js` 那一次拿得到 `env`，因此用 `WeakMap` 把结论挂到 `Request` 上，后续调用（`device.js` / `audit.js` 等，不带 env）直接复用，不必改一大批调用方签名，且不影响任何鉴权判断（IP 从不参与鉴权）。
+- 单测（11 项全过）：CF 网段判定、直连忽略 `X-DP-Real-IP`、CF 反代采信、沙箱+正确令牌采信、同请求后续无 env 复用、错误令牌拒绝、未配置令牌拒绝、等长不同令牌拒绝、非法 IP 不采信、无 forwarded 兜底。
 
 **修改文件表**
 
 | 文件 | 改动 |
 | --- | --- |
-| `public/server.js` | HTML 内联注入形态常量；默认关闭不可用 fallback；keep-alive 连接池；健康检查加 `?diag=1`；版本号 12.3 |
+| `public/server.js` | HTML 内联注入形态常量；默认关闭不可用 fallback；keep-alive 连接池；健康检查加 `?diag=1` 与 `proxyToken`；读取并下发 `X-DP-Proxy-Token`；`_dp` 加入 `DENY_NAMES`；版本号 12.3 |
 | `public/index.html` | 探针版本 12.3 + 注释说明；fetch patch 加同源回退与 `isNetTypeError`；`api()` 网络错误中文化 |
 | `public/developer.html` | 同上（探针、自愈回退、`isNetTypeError`） |
 | `public/tavern.html` | 同上 |
 | `public/dp-backend.js` | 注释补充 V12.2 失败教训，明确它只是兜底而不再承担主判定 |
+| `functions/api/_lib/clientip.js` | `resolveClientIp(request, env)`：新增共享令牌信任通道、常量时间比较、`WeakMap` 同请求复用 |
+| `functions/_middleware.js` | 取 IP 时传 `env`，让令牌通道生效并把结果缓存到请求上 |
+| `.gitignore` | 忽略 `public/_dp/`（网关共享令牌目录） |
 
 ---
 

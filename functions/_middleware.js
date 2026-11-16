@@ -232,7 +232,9 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const path = url.pathname;
   const api = isApiPath(path);
-  const ip = resolveClientIp(request) || '';
+  // V12.3：这里传 env，让 resolveClientIp 能校验 WorkBuddy 沙箱反代的共享令牌，
+  // 并把结论缓存到 Request 上，后续模块（device.js / audit.js 等）不带 env 也能取到真实 IP
+  const ip = resolveClientIp(request, env) || '';
   const now = Date.now();
 
   // ---- 1) 蜜罐：假 401（与普通未登录口径完全一致），不进入限流/门禁 ----
