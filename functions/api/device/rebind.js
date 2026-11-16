@@ -37,7 +37,7 @@ export async function onRequestPost(context) {
       return Response.json({ success: false, error: 'forbidden' }, { status: 403 });
     }
 
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const meta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
 

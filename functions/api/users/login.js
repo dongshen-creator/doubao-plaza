@@ -170,7 +170,7 @@ export async function onRequestPost(context) {
     }
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    const clientIP = getClientIp(request);
+    const clientIP = getClientIp(request, env);
     const cmeta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
 

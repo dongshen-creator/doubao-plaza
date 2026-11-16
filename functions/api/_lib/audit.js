@@ -9,7 +9,7 @@ export async function writeAdminAudit(env, { actorId, action, target, detail, re
   let ip = null;
   let ua = null;
   if (request) {
-    try { ip = resolveClientIp(request) || null; } catch (e) { ip = null; }
+    try { ip = resolveClientIp(request, env) || null; } catch (e) { ip = null; }
     try { ua = (request.headers.get('User-Agent') || '').slice(0, 512) || null; } catch (e) { ua = null; }
   }
   try {

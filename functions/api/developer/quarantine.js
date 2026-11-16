@@ -27,7 +27,7 @@ export async function onRequestPost(context) {
     ).bind(targetId).first();
     if (!target) return devErr('账号不存在', 404);
 
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const cmeta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
 

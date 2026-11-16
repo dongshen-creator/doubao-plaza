@@ -213,7 +213,7 @@ async function execute(env, gate, request, runId, confirm) {
     await env.DB.prepare(
       `UPDATE cleanup_runs SET report = ? WHERE id = ?`
     ).bind(JSON.stringify(exReport), ex.id).run();
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const cmeta = cfMeta(request);
     await logRiskEvent(env, {
       event_type: 'cleanup', user_id: gate.userId, ip, ...cmeta,

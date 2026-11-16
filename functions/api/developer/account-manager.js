@@ -404,7 +404,7 @@ export async function onRequestPost(context) {
     }
 
     const results = [];
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const cmeta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
     for (const userId of userIds) {

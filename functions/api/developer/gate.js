@@ -65,7 +65,7 @@ export async function onRequestPost(context) {
     ).bind(gate.userId).first();
     if (!user) return devErr('账号异常', 403);
 
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const cmeta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
 

@@ -42,7 +42,7 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const { action, code } = body;
 
-    const ip = getClientIp(request);
+    const ip = getClientIp(request, env);
     const cmeta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
     const mfaRisk = (act, detail, score = 0) => logRiskEvent(env, {

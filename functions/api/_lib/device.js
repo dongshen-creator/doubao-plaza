@@ -15,8 +15,8 @@ const COOKIE_MAX_AGE = 400 * 24 * 60 * 60; // 400 天
 const CLAIM_HOURLY_LIMIT = 5;
 const CLAIM_DAILY_LIMIT = 15;
 
-export function getClientIp(request) {
-  return resolveClientIp(request) || 'unknown';
+export function getClientIp(request, env) {
+  return resolveClientIp(request, env) || 'unknown';
 }
 
 export function cfMeta(request) {

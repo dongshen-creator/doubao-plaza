@@ -356,7 +356,7 @@ export async function onRequestPost(context) {
       event_type: auditAction,
       user_id: activeUserIds[0] || null,
       device_id: deviceId,
-      ip: getClientIp(request),
+      ip: getClientIp(request, env),
       ...cfMeta(request),
       ua: request.headers.get('User-Agent') || '',
       action: action === 'ban' ? 'blocked' : 'allowed',

@@ -88,7 +88,7 @@ export async function onRequestGet(context) {
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
     // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
-    const clientIP = resolveClientIp(context.request) || 'unknown';
+    const clientIP = resolveClientIp(context.request, env) || 'unknown';
 
     // IP 频率限制：同 IP 每小时最多请求 10 次密保问题
     const ipRequests = await env.DB.prepare(
@@ -149,7 +149,7 @@ export async function onRequestPost(context) {
 
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
     // V9.1：经反代时取 Worker 回传的真实 IP（信任条件见 clientip.js）
-    const clientIP = resolveClientIp(context.request) || 'unknown';
+    const clientIP = resolveClientIp(context.request, env) || 'unknown';
 
     const body = await context.request.json().catch(() => ({}));
     const { user_id, security_answer, new_password } = body;

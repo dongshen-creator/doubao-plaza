@@ -80,7 +80,7 @@ export async function onRequestPost(context) {
       return jsonNoStore({ success: false, error: '会话已过期' });
     }
 
-    const ip = resolveClientIp(request) || 'unknown';
+    const ip = resolveClientIp(request, env) || 'unknown';
     const meta = cfMeta(request);
     const ua = request.headers.get('User-Agent') || '';
     const devRes = await resolveAuthDevice(env, request, ip, body);

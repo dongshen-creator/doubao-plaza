@@ -122,7 +122,7 @@ export async function onRequestGet(context) {
     if (cachedHit) return cachedHit;
 
     // V7.3 读放大防护②：按 IP 对搜索接口限频（同实例内 60 次/分钟）
-    const clientIP = resolveClientIp(context.request) || 'unknown';
+    const clientIP = resolveClientIp(context.request, env) || 'unknown';
     if (_searchRateLimited(clientIP)) {
       return Response.json({ success: false, error: '搜索过于频繁，请稍后再试' }, { status: 429 });
     }
@@ -220,7 +220,7 @@ export async function onRequestPost(context) {
 
     // V11 修复：Turnstile 人机验证（配置了 TURNSTILE_SECRET 时强制校验）
     // V8.0：只信 Cloudflare 可信边缘头，不接受可伪造的 X-Forwarded-For
-    const clientIP = resolveClientIp(context.request) || 'unknown';
+    const clientIP = resolveClientIp(context.request, env) || 'unknown';
     const cmeta = cfMeta(context.request);
     const turnstileResult = await verifyTurnstile(turnstile_token, env, clientIP);
     if (!turnstileResult.success) {
