@@ -314,7 +314,15 @@
         fail('拉取共享服务', { message: errBody.error || ('共享服务返回 HTTP ' + res.status) });
         return;
       }
-      var payload = await res.json();
+      // V12.4：导出端若返回非 JSON（网关 404/HTML 占位页等），res.json() 只会抛
+      // "Unexpected token ..." 这种无法定位的错，这里给出可读结论
+      var payload;
+      try {
+        payload = await res.json();
+      } catch (eParse) {
+        fail('拉取共享服务', { message: '导出端返回了非 JSON 内容（HTTP ' + res.status + '）' });
+        return;
+      }
       if (!payload.success) { fail('拉取共享服务', { message: payload.error || '导出端返回失败' }); return; }
       var records = Array.isArray(payload.records) ? payload.records : [];
       rowsRead = records.length;

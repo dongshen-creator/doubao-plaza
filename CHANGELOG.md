@@ -4,6 +4,57 @@
 
 ---
 
+## v12.4 — 2026-11-16
+
+### 修复注册提交后报 `Unexpected token 'N', "Not Found" is not valid JSON`
+
+用户报告：点「注册」提交后弹出这句。这是 V12.3 之后暴露出来的下一个坑。
+
+**一、根因：注册流程里那句裸 `fetch().then(r => r.json())`**
+
+```js
+// public/index.html · solveRegisterPow()
+var res = await fetch('/api/users/register-challenge').then(function(r) { return r.json(); });
+```
+
+- 这句**既不看 HTTP 状态、也不看正文是不是 JSON**。只要 `/api/users/register-challenge` 返回的正文不是 JSON，`r.json()` 就抛 `Unexpected token 'N', "Not Found" is not valid JSON`。
+- 而 `doRegister()` 里 catch 的是 `ePow.message` 并**原样显示在注册表单错误框**里（`err.innerHTML = '注册安全验证失败：' + ePow.message`），所以用户看到的就是浏览器原始报错，毫无可操作性。
+- 什么时候会返回非 JSON：平台网关在沙箱重启、边缘异常、或路由暂不可用时，会对请求回一个**非 JSON 的占位响应**（正文就是 `Not Found`）。V12.3 之前同样的请求还会被形态误判挡在跨域阶段，所以这个坑现在才露出来。
+
+**二、修复：统一走 `fetchJson()`**
+
+新增全局 `fetchJson(url, init, label)`，注册流程与其它裸解析点全部改用它：
+
+- 校验 HTTP 状态：4xx 直接给出业务错误（`接口 返回 HTTP 403：无权访问`），不重试；5xx / 网关占位响应**自动重试一次**。
+- 校验正文：`JSON.parse` 失败时抛 `xxx 返回了非 JSON 内容（HTTP 200，正文开头：Not Found）`。
+- 网络层失败抛 `xxx 网络不可达，请检查网络后重试`。
+- 所有错误都带**人类可读的接口名**（`获取注册验证` / `站点设置` / `博客公告`）。
+
+替换点：`solveRegisterPow()`、两处 `/api/site-settings`、`/api/blog/announce`。
+
+**三、同时加固（防止同类问题再以原始报错的形式出现）**
+
+- `api()`：在返回文本前**先校验一次是否 JSON**（仍然只返回字符串，不破坏「去重共享同一 Promise」的引用语义）。非 JSON 时抛 `接口 /api/xxx 返回了非 JSON 内容（HTTP 200，实际开头：Not Found）`。
+- `cloud-service.js`：`pullShared()` 里 `await res.json()` 加了兜底，失败时提示「导出端返回了非 JSON 内容（HTTP xxx）」。
+- `public/server.js`：加 `process.on('uncaughtException')` / `('unhandledRejection')` 守卫——网关进程一旦崩溃，平台边缘就会对前端回 `Not Found` 占位响应，正是本次症状的来源之一；本服务无跨请求共享状态，单个请求异常时记录并继续，比整进程退出安全。
+- `GET /__dp/health` 增加 `uptimeSec`：数值很小说明沙箱刚重启过，可用来判断「平台返回 Not Found」的时间窗。
+
+**四、验证**
+
+- `fetchJson` 单测 12 项全过：正常解析、404 业务错文案、200+`Not Found` 被识别、5xx 重试两次、4xx 不重试、网络不可达。
+- 三张页面内联脚本语法检查 9/3/9 全过。
+- 用真实 Chromium（Playwright）跑首页、`/developer`、`/tavern`、登录、**完整注册提交**，全程无异常 JSON、无非 JSON 的 2xx 响应。
+
+**修改文件表**
+
+| 文件 | 改动 |
+| --- | --- |
+| `public/index.html` | 新增 `fetchJson()`；替换 4 处裸 `.json()`；`api()` 增加 JSON 校验；版本标记 12.4 |
+| `public/cloud-service.js` | `pullShared()` 的 `res.json()` 加兜底 |
+| `public/server.js` | 进程级 `uncaughtException` / `unhandledRejection` 守卫；health 增加 `uptimeSec`；版本号 12.4 |
+
+---
+
 ## v12.3 — 2026-11-16
 
 ### 修复 WorkBuddy 版注册/登录报 `failed to fetch`

@@ -763,7 +763,17 @@ async function api(path, options = {}) {
         }
         // 只回文本、由每个调用方各自 JSON.parse：去重共享同一 Promise，
         // 若在此处 parse 则多个调用方拿到同一对象引用，任一方改数组会污染其他方
-        return await res.text();
+        var rawText = await res.text();
+        // V12.4：在源头校验一次「是不是 JSON」，但不把对象返回出去（保持上面的引用语义）。
+        // 否则浏览器只会抛 "Unexpected token 'N', "Not Found" is not valid JSON" 这类
+        // 完全没信息量的错，既不说是哪个接口，也不说是多长的正文。
+        try {
+          JSON.parse(rawText);
+        } catch (eParse) {
+          throw new Error('接口 ' + path + ' 返回了非 JSON 内容（HTTP ' + res.status +
+            '，正常应为 JSON，实际开头：' + String(rawText).trim().slice(0, 40) + '）');
+        }
+        return rawText;
       } catch (e) {
         lastErr = e;
         // 超时(abort)/网络错误(TypeError) → 幂等才重试；业务错误不重试
@@ -1520,7 +1530,7 @@ async function init() {
 
   // 拉取站点设置（维护/迁移模式 + v9.2 全局设置公开键），成功后应用品牌与页脚
   try {
-    const ss = await fetch('/api/site-settings').then(r => r.json());
+    const ss = await fetchJson('/api/site-settings', undefined, '站点设置');
     if (ss.success && ss.data) {
       siteSettings = Object.assign({}, siteSettings, ss.data);
       if (typeof applySiteBranding === 'function') applySiteBranding();
@@ -1740,7 +1750,7 @@ async function loadTempModeManager() {
   const el = document.getElementById('developerContent');
   // 确保站点设置是最新的
   try {
-    const ss = await fetch('/api/site-settings').then(r => r.json());
+    const ss = await fetchJson('/api/site-settings', undefined, '站点设置');
     if (ss.success) siteSettings = ss.data;
   } catch (e) {}
 
@@ -2304,8 +2314,46 @@ function countLeadingZeroBits(u8) {
   return bits;
 }
 
+// V12.4：裸 `fetch(...).then(r => r.json())` 在本站曾经是「注册失败」的真实原因。
+// 平台网关在沙箱重启/边缘异常时会对请求回一个非 JSON 的占位响应（正文就是 "Not Found"），
+// 而 r.json() 不做任何状态与正文校验，于是浏览器抛出
+//   Unexpected token 'N', "Not Found" is not valid JSON
+// 这句话被注册流程的 catch 直接显示在表单里——用户完全无法判断发生了什么。
+// 统一走这里：校验 HTTP 状态、校验正文是否为 JSON、幂等请求自动重试一次，并给出可读错误。
+async function fetchJson(url, init, label) {
+  const name = label || url;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise(function (r) { setTimeout(r, 600); });
+    let res;
+    try {
+      res = await fetch(url, init);
+    } catch (e) {
+      lastErr = new Error(name + ' 网络不可达，请检查网络后重试');
+      continue;
+    }
+    const text = await res.text().catch(function () { return ''; });
+    if (!res.ok) {
+      let msg = '';
+      try { msg = (JSON.parse(text) || {}).error || ''; } catch (e) { /* 非 JSON 错误体 */ }
+      lastErr = new Error(name + ' 返回 HTTP ' + res.status + (msg ? '：' + msg : ''));
+      // 4xx 属于业务结论，不重试；5xx / 网关占位响应才重试
+      if (res.status < 500) break;
+      continue;
+    }
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      lastErr = new Error(name + ' 返回了非 JSON 内容（HTTP ' + res.status +
+        '，正文开头：' + String(text).trim().slice(0, 40) + '）');
+      continue;
+    }
+  }
+  throw lastErr || new Error(name + ' 请求失败，请稍后重试');
+}
+
 async function solveRegisterPow() {
-  var res = await fetch('/api/users/register-challenge').then(function(r) { return r.json(); });
+  var res = await fetchJson('/api/users/register-challenge', undefined, '获取注册验证');
   if (!res || !res.success) throw new Error((res && res.error) || '获取注册验证失败，请重试');
   if (res.data && res.data.disabled) return null; // 服务端 PoW 未启用（表未创建），跳过
   var d = res.data || {};
@@ -4108,8 +4156,7 @@ function blogSearchRenderPanel() {
 // 侧边栏公告摘要
 async function blogLoadSidebarAnnouncements() {
   try {
-    var res = await fetch('/api/blog/announce');
-    var data = await res.json();
+    var data = await fetchJson('/api/blog/announce', undefined, '博客公告');
     var el = document.getElementById('blogSidebarAnnouncements');
     if (!el) return;
     if (data.success && data.data && data.data.length > 0) {

@@ -399,11 +399,13 @@ async function handle(req, res) {
     const info = {
       success: true,
       mode: 'workbuddy-backend',
-      version: '12.3',
+      version: '12.4',
       upstream: PRIMARY,
       fallback: FALLBACK,
       // 只暴露「有没有配」不暴露值：false 表示真实客户端 IP 无法被上游采信
       proxyToken: !!PROXY_TOKEN,
+      // 进程存活秒数：数值很小说明沙箱刚重启过（可用于判断「平台返回 Not Found」的时间窗）
+      uptimeSec: Math.round(process.uptime()),
       time: new Date().toISOString(),
     };
     // ?diag=1 时回显平台网关转发进来的来源标识头，用于核对真实客户端 IP 是否可用
@@ -480,6 +482,16 @@ const server = http.createServer((req, res) => {
     if (!res.headersSent) sendJson(res, 500, { success: false, error: '后台内部错误' });
     else res.destroy();
   });
+});
+
+/* V12.4：网关进程一旦崩溃，平台边缘会对请求回一个「非 JSON 的占位响应」
+   （实测前端只看到 `Unexpected token 'N', "Not Found" is not valid JSON`）。
+   本服务无跨请求共享状态，因此单个请求异常时宁可记录并继续，也不要整进程退出。 */
+process.on('uncaughtException', (e) => {
+  console.error('[dp-gateway] uncaughtException:', (e && e.stack) || e);
+});
+process.on('unhandledRejection', (e) => {
+  console.error('[dp-gateway] unhandledRejection:', (e && (e.stack || e.message)) || e);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
