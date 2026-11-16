@@ -134,8 +134,9 @@ function computeClientIp(request, env) {
   // ② V12.3 WorkBuddy 发布沙箱反代：边缘看到的是沙箱出口 IP（不在 CF 网段），
   //    若请求同时携带与 Pages 环境变量一致的共享令牌，则采信真实 IP。
   //    没有令牌就一律不采信——否则任何人直连 pages.dev 伪造该头即可绕过按 IP 限流。
-  const expected = env && typeof env.DP_PROXY_TOKEN === 'string' ? env.DP_PROXY_TOKEN : '';
-  if (expected && safeEqual(request.headers.get('X-DP-Proxy-Token') || '', expected)) return forwarded;
+  //    注：写入侧容易带上行尾换行，比较前统一 trim，避免「明明配了却不生效」。
+  const raw = env && typeof env.DP_PROXY_TOKEN === 'string' ? env.DP_PROXY_TOKEN.trim() : '';
+  if (raw && safeEqual((request.headers.get('X-DP-Proxy-Token') || '').trim(), raw)) return forwarded;
   return edge;
 }
 
