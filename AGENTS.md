@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v12.5）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v13.0.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -53,6 +53,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
     - **WorkBuddy 发布域是纯静态托管，没有 Functions**：`public/index.html` 必须把该域的 `/api/*` 改写为主站绝对地址并注入 `X-DP-Client: plaza-v1`，`/vendor/*` 经 `__dpAsset` 改写到主站，manifest 在该域移除。主站与 `cf.gallopingroad.top` 保持同源相对路径。登录态是 `localStorage.dp_token` + Bearer 头，不依赖 Cookie。
     - **`functions/_middleware.js` 全局门禁先于所有端点执行**：V12.1 起白名单为**自有前端域名的全业务 API**（`isSharedAppOrigin()`：精确发布域 + `*.app.workbuddy.host` + 官方反代域），中间件统一应答 CORS 预检并给实际响应补 CORS 头。实际请求仍必须带 `X-DP-Client: plaza-v1`；蜜罐、限流、封禁检查不得放宽。新增前端域名必须同步维护此白名单与 `public/index.html` 的 `LOCAL_HOSTS`。
     - **副本同步必须无人值守**：云数据库 `dp_replica` 是公开脱敏投影副本，对 `anon` 开放读写（RLS `WITH CHECK` 限定 `d1|supabase` 来源、白名单表、`record_key ≤ 128`，不开放 DELETE）。`public/cloud-service.js` 的自动同步**不得依赖 `refreshSession()` / `gate()` / 面板按钮** —— SDK 无匿名登录，一旦要求登录就会静默跳过。水位存 `localStorage`，只在 `originOk()`（发布域）执行，页面隐藏暂停、异常静默重试。SDK 未加载时降级同源 REST 仅带 publishableKey。V12.0 的 owner-scoped 四表保持原样。
+11. **V13 云服务账号迁移边界（V13.0.1）**：账号/会话 RPC 只能承载登录态；主站绝大多数业务 `/api/*` 仍只认 D1 会话 token。未完成「云令牌→主站会话」兼容或全业务迁移前，**禁止把 `dp_token` 直接换成云 token 并发布**，否则用户会在首页登录后进入半登录状态（好友/博客/上传/后台全部失效）。`cloud-backend.js` 里迁移历史账号必须调用 `origFetch`，不能再次调用被包装的 `window.fetch`，否则自递归。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

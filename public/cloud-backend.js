@@ -82,6 +82,31 @@
     return (out && out.data) || [];
   }
 
+  // 登录/注册 RPC 只返回 uid/name，完整资料用会话 RPC 补齐；
+  // 若会话查询失败，仍用调用方给的 fallback，避免把用户困在半登录状态。
+  async function sessionData(token, fallback) {
+    var base = fallback || {};
+    try {
+      var rows = await rpc('dp_auth_session', { p_token: token });
+      if (rows.length && rows[0].ok) {
+        return {
+          id: rows[0].uid || base.id || '',
+          name: rows[0].uname || base.name || '',
+          avatar: rows[0].avatar || base.avatar || '',
+          bio: rows[0].bio || base.bio || '',
+          doubao_id: rows[0].doubao_id || base.doubao_id || '',
+          is_developer: !!rows[0].is_developer,
+          is_global_admin: !!rows[0].is_global_admin,
+        };
+      }
+    } catch (e) {}
+    return {
+      id: base.id || '', name: base.name || '', avatar: base.avatar || '',
+      bio: base.bio || '', doubao_id: base.doubao_id || '',
+      is_developer: !!base.is_developer, is_global_admin: !!base.is_global_admin,
+    };
+  }
+
   async function handleLogin(body) {
     var identifier = String(body.identifier || '').trim();
     var password = String(body.password || '');
@@ -100,17 +125,19 @@
       p_device: deviceId(), p_ip: clientIp(),
     });
     if (!lr.length || !lr[0].ok) return jsonResponse({ success: false, error: '账号或密码错误' });
-    return jsonResponse({
-      success: true, token: lr[0].token,
-      data: { id: lr[0].uid, name: lr[0].uname, doubao_id: '', avatar: '', bio: '' },
+    var data = await sessionData(lr[0].token, {
+      id: lr[0].uid, name: lr[0].uname, doubao_id: '', avatar: '', bio: '',
     });
+    return jsonResponse({ success: true, token: lr[0].token, data: data });
   }
 
   // 历史账号迁移：用主站登录接口校验（密码不入库、不落日志），成功后在云端建档。
   // 主站 Cloudflare 后端常驻；此步骤只对“云端尚无账号”的用户发生一次。
   async function migrateFromShared(identifier, password) {
     try {
-      var res = await fetch('/api/users/login', {
+      // 必须走 origFetch（外层已打过 patch，会把相对路径改写回共享主站）。
+      // 这里若再调用 window.fetch 会命中本文件的 handleLogin，形成无限递归。
+      var res = await origFetch('/api/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: identifier, password: password }),
@@ -130,16 +157,18 @@
         var lr = await rpc('dp_auth_login', {
           p_identifier: name, p_hash: hash, p_device: deviceId(), p_ip: clientIp(),
         });
-        if (lr.length && lr[0].ok) return { ok: true, result: {
-          success: true, token: lr[0].token,
-          data: { id: lr[0].uid, name: lr[0].uname, doubao_id: doubao },
-        } };
+        if (lr.length && lr[0].ok) {
+          var migratedData = await sessionData(lr[0].token, {
+            id: lr[0].uid, name: lr[0].uname, doubao_id: doubao,
+          });
+          return { ok: true, result: { success: true, token: lr[0].token, data: migratedData } };
+        }
         return { ok: false, error: (reg[0] && reg[0].reason) || '迁移失败，请重试' };
       }
-      return { ok: true, result: {
-        success: true, token: reg[0].token,
-        data: { id: reg[0].uid, name: name, doubao_id: doubao },
-      } };
+      var registeredData = await sessionData(reg[0].token, {
+        id: reg[0].uid, name: name, doubao_id: doubao,
+      });
+      return { ok: true, result: { success: true, token: reg[0].token, data: registeredData } };
     } catch (e) {
       return { ok: false, error: '账号校验暂不可用，请稍后重试' };
     }
@@ -157,9 +186,12 @@
       p_agent: agent || null, p_device: deviceId(), p_ip: clientIp(),
     });
     if (!reg.length || !reg[0].ok) return jsonResponse({ success: false, error: (reg[0] && reg[0].reason) || '注册失败' });
+    var registerData = await sessionData(reg[0].token, {
+      id: reg[0].uid, name: name, doubao_id: doubao,
+      avatar: body.avatar || '', bio: body.bio || '',
+    });
     return jsonResponse({
-      success: true, token: reg[0].token,
-      data: { id: reg[0].uid, name: name, doubao_id: doubao, avatar: body.avatar || '', bio: body.bio || '' },
+      success: true, token: reg[0].token, data: registerData,
     });
   }
 

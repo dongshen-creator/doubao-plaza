@@ -4,6 +4,18 @@
 
 ---
 
+## v13.0.1 — 2026-11-16（发布前复核热修，未上线）
+
+### 修复 V13.0 的三个上线阻断问题
+
+- **历史账号首次登录迁移桥自递归**：`migrateFromShared()` 里用 `fetch('/api/users/login')` 再次触发本文件包装的 `handleLogin`，会无限递归。改为调用 `origFetch`（外层 V12 门禁 patch 会把相对路径改写到共享主站，正好用于校验历史账号）。
+- **云登录资料字段缺失**：`dp_auth_login` / `dp_auth_register` 只返回 uid/name，导致登录后头像、简介、豆包号、管理员标记为空。新增 `sessionData()`，用 `dp_auth_session` 补齐完整资料，并保留调用方 fallback。
+- **发布边界明确化**：目前只有账号/会话迁到云，主站绝大多数 `/api/*` 仍校验自己的 D1 会话令牌；云令牌直接写进 `dp_token` 会进入“半登录”状态。因此本版**暂不发布**，需先做令牌兼容或全业务迁移。
+
+修改文件：`public/cloud-backend.js`、`public/index.html`、`CHANGELOG.md`、`AGENTS.md`。
+
+---
+
 ## v13.0 — 2026-11-16
 
 ### 把 WorkBuddy 版账号体系迁到 WorkBuddy 云服务（用户明确要求「用 workbuddy 应用发布的云服务」）
