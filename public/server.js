@@ -65,6 +65,52 @@ const AGENT_OPTS = {
 const HTTPS_AGENT = new https.Agent(AGENT_OPTS);
 const HTTP_AGENT = new http.Agent(AGENT_OPTS);
 
+/* ── V12.5 上游连接预热 ────────────────────────────────────────
+   沙箱冷启动后第一条请求要现付 DNS + TCP + TLS（实测 TLS 约 0.2s，
+   首个请求整体约 0.9s）。注册/登录是多次串行上游调用，冷连接开销累加。
+   启动即通过同一 keep-alive agent 并发发几条轻量 HEAD，把 socket 灌进
+   空闲池；之后按 < keepAliveMsecs 的间隔续热，避免空闲 socket 被回收。
+   预热只影响连接复用，不改业务语义，失败一律静默不影响服务可用。 */
+const PREWARM_PATH = '/';                 // 轻量、必然存在、无业务副作用
+const PREWARM_SOCKETS = 4;                // 预填 4 条，覆盖常见并发
+const PREWARM_INTERVAL_MS = 12000;        // 小于 keepAliveMsecs(15000)，持续保活
+const PREWARM_REQ_TIMEOUT_MS = 10000;
+let prewarmState = { filled: 0, lastAt: 0, lastErr: '' };
+
+function prewarmOne() {
+  return new Promise((resolve) => {
+    let target;
+    try { target = new URL(PREWARM_PATH, PRIMARY); }
+    catch (e) { resolve(false); return; }
+    const mod = target.protocol === 'https:' ? https : http;
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+    const req = mod.request(target, {
+      method: 'HEAD',
+      agent: target.protocol === 'https:' ? HTTPS_AGENT : HTTP_AGENT,
+      timeout: PREWARM_REQ_TIMEOUT_MS,
+    }, (res) => {
+      res.resume(); // 丢弃响应体，让 socket 尽快回到 agent 空闲池
+      res.on('end', () => finish(true));
+      res.on('error', () => finish(false));
+    });
+    req.on('timeout', () => { try { req.destroy(); } catch (e) {} finish(false); });
+    req.on('error', () => finish(false));
+    req.end();
+  });
+}
+
+async function prewarm() {
+  const results = await Promise.all(Array.from({ length: PREWARM_SOCKETS }, prewarmOne));
+  const filled = results.filter(Boolean).length;
+  prewarmState = {
+    filled,
+    lastAt: Date.now(),
+    lastErr: filled ? '' : '预热请求未成功',
+  };
+  if (filled > 0) console.log('[dp-gateway] prewarm filled ' + filled + '/' + PREWARM_SOCKETS);
+}
+
 /* ── V12.3 网关共享令牌 ───────────────────────────────────────
    上游只在「边缘 IP ∈ Cloudflare 官方网段」时才采信 X-DP-Real-IP。
    经本沙箱反代时边缘看到的是沙箱出口 IP，该头会被忽略 ⇒ 所有用户在上游
@@ -399,13 +445,20 @@ async function handle(req, res) {
     const info = {
       success: true,
       mode: 'workbuddy-backend',
-      version: '12.4',
+      version: '12.5',
       upstream: PRIMARY,
       fallback: FALLBACK,
       // 只暴露「有没有配」不暴露值：false 表示真实客户端 IP 无法被上游采信
       proxyToken: !!PROXY_TOKEN,
       // 进程存活秒数：数值很小说明沙箱刚重启过（可用于判断「平台返回 Not Found」的时间窗）
       uptimeSec: Math.round(process.uptime()),
+      // 连接池预热状态：filled 是最近一次预热成功的 socket 数
+      prewarm: {
+        filled: prewarmState.filled,
+        target: PREWARM_SOCKETS,
+        lastAt: prewarmState.lastAt ? new Date(prewarmState.lastAt).toISOString() : null,
+        lastErr: prewarmState.lastErr,
+      },
       time: new Date().toISOString(),
     };
     // ?diag=1 时回显平台网关转发进来的来源标识头，用于核对真实客户端 IP 是否可用
@@ -497,4 +550,8 @@ process.on('unhandledRejection', (e) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log('[dp-gateway] WorkBuddy same-origin backend listening on 0.0.0.0:' + PORT);
   console.log('[dp-gateway] upstream=' + PRIMARY + ' fallback=' + FALLBACK);
+  // 启动即预热，随后定时续热；unref 保证不阻塞进程退出
+  prewarm();
+  const timer = setInterval(prewarm, PREWARM_INTERVAL_MS);
+  if (timer && typeof timer.unref === 'function') timer.unref();
 });

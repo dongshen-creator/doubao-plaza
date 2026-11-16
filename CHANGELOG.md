@@ -4,6 +4,30 @@
 
 ---
 
+## v12.5 — 2026-11-16
+
+### 优化：上游连接预热，压低 WorkBuddy 写接口冷启动延迟
+
+**背景**：V12.3 加了 keep-alive 后，热连接下 GET 已降到 0.14–0.16s，但沙箱冷启动后第一条请求仍要现付 DNS + TCP + TLS（实测本机 TLS 约 0.2s、首个请求整体约 0.9s）。注册/登录是多次串行上游调用，这段冷连接开销会累加，是「登录经沙箱 6–9s、直连 2–4s」的主要剩余来源。
+
+**修改文件**：`public/server.js`
+
+**实现**：
+- 启动即通过反代**同一个 keep-alive agent** 并发发 4 条 `HEAD /` 到主站，把 socket 灌进 agent 空闲池；之后每 12s 续热一次（小于 `keepAliveMsecs=15000`，避免空闲 socket 被回收）。`setInterval` 已 `unref`，不阻塞进程退出。
+- 预热失败一律静默，不影响服务可用性；只在成功时打印 `prewarm filled N/4`。
+- `GET /__dp/health` 新增 `prewarm` 字段（`filled` / `target` / `lastAt` / `lastErr`），便于线上核对连接池是否已热。
+- 版本号 `12.4` → `12.5`。
+
+**验证**（本地 `PORT=3199`，真实上游）：
+- 预热 `filled 4/4`；首个反代请求 0.43s 且 `time_appconnect=0`（TLS 由预热完成），稳态 0.15–0.19s；对比直连冷启动 0.91s / 稳态 0.44–0.50s，约 2–3 倍提升。
+- 写接口回归：`POST /api/device/claim` 200，回种 `Set-Cookie: __Host-dp_device=...`（Domain 已去），预热状态保持 4/4。
+- 静态首页内联 `window.__DP_BACKEND__=true` 注入正常；`fallback=""`、`proxyToken:true` 未受改动影响。
+- `node --check` 通过。
+
+**边界**：预热只优化连接复用，不改任何业务语义；沙箱出网链路本身的 RTT 无法消除，故稳态延迟仍高于直连主站。
+
+---
+
 ## v12.4 — 2026-11-16
 
 ### 修复注册提交后报 `Unexpected token 'N', "Not Found" is not valid JSON`
