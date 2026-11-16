@@ -41,6 +41,11 @@
 - 本地反代实测：直连主站 `/api/site-settings` 为 403（缺门禁头），经同源后台为 **200** 并带 `X-DP-Gateway: workbuddy-same-origin`；`POST /api/device/claim` 200 且返回 `Set-Cookie: __Host-dp_device=...; Path=/; Secure; HttpOnly; SameSite=Lax`（Domain 已去）；`POST /api/users/login` 返回业务 JSON `{"success":false,"error":"账号或密码错误"}`（不再是 501/404）；`/api/users/auto-login`、`/api/announcements`、`/api/features`、`/api/sync/export?limit=1` 全 200。
 - 前端三形态模拟测试 `dp-v122-front-smoke.mjs`：**43 PASS / 0 FAIL**（静态托管跨域、真后台同源、主站/反代域同源、探针时序、cloud-service 适配）。
 - 三张页面内联 JS 语法检查：9 段全部通过；`server.js` / `dp-backend.js` / `cloud-service.js` `node --check` 通过。
+- **线上复验（发布后，`deployedAs: http-service`）**：`GET /__dp/health` → `mode: workbuddy-backend`；`GET /dp-backend.js?v=12.2` → `window.__DP_BACKEND__ = true`；首页字节与本地完全一致（824714B，探针在 fetch patch 之前，关键函数片段齐全）。
+- 线上静态资源全 200：首页、`style.css`、`manifest.json`、`vendor/katex/dist/katex.min.css`、`katex.min.js`、`vendor/suneditor/dist/suneditor.min.js`、`vendor/fingerprintjs/fp.min.js`、`developer.html`、`tavern.html`、`cloud-service.js`——V12.1 用户控制台里的 vendor / manifest 403/404 全部消失。
+- 线上接口全 200 且带 `X-Dp-Gateway: workbuddy-same-origin`：`/api/site-settings`、`/api/announcements`、`/api/features`、`/api/sync/export?limit=1`；`POST /api/users/login` 返回业务 JSON；`POST /api/device/claim` 回种 `__Host-dp_device`（Domain 已去，平台改写 SameSite 为 None 但保留 Secure，同源请求照常携带）；`POST /api/users/auto-login` 正常返回「无会话token」。
+- 云数据面仍由平台边缘接管（`Server: tcbgw`），同源匿名 SELECT 200、upsert 201；探针 `__wb_v122_probe__` 已删除（`probe_rows = 0`）；`dp_replica` 现有 144 行 / 5 张表。
+- `/server.js`、`/../README.md` 等敏感/越界路径线上均 404；`/pages/*`、`/chat/*`、`/api/*` 反代结果与上游一致（404 / 302 / 404）。`/cdn-assets/*` 的 503 是上游 `R2 storage not configured`，**直连主站同样 503**，非本次引入。
 
 **修改文件表**
 
