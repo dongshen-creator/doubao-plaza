@@ -53,6 +53,30 @@
   - 性能/一致性：同一请求内多处调用 `resolveClientIp`，只有 `_middleware.js` 那一次拿得到 `env`，因此用 `WeakMap` 把结论挂到 `Request` 上，后续调用（`device.js` / `audit.js` 等，不带 env）直接复用，不必改一大批调用方签名，且不影响任何鉴权判断（IP 从不参与鉴权）。
 - 单测（11 项全过）：CF 网段判定、直连忽略 `X-DP-Real-IP`、CF 反代采信、沙箱+正确令牌采信、同请求后续无 env 复用、错误令牌拒绝、未配置令牌拒绝、等长不同令牌拒绝、非法 IP 不采信、无 forwarded 兜底。
 
+**七、线上联调又踩到两个坑（都已修）**
+
+- **`wrangler pages secret put` 会连行尾换行一起存**。第一次用 `cat file | wrangler ...` 写入，密文尾部多了 `\n`，而请求头里的令牌是 trim 过的 64 位，`safeEqual` 因长度不等永远 false，表现为「明明配了却完全不生效」。改为 `printf '%s' "$(cat file)"` 写入，并在比较前对两侧都 `.trim()`。
+- **中间件缓存在 `Request` 对象上的结论，路由处理器取不到**。原打算用 `WeakMap` 把中间件算好的真实 IP 挂到请求上，让 `device.js` / `audit.js` 不必改签名；线上验证时 `/api/device/claim` 仍然 429，加临时诊断端点才确认：Pages Functions 传给路由处理器的 `Request` **不是**中间件里那个对象，缓存命中不了，于是又回退到边缘 IP。最终改为**所有取 IP 的调用点显式传 `env`**（`getClientIp(request, env)` / `resolveClientIp(request, env)`，共 14 处，逐 handler 校验 `env` 均已解构）。`WeakMap` 只作为同请求内的微优化保留，不再承担正确性。
+
+**八、线上验证结果（WorkBuddy 发布域）**
+
+| 项 | 结果 |
+| --- | --- |
+| `GET /__dp/health` | `mode: workbuddy-backend`、`version: 12.3`、`proxyToken: true` |
+| 首页形态注入 | 内联 1 处、外部 `/dp-backend.js` 请求 0 处 |
+| `/developer`、`/tavern` | 200，且同一处内联注入 |
+| `/api/site-settings`、`/api/custom-pages` | 200，0.85–1.3s |
+| `POST /api/device/claim` | 200，回种 `__Host-dp_device`（host-only） |
+| **端到端注册** | 200 `success: true`（PoW 解出 → 挑战消费 → 设备绑定 → 入库） |
+| **端到端登录** | 200 `success: true`，token 长度 64 |
+| 平台转发的来源头 | `x-real-ip: <客户端公网 IP>`，`x-forwarded-for: <客户端 IP>, <内网…>` |
+| 伪造头对照 | 无令牌 / 错误令牌 + 伪造 `X-DP-Real-IP` 均不被采信，仍按真实 IP 计数 |
+
+已知遗留（非本次代码问题）：
+
+- 必须访问**带 `?sharecode=SVJNHYE5RN`** 的分享链接；直接打开裸域名会被平台门禁 403 并返回平台自己的 HTML，本站代码无法干预。
+- 写类接口经沙箱比直连多约 4s（登录 6–9s vs 直连 2–4s），读接口只多约 0.4s，属沙箱出网链路往返开销；如需进一步优化可加上游连接预热。
+
 **修改文件表**
 
 | 文件 | 改动 |
@@ -62,8 +86,11 @@
 | `public/developer.html` | 同上（探针、自愈回退、`isNetTypeError`） |
 | `public/tavern.html` | 同上 |
 | `public/dp-backend.js` | 注释补充 V12.2 失败教训，明确它只是兜底而不再承担主判定 |
-| `functions/api/_lib/clientip.js` | `resolveClientIp(request, env)`：新增共享令牌信任通道、常量时间比较、`WeakMap` 同请求复用 |
-| `functions/_middleware.js` | 取 IP 时传 `env`，让令牌通道生效并把结果缓存到请求上 |
+| `functions/api/_lib/clientip.js` | `resolveClientIp(request, env)`：共享令牌信任通道、常量时间比较、两侧 trim、`WeakMap` 同请求复用 |
+| `functions/api/_lib/device.js` | `getClientIp(request, env)` |
+| `functions/api/_lib/audit.js` | 审计写 IP 时传 `env` |
+| `functions/_middleware.js` | 取 IP 时传 `env` |
+| `functions/api/device/{claim,rebind}.js`、`users.js`、`users/{login,recover,auto-login}.js`、`developer/{account-manager,cleanup,gate,mfa,quarantine,devices}.js` | 取 IP 时显式传 `env` |
 | `.gitignore` | 忽略 `public/_dp/`（网关共享令牌目录） |
 
 ---
