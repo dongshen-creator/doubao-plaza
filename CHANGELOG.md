@@ -4,6 +4,33 @@
 
 ---
 
+## v13.0 — 2026-11-16
+
+### 把 WorkBuddy 版账号体系迁到 WorkBuddy 云服务（用户明确要求「用 workbuddy 应用发布的云服务」）
+
+**根因复盘**：V12.2 起 WorkBuddy 发布域跑 `node server.js` 沙箱反代，沙箱按会话存在、随时被平台回收；回收后发布域退化成静态托管（Python http.server），`/api/*` 与 `/.cloud/*` 之外的路径全 404——这就是用户报「数据库根本用不了 / 一堆报错 / Not Found / failed to fetch」的同一根因。WorkBuddy 云服务本身（Database/Auth/Storage/LLM 数据面走平台常驻网关）一直是好的。
+
+**实测决定方案的关键证据**：
+- 云服务 `inspect` → `activated:true / billingStatus:normal / active`；数据面 `/.cloud/database/rest/dp_replica` 200；浏览器内 `createWorkBuddyCloud().database.rpc('dp_auth_lookup',…)` → status 200。
+- 主站 Cloudflare 后端常驻：带 `X-DP-Client: plaza-v1` 直连 `/api/site-settings`=200；跨域登录接口实测 200 + 业务错误「账号或密码错误」。
+- 云数据库支持 DDL / RLS / SECURITY DEFINER 函数、`sha256`/`gen_random_uuid`，但**无** `hmac`/`gen_random_bytes` ⇒ PBKDF2 的 HMAC 步骤在客户端 WebCrypto 完成，云数据库只存哈希串。
+
+**实现**：
+- 云数据库新增 `dp_auth_users`（账号，服务端专用 RLS）、`dp_auth_sessions`（会话）两表，及 3 个 SECURITY DEFINER RPC：`dp_auth_lookup` / `dp_auth_login` / `dp_auth_register` / `dp_auth_session`（均 GRANT 给 anon/authenticated）。注册含昵称/豆包号/主页链接唯一性校验，登录用 `IS DISTINCT FROM` 做恒定时间哈希比较。
+- 新增 `public/cloud-backend.js`：包装 `window.fetch`，仅拦截 `/api/users/login`、`/api/users`(注册)、`/api/users/auto-login` 改道到云 RPC；其余接口保持原有跨域直连主站路径。密码用 WebCrypto 算 PBKDF2-SHA256/100000（与主站格式一致，用户密码不明文离浏览器）。历史账号首次登录时经主站校验后自动在云端建档（迁移桥）。
+- `public/cloud-service.js`：`DPCloud` 暴露 `getClient()` 复用同一 SDK client；版本 `?v=1`→`?v=2`。
+- `public/index.html`：在 cloud-service.js 之后引入 `cloud-backend.js?v=1`。
+
+**验证**：
+- 云数据库 RPC 端到端：注册→登录→会话校验→错误密码拒绝→重复昵称拒绝，全通过；测试账号与会话已清理。
+- 浏览器 WebCrypto 与 Node PBKDF2 哈希逐字节一致（match:true）⇒ 前端算的哈希能被云端校验。
+- 浏览器从 workbuddy 域调用 `database.rpc` 返回 200。
+- `node --check` 三文件通过。
+
+**边界**：三块能力平台无对应实现，未在本次迁移：HttpOnly 设备 Cookie（改 localStorage 设备 ID）、服务端密钥代理（翻译/第三方图床）、Supabase Realtime（保持原跨域主站路径）。业务数据（公告/功能/博客/好友/聊天等）仍以主站为事实来源，经 `dp_replica` 每 5 分钟自动同步；本次只把**账号与会话**落到云服务。
+
+---
+
 ## v12.5 — 2026-11-16
 
 ### 优化：上游连接预热，压低 WorkBuddy 写接口冷启动延迟

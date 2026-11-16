@@ -633,7 +633,9 @@
     render: render,
     syncNow: autoSyncTick,
     publicConfig: publicConfig,
-    sharedOrigin: SHARED_ORIGIN
+    sharedOrigin: SHARED_ORIGIN,
+    // V13.0：暴露共享 client，供 cloud-backend.js 调用云数据库与鉴权 RPC
+    getClient: function () { return initClient(); }
   };
 
   function boot() {

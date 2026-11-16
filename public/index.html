@@ -219,7 +219,11 @@
   <script src="supabase-sdk.js?v=2"></script>
   <!-- V12.0 云服务 SDK：本项目无构建步骤，按 plain-HTML 规范用 CDN 形式，defer 保证先于业务脚本执行 -->
   <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js" defer></script>
-  <script src="cloud-service.js?v=1" defer></script>
+  <script src="cloud-service.js?v=2" defer></script>
+  <!-- V13.0：WorkBuddy 云服务后端适配层。必须在 cloud-service.js 之后加载
+       （复用其 SDK client），把登录/注册/自动登录改道到云数据库 RPC，
+       彻底摆脱会被平台回收的沙箱 node 反代。 -->
+  <script src="cloud-backend.js?v=1" defer></script>
   <script>
     (function () {
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
