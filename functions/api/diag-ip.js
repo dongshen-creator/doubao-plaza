@@ -1,29 +1,35 @@
 // 临时诊断端点（V12.3 排查用，验证完即删除）
-// 仅回显本次请求的来源头、解析出的 IP、以及跨模块取 IP 是否一致
+// 复现 issueDevice 的 INSERT，把真实异常文本暴露出来（issueDevice 内部只 console.warn）
 import { resolveClientIp } from './_lib/clientip.js';
-import { getClientIp } from './_lib/device.js';
+
+const HEX = 'abcdef0123456789';
+function rand(n) { let s = ''; for (let i = 0; i < n; i++) s += HEX[Math.floor(Math.random() * 16)]; return s; }
 
 export async function onRequest(context) {
   const { request, env } = context;
-  const h = (k) => request.headers.get(k) || '';
-  const token = typeof env.DP_PROXY_TOKEN === 'string' ? env.DP_PROXY_TOKEN : '';
-  const forwarded = h('X-DP-Real-IP');
-  let counts = null;
+  const ip = resolveClientIp(request, env) || 'unknown';
+  const out = { ok: true, ip };
+
   try {
-    counts = await env.DB.prepare(
-      `SELECT
-         (SELECT COUNT(*) FROM devices WHERE created_ip = ? AND created_at > datetime('now','-1 hour')) AS hour_total,
-         (SELECT COUNT(*) FROM devices WHERE created_ip = ? AND created_at > datetime('now','-24 hours')) AS day_total,
-         (SELECT COUNT(*) FROM devices WHERE created_ip = ?) AS all_total`
-    ).bind(forwarded, forwarded, forwarded).first();
-  } catch (e) { counts = { error: e.message }; }
-  return Response.json({
-    ok: true,
-    edge: h('CF-Connecting-IP'),
-    forwarded,
-    tokenMatch: token.trim() !== '' && token.trim() === h('X-DP-Proxy-Token').trim(),
-    resolvedWithEnv: resolveClientIp(request, env),
-    resolvedHelper: getClientIp(request),
-    countsForForwardedIp: counts,
-  }, { headers: { 'Cache-Control': 'no-store' } });
+    const st = await env.DB.prepare(
+      `SELECT (SELECT COUNT(*) FROM devices WHERE created_ip = ? AND created_at > datetime('now','-1 hour')) AS h,
+              (SELECT COUNT(*) FROM devices WHERE created_ip = ? AND created_at > datetime('now','-24 hours')) AS d`
+    ).bind(ip, ip).first();
+    out.counts = st;
+  } catch (e) { out.countsError = e.message; }
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO devices (id, token_hash, claim_count, created_ip, last_seen_at, last_claim_at)
+       VALUES (?, ?, 1, ?, datetime('now'), datetime('now'))`
+    ).bind(rand(32), rand(64), ip).run();
+    out.insert = 'ok';
+  } catch (e) { out.insertError = e.message; }
+
+  try {
+    const cols = await env.DB.prepare(`PRAGMA table_info(devices)`).all();
+    out.columns = (cols.results || []).map((c) => `${c.name}${c.notnull ? '!' : ''}${c.dflt_value != null ? '=' + c.dflt_value : ''}`);
+  } catch (e) { out.columnsError = e.message; }
+
+  return Response.json(out, { headers: { 'Cache-Control': 'no-store' } });
 }
