@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<!-- V12.2 部署形态探针：真后台同源，静态托管时降级为跨域改写 -->
-<script src="/dp-backend.js?v=12.2"></script>
+<!-- V12.3 部署形态探针：真后台出 HTML 时整行替换为内联脚本，不再依赖该子资源请求 -->
+<script src="/dp-backend.js?v=12.3"></script>
 <script>
 /* AUDIT FIX v9.0 [6.7]: 门禁证明注入 + V12.2 同源后台（与 functions/_middleware.js gate 配套） */
 (function () {
@@ -13,6 +13,10 @@
   var remote = !window.__DP_BACKEND__ && LOCAL_HOSTS.indexOf(location.hostname) === -1;
   var orig = window.fetch;
   if (typeof orig !== 'function') return;
+  // 跨 realm（iframe / 沙箱）时 instanceof TypeError 会失效，改用 name 判定
+  function isNetTypeError(e) {
+    return !!e && (e.name === 'TypeError' || e instanceof TypeError);
+  }
   function isApi(u) {
     if (!u || u.indexOf('api') === -1) return false;
     try {
@@ -23,6 +27,8 @@
     } catch (e) { return false; }
   }
   window.fetch = function (input, init) {
+    var remoteUrl = null;
+    var keepInit = init;
     try {
       var u = (typeof input === 'string') ? input
         : (typeof URL !== 'undefined' && input instanceof URL) ? input.href
@@ -36,9 +42,11 @@
         var h = new Headers(src);
         if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
         init = Object.assign({}, init, { headers: h });
+        keepInit = init;
         if (remote) {
           var r2 = new URL(u, location.href);
           var abs = SHARED + r2.pathname + r2.search;
+          remoteUrl = r2.pathname + r2.search;
           if (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL)) input = abs;
           else if (typeof Request !== 'undefined' && input instanceof Request) {
             try { input = new Request(abs, input); } catch (e) {}
@@ -46,7 +54,17 @@
         }
       }
     } catch (e) {}
-    return orig.call(this, input, init);
+    var p = orig.call(this, input, keepInit);
+    // V12.3：跨域被 CORS 拦截只会抛 TypeError，回退同源再试并永久切回同源
+    if (!remoteUrl) return p;
+    return p.catch(function (err) {
+      if (!isNetTypeError(err)) throw err;
+      return orig.call(window, remoteUrl, keepInit).then(function (res) {
+        remote = false;
+        if (window.__DP_SHARED) { window.__DP_SHARED.remote = false; window.__DP_SHARED.selfHealed = true; }
+        return res;
+      });
+    });
   };
   window.__dpFetchPatched = true;
 })();

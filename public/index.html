@@ -42,8 +42,11 @@
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
   <!-- V12.2 部署形态探针：静态托管下发 false，WorkBuddy 真后台下发 true。
-       必须早于下方 fetch patch，让 /api 与 vendor 的走向在首帧就确定。 -->
-  <script src="/dp-backend.js?v=12.2"></script>
+       必须早于下方 fetch patch，让 /api 与 vendor 的走向在首帧就确定。
+       V12.3：真后台出 HTML 时会把这整行**换成内联脚本**（window.__DP_BACKEND__=true），
+       不再由浏览器单独请求本文件——该请求一旦被平台门禁 403 并返回 HTML，
+       浏览器解析失败就会让形态判定退化成「静态托管」，进而触发 failed to fetch。 -->
+  <script src="/dp-backend.js?v=12.3"></script>
   <script>
   /* AUDIT FIX v9.0 [6.7] 门禁证明 + V12.2 同源后台：
      · WorkBuddy 真后台（__DP_BACKEND__=true）：网页/接口/静态资源全部同源，
@@ -78,6 +81,10 @@
 
     var orig = window.fetch;
     if (typeof orig !== 'function') return;
+    // 跨 realm（iframe / 沙箱）时 instanceof TypeError 会失效，改用 name 判定
+    function isNetTypeError(e) {
+      return !!e && (e.name === 'TypeError' || e instanceof TypeError);
+    }
     function isLocalApi(u) {
       if (!u || u.indexOf('api') === -1) return false;
       try {
@@ -88,6 +95,8 @@
       } catch (e) { return false; }
     }
     window.fetch = function (input, init) {
+      var remoteUrl = null;
+      var keepInit = init;
       try {
         var u = (typeof input === 'string') ? input
           : (typeof URL !== 'undefined' && input instanceof URL) ? input.href
@@ -101,9 +110,11 @@
           var h = new Headers(src);
           if (!h.has('X-DP-Client')) h.set('X-DP-Client', 'plaza-v1');
           init = Object.assign({}, init, { headers: h });
+          keepInit = init;
           if (remote) {
             var r2 = new URL(u, location.href);
             var abs = SHARED + r2.pathname + r2.search;
+            remoteUrl = r2.pathname + r2.search;
             if (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL)) input = abs;
             else if (typeof Request !== 'undefined' && input instanceof Request) {
               try { input = new Request(abs, input); } catch (e) {}
@@ -111,7 +122,21 @@
           }
         }
       } catch (e) {}
-      return orig.call(this, input, init);
+      var p = orig.call(this, input, keepInit);
+      // V12.3：跨域改写一旦被 CORS 拦截，浏览器只会抛 TypeError(failed to fetch)。
+      // 此时回退同源相对路径再试一次——真后台部署下同源一定通，静态托管下也不会更糟。
+      if (!remoteUrl) return p;
+      return p.catch(function (err) {
+        if (!isNetTypeError(err)) throw err;
+        var retry = orig.call(window, remoteUrl, keepInit);
+        return retry.then(function (res) {
+          // 同源这条路确实可用 → 永久切回同源，后续请求不再走跨域
+          remote = false;
+          if (window.__DP_SHARED) window.__DP_SHARED.remote = false;
+          window.__DP_SHARED.selfHealed = true;
+          return res;
+        });
+      });
     };
     window.__dpFetchPatched = true;
   })();
@@ -742,8 +767,12 @@ async function api(path, options = {}) {
       } catch (e) {
         lastErr = e;
         // 超时(abort)/网络错误(TypeError) → 幂等才重试；业务错误不重试
-        const isNetErr = (e && (e.name === 'AbortError' || e.name === 'TimeoutError' || e instanceof TypeError));
+        // 注：跨 realm 时 instanceof TypeError 会失效，按 name 兜底
+        const netType = !!e && (e.name === 'TypeError' || e instanceof TypeError);
+        const isNetErr = (e && (e.name === 'AbortError' || e.name === 'TimeoutError')) || netType;
         if (timedOut && e && e.name === 'AbortError') lastErr = new Error('请求超时，请稍后重试');
+        // V12.3：浏览器原始文案只有 "failed to fetch"，用户无法判断该做什么
+        else if (netType) lastErr = new Error('网络连接异常，未能连上服务器，请稍后重试');
         if (!isNetErr || !isIdempotent || attempt >= MAX_TRY - 1) throw lastErr;
       }
     }

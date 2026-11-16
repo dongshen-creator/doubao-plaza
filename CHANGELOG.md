@@ -4,6 +4,62 @@
 
 ---
 
+## v12.3 — 2026-11-16
+
+### 修复 WorkBuddy 版注册/登录报 `failed to fetch`
+
+用户报告：「为什么注册登录和我说是 failed to fetch，这bug这么多的吗」。线上实测定位到三条独立根因，逐条修复。
+
+**一、根因 A（主因）：形态探针请求被平台门禁 403，前端误判成「静态托管」**
+
+- 平台门禁 `Server: CloudStudio Gateway` 对**没有 `__wb_rsc` 会话 Cookie 的非首页请求一律 403，并返回 HTML**。
+- V12.2 让页面靠 `<script src="/dp-backend.js">` 单独发一个请求来判定部署形态。该请求一旦被 403，浏览器拿到的是 HTML，当 JS 解析必然失败，`window.__DP_BACKEND__` 保持 `undefined`。
+- 前端于是走「静态托管」分支，把 `/api/*` 改写成跨域绝对地址 `https://doubao-plaza.pages.dev/...`。跨域 POST 带 `Content-Type: application/json` + `X-DP-Client` + `Authorization`，必然触发预检；预检/响应一旦不合规，浏览器**只会抛 `TypeError: Failed to fetch`**，不暴露真实原因。这就是用户看到的 `failed to fetch`。
+- 修复：服务端输出 HTML 时，直接把 `/dp-backend.js` 那一行 `<script src>` **整行替换成内联脚本** `window.__DP_BACKEND__=true`。形态判定与任何子资源请求彻底解耦，且内联脚本位置仍在 fetch patch 之前。实测首页第 49 行是内联常量，第 137 行才是 patch 赋值，顺序正确；三张页面（`index` / `developer` / `tavern`）全部生效，页面里已无 `/dp-backend.js` 外部请求。
+
+**二、根因 B：备用上游 `cf.gallopingroad.top` 完全不可用**
+
+- 实测 `curl` 返回 `000`：一次挂起 **15.4s** 才失败，另外两次 0.16s SSL 失败（exit 35）。
+- 原逻辑在主上游任意网络抖动时切到它，等于把一次抖动放大成 15 秒挂死。
+- 修复：默认关闭该 fallback（`DP_UPSTREAM_FALLBACK` 默认空），只有显式配置才启用。
+
+**三、根因 C：反代延迟 3–8s（直连仅 0.4s）**
+
+- 实测登录 POST 经反代 ttfb **2.8 / 3.0 / 3.0 / 4.9 / 5.5 / 6.6 / 6.7 / 6.9 / 7.7 / 8.0s**，直连主站只要 0.4–0.6s；而沙箱自身计算只要 0.42–0.58s。
+- 瓶颈在「沙箱 → 上游」这段跨网络：每个请求都重新做 TCP + TLS 握手。
+- 修复：加 keep-alive 连接池（`maxSockets 96` / `maxFreeSockets 24` / `keepAliveMsecs 15s`）。
+- 效果（本地实测，同一进程连续请求）：
+  - `GET /api/site-settings`：1.2–2.6s → **0.14–0.16s**（首请求 0.34s 建连）
+  - `POST /api/users/login`：3–8s → **1.1–1.8s**
+
+**四、前端加固（不只是修判定，还要能自愈）**
+
+- `window.fetch` patch 增加**同源回退**：跨域改写后的请求若抛 `TypeError`，立刻用同源相对路径重试一次；重试成功就永久切回同源（`__DP_SHARED.selfHealed = true`），后续请求不再走跨域。这样即使形态判定再次意外失效，功能也不会挂。
+- 错误类型判定改用 `err.name === 'TypeError'` 兜底：跨 realm（iframe / 沙箱）时 `instanceof TypeError` 会失效，只看 instanceof 会漏判。
+- `api()` 网络错误文案改为「网络连接异常，未能连上服务器，请稍后重试」，不再把浏览器原始的 `failed to fetch` 直接甩给用户。
+
+**五、新增诊断出口**
+
+- `GET /__dp/health?diag=1` 回显平台网关转发进来的来源标识头（`cf-connecting-ip` / `x-real-ip` / `x-forwarded-for` / `true-client-ip` / `x-client-ip`）与解析出的 `clientIp`，用于线上核对真实客户端 IP 是否可用（只回显调用者自己的请求头）。
+
+**六、发现但未在本版处理的隐患（需单独决策）**
+
+- 上游 `functions/api/_lib/clientip.js` 只在**边缘 IP 属于 Cloudflare 官方网段**时才采信 `X-DP-Real-IP`，否则退回边缘 IP。经 WorkBuddy 沙箱反代时，边缘看到的是**沙箱出口 IP**，不在 CF 网段 ⇒ 该头被忽略 ⇒ 所有 WorkBuddy 域用户在上游看起来是**同一个 IP**。
+- 影响：`functions/api/_lib/device.js` 的 `CLAIM_HOURLY_LIMIT = 5` / `CLAIM_DAILY_LIMIT = 15` 是按 `created_ip` 计数的，共享 IP 会让**第 6 个新设备在一小时内就被 429**（「设备签发过于频繁」），风险评分与按 IP 处置也会失真。V12.1 是浏览器直连主站，没有这个问题，属 V12.2 架构切换引入的回归。
+- 正确修法需要「沙箱 → 主站」共享一个密钥（`DP_PROXY_TOKEN`：Cloudflare Pages 侧用 `wrangler pages secret put` 写入，沙箱侧从部署目录里一个 git 忽略的文件读取），**不能**用「带某个头就采信」的写法，否则任何人直连 `pages.dev` 伪造该头即可绕过 IP 限流。
+
+**修改文件表**
+
+| 文件 | 改动 |
+| --- | --- |
+| `public/server.js` | HTML 内联注入形态常量；默认关闭不可用 fallback；keep-alive 连接池；健康检查加 `?diag=1`；版本号 12.3 |
+| `public/index.html` | 探针版本 12.3 + 注释说明；fetch patch 加同源回退与 `isNetTypeError`；`api()` 网络错误中文化 |
+| `public/developer.html` | 同上（探针、自愈回退、`isNetTypeError`） |
+| `public/tavern.html` | 同上 |
+| `public/dp-backend.js` | 注释补充 V12.2 失败教训，明确它只是兜底而不再承担主判定 |
+
+---
+
 ## v12.2 — 2026-11-16
 
 ### 借用 WorkBuddy 后台服务器：发布域改为真后台，网页/接口/静态资源全部同源
