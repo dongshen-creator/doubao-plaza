@@ -1,20 +1,18 @@
 /* ═══════════════════════════════════════════════════════════
-   V13.0 · WorkBuddy 云服务后端适配层
+   V13.1 · WorkBuddy 云服务账号 + 主站会话桥
    ---------------------------------------------------------------
-   目标：让 WorkBuddy 发布域的账号体系跑在 WorkBuddy 云服务（Database +
-   RPC）上，不依赖会被平台回收的沙箱 node 进程，也不把密码明文发出去。
+   认证在 WorkBuddy 云服务（Database + RPC）完成，不依赖会被平台回收的
+   沙箱 node 进程；但业务接口仍由常驻的 Cloudflare Pages Functions 承载。
+   因此云登录成功后，必须再调用主站 /api/users/cloud-bridge，用“有效云令牌”
+   换取 D1 会话令牌，前端最终保存的 dp_token 仍是主站令牌。
 
-   做法：包装 window.fetch，只拦截以下三个接口并改道到云服务 RPC：
-     · POST /api/users/login       → dp_auth_lookup + 客户端PBKDF2 + dp_auth_login
-     · POST /api/users             → 客户端PBKDF2 + dp_auth_register
-     · POST /api/users/auto-login  → dp_auth_session
-   其余接口（公告/功能/设置/博客/好友/聊天…）保持原有跨域直连主站路径——
-   主站 Cloudflare 后端常驻稳定，实测带门禁头全 200。
+   包装 window.fetch，只拦截：
+     · POST /api/users/login  → 云 RPC 校验 → 主站会话桥
+     · POST /api/users        → 云 RPC 注册 → 主站会话桥
+   /api/users/auto-login 不再拦截：主站令牌本来就能走主站自动登录。
 
    密码安全：PBKDF2-SHA256/100000 轮在客户端 WebCrypto 完成，格式与主站
-   完全一致（pbkdf2$100000$<salt>$<hash>），云数据库只存哈希串，服务端
-   RPC 做恒定时间比较（PostgreSQL IS DISTINCT FROM）。用户密码永不明文
-   离开浏览器。
+   完全一致（pbkdf2$100000$<salt>$<hash>），用户密码永不明文离开浏览器。
 
    依赖：cloud-service.js 暴露的 window.DPCloud.getClient()（同一 SDK 实例）。
    ═══════════════════════════════════════════════════════════ */
@@ -82,29 +80,25 @@
     return (out && out.data) || [];
   }
 
-  // 登录/注册 RPC 只返回 uid/name，完整资料用会话 RPC 补齐；
-  // 若会话查询失败，仍用调用方给的 fallback，避免把用户困在半登录状态。
-  async function sessionData(token, fallback) {
-    var base = fallback || {};
-    try {
-      var rows = await rpc('dp_auth_session', { p_token: token });
-      if (rows.length && rows[0].ok) {
-        return {
-          id: rows[0].uid || base.id || '',
-          name: rows[0].uname || base.name || '',
-          avatar: rows[0].avatar || base.avatar || '',
-          bio: rows[0].bio || base.bio || '',
-          doubao_id: rows[0].doubao_id || base.doubao_id || '',
-          is_developer: !!rows[0].is_developer,
-          is_global_admin: !!rows[0].is_global_admin,
-        };
-      }
-    } catch (e) {}
-    return {
-      id: base.id || '', name: base.name || '', avatar: base.avatar || '',
-      bio: base.bio || '', doubao_id: base.doubao_id || '',
-      is_developer: !!base.is_developer, is_global_admin: !!base.is_global_admin,
-    };
+  // 云令牌只在本地换一次主站会话；主站接口会再次用 dp_auth_session 校验，
+  // 因此这里失败一律明确报错，绝不把云 token 直接写进 dp_token。
+  async function bridge(cloudToken, hash, profile) {
+    var res = await origFetch('/api/users/cloud-bridge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({
+        token: cloudToken,
+        hash: hash || '',
+      }, profile || {})),
+    });
+    var text = await res.text().catch(function () { return ''; });
+    var data = null;
+    try { data = JSON.parse(text); } catch (e) {}
+    if (!res.ok || !data || !data.success) {
+      throw new Error((data && data.error) || '主站会话桥接失败，请稍后重试');
+    }
+    try { localStorage.setItem('dp_cloud_token', cloudToken); } catch (e) {}
+    return data;
   }
 
   async function handleLogin(body) {
@@ -125,10 +119,7 @@
       p_device: deviceId(), p_ip: clientIp(),
     });
     if (!lr.length || !lr[0].ok) return jsonResponse({ success: false, error: '账号或密码错误' });
-    var data = await sessionData(lr[0].token, {
-      id: lr[0].uid, name: lr[0].uname, doubao_id: '', avatar: '', bio: '',
-    });
-    return jsonResponse({ success: true, token: lr[0].token, data: data });
+    return jsonResponse(await bridge(lr[0].token, hash));
   }
 
   // 历史账号迁移：用主站登录接口校验（密码不入库、不落日志），成功后在云端建档。
@@ -158,17 +149,15 @@
           p_identifier: name, p_hash: hash, p_device: deviceId(), p_ip: clientIp(),
         });
         if (lr.length && lr[0].ok) {
-          var migratedData = await sessionData(lr[0].token, {
-            id: lr[0].uid, name: lr[0].uname, doubao_id: doubao,
-          });
-          return { ok: true, result: { success: true, token: lr[0].token, data: migratedData } };
+          return { ok: true, result: await bridge(lr[0].token, hash, {
+            doubao_id: doubao, agent_url: null,
+          }) };
         }
         return { ok: false, error: (reg[0] && reg[0].reason) || '迁移失败，请重试' };
       }
-      var registeredData = await sessionData(reg[0].token, {
-        id: reg[0].uid, name: name, doubao_id: doubao,
-      });
-      return { ok: true, result: { success: true, token: reg[0].token, data: registeredData } };
+      return { ok: true, result: await bridge(reg[0].token, hash, {
+        doubao_id: doubao, agent_url: null,
+      }) };
     } catch (e) {
       return { ok: false, error: '账号校验暂不可用，请稍后重试' };
     }
@@ -186,28 +175,10 @@
       p_agent: agent || null, p_device: deviceId(), p_ip: clientIp(),
     });
     if (!reg.length || !reg[0].ok) return jsonResponse({ success: false, error: (reg[0] && reg[0].reason) || '注册失败' });
-    var registerData = await sessionData(reg[0].token, {
-      id: reg[0].uid, name: name, doubao_id: doubao,
+    return jsonResponse(await bridge(reg[0].token, hash, {
+      doubao_id: doubao, agent_url: agent || null,
       avatar: body.avatar || '', bio: body.bio || '',
-    });
-    return jsonResponse({
-      success: true, token: reg[0].token, data: registerData,
-    });
-  }
-
-  async function handleAutoLogin(body) {
-    var token = String(body.token || '');
-    if (!token) return jsonResponse({ success: false, error: 'no_token' });
-    var rows = await rpc('dp_auth_session', { p_token: token });
-    if (!rows.length || !rows[0].ok) return jsonResponse({ success: false, error: '会话已失效' });
-    return jsonResponse({
-      success: true, token: token,
-      data: {
-        id: rows[0].uid, name: rows[0].uname, avatar: rows[0].avatar,
-        bio: rows[0].bio, doubao_id: rows[0].doubao_id,
-        is_developer: rows[0].is_developer, is_global_admin: rows[0].is_global_admin,
-      },
-    });
+    }));
   }
 
   function parseBody(init) {
@@ -228,7 +199,6 @@
     var handler = null;
     if (path === '/api/users/login' && method === 'POST') handler = handleLogin;
     else if (path === '/api/users' && method === 'POST') handler = handleRegister;
-    else if (path === '/api/users/auto-login' && method === 'POST') handler = handleAutoLogin;
 
     if (handler) {
       return Promise.resolve()

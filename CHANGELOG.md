@@ -4,6 +4,22 @@
 
 ---
 
+## v13.1 — 2026-11-16（云令牌兼容桥，代码完成待上线）
+
+### 解决 V13.0.1 的“半登录”阻断
+
+用户选定「云令牌兼容（推荐）」路线：账号认证仍在 WorkBuddy 云服务，但业务 API 继续由常驻主站承载。
+
+- 新增 `functions/api/users/cloud-bridge.js`：`POST /api/users/cloud-bridge` 只接受一个有效的云令牌，服务端用云数据面 `dp_auth_session` RPC 二次校验；校验通过后建立/复用 D1 镜像用户（`cloud_identity_map` 映射云 uid → D1 user id），签发主站 D1 会话令牌与 Supabase JWT。前端最终保存的 `dp_token` 仍是主站令牌，58 个业务接口零改动。
+- 安全边界：不接收密码明文；hash 仅在新镜像账号建档时写入且必须通过格式校验；角色/身份以云会话为准，忽略前端传入的 `is_developer` 等字段；令牌无效直接拒绝，无降级旁路。
+- `public/cloud-backend.js` 升级 V13.1：登录、注册、历史账号迁移在云 RPC 成功后统一经 `bridge()` 换主站会话；不再拦截 `/api/users/auto-login`（主站令牌走主站自动登录即可）。云令牌另存 `dp_cloud_token` 便于后续云侧调用。
+- `public/index.html`：`cloud-backend.js` 缓存版本 v2 → v3。
+- `AGENTS.md` 第 11 条同步为“云令牌必须经主站会话桥”。
+
+修改文件：`functions/api/users/cloud-bridge.js`、`public/cloud-backend.js`、`public/index.html`、`CHANGELOG.md`、`AGENTS.md`。
+
+---
+
 ## v13.0.1 — 2026-11-16（发布前复核热修，未上线）
 
 ### 修复 V13.0 的三个上线阻断问题
