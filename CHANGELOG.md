@@ -17,7 +17,7 @@
 - `functions/api/users/cloud-bridge.js`：桥接成功后把本次设备令牌一并返回给前端。
 - `public/index.html`：`ensureDeviceMark()` 保存 `dp_device_token`。
 - `public/cloud-backend.js`：登录/注册请求自动带上已保存令牌；会话桥返回的新令牌也落本地；自动登录继续走主站，但请求体补上 `device_token`。
-- `public/index.html`：`cloud-backend.js` 缓存版本 v4 → v5。
+- `public/index.html`：`cloud-backend.js` 缓存版本 v4 → v5；KaTeX / SunEditor / FingerprintJS 不再把本域 `/vendor/*` 写死在 HTML 里，改由 fetch patch 判定后注入正确地址，消除 WorkBuddy 域首帧 404。
 
 修改文件：`functions/api/device/claim.js`、`functions/api/_lib/device.js`、`functions/api/users/cloud-bridge.js`、`public/index.html`、`public/cloud-backend.js`、`CHANGELOG.md`。
 

@@ -38,9 +38,9 @@
   <!-- Iconify 矢量图标运行时（自定义元素，动态注入自动升级） -->
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" integrity="sha384-GPb5RlngihS9H0z1D137JsvzmeZ7tCpWEF4t5YDoTZyMsPP8S7h7vFDh4XhheU83" crossorigin="anonymous" defer></script>
   <!-- SunEditor 富文本编辑器（本地静态资源，按需懒加载，见 ensureSunEditorLoaded） -->
-  <link rel="preload" href="/vendor/suneditor/dist/suneditor.min.js" as="script">
+  <link rel="preload" data-dp-vendor="/vendor/suneditor/dist/suneditor.min.js" as="script">
   <!-- KaTeX LaTeX 渲染（本地静态资源，避免国内 CDN 被 DNS 污染拦截） -->
-  <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css">
+  <link rel="stylesheet" data-dp-vendor="/vendor/katex/dist/katex.min.css">
   <!-- V12.2 部署形态探针：静态托管下发 false，WorkBuddy 真后台下发 true。
        必须早于下方 fetch patch，让 /api 与 vendor 的走向在首帧就确定。
        V12.3：真后台出 HTML 时会把这整行**换成内联脚本**（window.__DP_BACKEND__=true），
@@ -64,15 +64,23 @@
 
     // 静态预览域未随包带上 vendor/，公式 / 编辑器 / 指纹库从主站取；manifest 跨域无意义，直接移除
     function rewriteAssets() {
-      if (!remote) return;
-      var nodes = document.querySelectorAll('link[href^="/vendor/"], script[src^="/vendor/"]');
-      for (var i = 0; i < nodes.length; i++) {
-        var n = nodes[i];
+      // V13.3：资源地址一律由脚本注入。若把本域 /vendor 写死在 HTML 里，
+      // 浏览器会在 fetch patch 判定远程之前就发起本域请求（WorkBuddy 域 404）。
+      var links = document.querySelectorAll('link[data-dp-vendor]');
+      for (var i = 0; i < links.length; i++) {
+        var n = links[i];
         if (n.getAttribute('data-dp-rewritten')) continue;
-        var a = n.tagName === 'LINK' ? 'href' : 'src';
-        n.setAttribute(a, SHARED + n.getAttribute(a));
+        n.setAttribute('href', window.__dpAsset(n.getAttribute('data-dp-vendor')));
         n.setAttribute('data-dp-rewritten', '1');
       }
+      if (!document.getElementById('dpFingerprintScript')) {
+        var s = document.createElement('script');
+        s.id = 'dpFingerprintScript';
+        s.src = window.__dpAsset('/vendor/fingerprintjs/fp.min.js');
+        s.defer = true;
+        document.head.appendChild(s);
+      }
+      if (!remote) return;
       var mf = document.querySelector('link[rel="manifest"]');
       if (mf && mf.parentNode) mf.parentNode.removeChild(mf);
     }
@@ -214,8 +222,8 @@
     };
   })();
   </script>
-  <!-- FingerprintJS 开源版（V5.14 本地自托管，规避外部 CDN 被 local address space 拦截） -->
-  <script src="/vendor/fingerprintjs/fp.min.js" defer></script>
+  <!-- FingerprintJS 开源版（V5.14 本地自托管，规避外部 CDN 被 local address space 拦截）
+       V13.3：不在 HTML 里写死 src，避免 WorkBuddy 域首帧先抓本域 /vendor 再被脚本改写。 -->
   <script src="supabase-sdk.js?v=2"></script>
   <!-- V12.0 云服务 SDK：本项目无构建步骤，按 plain-HTML 规范用 CDN 形式，defer 保证先于业务脚本执行 -->
   <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js" defer></script>
