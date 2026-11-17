@@ -4,7 +4,7 @@
 
 ---
 
-## v13.1 — 2026-11-16（云令牌兼容桥，代码完成待上线）
+## v13.1 — 2026-11-16（云令牌兼容桥；主站函数已上线，WorkBuddy 前端待发布）
 
 ### 解决 V13.0.1 的“半登录”阻断
 
@@ -17,6 +17,12 @@
 - `AGENTS.md` 第 11 条同步为“云令牌必须经主站会话桥”。
 
 修改文件：`functions/api/users/cloud-bridge.js`、`public/cloud-backend.js`、`public/index.html`、`CHANGELOG.md`、`AGENTS.md`。
+
+**验证（主站已实测）**：
+- 无效云令牌调用 `/api/users/cloud-bridge` → `{"success":false,"error":"云会话已失效，请重新登录"}`，无旁路。
+- 临时云账号完整链路：云 `dp_auth_register` 200 → 云令牌换主站令牌 200（返回 `token` + `supabase_token` + D1 用户资料）→ 带主站令牌请求 `/api/friends?user_id=...` 200 `{"success":true,"data":[]}`。
+- 自动登录不带设备证据时返回 `need_reauth:true`，这是原有一机一号风控的预期行为，不是桥接失败。
+- 临时账号已清理：D1 用户 DELETE 成功（回查“用户不存在”），云 `dp_auth_users` / `dp_auth_sessions` 均归零。
 
 ---
 
