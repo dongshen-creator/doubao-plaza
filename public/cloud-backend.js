@@ -82,13 +82,14 @@
 
   // 云令牌只在本地换一次主站会话；主站接口会再次用 dp_auth_session 校验，
   // 因此这里失败一律明确报错，绝不把云 token 直接写进 dp_token。
-  async function bridge(cloudToken, hash, profile) {
+  async function bridge(cloudToken, hash, profile, evidence) {
     var res = await origFetch('/api/users/cloud-bridge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({
         token: cloudToken,
         hash: hash || '',
+        evidence: evidence || {},
       }, profile || {})),
     });
     var text = await res.text().catch(function () { return ''; });
@@ -108,7 +109,7 @@
     var rows = await rpc('dp_auth_lookup', { p_identifier: identifier });
     if (!rows.length) {
       // 云端没有该账号：历史用户在主站注册过。走一次主站登录做迁移校验。
-      var migrated = await migrateFromShared(identifier, password);
+      var migrated = await migrateFromShared(identifier, password, body);
       if (!migrated.ok) return jsonResponse({ success: false, error: migrated.error || '账号或密码错误' });
       return jsonResponse(migrated.result);
     }
@@ -119,12 +120,12 @@
       p_device: deviceId(), p_ip: clientIp(),
     });
     if (!lr.length || !lr[0].ok) return jsonResponse({ success: false, error: '账号或密码错误' });
-    return jsonResponse(await bridge(lr[0].token, hash));
+    return jsonResponse(await bridge(lr[0].token, hash, null, body));
   }
 
   // 历史账号迁移：用主站登录接口校验（密码不入库、不落日志），成功后在云端建档。
   // 主站 Cloudflare 后端常驻；此步骤只对“云端尚无账号”的用户发生一次。
-  async function migrateFromShared(identifier, password) {
+  async function migrateFromShared(identifier, password, evidence) {
     try {
       // 必须走 origFetch（外层已打过 patch，会把相对路径改写回共享主站）。
       // 这里若再调用 window.fetch 会命中本文件的 handleLogin，形成无限递归。
@@ -151,13 +152,13 @@
         if (lr.length && lr[0].ok) {
           return { ok: true, result: await bridge(lr[0].token, hash, {
             doubao_id: doubao, agent_url: null,
-          }) };
+          }, evidence) };
         }
         return { ok: false, error: (reg[0] && reg[0].reason) || '迁移失败，请重试' };
       }
       return { ok: true, result: await bridge(reg[0].token, hash, {
         doubao_id: doubao, agent_url: null,
-      }) };
+      }, evidence) };
     } catch (e) {
       return { ok: false, error: '账号校验暂不可用，请稍后重试' };
     }
@@ -178,7 +179,7 @@
     return jsonResponse(await bridge(reg[0].token, hash, {
       doubao_id: doubao, agent_url: agent || null,
       avatar: body.avatar || '', bio: body.bio || '',
-    }));
+    }, body));
   }
 
   function parseBody(init) {

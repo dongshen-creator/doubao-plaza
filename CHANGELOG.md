@@ -4,6 +4,23 @@
 
 ---
 
+## v13.2 — 2026-11-17（修复云登录后自动登录被风控拒绝）
+
+### 发布后真浏览器验收发现
+
+注册/登录本身成功，主站业务接口 `/api/friends` 也返回 200，但刷新页面后 `/api/users/auto-login` 返回 403 `need_reauth:true`，`dp_token` 被前端清掉。
+
+**根因**：V13.1 的会话桥只创建了 D1 会话，没有给会话写 `device_id`，也没有写 `login_ok` 风险事件；自动登录按 V11.0 设备确认规则判定为 `device_unverified`，拒绝续期。
+
+**修复**：
+- `functions/api/users/cloud-bridge.js`：接收前端原登录/注册请求里的设备证据，调用 `resolveAuthDevice()` 绑定设备，会话写入 `device_id`，并写 `bindDeviceForUser()` + `observeDeviceSignals()` + `logRiskEvent(action='allowed')`；设备封禁时直接 403 拒绝；成功时回种设备 Cookie。
+- `public/cloud-backend.js`：登录、注册、历史账号迁移调用 `bridge()` 时把原始 `body`（含设备证据）一并传给会话桥。
+- `public/index.html`：`cloud-backend.js` 缓存版本 v3 → v4。
+
+修改文件：`functions/api/users/cloud-bridge.js`、`public/cloud-backend.js`、`public/index.html`、`CHANGELOG.md`。
+
+---
+
 ## v13.1 — 2026-11-16（云令牌兼容桥；主站函数已上线，WorkBuddy 前端待发布）
 
 ### 解决 V13.0.1 的“半登录”阻断

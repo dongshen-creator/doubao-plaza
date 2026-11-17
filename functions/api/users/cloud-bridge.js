@@ -13,7 +13,15 @@
 
 import { signSupabaseJWT, generateToken } from '../_lib/jwt.js';
 import { normalizeName } from '../_lib/name.js';
-import { getClientIp } from '../_lib/device.js';
+import {
+  getClientIp,
+  cfMeta,
+  ensureDeviceSignalSchema,
+  resolveAuthDevice,
+  observeDeviceSignals,
+  bindDeviceForUser,
+  logRiskEvent,
+} from '../_lib/device.js';
 
 const CLOUD_RPC_URL =
   'https://doubao-plaza-v11.app.workbuddy.host/.cloud/database/rest/v1/rpc/dp_auth_session';
@@ -173,22 +181,63 @@ export async function onRequestPost(context) {
       ).bind(uid, user.id).run();
     }
 
+    // V13.2：必须把设备证据链补齐，否则 D1 会话没有 device_id、也没有可信事件，
+    // 刷新后的 /api/users/auto-login 会以 device_unverified 拒绝续期。
+    const evidence = body.evidence && typeof body.evidence === 'object' ? body.evidence : {};
+    let devRes = null;
+    try {
+      await ensureDeviceSignalSchema(env);
+      devRes = await resolveAuthDevice(env, request, clientIP || 'unknown', evidence);
+      if (devRes.banned) {
+        return Response.json({ success: false, error: '设备环境需要重新确认，请重新登录' }, {
+          status: 403,
+          headers: devRes.header ? { 'Set-Cookie': devRes.header } : {},
+        });
+      }
+    } catch (e) {
+      console.warn('[CLOUD-BRIDGE] device resolve failed:', e && e.message ? e.message : e);
+    }
+    const deviceId = devRes && devRes.device &&
+      (!devRes.bindingUserId || devRes.bindingUserId === user.id) ? devRes.device.id : null;
+
     const token = generateToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       .toISOString().replace('T', ' ').slice(0, 19);
     await env.DB.prepare(
       `INSERT INTO sessions (user_id, token, expires_at, device_id, created_ip, last_seen_at)
-       VALUES (?, ?, ?, NULL, ?, datetime('now'))`
-    ).bind(user.id, token, expiresAt, clientIP || null).run();
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(user.id, token, expiresAt, deviceId, clientIP || null).run();
+
+    if (deviceId) {
+      try {
+        await bindDeviceForUser(env, deviceId, user.id, 'login');
+        await observeDeviceSignals(env, deviceId, evidence, request, clientIP);
+        await logRiskEvent(env, {
+          event_type: 'login_ok',
+          user_id: user.id,
+          device_id: deviceId,
+          ip: clientIP,
+          ...cfMeta(request),
+          ua,
+          action: 'allowed',
+          risk_score: devRes && devRes.recovered ? 20 : 0,
+          detail: { cloud_bridge: true, recovered_device: !!(devRes && devRes.recovered) },
+        });
+      } catch (e) {
+        console.warn('[CLOUD-BRIDGE] device bind/log failed:', e && e.message ? e.message : e);
+      }
+    }
 
     const supabaseToken = await signSupabaseJWT(user.id, env);
 
+    const headers = { 'Cache-Control': 'no-store' };
+    if (devRes && devRes.header) headers['Set-Cookie'] = devRes.header;
     return Response.json({
       success: true,
       token,
       supabase_token: supabaseToken,
       data: safeUser(user, clientIP, ua),
-    }, { headers: { 'Cache-Control': 'no-store' } });
+    }, { headers });
   } catch (e) {
     console.error('[CLOUD-BRIDGE] error:', e && e.message ? e.message : e);
     return Response.json({ success: false, error: '云会话桥接失败，请稍后重试' }, { status: 500 });
