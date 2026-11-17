@@ -236,6 +236,7 @@ export async function onRequestPost(context) {
       success: true,
       token,
       supabase_token: supabaseToken,
+      device_token: devRes && devRes.raw ? devRes.raw : '',
       data: safeUser(user, clientIP, ua),
     }, { headers });
   } catch (e) {

@@ -223,7 +223,7 @@
   <!-- V13.0：WorkBuddy 云服务后端适配层。必须在 cloud-service.js 之后加载
        （复用其 SDK client），把登录/注册/自动登录改道到云数据库 RPC，
        彻底摆脱会被平台回收的沙箱 node 反代。 -->
-  <script src="cloud-backend.js?v=4" defer></script>
+  <script src="cloud-backend.js?v=5" defer></script>
   <script>
     (function () {
       var SUPABASE_URL = 'https://qwslopgbfkvnxrkqlvjl.supabase.co';
@@ -1936,13 +1936,20 @@ function removeDeviceLogin(userId) {
 async function ensureDeviceMark() {
   // 提前向服务端换取 __Host-dp_device 设备标记；失败不阻止提交（服务端在注册/登录时兜底补签）
   try {
-    await fetch('/api/device/claim', {
+    const res = await fetch('/api/device/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // V11.0：携带设备证据供服务端恢复设备身份（采集失败时 evidence 为部分结果，仍照常提交）
       body: JSON.stringify(await getDeviceEvidence()),
       credentials: 'same-origin',
     });
+    // V13.2：跨域发布域保存显式设备令牌，避免 SameSite=Lax Cookie 无法回传导致自动登录失效
+    if (res.ok) {
+      const d = await res.json().catch(function () { return {}; });
+      if (d && d.device_token) {
+        try { localStorage.setItem('dp_device_token', d.device_token); } catch (e) {}
+      }
+    }
   } catch (e) { /* 忽略 */ }
 }
 

@@ -313,7 +313,19 @@ export async function resolveAuthDevice(env, request, ip, hints = {}) {
   try { await ensureDeviceSignalSchema(env); } catch (error) {
     console.warn('[DEVICE] signal schema unavailable:', error.message);
   }
-  const { raw, device } = await getDeviceByCookie(env, request);
+  let { raw, device } = await getDeviceByCookie(env, request);
+  // V13.2：WorkBuddy 发布域跨域调用主站时 SameSite=Lax 的 HttpOnly Cookie 不会回传，
+  // 因此额外接受前端从 /api/device/claim 响应里保存的 dp_device_token。
+  // 它只用于定位设备记录；封禁状态、绑定关系和信号强度校验一律照常执行。
+  let tokenSource = raw ? 'cookie' : '';
+  if (!device && hints && hints.device_token) {
+    const traw = String(hints.device_token).trim();
+    if (traw.length >= 32 && traw.length <= 128) {
+      const thash = await hashToken(traw);
+      const byToken = await env.DB.prepare(`SELECT * FROM devices WHERE token_hash = ?`).bind(thash).first();
+      if (byToken) { device = byToken; raw = traw; tokenSource = 'body'; }
+    }
+  }
   if (device) {
     if (device.status === 'banned') {
       return {

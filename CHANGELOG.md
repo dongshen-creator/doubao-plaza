@@ -4,6 +4,25 @@
 
 ---
 
+## v13.3 — 2026-11-17（显式设备令牌，彻底修复跨域自动登录）
+
+### V13.2 仍失败的根因
+
+`deviceSetCookie()` 使用 `SameSite=Lax`。WorkBuddy 静态发布域调用主站 `/api/*` 属于跨站请求，浏览器不会回传该 Cookie；每次桥接/自动登录都找不到设备，风控按 `device_unverified` 拒绝。
+
+### 修复
+
+- `functions/api/device/claim.js`：响应新增 `device_token`（服务端签发的设备原始令牌，仅本次响应返回）。
+- `functions/api/_lib/device.js`：`resolveAuthDevice()` 在 Cookie 缺失时接受 `hints.device_token`，按散列定位设备；封禁状态、绑定关系、信号强度校验全部照常执行，令牌不是身份凭据。
+- `functions/api/users/cloud-bridge.js`：桥接成功后把本次设备令牌一并返回给前端。
+- `public/index.html`：`ensureDeviceMark()` 保存 `dp_device_token`。
+- `public/cloud-backend.js`：登录/注册请求自动带上已保存令牌；会话桥返回的新令牌也落本地；自动登录继续走主站，但请求体补上 `device_token`。
+- `public/index.html`：`cloud-backend.js` 缓存版本 v4 → v5。
+
+修改文件：`functions/api/device/claim.js`、`functions/api/_lib/device.js`、`functions/api/users/cloud-bridge.js`、`public/index.html`、`public/cloud-backend.js`、`CHANGELOG.md`。
+
+---
+
 ## v13.2 — 2026-11-17（修复云登录后自动登录被风控拒绝）
 
 ### 发布后真浏览器验收发现

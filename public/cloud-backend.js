@@ -98,7 +98,10 @@
     if (!res.ok || !data || !data.success) {
       throw new Error((data && data.error) || '主站会话桥接失败，请稍后重试');
     }
-    try { localStorage.setItem('dp_cloud_token', cloudToken); } catch (e) {}
+    try {
+      localStorage.setItem('dp_cloud_token', cloudToken);
+      if (data.device_token) localStorage.setItem('dp_device_token', data.device_token);
+    } catch (e) {}
     return data;
   }
 
@@ -201,13 +204,27 @@
     if (path === '/api/users/login' && method === 'POST') handler = handleLogin;
     else if (path === '/api/users' && method === 'POST') handler = handleRegister;
 
+    var deviceToken = '';
+    try { deviceToken = localStorage.getItem('dp_device_token') || ''; } catch (e) {}
+
     if (handler) {
+      var body = parseBody(init);
+      if (deviceToken && !body.device_token) body.device_token = deviceToken;
       return Promise.resolve()
-        .then(function () { return handler(parseBody(init)); })
+        .then(function () { return handler(body); })
         .then(function (r) { return r; })
         .catch(function (e) {
           return jsonResponse({ success: false, error: e && e.message ? e.message : '云服务暂不可用' });
         });
+    }
+
+    // 自动登录继续走主站，但要补上显式设备令牌：跨域下 HttpOnly Cookie 不会回传。
+    if (path === '/api/users/auto-login' && method === 'POST' && deviceToken) {
+      var autoBody = parseBody(init);
+      if (!autoBody.device_token) autoBody.device_token = deviceToken;
+      var headers = new Headers((init && init.headers) || undefined);
+      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+      init = Object.assign({}, init, { body: JSON.stringify(autoBody), headers: headers });
     }
     return origFetch(input, init);
   };

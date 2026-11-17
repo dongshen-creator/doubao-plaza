@@ -57,7 +57,14 @@ export async function onRequestPost(context) {
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
     if (dev.header) headers['Set-Cookie'] = dev.header;
     return new Response(
-      JSON.stringify({ success: true, fresh: !!dev.fresh && !dev.recovered, recovered: !!dev.recovered }),
+      JSON.stringify({
+        success: true,
+        fresh: !!dev.fresh && !dev.recovered,
+        recovered: !!dev.recovered,
+        // V13.2：跨域发布域拿不到 SameSite=Lax Cookie，返回一次性设备令牌供前端保存，
+        // 后续登录/自动登录用它恢复同一设备；令牌只存 localStorage，不等同身份凭据。
+        device_token: dev.raw || '',
+      }),
       { status: 200, headers }
     );
   } catch (e) {
