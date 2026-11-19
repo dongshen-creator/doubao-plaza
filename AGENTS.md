@@ -57,6 +57,8 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 12. **两套工具系统不可同名（V14.0 修复）**：前端有「网站工具（registry）」与「频道工具（chat_channel_tools）」两套系统，入口函数必须分别是 `openWebToolPanel(toolId,title)` 与 `openToolPanel(toolId,roomId)`。曾因两者都叫 `openToolPanel`，后声明的频道版覆盖 registry 版，导致网站工具卡片点击报「工具不存在」。新增工具入口**禁止复用这两个名字**。频道工具箱 `showQuickTools()` 顶部列出全部 registry 工具供频道内调用；音乐工具（`functions/api/tools/music.js`）走可拖拽浮窗 `openMusicDock()`，版权歌 fee>0 无免费源，取链用 legacy `/song/url`（v1 会 -460 风控）。
 13. **主题/背景特效层约定（V14.1）**：主题用 body class 标识（青碧色=`theme-cyan`，中国红=`theme-red`，默认橙无 class），配色全部走 CSS 变量（青碧 `--accent:#06B6D4`）。背景 canvas 层均为 JS 动态创建、`<script>` 引入、`pointer-events:none`、`z-index:-2(fluid)/-1(silk,fog,粒子)`，插在 `.noise-overlay` 之前。青碧色主题跑 fluid 流体层，中国红跑 silk 薄膜干涉+fog 薄雾。新特效必须：读 `dp_shader`（`≠off` 才启用）、尊重 `prefers-reduced-motion` 早退、MutationObserver 监听 body.class、暴露同步钩子挂进 `syncMetaThemeColor()`（否则主题切换不生效）。青碧指针粒子在 `public/jade-particles.js`，仅 `theme-cyan` 启用，空闲自动暂停 rAF。
 
+14. **网站工具的频道配置入口（V14.2）**：全站网页工具（registry）要在频道里用，必须走「频道设置 → 网站工具」栏目配置，落库到 `chat_channel_tools`，`tool_type='webapp'` 且 `config.web_tool_id` 指向 registry id；不要只放在 `showQuickTools()` 弹窗里。频道工具行统一用 `dpWebToolIdOf()` 读取关联 id，分享卡片用 `w:<registryId>` 前缀，`openToolPanel()` 负责把两种 id 都路由到 `dpOpenWebToolFromChannel()`。列表刷新统一走 `refreshChannelToolLists()`，否则设置弹窗与工具箱会不同步。
+
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。
 - 注释使用中文；修复类变更在代码中标注「V12 修复：…」之类的版本说明。

@@ -4,6 +4,27 @@
 
 ---
 
+## v14.2 — 2026-11-19（频道设置里可配置网站工具）
+
+用户纠正：网站工具不该只塞在快捷工具弹窗，应该像其它频道能力一样，在**频道设置**里有独立栏目自行配置。
+
+### 新增
+- `showRoomSettings()` 在「频道工具」下方新增「网站工具」栏目（仅频道会话）：列出 `/api/tools/registry` 的全部网页工具，管理员可一键「添加 / 移除」，普通成员只读显示「已添加」。
+- 新增 `loadSettingsWebTools()` / `addWebToolToChannel()` / `removeWebToolFromChannel()` / `refreshChannelToolLists()` / `dpWebToolIdOf()`：配置写入 `chat_channel_tools`，`tool_type='webapp'`，`config.web_tool_id` 关联注册表，重复添加会被拦截。
+- 工具编辑器 `showToolEditor('webapp')` 支持从「网站工具」类型下拉选择并自动填入名称/图标；保存时写入同一数据结构。新增 `onWebAppPick()`。
+
+### 修复
+- `openToolPanel()` 新增数据库行 `webapp` 分支：按 `config.web_tool_id`（兼容 `url='w:xxx'`）路由到 `dpOpenWebToolFromChannel()`，频道设置里配置的工具、工具卡片、快捷工具箱三处点击行为一致。
+- `showQuickTools()` 中 `bodyHtml = ...` 误写为覆盖（会抹掉网站工具分区），改为 `+=`；分区标题加「频道设置中配置 →」入口。
+- 私聊会话不再渲染网站工具配置栏目，避免空列表一直停在「加载中」。
+
+### 验证
+- `index.html` 内联 9 段脚本语法检查通过；线上 `/api/tools/registry` 返回工具列表正常。
+
+修改文件：`public/index.html`、`CHANGELOG.md`、`AGENTS.md`。
+
+---
+
 ## v14.1 — 2026-11-19（青碧色主题指针粒子集成进网站）
 
 用户澄清：青碧粒子不是要独立演示页，而是要**作为网站本身的指针效果**集成进去。本次把 `pointer-particles.html` 的粒子引擎改造为网站层。

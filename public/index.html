@@ -11037,6 +11037,12 @@ async function showRoomSettings() {
   }
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">频道公告' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showAnnouncementEditor(null)" style="font-size:12px">+ 发布</button>' : '') + '</div><div id="settingsChannelAnnouncementList" style="max-height:200px;overflow-y:auto"></div></div>';
   html += '<div style="margin-top:16px"><div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><iconify-icon icon="ph:wrench-fill"></iconify-icon> 频道工具' + (canManage ? '<button class="btn btn-sm btn-orange" onclick="showToolEditor()" style="font-size:12px">+ 添加</button>' : '') + '</div><div id="settingsChannelToolList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>';
+  // V14.2：网站工具配置栏目 —— 管理员可把全站网页工具直接加入本频道
+  if (room && room.type === 'channel') {
+    html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-color)"><div style="font-weight:600;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between"><span><iconify-icon icon="ph:app-window-fill"></iconify-icon> 网站工具</span>' + (canManage ? '<button class="btn btn-sm btn-gray" onclick="showToolEditor(\'webapp\')" style="font-size:12px">自定义添加</button>' : '') + '</div>' +
+      '<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">添加后，成员可在频道工具箱和工具卡片中直接调用；也可单独分享到频道。</div>' +
+      '<div id="settingsWebToolList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"><div style="color:var(--text-faint);font-size:12px">加载中...</div></div></div>';
+  }
   // 频道分组管理
   html += '<div style="margin-top:12px"><button class="btn btn-sm btn-gray" style="width:100%" onclick="showChannelGroupManager()"><iconify-icon icon="ph:folder-fill"></iconify-icon> 频道分组管理</button></div>';
   if (canManage) {
@@ -11053,7 +11059,11 @@ async function showRoomSettings() {
   html += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', html);
   if (canManage) loadRoomMemberList(chatState.currentRoomId);
-  if (room && room.type === 'channel') { loadChannelAnnouncements(room.id, 'settingsChannelAnnouncementList'); loadChannelTools(room.id, 'settingsChannelToolList'); }
+  if (room && room.type === 'channel') {
+    loadChannelAnnouncements(room.id, 'settingsChannelAnnouncementList');
+    loadChannelTools(room.id, 'settingsChannelToolList');
+    loadSettingsWebTools(room.id, canManage);
+  }
 }
 
 async function toggleMuteNotifications(roomId) {
@@ -11611,7 +11621,7 @@ async function loadChannelTools(roomId, containerId) {
 }
 
 // ═══ 工具编辑器弹窗 ═══
-async function showToolEditor() {
+async function showToolEditor(preselect) {
   var myLevel = await getPermissionLevel(chatState.currentRoomId, currentUser.id);
   if (myLevel < 2) { toast('只有频道创建者及以上才能管理工具', 'error'); return; }
   var existing = document.getElementById('toolEditorModal');
@@ -11628,13 +11638,14 @@ async function showToolEditor() {
     '<button class="tool-type-btn" onclick="selectToolType(\'api\')" data-type="api"><span class="tool-type-icon"><iconify-icon icon="ph:lightning-fill"></iconify-icon></span><span class="tool-type-label">API工具</span></button>' +
     '<button class="tool-type-btn" onclick="selectToolType(\'vote\')" data-type="vote"><span class="tool-type-icon"><iconify-icon icon="ph:chart-bar-fill"></iconify-icon></span><span class="tool-type-label">投票</span></button>' +
     '<button class="tool-type-btn" onclick="selectToolType(\'chain\')" data-type="chain"><span class="tool-type-icon"><iconify-icon icon="ph:note-pencil-fill"></iconify-icon></span><span class="tool-type-label">接龙</span></button>' +
+    '<button class="tool-type-btn" onclick="selectToolType(\'webapp\')" data-type="webapp"><span class="tool-type-icon"><iconify-icon icon="ph:app-window-fill"></iconify-icon></span><span class="tool-type-label">网站工具</span></button>' +
     '</div><div id="toolConfigArea"></div></div></div>';
   modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
   document.body.appendChild(modal);
-  selectToolType('link');
+  selectToolType(preselect === 'webapp' ? 'webapp' : 'link');
 }
 
-function selectToolType(type) {
+async function selectToolType(type) {
   _toolEditorState.type = type;
   document.querySelectorAll('#toolTypeGrid .tool-type-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.type === type);
@@ -11643,7 +11654,21 @@ function selectToolType(type) {
   if (!area) return;
   var html = '<div class="tool-editor-form-group"><label class="tool-editor-label">工具名称</label><input class="tool-editor-input" id="toolTitle" placeholder="给工具起个名字"></div>';
   html += '<div class="tool-editor-form-group"><label class="tool-editor-label">图标 (emoji)</label><input class="tool-editor-input" id="toolIcon" placeholder="🔗" value="' + (TOOL_TYPES[type] ? TOOL_TYPES[type].icon : '🔗') + '"></div>';
-  if (type === 'link') {
+  if (type === 'webapp') {
+    var reg = await dpGetRegistry();
+    if (!reg || !reg.length) {
+      area.innerHTML = '<div style="color:var(--text-faint);font-size:13px;padding:12px 0">网站工具列表暂时无法加载，请稍后重试。</div><button class="btn btn-gray btn-full" style="margin-top:8px" onclick="selectToolType(\'link\')">返回</button>';
+      return;
+    }
+    var opts = reg.map(function(t) {
+      return '<option value="' + dpMusicEsc(t.id) + '" data-icon="' + dpMusicEsc(t.icon || '🧩') + '" data-name="' + dpMusicEsc(t.name) + '">' + dpMusicEsc(t.icon || '🧩') + ' ' + dpMusicEsc(t.name) + '</option>';
+    }).join('');
+    html = '<div class="tool-editor-form-group"><label class="tool-editor-label">选择网站工具</label>' +
+      '<select class="tool-editor-input" id="toolWebAppId" onchange="onWebAppPick(this)">' + opts + '</select></div>' +
+      '<div class="tool-editor-form-group"><label class="tool-editor-label">显示名称 (可改)</label><input class="tool-editor-input" id="toolTitle" placeholder="工具名称"></div>' +
+      '<div class="tool-editor-form-group"><label class="tool-editor-label">图标 (emoji)</label><input class="tool-editor-input" id="toolIcon" value="🧩"></div>' +
+      '<div style="font-size:12px;color:var(--text-faint);line-height:1.6;margin:-2px 0 6px">选择后会自动填入名称与图标；保存后该工具即可在本频道调用，并支持分享到频道。</div>';
+  } else if (type === 'link') {
     html += '<div class="tool-editor-form-group"><label class="tool-editor-label">链接 URL</label><input class="tool-editor-input" id="toolUrl" placeholder="https://..."></div>';
   } else if (type === 'embed') {
     html += '<div class="tool-editor-form-group"><label class="tool-editor-label">网页 URL (将内嵌显示)</label><input class="tool-editor-input" id="toolUrl" placeholder="https://..."></div>';
@@ -11660,7 +11685,20 @@ function selectToolType(type) {
   }
   html += '<button class="btn btn-orange btn-full" style="margin-top:8px" onclick="saveToolFromEditor()">保存工具</button>';
   area.innerHTML = html;
+  if (type === 'webapp') onWebAppPick(document.getElementById('toolWebAppId'));
   if (type === 'vote') { addVoteOption(); addVoteOption(); }
+}
+
+// V14.2：选择网站工具时自动填入名称与图标
+function onWebAppPick(sel) {
+  var opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+  if (!opt) return;
+  var title = opt.getAttribute('data-name') || (opt.textContent || '').replace(/^\S+\s*/, '').trim();
+  var icon = opt.getAttribute('data-icon') || '🧩';
+  var t = document.getElementById('toolTitle');
+  var i = document.getElementById('toolIcon');
+  if (t) t.value = title;
+  if (i) i.value = icon;
 }
 
 function addVoteOption() {
@@ -11676,13 +11714,32 @@ function addVoteOption() {
 async function saveToolFromEditor() {
   var type = _toolEditorState.type;
   var title = document.getElementById('toolTitle') ? document.getElementById('toolTitle').value.trim() : '';
-  if (!title) { toast('请输入工具名称', 'error'); return; }
   var icon = document.getElementById('toolIcon') ? document.getElementById('toolIcon').value.trim() : '';
   icon = icon || (TOOL_TYPES[type] ? TOOL_TYPES[type].icon : '🔗');
   var url = document.getElementById('toolUrl') ? document.getElementById('toolUrl').value.trim() : '';
   var desc = document.getElementById('toolDesc') ? document.getElementById('toolDesc').value.trim() : '';
   var config = {};
   var tId = 'tool_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  // V14.2：网站工具 —— 用 config.web_tool_id 关联全站注册表，避免重复添加
+  if (type === 'webapp') {
+    var webId = document.getElementById('toolWebAppId') ? document.getElementById('toolWebAppId').value.trim() : '';
+    if (!webId) { toast('请选择网站工具', 'error'); return; }
+    var reg = await dpGetRegistry();
+    var meta = null;
+    (reg || []).forEach(function(x) { if (x.id === webId) meta = x; });
+    if (!meta) { toast('网站工具不存在', 'error'); return; }
+    var { data: dupRows } = await __SB.from('chat_channel_tools').select('id, url, config').eq('room_id', chatState.currentRoomId).eq('tool_type', 'webapp');
+    var dup = false;
+    (dupRows || []).forEach(function(row) { if (dpWebToolIdOf(row) === webId) dup = true; });
+    if (dup) { toast('该网站工具已在本频道', 'error'); return; }
+    if (!title) title = meta.name;
+    if (!icon || icon === '🧩') icon = meta.icon || '🧩';
+    if (!desc) desc = meta.description || '';
+    config = { web_tool_id: webId, description: desc };
+    url = 'w:' + webId;
+  }
+  if (!title) { toast('请输入工具名称', 'error'); return; }
 
   if (type === 'link' || type === 'embed' || type === 'api') {
     if (!url) { toast('请输入 URL', 'error'); return; }
@@ -11716,11 +11773,11 @@ async function saveToolFromEditor() {
   await __SB.from('chat_channel_tools').insert({ id: tId, room_id: chatState.currentRoomId, title: title, url: url, icon: icon, tool_type: type, config: config, description: desc, created_by: currentUser.id });
   var modal = document.getElementById('toolEditorModal');
   if (modal) modal.remove();
-  loadChannelTools(chatState.currentRoomId);
-  if (document.getElementById('settingsChannelToolList')) loadChannelTools(chatState.currentRoomId, 'settingsChannelToolList');
+  refreshChannelToolLists(chatState.currentRoomId);
   toast('工具已添加', 'success');
-  // 自动发送工具分享消息到频道
-  shareToolToChannel(tId, type, icon, title);
+  // 自动发送工具分享消息到频道（网站工具用 w: 前缀，点击仍打开网站工具）
+  var shareId = (type === 'webapp' && config.web_tool_id) ? ('w:' + config.web_tool_id) : tId;
+  shareToolToChannel(shareId, type, icon, title);
 }
 
 async function deleteChannelTool(toolId, roomId) {
@@ -11737,8 +11794,7 @@ async function deleteChannelTool(toolId, roomId) {
   try { await __SB.from('chat_tool_votes').delete().eq('tool_id', toolId); } catch(e) {}
   try { await __SB.from('chat_tool_chains').delete().eq('tool_id', toolId); } catch(e) {}
   await __SB.from('chat_channel_tools').delete().eq('id', toolId);
-  loadChannelTools(roomId);
-  if (document.getElementById('settingsChannelToolList')) loadChannelTools(roomId, 'settingsChannelToolList');
+  refreshChannelToolLists(roomId);
   toast('工具已删除');
 }
 
@@ -11753,6 +11809,85 @@ async function dpGetRegistry() {
     } catch (e) {}
   }
   return toolPanelState.registryCache || [];
+}
+
+// V14.2：读取频道工具行关联的网站工具 id（兼容 config.web_tool_id 与 url "w:xxx"）
+function dpWebToolIdOf(t) {
+  if (!t) return '';
+  var id = (t.config && t.config.web_tool_id) || '';
+  if (!id && typeof t.url === 'string' && t.url.indexOf('w:') === 0) id = t.url.slice(2);
+  return String(id || '');
+}
+
+// V14.2：刷新所有工具列表（频道工具箱 / 频道设置 / 网站工具配置区）
+function refreshChannelToolLists(roomId) {
+  loadChannelTools(roomId);
+  if (document.getElementById('settingsChannelToolList')) loadChannelTools(roomId, 'settingsChannelToolList');
+  if (document.getElementById('settingsWebToolList')) loadSettingsWebTools(roomId, true);
+}
+
+// V14.2：频道设置里的网站工具配置列表
+async function loadSettingsWebTools(roomId, canManage) {
+  var el = document.getElementById('settingsWebToolList');
+  if (!el) return;
+  var registry = await dpGetRegistry();
+  if (!registry || !registry.length) {
+    el.innerHTML = '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px">网站工具列表暂时无法加载，请稍后重试。</div>';
+    return;
+  }
+  var { data: rows } = await __SB.from('chat_channel_tools').select('id, title, icon, tool_type, url, config').eq('room_id', roomId).eq('tool_type', 'webapp');
+  var added = {};
+  (rows || []).forEach(function(t) { var wid = dpWebToolIdOf(t); if (wid) added[wid] = t; });
+  el.innerHTML = registry.map(function(t) {
+    var exists = added[t.id];
+    var action = exists
+      ? 'removeWebToolFromChannel(\'' + escAttr(exists.id) + '\',\'' + escAttr(t.id) + '\')'
+      : 'addWebToolToChannel(\'' + escAttr(t.id) + '\')';
+    var btn = canManage
+      ? '<button class="btn ' + (exists ? 'btn-sm btn-gray' : 'btn-sm btn-orange') + '" style="font-size:11px;padding:2px 7px;flex-shrink:0" onclick="' + action + '">' + (exists ? '移除' : '添加') + '</button>'
+      : (exists ? '<span style="font-size:11px;color:var(--accent);flex-shrink:0">已添加</span>' : '');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-secondary)">' +
+      '<span style="font-size:20px;line-height:1">' + dpMusicEsc(t.icon || '🧩') + '</span>' +
+      '<span style="flex:1;min-width:0;font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + dpMusicEsc(t.name) + '">' + dpMusicEsc(t.name) + '</span>' + btn + '</div>';
+  }).join('');
+}
+
+// V14.2：在频道设置里一键添加网站工具
+async function addWebToolToChannel(webToolId) {
+  if (!chatState.currentRoomId) { toast('请先选择一个频道', 'error'); return; }
+  if (!await checkChannelPermission(chatState.currentRoomId)) { toast('只有管理员才能配置频道工具', 'error'); return; }
+  var registry = await dpGetRegistry();
+  var meta = null;
+  (registry || []).forEach(function(x) { if (x.id === webToolId) meta = x; });
+  if (!meta) { toast('网站工具不存在', 'error'); return; }
+  var { data: rows } = await __SB.from('chat_channel_tools').select('id, url, config').eq('room_id', chatState.currentRoomId).eq('tool_type', 'webapp');
+  var exists = false;
+  (rows || []).forEach(function(row) { if (dpWebToolIdOf(row) === webToolId) exists = true; });
+  if (exists) { toast('该网站工具已在本频道', 'error'); return; }
+  var tId = 'tool_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var { error } = await __SB.from('chat_channel_tools').insert({
+    id: tId, room_id: chatState.currentRoomId, title: meta.name, url: 'w:' + meta.id,
+    icon: meta.icon || '🧩', tool_type: 'webapp',
+    config: { web_tool_id: meta.id, description: meta.description || '' },
+    description: meta.description || '', created_by: currentUser.id
+  });
+  if (error) { toast('添加失败: ' + error.message, 'error'); return; }
+  refreshChannelToolLists(chatState.currentRoomId);
+  toast('已添加到本频道', 'success');
+}
+
+// V14.2：从频道设置里移除网站工具
+async function removeWebToolFromChannel(toolId, webToolId) {
+  if (!chatState.currentRoomId) { toast('请先选择一个频道', 'error'); return; }
+  if (!await checkChannelPermission(chatState.currentRoomId)) { toast('只有管理员才能配置频道工具', 'error'); return; }
+  var registry = await dpGetRegistry();
+  var name = webToolId || '该工具';
+  (registry || []).forEach(function(x) { if (x.id === webToolId) name = x.name; });
+  if (!confirm('从本频道移除网站工具「' + name + '」？')) return;
+  var { error } = await __SB.from('chat_channel_tools').delete().eq('id', toolId);
+  if (error) { toast('移除失败: ' + error.message, 'error'); return; }
+  refreshChannelToolLists(chatState.currentRoomId);
+  toast('已从本频道移除', 'success');
 }
 // V14.0：把网站工具分享到当前频道（作为 tool: 卡片，打开时路由到 openWebToolPanel）
 async function shareWebToolToChannel(toolId, icon, name) {
@@ -11795,7 +11930,7 @@ async function showQuickTools() {
 
   // V14.0：网站工具分区 —— 把全部网页工具做成可在频道里调用的小工具
   bodyHtml += '<div style="padding:2px 2px 10px;border-bottom:1px solid var(--border-color)">';
-  bodyHtml += '<div style="font-size:12px;color:var(--text-faint);margin:4px 2px 8px;display:flex;align-items:center;gap:6px"><iconify-icon icon="ph:app-window-fill"></iconify-icon> 网站工具 · 点击即可在频道内调用</div>';
+  bodyHtml += '<div style="font-size:12px;color:var(--text-faint);margin:4px 2px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px"><span><iconify-icon icon="ph:app-window-fill"></iconify-icon> 网站工具 · 点击即可在频道内调用</span><span style="color:var(--accent);cursor:pointer;flex-shrink:0" onclick="document.getElementById(\'quickToolsPopup\').remove();showRoomSettings()">频道设置中配置 →</span></div>';
   bodyHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">';
   registry.forEach(function (t) {
     bodyHtml += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border:1px solid var(--border-color);border-radius:10px;cursor:pointer;position:relative;transition:transform .15s" ' +
@@ -11813,7 +11948,7 @@ async function showQuickTools() {
   if (!tools || tools.length === 0) {
     bodyHtml += '<div style="text-align:center;padding:16px;color:var(--text-faint);font-size:13px">此频道还没有自定义工具<br><button class="btn btn-sm btn-orange" style="margin-top:10px" onclick="document.getElementById(\'quickToolsPopup\').remove();showToolEditor()">+ 添加工具</button></div>';
   } else {
-    bodyHtml = '<div style="display:flex;flex-direction:column;gap:8px">';
+    bodyHtml += '<div style="display:flex;flex-direction:column;gap:8px">';
     tools.forEach(function(t) {
       var tt = t.tool_type || 'link';
       var meta = TOOL_TYPES[tt] || TOOL_TYPES.link;
@@ -11823,11 +11958,12 @@ async function showQuickTools() {
           '<span class="tool-card-name">' + esc(t.title) + '</span>' +
           '<span class="tool-card-type-badge">链接</span></a>';
       } else {
+        var shareId = tt === 'webapp' ? ('w:' + dpWebToolIdOf(t)) : t.id;
         bodyHtml += '<div class="tool-card-item" onclick="document.getElementById(\'quickToolsPopup\').remove();openToolPanel(\'' + t.id + '\',\'' + chatState.currentRoomId + '\')">' +
           '<span class="tool-card-icon">' + (t.icon || meta.icon) + '</span>' +
           '<span class="tool-card-name">' + esc(t.title) + '</span>' +
           '<span class="tool-card-type-badge">' + meta.badge + '</span>' +
-          '<span class="tool-card-delete" onclick="event.stopPropagation();shareToolToChannel(\'' + t.id + '\',\'' + tt + '\',\'' + escAttr(t.icon || meta.icon) + '\',\'' + escAttr(t.title) + '\')"><iconify-icon icon="ph:share-network-fill"></iconify-icon></span></div>';
+          '<span class="tool-card-delete" onclick="event.stopPropagation();shareToolToChannel(\'' + shareId + '\',\'' + tt + '\',\'' + escAttr(t.icon || meta.icon) + '\',\'' + escAttr(t.title) + '\')"><iconify-icon icon="ph:share-network-fill"></iconify-icon></span></div>';
       }
     });
     bodyHtml += '</div>';
@@ -12132,6 +12268,16 @@ async function openToolPanel(toolId, roomId) {
     var wid = toolId.slice(2);
     dpOpenWebToolFromChannel(wid, roomId);
     return;
+  }
+  // V14.2：频道设置里配置的网站工具（数据库行 tool_type=webapp），按 config.web_tool_id 路由
+  if (toolId && toolId.indexOf('w:') !== 0) {
+    try {
+      var preRes = await __SB.from('chat_channel_tools').select('id, tool_type, title, url, config').eq('id', toolId).maybeSingle();
+      if (preRes && preRes.data && preRes.data.tool_type === 'webapp') {
+        var preWid = dpWebToolIdOf(preRes.data);
+        if (preWid) { dpOpenWebToolFromChannel(preWid, preRes.data.title || roomId); return; }
+      }
+    } catch (e) {}
   }
   // === 页面类工具：Tavern 角色酒馆以 iframe 嵌入（保留最左侧活动栏，顶栏统一由主站提供）===
   if (toolId === 'tavern') {
