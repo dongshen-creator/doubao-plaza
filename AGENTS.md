@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v13.3）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v14.0.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -54,6 +54,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
     - **`functions/_middleware.js` 全局门禁先于所有端点执行**：V12.1 起白名单为**自有前端域名的全业务 API**（`isSharedAppOrigin()`：精确发布域 + `*.app.workbuddy.host` + 官方反代域），中间件统一应答 CORS 预检并给实际响应补 CORS 头。实际请求仍必须带 `X-DP-Client: plaza-v1`；蜜罐、限流、封禁检查不得放宽。新增前端域名必须同步维护此白名单与 `public/index.html` 的 `LOCAL_HOSTS`。
     - **副本同步必须无人值守**：云数据库 `dp_replica` 是公开脱敏投影副本，对 `anon` 开放读写（RLS `WITH CHECK` 限定 `d1|supabase` 来源、白名单表、`record_key ≤ 128`，不开放 DELETE）。`public/cloud-service.js` 的自动同步**不得依赖 `refreshSession()` / `gate()` / 面板按钮** —— SDK 无匿名登录，一旦要求登录就会静默跳过。水位存 `localStorage`，只在 `originOk()`（发布域）执行，页面隐藏暂停、异常静默重试。SDK 未加载时降级同源 REST 仅带 publishableKey。V12.0 的 owner-scoped 四表保持原样。
 11. **V13 云服务账号迁移边界（V13.1）**：账号认证在 WorkBuddy 云服务，但业务 `/api/*` 仍由常驻主站承载。云令牌**必须先经** `POST /api/users/cloud-bridge` 用 `dp_auth_session` RPC 二次校验并换取 D1 会话令牌，前端 `dp_token` 只能存主站令牌；禁止把云 token 直接写进 `dp_token`。`cloud-backend.js` 里迁移历史账号必须调用 `origFetch`，不能再调用被包装的 `window.fetch`。`/api/users/auto-login` 不拦截，继续走主站。
+12. **两套工具系统不可同名（V14.0 修复）**：前端有「网站工具（registry）」与「频道工具（chat_channel_tools）」两套系统，入口函数必须分别是 `openWebToolPanel(toolId,title)` 与 `openToolPanel(toolId,roomId)`。曾因两者都叫 `openToolPanel`，后声明的频道版覆盖 registry 版，导致网站工具卡片点击报「工具不存在」。新增工具入口**禁止复用这两个名字**。频道工具箱 `showQuickTools()` 顶部列出全部 registry 工具供频道内调用；音乐工具（`functions/api/tools/music.js`）走可拖拽浮窗 `openMusicDock()`，版权歌 fee>0 无免费源，取链用 legacy `/song/url`（v1 会 -460 风控）。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。
