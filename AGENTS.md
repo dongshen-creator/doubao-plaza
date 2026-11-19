@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v14.0.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v14.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -55,6 +55,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
     - **副本同步必须无人值守**：云数据库 `dp_replica` 是公开脱敏投影副本，对 `anon` 开放读写（RLS `WITH CHECK` 限定 `d1|supabase` 来源、白名单表、`record_key ≤ 128`，不开放 DELETE）。`public/cloud-service.js` 的自动同步**不得依赖 `refreshSession()` / `gate()` / 面板按钮** —— SDK 无匿名登录，一旦要求登录就会静默跳过。水位存 `localStorage`，只在 `originOk()`（发布域）执行，页面隐藏暂停、异常静默重试。SDK 未加载时降级同源 REST 仅带 publishableKey。V12.0 的 owner-scoped 四表保持原样。
 11. **V13 云服务账号迁移边界（V13.1）**：账号认证在 WorkBuddy 云服务，但业务 `/api/*` 仍由常驻主站承载。云令牌**必须先经** `POST /api/users/cloud-bridge` 用 `dp_auth_session` RPC 二次校验并换取 D1 会话令牌，前端 `dp_token` 只能存主站令牌；禁止把云 token 直接写进 `dp_token`。`cloud-backend.js` 里迁移历史账号必须调用 `origFetch`，不能再调用被包装的 `window.fetch`。`/api/users/auto-login` 不拦截，继续走主站。
 12. **两套工具系统不可同名（V14.0 修复）**：前端有「网站工具（registry）」与「频道工具（chat_channel_tools）」两套系统，入口函数必须分别是 `openWebToolPanel(toolId,title)` 与 `openToolPanel(toolId,roomId)`。曾因两者都叫 `openToolPanel`，后声明的频道版覆盖 registry 版，导致网站工具卡片点击报「工具不存在」。新增工具入口**禁止复用这两个名字**。频道工具箱 `showQuickTools()` 顶部列出全部 registry 工具供频道内调用；音乐工具（`functions/api/tools/music.js`）走可拖拽浮窗 `openMusicDock()`，版权歌 fee>0 无免费源，取链用 legacy `/song/url`（v1 会 -460 风控）。
+13. **主题/背景特效层约定（V14.1）**：主题用 body class 标识（青碧色=`theme-cyan`，中国红=`theme-red`，默认橙无 class），配色全部走 CSS 变量（青碧 `--accent:#06B6D4`）。背景 canvas 层均为 JS 动态创建、`<script>` 引入、`pointer-events:none`、`z-index:-2(fluid)/-1(silk,fog,粒子)`，插在 `.noise-overlay` 之前。青碧色主题跑 fluid 流体层，中国红跑 silk 薄膜干涉+fog 薄雾。新特效必须：读 `dp_shader`（`≠off` 才启用）、尊重 `prefers-reduced-motion` 早退、MutationObserver 监听 body.class、暴露同步钩子挂进 `syncMetaThemeColor()`（否则主题切换不生效）。青碧指针粒子在 `public/jade-particles.js`，仅 `theme-cyan` 启用，空闲自动暂停 rAF。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

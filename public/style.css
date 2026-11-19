@@ -2384,6 +2384,18 @@ body {
 }
 .dark #fluid-canvas { opacity: .55; }
 
+/* ── V14.1 青碧指针粒子（JS 注入 #jade-particles-canvas，仅 theme-cyan 启用） ── */
+#jade-particles-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #jade-particles-canvas { display: none !important; }
+}
+
 /* ── L2 背景：SVG feTurbulence 噪点覆盖层 ── */
 .noise-overlay {
   position: fixed;

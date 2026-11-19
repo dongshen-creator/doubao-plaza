@@ -13864,6 +13864,8 @@ function syncMetaThemeColor() {
     // V9.6：指雾笔只在青碧色 / 水墨灰启用，且配色（--accent / 暗色）变了要重画雾
     if (typeof window.__npFogAccent === 'function') window.__npFogAccent();
     if (typeof window.__npFogSync === 'function') window.__npFogSync();
+    // V14.1：青碧色主题的指针发光粒子随主题切换显隐/换色
+    if (typeof window.__npJadeSync === 'function') window.__npJadeSync();
   } catch (e) {}
 }
 
@@ -15400,5 +15402,7 @@ try { document.body.classList.toggle('shaders-off', !shaderOn); } catch (e) {}
   }
 })();
 </script>
+<!-- V14.1 青碧色主题指针粒子（独立 canvas 层，theme-cyan 下启用） -->
+<script src="jade-particles.js"></script>
 </body>
 </html>

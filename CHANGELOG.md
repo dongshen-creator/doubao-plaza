@@ -4,6 +4,29 @@
 
 ---
 
+## v14.1 — 2026-11-19（青碧色主题指针粒子集成进网站）
+
+用户澄清：青碧粒子不是要独立演示页，而是要**作为网站本身的指针效果**集成进去。本次把 `pointer-particles.html` 的粒子引擎改造为网站层。
+
+### 新增
+- `public/jade-particles.js`：独立 canvas 层 `#jade-particles-canvas`，复刻华为活动页发光粒子算法 + 青碧配色 + 拖尾 + 点击爆发/拖拽喷射。
+  - 门控：仅 `body.theme-cyan`（青碧色主题）+ `dp_shader≠off` 时启用；`prefers-reduced-motion` 早退。
+  - 配色跟随 `--accent`/`--accent-light`，主题切换自动重建贴图。
+  - `position:fixed; inset:0; z-index:-1; pointer-events:none`，插在 `.noise-overlay` 之前，不遮挡正文。
+  - 空闲自动暂停 rAF（无粒子 12 帧后清空停帧），指针移动唤醒，省 CPU。
+  - MutationObserver 监听 body.class；暴露 `window.__npJadeSync` 挂进 `syncMetaThemeColor()`。
+
+### 修改
+- `public/index.html`：`syncMetaThemeColor()` 增加 `__npJadeSync()` 调用；body 尾部引入 `jade-particles.js`。
+- `public/style.css`：新增 `#jade-particles-canvas` 层级规则 + reduced-motion 隐藏。
+
+### 验证
+- 真浏览器：默认橙色主题隐藏、切青碧色启用、鼠标划动画出粒子（检测到非透明像素）、切回隐藏、shader off/on 联动、零 JS 报错。
+
+修改文件：`public/jade-particles.js`（新增）、`public/index.html`、`public/style.css`、`CHANGELOG.md`。
+
+---
+
 ## v14.0.1 — 2026-11-19（音乐搜索体验优化）
 
 - 后端 `normalizeSong` 保留 `fee` 字段（fee=0 免费可播，>0 会员/付费）。
