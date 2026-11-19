@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>青碧粒子 · Jade Particles</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at 50% 40%, #0d3b35 0%, #082621 55%, #041412 100%);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #dff5ee;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  #stage { position: absolute; inset: 0; display: block; touch-action: none; cursor: crosshair; }
+
+  .topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 22px;
+    pointer-events: none;
+  }
+  .brand { font-size: 15px; font-weight: 500; letter-spacing: .5px; color: #8ff0d4; }
+  .brand small { color: #5fae9c; font-weight: 400; margin-left: 6px; font-size: 12px; }
+  .spacer { flex: 1; }
+  .ctrl { pointer-events: auto; display: flex; gap: 8px; }
+  .ctrl button {
+    background: rgba(45,212,191,.08); color: #a7e8d6;
+    border: 1px solid rgba(45,212,191,.22); border-radius: 8px;
+    padding: 7px 13px; font-size: 12px; cursor: pointer;
+    backdrop-filter: blur(6px); transition: .18s;
+  }
+  .ctrl button:hover { background: rgba(45,212,191,.18); color: #e6fff7; }
+  .ctrl button.on { background: rgba(45,212,191,.24); border-color: rgba(94,234,212,.55); color: #d6fff2; }
+
+  .hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 5; text-align: center; pointer-events: none;
+    transition: opacity .8s; opacity: 1;
+  }
+  .hint .ring {
+    width: 74px; height: 74px; margin: 0 auto 20px;
+    border: 1px dashed rgba(94,234,212,.5); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .hint .ring i {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #7ff0d4; box-shadow: 0 0 22px 9px rgba(45,212,191,.8);
+  }
+  .hint h1 { font-size: 19px; font-weight: 500; letter-spacing: 1px; margin-bottom: 10px; color: #c9fff0; }
+  .hint p { font-size: 13px; color: #7fbfae; line-height: 1.9; }
+  .hint p b { color: #7ff0d4; font-weight: 500; }
+  @keyframes pulse { 0%,100%{ transform:scale(1); opacity:.85 } 50%{ transform:scale(1.12); opacity:1 } }
+
+  .footer {
+    position: absolute; bottom: 14px; left: 0; right: 0; z-index: 10;
+    text-align: center; font-size: 11px; color: #4d8a7b; pointer-events: none;
+    letter-spacing: .4px;
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="topbar">
+  <div class="brand">青碧粒子 <small>Jade Particles</small></div>
+  <div class="spacer"></div>
+  <div class="ctrl">
+    <button id="btnColor">彩色</button>
+    <button id="btnTrail" class="on">拖尾</button>
+    <button id="btnClear">清空</button>
+  </div>
+</div>
+
+<div class="hint" id="hint">
+  <div class="ring"><i></i></div>
+  <h1>让指针划出青碧的光</h1>
+  <p><b>移动</b> 拖出光点 · <b>点击</b> 迸发星芒 · <b>按住拖动</b> 持续喷射</p>
+</div>
+
+<div class="footer">青碧色主题的指针跟随发光粒子 · 支持触摸</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var hint = document.getElementById('hint');
+  var W = 0, H = 0, DPR = 1;
+
+  // ── 原站粒子配置（从活动页 meta.js 中提取的真实参数）──
+  var OPT = {
+    starRadius: 20,
+    starSum: 10,
+    initScope: 4,
+    speeding: 4,
+    drag: 0.81,
+    dwindleStep: 0.5,
+    wander: 0.92
+  };
+
+  var SPRITE_SRC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAA8BAMAAADI0sRBAAADI2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS41LWMwMTQgNzkuMTUxNDgxLCAyMDEzLzAzLzEzLTEyOjA5OjE1ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIiB4bWxuczpzdFJlZj0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3NUeXBlL1Jlc291cmNlUmVmIyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ0MgKE1hY2ludG9zaCkiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MDI1MjQ0MDJCOENFMTFFNEE1NTE4NjcxNUQ1Mzk1NjciIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MDI1MjQ0MDNCOENFMTFFNEE1NTE4NjcxNUQ1Mzk1NjciPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDowMjUyNDQwMEI4Q0UxMUU0QTU1MTg2NzE1RDUzOTU2NyIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDowMjUyNDQwMUI4Q0UxMUU0QTU1MTg2NzE1RDUzOTU2NyIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PlIcnpEAAAAZdEVYdFNvZnR3YXJlAEFkb2JlIEltYWdlUmVhZHlxyWU8AAAAMFBMVEVHcEz///////////////////////////////////////////////////////////9EPuwCAAAAEHRSTlMABPILGC8lVRI/e73iaYRPHtT7twAAAJxJREFUOMtjYBgFo2AggKCgoSBOSUZhixaPZkMBXHot3EJDU5oFcWl2i/xePzUFh3ZGk8zada+uT3PGLs3cNn31IZ1dlRkGWKWFXas2KSlpLw8xxCotkXlbCQj2TmvELh2/BiR96it2aZHwRyBpvVJHrNIm+KUJGE7AaQQ8RiBYCAQqgShhEMYboYSSAygxCQriTW0CoxluFNAIAABCfjyfRyRQqQAAAABJRU5ErkJggg==';
+
+  var sprite = new Image();
+  sprite.src = SPRITE_SRC;
+
+  // 默认：青碧色色阶（teal/cyan）；彩色模式：多色
+  var TEAL_TINTS = ['#5eead4', '#2dd4bf', '#14b8a6', '#99f6e4', '#0d9488', '#22d3ee'];
+  var RAINBOW_TINTS = ['#ffffff', '#7fd8ff', '#ff8fd0', '#ffd479', '#9fb8ff', '#b6ffd9'];
+  var tealTinted = [], rainbowTinted = [];
+  function tintSet(colors) {
+    return colors.map(function (color) {
+      var c = document.createElement('canvas');
+      c.width = c.height = 60;
+      var g = c.getContext('2d');
+      g.drawImage(sprite, 0, 0, 60, 60);
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = color;
+      g.fillRect(0, 0, 60, 60);
+      return c;
+    });
+  }
+  function buildTints() {
+    tealTinted = tintSet(TEAL_TINTS);
+    rainbowTinted = tintSet(RAINBOW_TINTS);
+  }
+
+  var stars = [];
+  var ripples = [];
+  var modeColor = false;   // false=青碧（默认），true=彩色
+  var modeTrail = true;
+  var pointerDown = false;
+  var lastX = null, lastY = null;
+  var interacted = false;
+  var PI2 = Math.PI * 2;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function randInt(a, b) { return Math.floor(rand(a, b)); }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  function Star(x, y, power) {
+    this.r = rand(2, OPT.starRadius * (power || 1));
+    this.x = x; this.y = y;
+    this.dir = randInt(0, 4);
+    this.vx = rand(-OPT.speeding, OPT.speeding) * (power || 1);
+    this.vy = rand(-OPT.speeding, OPT.speeding) * (power || 1);
+    this.drag = OPT.drag;
+    this.dwindle = OPT.dwindleStep;
+    this.theta = rand(0, PI2);
+    var pool = modeColor ? rainbowTinted : tealTinted;
+    this.img = pool.length ? pool[randInt(0, pool.length)] : sprite;
+  }
+  Star.prototype.step = function () {
+    this.vx *= this.drag; this.vy *= this.drag;
+    if (this.dir === 0)      { this.x -= this.vx; this.y -= this.vy; }
+    else if (this.dir === 1) { this.x += this.vx; this.y -= this.vy; }
+    else if (this.dir === 2) { this.x += this.vx; this.y += this.vy; }
+    else                     { this.x -= this.vx; this.y += this.vy; }
+    this.vx += 0.1 * Math.cos(this.theta);
+    this.vy += 0.1 * Math.sin(this.theta);
+    this.r -= rand(0, this.dwindle);
+  };
+  Star.prototype.draw = function () {
+    if (this.r <= 0) return;
+    var t = this.r / 2;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.theta);
+    ctx.drawImage(this.img, -t, -t, this.r, this.r);
+    ctx.restore();
+  };
+
+  function Ripple(x, y) { this.x = x; this.y = y; this.r = 4; this.a = 0.85; }
+  Ripple.prototype.step = function () { this.r += 5; this.a *= 0.9; };
+  Ripple.prototype.draw = function () {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, PI2);
+    ctx.strokeStyle = 'rgba(94,234,212,' + this.a.toFixed(3) + ')';
+    ctx.lineWidth = 2; ctx.stroke();
+  };
+
+  function emit(x, y, count, power) {
+    count = count || OPT.starSum;
+    power = power || 1;
+    for (var i = 0; i < count; i++) {
+      var sx = randInt(0, OPT.initScope), sy = randInt(0, OPT.initScope);
+      var d = i % 4;
+      var px = x + (d === 1 || d === 2 ? sx : -sx);
+      var py = y + (d === 2 || d === 3 ? sy : -sy);
+      stars.push(new Star(px, py, power));
+    }
+    if (stars.length > 1400) stars.splice(0, stars.length - 1400);
+  }
+
+  function burst(x, y) {
+    emit(x, y, OPT.starSum * 7, 1.9);
+    ripples.push(new Ripple(x, y));
+  }
+
+  function markInteracted() {
+    if (!interacted) { interacted = true; hint.style.opacity = '0'; }
+  }
+
+  function pos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function onMove(e) {
+    var p = pos(e);
+    var step = (lastX === null) ? 0 : Math.hypot(p.x - lastX, p.y - lastY);
+    var stride = Math.max(1, Math.floor(step / 14));
+    for (var k = 0; k < stride; k++) {
+      emit(p.x, p.y, pointerDown ? OPT.starSum * 2 : OPT.starSum, pointerDown ? 1.4 : 1);
+    }
+    lastX = p.x; lastY = p.y;
+    markInteracted();
+  }
+  function onDown(e) { pointerDown = true; var p = pos(e); burst(p.x, p.y); markInteracted(); }
+  function onUp() { pointerDown = false; }
+
+  canvas.addEventListener('pointermove', onMove, { passive: true });
+  canvas.addEventListener('pointerdown', onDown, { passive: true });
+  window.addEventListener('pointerup', onUp, { passive: true });
+  window.addEventListener('pointercancel', onUp, { passive: true });
+  canvas.addEventListener('pointerleave', function () { lastX = lastY = null; }, { passive: true });
+  window.addEventListener('resize', resize);
+
+  document.getElementById('btnColor').addEventListener('click', function () {
+    modeColor = !modeColor;
+    this.textContent = modeColor ? '青碧' : '彩色';
+    this.classList.toggle('on', modeColor);
+  });
+  document.getElementById('btnTrail').addEventListener('click', function () {
+    modeTrail = !modeTrail;
+    this.classList.toggle('on', modeTrail);
+  });
+  document.getElementById('btnClear').addEventListener('click', function () {
+    stars.length = 0; ripples.length = 0;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  });
+
+  function frame() {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = modeTrail ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,1)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = stars.length - 1; i >= 0; i--) {
+      var s = stars[i];
+      s.step();
+      if (s.r <= 0) { stars.splice(i, 1); continue; }
+      s.draw();
+    }
+    for (var j = ripples.length - 1; j >= 0; j--) {
+      var rp = ripples[j];
+      rp.step();
+      if (rp.a < 0.02) { ripples.splice(j, 1); continue; }
+      rp.draw();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  onSpriteReady();
+  function onSpriteReady() {
+    if (!sprite.complete) { sprite.onload = function () { buildTints(); }; }
+    else buildTints();
+    requestAnimationFrame(frame);
+    setTimeout(function () { burst(W * 0.5, H * 0.5); }, 260);
+  }
+})();
+</script>
+</body>
+</html>

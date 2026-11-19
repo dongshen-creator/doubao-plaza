@@ -278,6 +278,22 @@ export const TOOL_REGISTRY = [
     result_type: 'page',
     max_tokens: 0,
     supports_history: false
+  },
+  {
+    // V14.0：网易云音乐搜索 + 可拖拽播放器（自定义 page_handler，后端 /api/tools/music）
+    id: 'music',
+    name: '音乐搜索',
+    icon: '🎵',
+    category: 'independent',
+    description: '搜索网易云歌曲，在可拖动的小播放窗里在线播放',
+    api_type: 'page',
+    page_handler: 'renderMusicTool',
+    model: null,
+    system_prompt: null,
+    input_fields: [],
+    result_type: 'page',
+    max_tokens: 0,
+    supports_history: false
   }
 ];
 

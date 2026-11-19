@@ -86,6 +86,12 @@ const RATE_RULES = [
     limit: 60,
     match: (p) => p === '/api/proxy' || p === '/api/tools/proxy',
   },
+  {
+    // V14.0：网易云音乐搜索/取链，每 IP 40 次/分钟（搜索+播放共享计数，防刷上游）
+    name: 'music',
+    limit: 40,
+    match: (p) => p === '/api/tools/music',
+  },
 ];
 
 const RATE_WINDOW_MS = 60 * 1000;

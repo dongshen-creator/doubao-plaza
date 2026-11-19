@@ -4,6 +4,30 @@
 
 ---
 
+## v14.0 — 2026-11-19（青碧粒子主题 + 网易云音乐工具 + 网站工具频道调用）
+
+### 新增
+- **青碧色粒子演示**：`pointer-particles.html` 改为 teal/cyan 青碧主题（粒子色阶、光环、UI 配色、开场文案），默认青碧、可切彩色，其余交互（移动拖尾/点击爆发/拖拽喷射）不变。独立演示文件，未接入业务。
+- **网易云音乐搜索工具**（后端 `functions/api/tools/music.js`）：
+  - `GET /api/tools/music?action=search&keyword=` 搜歌（`/cloudsearch`，兼容新/旧字段）；`?action=url&id=` 取播放直链（`/song/url` legacy，规避 v1 的 -460 风控）。
+  - 多上游 fallback（davidblackcn → vercel-enhanced → netstart），http 直链升级 https 以符合 CSP（upgrade-insecure-requests + media-src https:）。
+  - `functions/_middleware.js` 新增 music 限流 40/min；`registry.js` 登记 `music` 工具（page_handler=renderMusicTool）。
+- **可拖拽音乐播放窗**（前端 `public/index.html`）：全局单例浮窗，标题栏 pointer 拖拽（边界约束）、收起/关闭、搜索框、结果列表、封面/歌名/歌手、播放/暂停/上下曲/进度拖动、audio error 提示。`<audio>` + 本站 API，CSS 用主题变量与 `--accent` 渐变。
+
+### 修复
+- **网站工具面板函数被覆盖**：`openToolPanel` 被声明两次，频道版（后声明）覆盖 registry 版，导致网站工具卡片点击后错误查 `chat_channel_tools` 表并报「工具不存在」。将 registry 版重命名为 `openWebToolPanel`，更新其 3 处调用点；频道版保持原名。
+
+### 网站工具频道调用
+- 频道快捷工具弹窗新增「网站工具」分区，列出 registry 全部工具（含音乐），点击即在频道内调用（`dpOpenWebToolFromChannel`：音乐走浮窗、tavern/blog 走各自视图、其余走网页工具面板）；每个工具可「↥ 分享到频道」生成 `tool:` 卡片（新增 `webapp` 类型，id 前缀 `w:`，`openToolPanel` 识别后路由）。
+
+### 验证
+- 后端 3 个 JS 文件语法检查通过；index.html 内联脚本 9 块全部语法通过。
+- 实测音乐上游：搜歌返回 200（id/name/ar/al.picUrl 完整），`/song/url` legacy 返回 mp3 直链，CORS 回显 Origin。
+
+修改文件：`pointer-particles.html`、`functions/api/tools/music.js`、`functions/api/tools/registry.js`、`functions/_middleware.js`、`public/index.html`、`CHANGELOG.md`。
+
+---
+
 ## v13.3 — 2026-11-17（显式设备令牌，彻底修复跨域自动登录）
 
 ### V13.2 仍失败的根因
