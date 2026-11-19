@@ -63,6 +63,8 @@ function normalizeSong(s) {
     picUrl: toHttps(album.picUrl || (s.album && s.album.picUrl) || ''),
     duration: Number(s.dt || s.duration || 0),
     mvId: s.mv || 0,
+    // fee=0 免费可播；>0 为会员/付费歌（可能无法在线播放），前端据此标注 VIP
+    fee: Number((s.privilege && s.privilege.fee) != null ? s.privilege.fee : (s.fee != null ? s.fee : 0)),
   };
 }
 

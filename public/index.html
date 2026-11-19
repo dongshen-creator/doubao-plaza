@@ -3816,6 +3816,8 @@ async function dpMusicSearch(keyword) {
     var res = await api('/api/tools/music?action=search&keyword=' + encodeURIComponent(keyword) + '&limit=30');
     if (!res.success) throw new Error(res.error || '搜索失败');
     dpMusic.list = res.data.songs || [];
+    // V14.0.1：免费可播(fee=0)的排在前面，会员/付费歌(fee>0)靠后，减少点了播不了
+    dpMusic.list.sort(function (a, b) { return (a.fee || 0) - (b.fee || 0); });
     if (!dpMusic.list.length) {
       if (hint) hint.textContent = '没有找到相关歌曲';
       if (listEl) listEl.innerHTML = '';
@@ -3832,6 +3834,7 @@ async function dpMusicSearch(keyword) {
             '<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dpMusicEsc(s.name) + '</div>' +
             '<div style="font-size:11px;color:var(--text-faint,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + dpMusicEsc(s.artists) + (s.album ? ' · ' + dpMusicEsc(s.album) : '') + '</div>' +
           '</div>' +
+          ((s.fee || 0) > 0 ? '<span style="font-size:10px;color:#b8860b;border:1px solid #d9b45b;border-radius:4px;padding:1px 4px;flex-shrink:0">VIP</span>' : '') +
           '<iconify-icon icon="ph:play-circle" style="font-size:18px;color:var(--accent,#ff9800)"></iconify-icon>' +
         '</div>';
       }).join('');
