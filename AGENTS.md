@@ -59,7 +59,7 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 
 14. **网站工具的频道配置入口（V14.2）**：全站网页工具（registry）要在频道里用，必须走「频道设置 → 网站工具」栏目配置，落库到 `chat_channel_tools`，`tool_type='webapp'` 且 `config.web_tool_id` 指向 registry id；不要只放在 `showQuickTools()` 弹窗里。频道工具行统一用 `dpWebToolIdOf()` 读取关联 id，分享卡片用 `w:<registryId>` 前缀，`openToolPanel()` 负责把两种 id 都路由到 `dpOpenWebToolFromChannel()`。列表刷新统一走 `refreshChannelToolLists()`，否则设置弹窗与工具箱会不同步。
 15. **网站工具=独立小窗，音乐=同源流代理（V15.0）**：网站工具（registry）点击一律走 `openWebToolDock()` 浮窗（`dpToolFloat`），不能占用主界面或用"返回"跳到功能页；音乐/tavern/博客仍走各自专用视图。音乐播放必须走 `GET /api/tools/music?action=stream&id=`（同源音频代理，边缘取链后把字节流回传并透传 Range）——**绝不能把网易签名直链交给浏览器**，签名绑定出口 IP/短时效会静默播放失败；`play()` 的 promise 错误必须可见，不要 `.catch(()=>{})` 吞掉。
-16. **书籍是独立内容体系（V15.0）**：书籍用 `books` + `book_chapters` 两张 D1 表（见 `sql/migrations/v15.0-books.sql`），与 `blog_posts` 完全独立，不要再当成瀑布流里的一种"卡片皮肤"。前端 `blogState.contentType` 区分 `article`/`book`，书籍列表/详情（目录+上下章）/创作/分章编辑器分别走 `bookRenderList`/`bookShowDetail`/`bookShowCreate`/`bookShowChapterEditor`。新增 D1 表必须同时写 `sql/schema.sql` 与 `sql/migrations/`，且需提醒在 Cloudflare D1 执行迁移脚本。
+16. **书籍是独立内容体系（V15.0）**：书籍用 `books` + `book_chapters` 两张 D1 表（见 `sql/migrations/v15.0-books.sql`），与 `blog_posts` 完全独立，不要再当成瀑布流里的一种"卡片皮肤"。前端 `blogState.contentType` 区分 `article`/`book`，书籍列表/详情（目录+上下章）/创作/分章编辑器分别走 `bookRenderList`/`bookShowDetail`/`bookShowCreate`/`bookShowChapterEditor`。新增 D1 表必须同时写 `sql/schema.sql` 与 `sql/migrations/`；本项目无 Cloudflare 凭证，**书籍表由 `functions/api/_lib/books-schema.js` 的 `ensureBooksSchema()` 在接口首次访问时幂等自举创建**，新增 D1 表优先沿用此模式，不要要求用户手动执行 SQL。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

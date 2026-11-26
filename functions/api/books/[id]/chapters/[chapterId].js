@@ -3,6 +3,8 @@
 // PUT    /api/books/:id/chapters/:chapterId   更新章节（作者本人或管理员）
 // DELETE /api/books/:id/chapters/:chapterId   删除章节（作者本人或管理员）
 
+import { ensureBooksSchema } from '../../../_lib/books-schema.js';
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -51,6 +53,7 @@ export async function onRequestOptions() {
 export async function onRequestGet(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const id = parseInt(context.params.id, 10);
     const chapterId = parseInt(context.params.chapterId, 10);
     const ch = await context.env.DB.prepare(
@@ -67,6 +70,7 @@ export async function onRequestGet(context) {
 }
 
 async function canEdit(env, request, bookId) {
+  await ensureBooksSchema(env);
   const authUserId = await getAuthUserId(env, request);
   if (!authUserId) return { ok: false, code: 403, error: '请先登录' };
   const book = await env.DB.prepare(`SELECT author_id FROM books WHERE id = ?`).bind(bookId).first();

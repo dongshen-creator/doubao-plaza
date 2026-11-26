@@ -3,6 +3,8 @@
 // POST /api/books/:id/chapters         新增章节（作者本人或管理员）
 // body: { title, content, chapter_no? }   chapter_no 省略则自动取当前最大号+1
 
+import { ensureBooksSchema } from '../../_lib/books-schema.js';
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -51,6 +53,7 @@ export async function onRequestOptions() {
 export async function onRequestGet(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const id = parseInt(context.params.id, 10);
     const r = await context.env.DB.prepare(
       `SELECT id, chapter_no, title, views, created_at, updated_at FROM book_chapters WHERE book_id = ? ORDER BY chapter_no ASC`
@@ -65,6 +68,7 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const authUserId = await getAuthUserId(env, request);
     if (!authUserId) return jsonResponse({ success: false, error: '请先登录' }, 403);

@@ -3,6 +3,8 @@
 // PUT    /api/books/:id                   更新书籍元数据（作者本人或管理员）
 // DELETE /api/books/:id                   删除书籍及全部章节（作者本人或管理员）
 
+import { ensureBooksSchema } from '../_lib/books-schema.js';
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -55,6 +57,7 @@ export async function onRequestOptions() {
 export async function onRequestGet(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const url = new URL(request.url);
     const id = parseInt(context.params.id, 10);
@@ -94,6 +97,7 @@ export async function onRequestGet(context) {
 export async function onRequestPut(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const authUserId = await getAuthUserId(env, request);
     if (!authUserId) return jsonResponse({ success: false, error: '请先登录' }, 403);
@@ -126,6 +130,7 @@ export async function onRequestPut(context) {
 export async function onRequestDelete(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const authUserId = await getAuthUserId(env, request);
     if (!authUserId) return jsonResponse({ success: false, error: '请先登录' }, 403);

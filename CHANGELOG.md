@@ -31,7 +31,7 @@
 ### 验证
 - music.js 与 4 个书籍 Function 语法检查通过；index.html 9 段内联脚本语法通过。
 
-**部署前提**：需先在 Cloudflare Pages → D1 执行 `sql/migrations/v15.0-books.sql` 建表，书籍功能才可用。
+**建表（已自动化）**：`functions/api/_lib/books-schema.js` 提供 `ensureBooksSchema()`，4 个书籍接口首次访问时自动执行幂等 `CREATE TABLE IF NOT EXISTS`，无需手动去 Cloudflare D1 执行 SQL。手动迁移脚本 `sql/migrations/v15.0-books.sql` 仍保留供需要时使用。
 
 修改文件：`functions/api/tools/music.js`、`functions/api/books.js`、`functions/api/books/[id].js`、`functions/api/books/[id]/chapters.js`、`functions/api/books/[id]/chapters/[chapterId].js`、`public/index.html`、`public/style.css`、`sql/schema.sql`、`sql/migrations/v15.0-books.sql`、`CHANGELOG.md`、`AGENTS.md`。
 

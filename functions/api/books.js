@@ -4,6 +4,8 @@
 //
 // 数据模型：books（书籍元数据）+ book_chapters（章节）。与 blog_posts 完全独立。
 
+import { ensureBooksSchema } from './_lib/books-schema.js';
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -57,6 +59,7 @@ export async function onRequestOptions() {
 export async function onRequestGet(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const url = new URL(request.url);
     const search = url.searchParams.get('search') || '';
@@ -99,6 +102,7 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   if (!context.env || !context.env.DB) return jsonResponse({ success: false, error: '数据库未绑定' }, 500);
   try {
+    await ensureBooksSchema(context.env);
     const { env, request } = context;
     const authUserId = await getAuthUserId(env, request);
     if (!authUserId) return jsonResponse({ success: false, error: '请先登录后再创建书籍' }, 403);
