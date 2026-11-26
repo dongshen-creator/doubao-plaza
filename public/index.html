@@ -4861,7 +4861,12 @@ async function bookRenderList(area, search, loadMore) {
       ? '<button class="btn btn-gray" style="padding:7px 20px;font-size:13px" onclick="bookRenderList(document.getElementById(\'blogListArea\'),\'' + bookEsc(search || '') + '\',true)">加载更多</button>'
       : '<span style="color:var(--text-faint);font-size:12px">—— 已加载全部 ——</span>';
   } catch (e) {
-    if (page === 1 && grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--danger)">加载失败：' + bookEsc(e.message) + '</div>';
+    if (page === 1 && grid) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint)">' +
+        '<div style="font-size:34px;margin-bottom:10px"><iconify-icon icon="ph:books-fill"></iconify-icon></div>' +
+        '<div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">书籍书架尚未初始化</div>' +
+        '<div style="font-size:12px;line-height:1.7">需要站点管理员先在 Cloudflare D1 执行建表脚本<br><code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px">sql/migrations/v15.0-books.sql</code><br>执行后即可创作和阅读书籍。</div></div>';
+    }
   } finally {
     bookState.listLoading = false;
   }
