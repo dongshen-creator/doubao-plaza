@@ -3872,8 +3872,10 @@ async function dpMusicPlay(index) {
   try {
     if (!dpMusic.audio) return;
     // V15.0：不再把网易签名直链交给浏览器（跨域+签名IP绑定会静默失败），
-    // 改走同源流代理 /api/tools/music?action=stream，浏览器只请求本站。
-    var streamUrl = '/api/tools/music?action=stream&id=' + encodeURIComponent(song.id);
+    // 改走流代理 /api/tools/music?action=stream。跨域静态域下用 __dpAsset 指向主站
+    // （该 action 已在 middleware 豁免同源证明，<audio> 无法携带 X-DP-Client）。
+    var _asset = window.__dpAsset || function (p) { return p; };
+    var streamUrl = _asset('/api/tools/music?action=stream&id=' + encodeURIComponent(song.id));
     if (dpMusic.audio.src !== new URL(streamUrl, location.href).href) {
       dpMusic.audio.src = streamUrl;
     }

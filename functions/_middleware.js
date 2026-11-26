@@ -117,9 +117,18 @@ function isHoneypot(path) {
   return HONEYPOT_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
 }
 
-function isGateExempt(path) {
+function isGateExempt(path, request) {
   // <img> 元素无法携带自定义请求头；/api/ops/* 为运维探针预留
-  return path === '/api/img-proxy' || path === '/api/ops' || path.startsWith('/api/ops/');
+  if (path === '/api/img-proxy' || path === '/api/ops' || path.startsWith('/api/ops/')) return true;
+  // V15.0：<audio> 元素同样无法携带 X-DP-Client 头，音乐流代理是公开音频资源，
+  // 对 action=stream 豁免同源证明（仍有 40/min 限流兜底），否则跨域发布域无法播放。
+  if (path === '/api/tools/music' && request) {
+    try {
+      const u = new URL(request.url);
+      if ((u.searchParams.get('action') || '').toLowerCase() === 'stream') return true;
+    } catch (e) {}
+  }
+  return false;
 }
 
 function matchRateRule(path) {
@@ -323,7 +332,7 @@ export async function onRequest(context) {
       headers: applyApiSecurityHeaders(new Headers(corsHeaders(sharedOrigin))),
     });
   }
-  if (api && !apiAllowed && !isGateExempt(path)) {
+  if (api && !apiAllowed && !isGateExempt(path, request)) {
     const clientTag = request.headers.get(GATE_HEADER_NAME);
     const originOk = !origin || origin === url.origin || !!sharedOrigin;
     if (clientTag !== GATE_HEADER_VALUE || !originOk) {
