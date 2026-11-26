@@ -11,7 +11,7 @@
 
 ## 项目计划与任务（动手前先读）
 - `README.md` — 项目总览、架构、部署教程（用户侧）
-- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v14.1）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
+- `CHANGELOG.md` — **版本化任务/变更日志**（最新 v15.0）。每条记录含「新增/修复/修改文件表/验证记录」，是当前进行中工作和历史决策的主要来源。**改完代码必须同步更新 CHANGELOG**（新版本号 + 修改文件表）
 - `docs/TOOL_FRAMEWORK_GUIDE.md` — 网站工具框架扩展教程（改 `functions/api/tools/` 前必读）
 - `sql/supabase-migration.sql` — **Supabase 唯一迁移脚本**（已整合原 `supabase-security-fix.sql` 与 `fix-chat-members-rls.sql` 的全部内容，幂等可重复执行）
 - `sql/migrate-developers.sql` / `sql/d1-cleanup.sql` — D1 增量数据库脚本
@@ -58,6 +58,8 @@ docs/                        # 开发文档（TOOL_FRAMEWORK_GUIDE.md）与素�
 13. **主题/背景特效层约定（V14.1）**：主题用 body class 标识（青碧色=`theme-cyan`，中国红=`theme-red`，默认橙无 class），配色全部走 CSS 变量（青碧 `--accent:#06B6D4`）。背景 canvas 层均为 JS 动态创建、`<script>` 引入、`pointer-events:none`、`z-index:-2(fluid)/-1(silk,fog,粒子)`，插在 `.noise-overlay` 之前。青碧色主题跑 fluid 流体层，中国红跑 silk 薄膜干涉+fog 薄雾。新特效必须：读 `dp_shader`（`≠off` 才启用）、尊重 `prefers-reduced-motion` 早退、MutationObserver 监听 body.class、暴露同步钩子挂进 `syncMetaThemeColor()`（否则主题切换不生效）。青碧指针粒子在 `public/jade-particles.js`，仅 `theme-cyan` 启用，空闲自动暂停 rAF。
 
 14. **网站工具的频道配置入口（V14.2）**：全站网页工具（registry）要在频道里用，必须走「频道设置 → 网站工具」栏目配置，落库到 `chat_channel_tools`，`tool_type='webapp'` 且 `config.web_tool_id` 指向 registry id；不要只放在 `showQuickTools()` 弹窗里。频道工具行统一用 `dpWebToolIdOf()` 读取关联 id，分享卡片用 `w:<registryId>` 前缀，`openToolPanel()` 负责把两种 id 都路由到 `dpOpenWebToolFromChannel()`。列表刷新统一走 `refreshChannelToolLists()`，否则设置弹窗与工具箱会不同步。
+15. **网站工具=独立小窗，音乐=同源流代理（V15.0）**：网站工具（registry）点击一律走 `openWebToolDock()` 浮窗（`dpToolFloat`），不能占用主界面或用"返回"跳到功能页；音乐/tavern/博客仍走各自专用视图。音乐播放必须走 `GET /api/tools/music?action=stream&id=`（同源音频代理，边缘取链后把字节流回传并透传 Range）——**绝不能把网易签名直链交给浏览器**，签名绑定出口 IP/短时效会静默播放失败；`play()` 的 promise 错误必须可见，不要 `.catch(()=>{})` 吞掉。
+16. **书籍是独立内容体系（V15.0）**：书籍用 `books` + `book_chapters` 两张 D1 表（见 `sql/migrations/v15.0-books.sql`），与 `blog_posts` 完全独立，不要再当成瀑布流里的一种"卡片皮肤"。前端 `blogState.contentType` 区分 `article`/`book`，书籍列表/详情（目录+上下章）/创作/分章编辑器分别走 `bookRenderList`/`bookShowDetail`/`bookShowCreate`/`bookShowChapterEditor`。新增 D1 表必须同时写 `sql/schema.sql` 与 `sql/migrations/`，且需提醒在 Cloudflare D1 执行迁移脚本。
 
 ## 编码约定
 - Functions：ESM `import`，文件顶部注释列出支持的端点与参数，错误返回统一 JSON `{ error: '...' }` 风格。

@@ -4,6 +4,39 @@
 
 ---
 
+## v15.0 — 2026-11-26（音乐修复 + 工具小窗 + 瀑布流重做 + 独立书籍模块）
+
+用户反馈四个问题：①歌听不了（免费歌也不行）；②网站工具点开占用主界面、返回跳到功能页；③瀑布流死板难看；④书籍和讲堂内容要独立、书籍要能分章创作。
+
+### 修复：音乐播放（V15.0）
+- 根因：`action=url` 把网易 CDN 签名直链交给浏览器，签名绑定出口 IP / 短时效，浏览器跨域请求静默失败（audio error）。实测后端取链正常、直连 mp3 返回 206，确认问题在浏览器侧直连。
+- `functions/api/tools/music.js` 新增 `action=stream`：由 Cloudflare 边缘取链并把音频字节流代理回浏览器（同源），透传 Range 支持进度拖动。`action=url` 保留作调试。
+- 前端 `dpMusicPlay()` 改走 `action=stream`，不再静默吞掉 play() 错误（NotAllowedError 提示点播放键，其它错误可见 toast）；加 waiting/error 事件提示。
+
+### 修复：网站工具改为独立小窗（V15.0）
+- 新增通用浮窗框架 `dpToolFloat`（`openWebToolDock`/`dpToolFloatExecute` 等）：可拖拽、可收起、可关闭，像音乐窗一样浮在页面上，关闭不影响当前视图/频道。
+- 侧边栏工具入口、功能卡片、频道工具卡片、清空 AI 历史重开，全部改走 `openWebToolDock`；音乐/tavern/博客仍走各自专用视图。
+- 不再出现"点返回直接跳到功能界面"。
+
+### 重做：小肥羊讲堂瀑布流（V15.0）
+- `public/style.css`：从 CSS `column-count` 改为 CSS Grid + JS 计算 row span 的真瀑布流（`blogMasonryLayout()`），列数 `auto-fill`，卡片错落排布。
+- 卡片视觉升级：圆角/柔和阴影/悬停抬升/封面缩放动效/入场动画、书脊高光、作者头像行、渐变遮罩；移动端自适应。
+- `blogShowList` 的"专栏/书籍"卡片形态切换改为"文章/书籍"内容切换（`blogState.contentType`）。
+
+### 新增：独立书籍模块（V15.0）
+- 数据：`sql/schema.sql` + `sql/migrations/v15.0-books.sql` 新增 `books`（书籍）+ `book_chapters`（章节）表，与 `blog_posts` 完全独立。
+- 后端：`functions/api/books.js`（列表/创建）、`functions/api/books/[id].js`（详情/更新/删除）、`functions/api/books/[id]/chapters.js`（目录/新增章）、`functions/api/books/[id]/chapters/[chapterId].js`（章节正文/改/删）。沿用博客的 Bearer 鉴权、开发者审核直接发布、HTML 净化、封面协议白名单。
+- 前端：侧栏新增"书籍书架/创作书籍"入口；书籍书封网格列表、详情（章节目录 + 阅读 + 上下章）、书籍创建/编辑、分章编辑器（复用 SunEditor 富文本）。
+
+### 验证
+- music.js 与 4 个书籍 Function 语法检查通过；index.html 9 段内联脚本语法通过。
+
+**部署前提**：需先在 Cloudflare Pages → D1 执行 `sql/migrations/v15.0-books.sql` 建表，书籍功能才可用。
+
+修改文件：`functions/api/tools/music.js`、`functions/api/books.js`、`functions/api/books/[id].js`、`functions/api/books/[id]/chapters.js`、`functions/api/books/[id]/chapters/[chapterId].js`、`public/index.html`、`public/style.css`、`sql/schema.sql`、`sql/migrations/v15.0-books.sql`、`CHANGELOG.md`、`AGENTS.md`。
+
+---
+
 ## v14.2 — 2026-11-19（频道设置里可配置网站工具）
 
 用户纠正：网站工具不该只塞在快捷工具弹窗，应该像其它频道能力一样，在**频道设置**里有独立栏目自行配置。

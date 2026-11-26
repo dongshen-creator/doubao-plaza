@@ -3548,7 +3548,7 @@ async function loadFeaturesSidebarList() {
     }
     el.innerHTML = res.data.map(function(f) {
       if (f.tool_type) {
-        return '<div class="sidebar-item" style="cursor:pointer" onclick="openWebToolPanel(\'' + escAttr(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon"><iconify-icon icon="ph:wrench-fill"></iconify-icon></span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
+        return '<div class="sidebar-item" style="cursor:pointer" onclick="openWebToolDock(\'' + escAttr(f.tool_type) + '\',\'' + escAttr(f.title) + '\')"><span class="sidebar-item-icon"><iconify-icon icon="ph:wrench-fill"></iconify-icon></span><span class="sidebar-item-text">' + esc(f.title) + '</span></div>';
       }
       // 本地页面（同源 /pages/... 等）站内嵌入打开，外部链接保持新窗口
       if (f.link_url && f.link_url.indexOf('/pages/') === 0) {
@@ -3606,7 +3606,7 @@ async function loadFeatures() {
                   ? `<img src="${imgProxyUrl(esc(f.icon_url))}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='${isTool ? '<iconify-icon icon=ph:wrench-fill></iconify-icon>' : '<iconify-icon icon=ph:link-simple-fill></iconify-icon>'}'">`
                   : (isTool ? '<iconify-icon icon="ph:wrench-fill"></iconify-icon>' : '<iconify-icon icon="ph:link-simple-fill"></iconify-icon>');
                 if (isTool) {
-                  return `<div style="cursor:pointer" onclick="openWebToolPanel('${escAttr(f.tool_type)}','${escAttr(f.title)}')">
+                  return `<div style="cursor:pointer" onclick="openWebToolDock('${escAttr(f.tool_type)}','${escAttr(f.title)}')">
                     <div style="width:48px;height:48px;border-radius:12px;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:24px;overflow:hidden">${iconHtml}</div>
                     <div style="font-size:12px;font-weight:500;color:var(--text-secondary);word-break:break-all">${esc(f.title)}</div>
                   </div>`;
@@ -3654,7 +3654,11 @@ function saveLocalAIHistory(toolId, userInput, aiOutput) {
 function clearLocalAIHistory(toolId) {
   localStorage.removeItem('dp_ai_history_' + toolId);
   toast('对话历史已清空');
-  if (toolPanelState.currentTool) openWebToolPanel(toolPanelState.currentTool.id, toolPanelState.currentTool.name);
+  if (dpToolFloat.tool && dpToolFloat.dock) {
+    var _curTool = dpToolFloat.tool;
+    dpToolFloatClose();
+    openWebToolDock(_curTool.id, _curTool.name);
+  } else if (toolPanelState.currentTool) openWebToolDock(toolPanelState.currentTool.id, toolPanelState.currentTool.name);
 }
 
 // --- 渲染单个输入字段 ---
@@ -3800,7 +3804,14 @@ function dpMusicEnsureDock() {
     if (dpMusic.index < dpMusic.list.length - 1) dpMusicPlay(dpMusic.index + 1);
   });
   dpMusic.audio.addEventListener('error', function () {
-    toast('播放失败，该歌曲可能需要会员或暂无音源', 'error');
+    var hintErr = document.getElementById('dpMusicHint');
+    var msg = '播放失败：音源不可用（可能是会员/版权歌曲）';
+    if (hintErr) hintErr.textContent = msg;
+    toast(msg, 'error');
+  });
+  dpMusic.audio.addEventListener('waiting', function () {
+    var hintW = document.getElementById('dpMusicHint');
+    if (hintW) hintW.textContent = '缓冲中…';
   });
   return dock;
 }
@@ -3857,16 +3868,35 @@ async function dpMusicPlay(index) {
   if (artist) artist.textContent = song.artists || '';
   if (cover) cover.src = song.picUrl || '';
   var hint = document.getElementById('dpMusicHint');
-  if (hint) hint.textContent = '正在获取播放地址…';
+  if (hint) hint.textContent = '正在加载音频…';
   try {
-    var res = await api('/api/tools/music?action=url&id=' + encodeURIComponent(song.id));
-    if (!res.success) throw new Error(res.error || '无法获取播放地址');
     if (!dpMusic.audio) return;
-    dpMusic.audio.src = res.data.url;
-    dpMusic.audio.play().catch(function () {});
-    if (hint) hint.textContent = '正在播放 · ' + dpMusic.lastQuery;
+    // V15.0：不再把网易签名直链交给浏览器（跨域+签名IP绑定会静默失败），
+    // 改走同源流代理 /api/tools/music?action=stream，浏览器只请求本站。
+    var streamUrl = '/api/tools/music?action=stream&id=' + encodeURIComponent(song.id);
+    if (dpMusic.audio.src !== new URL(streamUrl, location.href).href) {
+      dpMusic.audio.src = streamUrl;
+    }
+    dpMusic.audio.load();
+    var promise = dpMusic.audio.play();
+    if (promise && typeof promise.catch === 'function') {
+      promise.then(function () {
+        if (hint) hint.textContent = '正在播放 · ' + (song.name || dpMusic.lastQuery);
+      }).catch(function (err) {
+        // 自动播放被拦截时，提示用户点播放键；其余错误给出可见提示，不再静默
+        var msg = (err && err.name === 'NotAllowedError')
+          ? '已就绪，点 ▶ 开始播放'
+          : '播放失败：' + ((err && err.message) || '暂无音源');
+        if (hint) hint.textContent = msg;
+        if (err && err.name !== 'NotAllowedError') toast(msg, 'error');
+      });
+    } else {
+      if (hint) hint.textContent = '正在播放 · ' + (song.name || dpMusic.lastQuery);
+    }
   } catch (e) {
-    if (hint) hint.textContent = '播放失败：' + (e && e.message ? e.message : '暂无音源');
+    var msg2 = '播放失败：' + (e && e.message ? e.message : '暂无音源');
+    if (hint) hint.textContent = msg2;
+    toast(msg2, 'error');
   }
 }
 
@@ -3895,6 +3925,159 @@ function openMusicDock(presetQuery) {
     dpMusicSearch(presetQuery);
   }
   try { dock.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+}
+
+// ═══════════════ V15.0 通用「独立工具小窗」═══════════════
+// 网站工具不再占用主界面、也不用"返回"跳到功能页，而是像音乐搜索一样开一个
+// 可拖拽的小窗。关闭小窗不影响当前视图/频道。音乐、tavern、博客仍走各自专用视图。
+var dpToolFloat = {
+  dock: null, tool: null, dragging: false, dragOX: 0, dragOY: 0, minimized: false
+};
+function dpToolFloatEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+// 工具小窗内字段名带前缀，避免与主界面对话框的 toolField_* 冲突
+function dpToolFloatField(field) {
+  var id = 'dpToolF_' + field.name;
+  var label = '<label style="display:block;font-size:12px;color:var(--text-faint);margin-bottom:4px">' + dpToolFloatEsc(field.label) + (field.required ? ' *' : '') + '</label>';
+  var inputStyle = 'width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-primary);color:var(--text-primary);font-size:13px;box-sizing:border-box';
+  if (field.type === 'textarea') {
+    return '<div style="margin-bottom:10px">' + label + '<textarea id="' + id + '" rows="3" placeholder="' + dpToolFloatEsc(field.placeholder || '') + '" style="' + inputStyle + '"></textarea></div>';
+  }
+  if (field.type === 'select') {
+    var opts = (field.options || []).map(function(o) {
+      return '<option value="' + dpToolFloatEsc(o.value) + '"' + (o.value === field.default ? ' selected' : '') + '>' + dpToolFloatEsc(o.label) + '</option>';
+    }).join('');
+    return '<div style="margin-bottom:10px">' + label + '<select id="' + id + '" style="' + inputStyle + '">' + opts + '</select></div>';
+  }
+  return '<div style="margin-bottom:10px">' + label + '<input id="' + id + '" type="' + (field.type || 'text') + '" placeholder="' + dpToolFloatEsc(field.placeholder || '') + '"' + (field.default != null ? ' value="' + dpToolFloatEsc(field.default) + '"' : '') + ' style="' + inputStyle + '"></div>';
+}
+function dpToolFloatEnsureDock() {
+  if (dpToolFloat.dock && document.body.contains(dpToolFloat.dock)) return dpToolFloat.dock;
+  var dock = document.createElement('div');
+  dock.id = 'dpToolFloat';
+  dock.setAttribute('data-dp-tool', '1');
+  dock.style.cssText = 'position:fixed;right:24px;bottom:24px;width:380px;max-width:calc(100vw - 24px);max-height:70vh;' +
+    'background:var(--bg-secondary,#fff);border:1px solid var(--border-color,#ddd);border-radius:16px;' +
+    'box-shadow:0 12px 40px rgba(0,0,0,.28);z-index:99998;overflow:hidden;display:flex;flex-direction:column;' +
+    'font-family:inherit;color:var(--text-primary,#222);';
+  dock.innerHTML =
+    '<div class="dpToolFloatHead" style="display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:grab;' +
+      'background:linear-gradient(90deg,var(--accent,#ff9800),var(--accent2,#ff6b6b));color:#fff;user-select:none;flex-shrink:0">' +
+      '<iconify-icon class="dpToolFloatIcon" icon="ph:wrench-fill" style="font-size:18px"></iconify-icon>' +
+      '<span class="dpToolFloatTitle" style="font-weight:600;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>' +
+      '<button class="dpToolFloatMin" title="收起" style="cursor:pointer;background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;width:26px;height:26px;font-size:15px;line-height:1">—</button>' +
+      '<button class="dpToolFloatClose" title="关闭" style="cursor:pointer;background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;width:26px;height:26px;font-size:15px;line-height:1">×</button>' +
+    '</div>' +
+    '<div class="dpToolFloatBody" style="padding:12px;overflow-y:auto;min-height:0"></div>';
+  document.body.appendChild(dock);
+  dpToolFloat.dock = dock;
+
+  var head = dock.querySelector('.dpToolFloatHead');
+  head.addEventListener('pointerdown', function (e) {
+    if (e.target.tagName === 'BUTTON') return;
+    var r = dock.getBoundingClientRect();
+    dpToolFloat.dragging = true;
+    dpToolFloat.dragOX = e.clientX - r.left;
+    dpToolFloat.dragOY = e.clientY - r.top;
+    dock.style.right = 'auto'; dock.style.bottom = 'auto';
+    dock.style.left = r.left + 'px'; dock.style.top = r.top + 'px';
+    head.style.cursor = 'grabbing';
+    try { head.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  head.addEventListener('pointermove', function (e) {
+    if (!dpToolFloat.dragging) return;
+    var x = Math.max(0, Math.min(e.clientX - dpToolFloat.dragOX, window.innerWidth - dock.offsetWidth));
+    var y = Math.max(0, Math.min(e.clientY - dpToolFloat.dragOY, window.innerHeight - 44));
+    dock.style.left = x + 'px'; dock.style.top = y + 'px';
+  });
+  function endDrag() { dpToolFloat.dragging = false; head.style.cursor = 'grab'; }
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+  dock.querySelector('.dpToolFloatMin').addEventListener('click', function () {
+    dpToolFloat.minimized = !dpToolFloat.minimized;
+    dock.querySelector('.dpToolFloatBody').style.display = dpToolFloat.minimized ? 'none' : '';
+    this.textContent = dpToolFloat.minimized ? '▢' : '—';
+  });
+  dock.querySelector('.dpToolFloatClose').addEventListener('click', dpToolFloatClose);
+  return dock;
+}
+function dpToolFloatClose() {
+  if (dpToolFloat.dock && dpToolFloat.dock.parentNode) dpToolFloat.dock.parentNode.removeChild(dpToolFloat.dock);
+  dpToolFloat.dock = null; dpToolFloat.tool = null; dpToolFloat.minimized = false;
+}
+// 执行小窗里的普通工具（复用现有 execute* 函数）
+async function dpToolFloatExecute() {
+  var tool = dpToolFloat.tool;
+  if (!tool) return;
+  var dock = dpToolFloat.dock;
+  var resultArea = dock ? dock.querySelector('.dpToolFloatResult') : null;
+  var btn = dock ? dock.querySelector('.dpToolFloatExec') : null;
+  if (!resultArea) return;
+  var params = {}, hasError = false;
+  (tool.input_fields || []).forEach(function (f) {
+    var el = dock.querySelector('#dpToolF_' + f.name);
+    var val = el ? String(el.value).trim() : '';
+    if (f.required && !val) { toast(f.label + '不能为空', 'error'); hasError = true; }
+    if (val) params[f.name] = val;
+  });
+  if (hasError) return;
+  if (btn) btn.disabled = true;
+  resultArea.innerHTML = '<div class="tool-loading">正在执行…</div>';
+  try {
+    if (tool.api_type === 'ai_chat') await executeAITextTool(tool, params, resultArea);
+    else if (tool.api_type === 'ai_image') await executeAIImageTool(tool, params, resultArea);
+    else if (tool.api_type === 'direct_url') await executeDirectUrlTool(tool, params, resultArea);
+    else if (tool.api_type === 'proxy_get') await executeProxyTool(tool, params, resultArea);
+    else resultArea.innerHTML = '<div class="ai-error">不支持的工具类型</div>';
+  } catch (e) {
+    resultArea.innerHTML = '<div class="ai-error"><iconify-icon icon="ph:x-circle-fill"></iconify-icon> ' + dpToolFloatEsc(e.message || String(e)) + '</div>';
+  }
+  if (btn) btn.disabled = false;
+}
+// 打开工具小窗（网站工具统一入口）。音乐/tavern/博客仍走专用视图。
+async function openWebToolDock(toolId, title) {
+  if (!toolPanelState.registryCache) {
+    try {
+      var res = await fetch('/api/tools/registry');
+      var data = await res.json();
+      if (data.success) toolPanelState.registryCache = data.data;
+    } catch (e) {}
+  }
+  var tool = null;
+  (toolPanelState.registryCache || []).forEach(function (t) { if (t.id === toolId) tool = t; });
+  if (!tool) { toast('工具不存在或已下线', 'error'); return true; }
+
+  if (toolId === 'music') { openMusicDock(); return true; }
+  if (toolId === 'xfy_blog') { switchView('blog'); return true; }
+  if (toolId === 'tavern') {
+    openEmbeddedPage('/tavern?embed=1', title || tool.name || '角色酒馆', 'tavern');
+    return true;
+  }
+
+  var dock = dpToolFloatEnsureDock();
+  dock.style.display = '';
+  dpToolFloat.minimized = false;
+  dock.querySelector('.dpToolFloatMin').textContent = '—';
+  dock.querySelector('.dpToolFloatBody').style.display = '';
+  dock.querySelector('.dpToolFloatIcon').setAttribute('icon', tool.icon || 'ph:wrench-fill');
+  dock.querySelector('.dpToolFloatTitle').textContent = title || tool.name || '工具';
+  dpToolFloat.tool = tool;
+
+  var body = dock.querySelector('.dpToolFloatBody');
+  var isAi = (tool.api_type === 'ai_chat' || tool.api_type === 'ai_image');
+  var fieldsHtml = (tool.input_fields || []).map(dpToolFloatField).join('');
+  body.innerHTML =
+    '<div style="font-size:12px;color:var(--text-faint);margin-bottom:10px;line-height:1.5">' + dpToolFloatEsc(tool.description || '') + '</div>' +
+    '<div>' + fieldsHtml + '</div>' +
+    '<button class="btn btn-orange btn-full dpToolFloatExec" onclick="dpToolFloatExecute()" style="margin-bottom:10px">' +
+      (isAi ? '<iconify-icon icon="ph:robot-fill"></iconify-icon> 询问AI' : '▶ 执行') +
+    '</button>' +
+    '<div class="dpToolFloatResult" style="font-size:13px;line-height:1.6"><div style="color:var(--text-faint)">输入参数后点击执行</div></div>';
+  try { dock.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  return true;
 }
 
 // page_handler：网页工具页里的音乐搜索入口
@@ -4248,7 +4431,9 @@ function weatherCodeToText(code) {
 // ===== 小肥羊讲堂（博客系统）=====
 var blogState = { currentView: 'list', currentPostId: null, currentUser: null, container: null, tool: null, currentCategory: null, categories: [], editorState: null, listPage: 1, listHasMore: false, listLoading: false,
   viewMode: (function() { try { return localStorage.getItem('blog_view_mode') === 'waterfall' ? 'waterfall' : 'list'; } catch(e) { return 'list'; } })(),
-  cardMode: (function() { try { return localStorage.getItem('blog_card_mode') === 'book' ? 'book' : 'column'; } catch(e) { return 'column'; } })() };
+  cardMode: (function() { try { return localStorage.getItem('blog_card_mode') === 'book' ? 'book' : 'column'; } catch(e) { return 'column'; } })(),
+  contentType: 'article' // V15.0：article=讲堂文章 / book=书籍（内容独立，分章创作）
+};
 
 // 博客独立视图渲染（左侧导航栏入口）
 function renderBlogView(sidebar, main) {
@@ -4281,6 +4466,11 @@ function renderBlogView(sidebar, main) {
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowReviewPanel(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon"><iconify-icon icon="ph:magnifying-glass-fill"></iconify-icon></span><span class="sidebar-item-text">审核管理</span></div>' : '') +
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogShowCategoryMgr(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon"><iconify-icon icon="ph:tag-fill"></iconify-icon></span><span class="sidebar-item-text">分类管理</span></div>' : '') +
       (isDev ? '<div class="sidebar-item" style="cursor:pointer" onclick="blogToggleAnnouncementMgr()"><span class="sidebar-item-icon"><iconify-icon icon="ph:megaphone-simple-fill"></iconify-icon></span><span class="sidebar-item-text">管理公告</span></div>' : '') +
+    '</div>' +
+    '<div class="sidebar-section">' +
+      '<div class="sidebar-section-title"><iconify-icon icon="ph:books-fill"></iconify-icon> 书籍</div>' +
+      '<div class="sidebar-item" style="cursor:pointer" onclick="bookShowList(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon"><iconify-icon icon="ph:library-fill"></iconify-icon></span><span class="sidebar-item-text">书籍书架</span></div>' +
+      (isPunished ? '' : '<div class="sidebar-item" style="cursor:pointer" onclick="bookShowCreate(document.getElementById(\'blogMainArea\'))"><span class="sidebar-item-icon"><iconify-icon icon="ph:book-open-fill"></iconify-icon></span><span class="sidebar-item-text">创作书籍</span></div>') +
     '</div>' +
     '<div class="sidebar-section">' +
       '<div class="sidebar-section-title" style="display:flex;align-items:center;justify-content:space-between"><span><iconify-icon icon="ph:bell-fill"></iconify-icon> 博客通知</span><span id="blogNotifUnreadBadge" style="background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;display:none">0</span></div>' +
@@ -4463,14 +4653,14 @@ async function blogShowList(container) {
       '<div id="blogAnnouncementMgr" style="display:none;margin-bottom:16px"></div>' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
         '<input id="blogSearchInputMain" type="text" placeholder="搜索文章..." style="flex:1;min-width:180px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px" onkeydown="if(event.key===\'Enter\')blogLoadList()">' +
-        '<div class="blog-view-toggle" role="tablist" aria-label="视图切换">' +
-          '<button class="wf-toggle-btn' + (blogState.viewMode === 'list' ? ' active' : '') + '" onclick="blogSetViewMode(\'list\')" title="列表视图"><iconify-icon icon="ph:list-bullets-fill"></iconify-icon> 列表</button>' +
-          '<button class="wf-toggle-btn' + (blogState.viewMode === 'waterfall' ? ' active' : '') + '" onclick="blogSetViewMode(\'waterfall\')" title="瀑布流视图"><iconify-icon icon="ph:columns-fill"></iconify-icon> 瀑布流</button>' +
+        '<div class="blog-view-toggle" role="tablist" aria-label="内容切换">' +
+          '<button class="wf-toggle-btn' + (blogState.contentType !== 'book' ? ' active' : '') + '" onclick="blogSetContentType(\'article\')" title="讲堂文章"><iconify-icon icon="ph:article-fill"></iconify-icon> 文章</button>' +
+          '<button class="wf-toggle-btn' + (blogState.contentType === 'book' ? ' active' : '') + '" onclick="blogSetContentType(\'book\')" title="书籍（独立内容，分章创作）"><iconify-icon icon="ph:book-open-fill"></iconify-icon> 书籍</button>' +
         '</div>' +
-        (blogState.viewMode === 'waterfall'
-          ? '<div class="blog-view-toggle" role="tablist" aria-label="卡片形态">' +
-              '<button class="wf-toggle-btn' + (blogState.cardMode === 'column' ? ' active' : '') + '" onclick="blogSetCardStyle(\'column\')" title="专栏横版卡"><iconify-icon icon="ph:article-fill"></iconify-icon> 专栏</button>' +
-              '<button class="wf-toggle-btn' + (blogState.cardMode === 'book' ? ' active' : '') + '" onclick="blogSetCardStyle(\'book\')" title="书籍竖版卡"><iconify-icon icon="ph:book-open-fill"></iconify-icon> 书籍</button>' +
+        (blogState.contentType !== 'book'
+          ? '<div class="blog-view-toggle" role="tablist" aria-label="视图切换">' +
+              '<button class="wf-toggle-btn' + (blogState.viewMode === 'list' ? ' active' : '') + '" onclick="blogSetViewMode(\'list\')" title="列表视图"><iconify-icon icon="ph:list-bullets-fill"></iconify-icon> 列表</button>' +
+              '<button class="wf-toggle-btn' + (blogState.viewMode === 'waterfall' ? ' active' : '') + '" onclick="blogSetViewMode(\'waterfall\')" title="瀑布流视图"><iconify-icon icon="ph:columns-fill"></iconify-icon> 瀑布流</button>' +
             '</div>'
           : '') +
       '</div>' +
@@ -4604,6 +4794,287 @@ function blogSetCardStyle(style) {
   if (blogState.container) blogShowList(blogState.container);
 }
 
+// ═══════════════ V15.0 书籍模块（独立内容 + 分章创作）═══════════════
+var bookState = { listPage: 1, listHasMore: false, listLoading: false, currentBook: null, search: '' };
+
+function blogSetContentType(type) {
+  blogState.contentType = (type === 'book') ? 'book' : 'article';
+  if (blogState.container) blogShowList(blogState.container);
+}
+
+function bookEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function bookFormatDate(d) {
+  if (!d) return '';
+  try { var t = new Date(String(d).replace(' ', 'T')); return isNaN(t) ? String(d).slice(0, 10) : t.toLocaleDateString('zh-CN'); } catch (e) { return String(d).slice(0, 10); }
+}
+
+// 书籍书架：书封卡片网格
+async function bookRenderList(area, search, loadMore) {
+  if (loadMore && (bookState.listLoading || !bookState.listHasMore)) return;
+  var page = loadMore ? bookState.listPage + 1 : 1;
+  var moreEl = document.getElementById('bookListLoadMore');
+  if (loadMore) {
+    bookState.listLoading = true;
+    if (moreEl) moreEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-faint)">加载中…</div>';
+  } else {
+    area.innerHTML = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+      '<h3 style="font-size:20px;font-weight:700;margin:0 auto 0 0"><iconify-icon icon="ph:books-fill"></iconify-icon> 书籍书架</h3>' +
+      '<input id="bookSearchInput" type="text" placeholder="搜索书名…" value="' + bookEsc(search || '') + '" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;width:180px" onkeydown="if(event.key===\'Enter\')bookRenderList(document.getElementById(\'blogListArea\'),this.value,false)">' +
+      '</div><div id="bookGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px"></div><div id="bookListLoadMore" style="text-align:center;padding:16px"></div>';
+  }
+  var grid = document.getElementById('bookGrid');
+  if (!grid) { bookState.listLoading = false; return; }
+  try {
+    var res = await api('/api/books?page=' + page + '&page_size=12' + (search ? '&search=' + encodeURIComponent(search) : ''));
+    if (!res.success) throw new Error(res.error || '加载失败');
+    var books = res.data || [];
+    var cards = books.map(function (b) {
+      var cover = b.cover_image
+        ? '<img src="' + imgProxyUrl(bookEsc(b.cover_image)) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+        : '';
+      var grad = blogCoverGrad(b.id);
+      return '<div class="book-card" onclick="bookShowDetail(' + b.id + ')" style="cursor:pointer;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--bg-card);transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform=\'translateY(-4px)\';this.style.boxShadow=\'0 12px 28px rgba(0,0,0,.16)\'" onmouseout="this.style.transform=\'none\';this.style.boxShadow=\'none\'">' +
+        '<div style="position:relative;width:100%;aspect-ratio:2/3;background:' + grad + '">' +
+          '<div style="position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(90deg,rgba(0,0,0,.35),rgba(255,255,255,.18),rgba(0,0,0,.1))"></div>' +
+          cover +
+          '<div style="position:absolute;left:0;right:0;bottom:0;padding:26px 10px 10px;background:linear-gradient(to top,rgba(0,0,0,.82),transparent);color:#fff;font-size:12px;font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">' + bookEsc(b.title) + '</div>' +
+        '</div>' +
+        '<div style="padding:10px 11px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + bookEsc(b.title) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-faint)">' +
+            '<span><iconify-icon icon="ph:book-open-fill"></iconify-icon> ' + (b.chapter_count || 0) + ' 章</span>' +
+            '<span style="margin-left:auto">' + bookEsc(b.author_name) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    if (page === 1) grid.innerHTML = cards || '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint)">还没有书籍，来创作第一本吧</div>';
+    else grid.insertAdjacentHTML('beforeend', cards);
+    bookState.listPage = page;
+    var pag = res.pagination || {};
+    bookState.listHasMore = !!pag.total_pages && pag.total_pages > page;
+    if (moreEl) moreEl.innerHTML = bookState.listHasMore
+      ? '<button class="btn btn-gray" style="padding:7px 20px;font-size:13px" onclick="bookRenderList(document.getElementById(\'blogListArea\'),\'' + bookEsc(search || '') + '\',true)">加载更多</button>'
+      : '<span style="color:var(--text-faint);font-size:12px">—— 已加载全部 ——</span>';
+  } catch (e) {
+    if (page === 1 && grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--danger)">加载失败：' + bookEsc(e.message) + '</div>';
+  } finally {
+    bookState.listLoading = false;
+  }
+}
+
+// 书籍详情：目录 + 阅读 + 上下章
+async function bookShowDetail(bookId, chapterId) {
+  var area = blogState.container || document.getElementById('blogMainArea');
+  if (!area) return;
+  try {
+    var res = await api('/api/books/' + bookId + '?with_chapters=1');
+    if (!res.success) throw new Error(res.error || '加载失败');
+    var b = res.data;
+    bookState.currentBook = b;
+    var chapters = b.chapters || [];
+    var isAuthor = currentUser && b.author_id == currentUser.id;
+    var isDev = isSiteAdmin();
+
+    if (!chapterId && chapters.length) chapterId = chapters[0].id;
+
+    var dirHtml = chapters.map(function (c) {
+      return '<div onclick="bookShowDetail(' + bookId + ',' + c.id + ')" style="padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;' + (c.id == chapterId ? 'background:var(--accent-bg);color:var(--accent);font-weight:700' : '') + '">' +
+        '<span style="color:var(--text-faint);margin-right:6px">' + c.chapter_no + '.</span> ' + bookEsc(c.title) + '</div>';
+    }).join('') || '<div style="font-size:12px;color:var(--text-faint);padding:8px">暂无章节</div>';
+
+    var bodyHtml = '<div style="padding:40px;color:var(--text-faint);text-align:center">选择章节开始阅读</div>';
+    var idx = chapters.findIndex(function (c) { return c.id == chapterId; });
+    if (idx >= 0) {
+      var chRes = await api('/api/books/' + bookId + '/chapters/' + chapterId);
+      if (chRes.success) {
+        var ch = chRes.data;
+        var prev = idx > 0 ? '<button class="btn btn-gray" style="font-size:12px" onclick="bookShowDetail(' + bookId + ',' + chapters[idx - 1].id + ')">← 上一章</button>' : '';
+        var next = idx < chapters.length - 1 ? '<button class="btn btn-gray" style="font-size:12px" onclick="bookShowDetail(' + bookId + ',' + chapters[idx + 1].id + ')">下一章 →</button>' : '';
+        bodyHtml = '<div style="font-size:20px;font-weight:800;margin-bottom:6px">' + bookEsc(ch.title) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-faint);margin-bottom:20px">第 ' + ch.chapter_no + ' 章 · ' + bookFormatDate(ch.updated_at) + '</div>' +
+          '<div class="dp-rich-content">' + renderRichContent(ch.content) + '</div>' +
+          '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:32px;padding-top:16px;border-top:1px solid var(--border)">' + prev + next + '</div>';
+      } else {
+        bodyHtml = '<div style="color:var(--danger);padding:20px">' + bookEsc(chRes.error || '章节加载失败') + '</div>';
+      }
+    }
+
+    area.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">' +
+        '<button class="btn btn-gray" style="font-size:12px" onclick="blogShowList(blogState.container)">← 返回书架</button>' +
+        '<span style="font-size:15px;font-weight:700">' + bookEsc(b.title) + '</span>' +
+        ((isAuthor || isDev) ? '<button class="btn btn-sm btn-orange" style="font-size:12px;margin-left:auto" onclick="bookShowChapterEditor(' + bookId + ')">+ 写章节</button><button class="btn btn-sm btn-gray" style="font-size:12px" onclick="bookShowCreate(blogState.container,' + bookId + ')">编辑书籍</button>' : '') +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:start">' +
+        '<div style="position:sticky;top:8px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--bg-card)">' +
+          '<div style="font-size:12px;font-weight:700;padding:6px 10px 10px;color:var(--text-faint)">目录 · ' + chapters.length + ' 章</div>' +
+          '<div style="max-height:60vh;overflow-y:auto">' + dirHtml + '</div>' +
+        '</div>' +
+        '<div style="min-width:0">' + bodyHtml + '</div>' +
+      '</div>';
+    try { window.scrollTo({ top: 0 }); } catch (e) {}
+  } catch (e) {
+    area.innerHTML = '<div style="padding:30px;text-align:center;color:var(--danger)">加载失败：' + bookEsc(e.message) + '</div>';
+  }
+}
+
+// 侧边栏「书籍书架」入口：切到书籍内容并渲染列表
+function bookShowList(container) {
+  blogState.contentType = 'book';
+  bookState.currentBook = null;
+  if (container) {
+    blogState.container = container;
+    blogShowList(container); // 重新渲染列表页骨架（含文章/书籍 tab）
+  }
+}
+
+function bookField(label, id, value, placeholder, type) {
+  type = type || 'text';
+  return '<div style="margin-bottom:14px"><label style="display:block;font-size:12px;color:var(--text-faint);margin-bottom:5px">' + bookEsc(label) + '</label>' +
+    (type === 'textarea'
+      ? '<textarea id="' + id + '" rows="3" placeholder="' + bookEsc(placeholder || '') + '" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;box-sizing:border-box">' + bookEsc(value || '') + '</textarea>'
+      : '<input id="' + id + '" type="' + type + '" value="' + bookEsc(value || '') + '" placeholder="' + bookEsc(placeholder || '') + '" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;box-sizing:border-box">') +
+    '</div>';
+}
+
+// 创建 / 编辑书籍元数据（V15.0：书籍用独立编辑器，章节另在分章编辑器里写）
+async function bookShowCreate(container, editBookId) {
+  if (!currentUser) { toast('请先登录', 'error'); return; }
+  var area = container || blogState.container || document.getElementById('blogMainArea');
+  blogState.container = area;
+  var b = null;
+  if (editBookId) {
+    try {
+      var r = await api('/api/books/' + editBookId);
+      if (r.success) b = r.data;
+    } catch (e) {}
+  }
+  area.innerHTML =
+    '<div style="max-width:620px;margin:0 auto">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">' +
+        '<button class="btn btn-gray" style="font-size:12px" onclick="' + (b ? 'bookShowDetail(' + b.id + ')' : 'blogShowList(blogState.container)') + '">← 返回</button>' +
+        '<h3 style="font-size:18px;font-weight:700;margin:0">' + (b ? '编辑书籍' : '创作新书') + '</h3>' +
+      '</div>' +
+      '<div style="border:1px solid var(--border);border-radius:14px;padding:18px;background:var(--bg-card)">' +
+        bookField('书名 *', 'bookTitleInput', b ? b.title : '', '给书起个名字') +
+        bookField('简介', 'bookSummaryInput', b ? b.summary : '', '一句话介绍这本书', 'textarea') +
+        bookField('封面图片 URL', 'bookCoverInput', b ? b.cover_image : '', 'https://...（可选）') +
+        bookField('分类 / 标签', 'bookCategoryInput', b ? b.category : '', '如：小说、随笔、教程（可选）') +
+        '<div style="font-size:12px;color:var(--text-faint);line-height:1.6;margin-bottom:14px">创建后进入书籍详情页，用「+ 写章节」逐章创作。书籍与小肥羊讲堂文章完全独立。</div>' +
+        '<button class="btn btn-orange btn-full" onclick="bookSaveBook(' + (b ? b.id : '0') + ')">' + (b ? '保存修改' : '创建书籍') + '</button>' +
+      '</div>' +
+    '</div>';
+}
+
+async function bookSaveBook(bookId) {
+  var title = (document.getElementById('bookTitleInput') || {}).value || '';
+  if (!title.trim()) { toast('请输入书名', 'error'); return; }
+  var payload = {
+    title: title.trim(),
+    summary: ((document.getElementById('bookSummaryInput') || {}).value || '').trim(),
+    cover_image: ((document.getElementById('bookCoverInput') || {}).value || '').trim(),
+    category: ((document.getElementById('bookCategoryInput') || {}).value || '').trim()
+  };
+  try {
+    var res = bookId
+      ? await api('/api/books/' + bookId, { method: 'PUT', body: JSON.stringify(payload) })
+      : await api('/api/books', { method: 'POST', body: JSON.stringify(payload) });
+    if (!res.success) throw new Error(res.error || '保存失败');
+    toast(bookId ? '书籍已保存' : (res.message || '书籍已创建'), 'success');
+    bookShowDetail(bookId || res.data.id);
+  } catch (e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+// 分章编辑器：写 / 改某一章，正文复用博客的富文本编辑器 SunEditor
+async function bookShowChapterEditor(bookId, chapterId) {
+  if (!currentUser) { toast('请先登录', 'error'); return; }
+  var area = blogState.container || document.getElementById('blogMainArea');
+  var ch = null;
+  if (chapterId) {
+    try {
+      var r = await api('/api/books/' + bookId + '/chapters/' + chapterId);
+      if (r.success) ch = r.data;
+    } catch (e) {}
+  }
+  var book = bookState.currentBook || {};
+  area.innerHTML =
+    '<div style="max-width:820px;margin:0 auto">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">' +
+        '<button class="btn btn-gray" style="font-size:12px" onclick="bookShowDetail(' + bookId + ')">← 返回书籍</button>' +
+        '<h3 style="font-size:18px;font-weight:700;margin:0">' + (ch ? '编辑章节' : '写新章节') + ' · ' + bookEsc(book.title || '') + '</h3>' +
+        (ch ? '<button class="btn btn-sm btn-red" style="font-size:12px;margin-left:auto" onclick="bookDeleteChapter(' + bookId + ',' + chapterId + ')">删除本章</button>' : '') +
+      '</div>' +
+      '<div style="border:1px solid var(--border);border-radius:14px;padding:18px;background:var(--bg-card)">' +
+        bookField('章节标题 *', 'bookChapterTitle', ch ? ch.title : '', '如：第一章 初见') +
+        bookField('章号', 'bookChapterNo', ch ? ch.chapter_no : '', '留空自动续接', 'number') +
+        '<div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--text-faint);margin-bottom:5px">章节正文 *</label>' +
+          '<textarea id="bookChapterContent" style="width:100%;min-height:320px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:14px;box-sizing:border-box">' + (ch ? bookEsc(ch.content) : '') + '</textarea>' +
+        '</div>' +
+        '<button class="btn btn-orange btn-full" onclick="bookSaveChapter(' + bookId + ',' + (ch ? ch.id : '0') + ')">' + (ch ? '保存章节' : '发布章节') + '</button>' +
+      '</div>' +
+    '</div>';
+  // 富文本增强：尝试用 SunEditor 替换 textarea（与博客编辑器一致），失败则保留纯文本
+  try {
+    if (typeof ensureSunEditorLoaded === 'function') {
+      ensureSunEditorLoaded(function () {
+        var ta = document.getElementById('bookChapterContent');
+        if (!ta || !window.SUNEDITOR) return;
+        try {
+          SUNEDITOR.create(ta.id, {
+            height: 380,
+            buttonList: [['bold', 'underline', 'italic', 'strike'], ['fontSize', 'fontColor'], ['list', 'align'], ['link', 'image'], ['undo', 'redo']]
+          });
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+}
+
+async function bookSaveChapter(bookId, chapterId) {
+  var title = (document.getElementById('bookChapterTitle') || {}).value || '';
+  if (!title.trim()) { toast('请输入章节标题', 'error'); return; }
+  var contentEl = document.getElementById('bookChapterContent');
+  var content = '';
+  if (contentEl) {
+    // SunEditor 会把 textarea 隐藏并生成 .sun-editor-editable，优先读富文本 HTML
+    var editable = contentEl.parentNode && contentEl.parentNode.querySelector('.sun-editor-editable');
+    content = (editable && editable.innerHTML) ? editable.innerHTML : contentEl.value;
+  }
+  if (!content || !content.trim()) { toast('请输入章节正文', 'error'); return; }
+  var noVal = ((document.getElementById('bookChapterNo') || {}).value || '').trim();
+  var payload = { title: title.trim(), content: content };
+  if (noVal) payload.chapter_no = parseInt(noVal, 10);
+  try {
+    var res = chapterId
+      ? await api('/api/books/' + bookId + '/chapters/' + chapterId, { method: 'PUT', body: JSON.stringify(payload) })
+      : await api('/api/books/' + bookId + '/chapters', { method: 'POST', body: JSON.stringify(payload) });
+    if (!res.success) throw new Error(res.error || '保存失败');
+    toast(chapterId ? '章节已保存' : '章节已发布', 'success');
+    bookShowDetail(bookId, chapterId || (res.data && res.data.id));
+  } catch (e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+async function bookDeleteChapter(bookId, chapterId) {
+  if (!confirm('确定删除这一章？此操作不可恢复。')) return;
+  try {
+    var res = await api('/api/books/' + bookId + '/chapters/' + chapterId, { method: 'DELETE' });
+    if (!res.success) throw new Error(res.error || '删除失败');
+    toast('章节已删除', 'success');
+    bookShowDetail(bookId);
+  } catch (e) {
+    toast('删除失败：' + e.message, 'error');
+  }
+}
+
 // --- 搜索值：侧栏优先，回退主区 ---
 function blogGetSearchValue() {
   var sidebar = document.getElementById('blogSearchInput');
@@ -4648,6 +5119,13 @@ function blogRenderWaterfallCard(p, isDev) {
   }
   var catName = p.category_name || blogCategoryName(p.category_id);
   var open = 'blogShowPost(blogState.container,' + p.id + ')';
+  var avatarHtml = (p.author_avatar
+    ? '<img src="' + imgProxyUrl(esc(p.author_avatar)) + '" alt="" onerror="this.style.display=\'none\'">'
+    : esc((p.author_name || '?').charAt(0)));
+  var authorRow = '<div class="wf-author"><span class="wf-avatar">' + avatarHtml + '</span>' +
+    '<span class="wf-author-name">' + esc(p.author_name) + '</span>' +
+    '<span class="wf-author-date"><iconify-icon icon="ph:eye-fill"></iconify-icon> ' + (p.views || 0) + ' · ' + blogFormatDate(p.created_at) + '</span></div>';
+  // meta 保留用于书籍卡紧凑场景（作者/日期/浏览量）
   var meta = '<div class="wf-meta"><span>' + esc(p.author_name) + '</span><span>· ' + blogFormatDate(p.created_at) + '</span><span><iconify-icon icon="ph:eye-fill"></iconify-icon> ' + (p.views || 0) + '</span></div>';
 
   if (blogState.cardMode === 'book') {
@@ -4683,12 +5161,12 @@ function blogRenderWaterfallCard(p, isDev) {
     '<div class="wf-col-body">' +
       '<div class="wf-title">' + esc(p.title) + '</div>' +
       (p.summary ? '<div class="wf-summary">' + esc(p.summary) + '</div>' : '') +
-      meta +
       ((catName || tags.length || statusBadge) ? '<div class="wf-foot">' +
         (catName ? '<span class="wf-cat">' + esc(catName) + '</span>' : '') +
         tags.slice(0, 3).map(function(t) { return '<span class="wf-tag">' + esc(t) + '</span>'; }).join('') +
         statusBadge +
       '</div>' : '') +
+      authorRow +
     '</div>' +
   '</div>';
 }
@@ -4698,6 +5176,8 @@ async function blogLoadList(loadMore) {
   var search = blogGetSearchValue();
   var area = document.getElementById('blogListArea');
   if (!area) return;
+  // V15.0：书籍内容独立，走专属列表渲染
+  if (blogState.contentType === 'book') { return bookRenderList(area, search, loadMore); }
   var isDev = isSiteAdmin();
   var wfMode = blogState.viewMode === 'waterfall';
   // 加载更多时防止重复请求
@@ -4799,7 +5279,38 @@ async function blogLoadList(loadMore) {
     }
   } finally {
     blogState.listLoading = false;
+    if (wfMode) blogMasonryLayout();
   }
+}
+
+// V15.0：CSS Grid 瀑布流布局 —— 测量卡片实际高度并设置 grid-row span，形成真正错落排布。
+function blogMasonryLayout() {
+  var grid = document.getElementById('blogWaterfallGrid');
+  if (!grid) return;
+  var cards = grid.querySelectorAll('.wf-card');
+  if (!cards.length) return;
+  var style = getComputedStyle(grid);
+  var rowH = parseFloat(style.getPropertyValue('grid-auto-rows')) || 8;
+  var gap = parseFloat(style.getPropertyValue('row-gap')) || 0;
+  // 图片是固定 aspect-ratio 容器，布局稳定；仍在图片加载后再算一次以兜底
+  function apply() {
+    cards.forEach(function (card) {
+      var h = card.getBoundingClientRect().height;
+      if (!h) return;
+      var span = Math.max(1, Math.ceil((h + gap) / (rowH + gap)));
+      card.style.gridRowEnd = 'span ' + span;
+    });
+  }
+  apply();
+  var imgs = grid.querySelectorAll('img');
+  var pending = imgs.length;
+  if (!pending) return;
+  var done = false;
+  function one() { if (--pending <= 0 && !done) { done = true; apply(); } }
+  imgs.forEach(function (img) {
+    if (img.complete) one();
+    else { img.addEventListener('load', one, { once: true }); img.addEventListener('error', one, { once: true }); }
+  });
 }
 
 // --- 博客通知系统 ---
@@ -11908,12 +12419,9 @@ async function shareWebToolToChannel(toolId, icon, name) {
   toast('已分享到频道', 'success');
 }
 
-// V14.0：从频道入口调用网站工具（音乐走浮窗，其余走网页工具面板）
+// V15.0：从频道入口调用网站工具 —— 统一走独立小窗，不再跳转到功能界面
 function dpOpenWebToolFromChannel(toolId, title) {
-  if (toolId === 'music') { openMusicDock(); return; }
-  if (toolId === 'tavern') { openEmbeddedPage('/tavern?embed=1', title || '角色酒馆', 'tavern'); return; }
-  if (toolId === 'xfy_blog') { switchView('blog'); return; }
-  openWebToolPanel(toolId, title);
+  openWebToolDock(toolId, title);
 }
 
 async function showQuickTools() {

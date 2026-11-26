@@ -1,11 +1,17 @@
-// 网易云音乐搜索工具 - 后端代理（V14.0）
+// 网易云音乐搜索工具 - 后端代理（V14.0，V15.0 修复播放）
 // GET /api/tools/music?action=search&keyword=关键词&limit=20  搜索歌曲
-// GET /api/tools/music?action=url&id=歌曲ID                    获取播放直链
+// GET /api/tools/music?action=url&id=歌曲ID                    获取播放直链（调试用）
+// GET /api/tools/music?action=stream&id=歌曲ID                 同源音频流代理（播放器实际用）
 // GET /api/tools/music?action=hot                             热门推荐（可选）
 //
 // 上游为公开的 NeteaseCloudMusicApi 实例（多上游 fallback）。Cloudflare Edge 出口
 // 与用户浏览器出口不同，风控表现不同，故统一由本端点代理；http 直链升级为 https
 // 以满足站点 CSP（upgrade-insecure-requests + media-src https:）。
+//
+// V15.0 关键修复：以前 action=url 只把网易 CDN 的签名直链交给浏览器，签名常绑定
+// 出口 IP / 短时效，浏览器跨域请求会静默失败（audio error，表现为"听不了"）。
+// 现在播放器改走 action=stream —— 由本端点在边缘取链并把音频字节流代理回浏览器，
+// 浏览器只请求同源地址，彻底绕开跨域、Referer 与签名 IP 绑定问题；透传 Range 以支持拖动进度。
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -144,6 +150,53 @@ export async function onRequestGet(context) {
           size: item.size || 0,
           format: item.type || 'mp3',
         },
+      });
+    }
+
+    // V15.0：同源音频流代理。浏览器 audio 只请求本站这个端点，由边缘去取网易 CDN 音频，
+    // 避免"签名 URL 在用户网络下失效"导致的静默播放失败。支持 Range 以支持进度拖动。
+    if (action === 'stream') {
+      const id = (url.searchParams.get('id') || '').trim();
+      if (!id || !/^\d+$/.test(id)) return json({ success: false, error: '歌曲 ID 无效' }, 400);
+
+      const { data } = await tryUpstreams(
+        (base) => [
+          `${base}/song/url?id=${id}`,
+          `${base}/song/url/v1?id=${id}&level=standard`,
+        ],
+        (d) => d && d.code === 200 && Array.isArray(d.data) && d.data.length > 0
+      );
+      const item = data.data[0] || {};
+      const playUrl = toHttps(item.url);
+      if (!playUrl) return json({ success: false, error: '该歌曲暂无免费播放源' }, 404);
+
+      const range = request.headers.get('Range') || '';
+      const headers = {
+        'User-Agent': UA,
+        'Referer': 'https://music.163.com/',
+        'Accept': 'audio/*,*/*;q=0.8',
+      };
+      if (range) headers['Range'] = range;
+
+      const upstream = await fetch(playUrl, { headers });
+      if (!upstream.ok && upstream.status !== 206) {
+        return json({ success: false, error: '音源请求失败 (' + upstream.status + ')' }, 502);
+      }
+
+      const outHeaders = {
+        'Content-Type': upstream.headers.get('Content-Type') || 'audio/mpeg',
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+      };
+      const contentRange = upstream.headers.get('Content-Range');
+      if (contentRange) outHeaders['Content-Range'] = contentRange;
+      const contentLength = upstream.headers.get('Content-Length');
+      if (contentLength) outHeaders['Content-Length'] = contentLength;
+
+      return new Response(upstream.body, {
+        status: upstream.status === 206 ? 206 : 200,
+        headers: outHeaders,
       });
     }
 
